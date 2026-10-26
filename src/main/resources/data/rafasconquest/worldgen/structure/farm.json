@@ -1,0 +1,7 @@
+{
+  "type": "rafasconquest:farm",
+  "biomes": "#rafasconquest:has_structure/farm",
+  "step": "surface_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "beard_thin"
+}

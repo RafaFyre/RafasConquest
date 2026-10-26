@@ -1,0 +1,4 @@
+{
+  "gamerule.PassIngameTimeForIRLTime": "Pass in-game time for real time",
+  "gamerule.PassIngameTimeForIRLTime.description": "In game days are caught up when the server is offline. One hour ~= 3 days worth of resource collection. Off by default."
+}

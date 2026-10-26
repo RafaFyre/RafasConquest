@@ -1,0 +1,12 @@
+{
+  "structures": [
+    {
+      "structure": "rafasconquest:farm",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "rafasconquest:farm_spread",
+    "salt": 1838263405
+  }
+}
