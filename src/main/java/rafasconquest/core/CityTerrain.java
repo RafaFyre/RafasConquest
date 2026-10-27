@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * How a city reshapes the land, decided from the original terrain alone so every cell of a city agrees.
  * <p>
- * The <b>box</b> is the city square plus {@link #BOX_MARGIN} blocks past the wall. Inside it, the ground becomes a flat
+ * The <b>box</b> is the city square plus the wall, which stands {@link CityLayout#WALL_OUTSET} blocks out past it, plus
+ * {@link #BOX_MARGIN} blocks past the wall. Inside it, the ground becomes a flat
  * <b>plate</b> at the median height of the box: everything above is cleared, everything below is filled.
  * <p>
  * Around the box, out to {@link #SLOPE_REACH} blocks:
@@ -24,14 +25,14 @@ import java.util.List;
  */
 public final class CityTerrain {
     public static final int BOX_MARGIN = 3;
-    /** Lowest and highest local coordinate inside the box, on both axes. */
-    public static final int BOX_MIN = -BOX_MARGIN;
-    public static final int BOX_MAX = CityLayout.SIZE - 1 + BOX_MARGIN;
+    /** Lowest and highest local coordinate inside the box, on both axes. The wall stands out past the city square. */
+    public static final int BOX_MIN = -CityLayout.WALL_OUTSET - BOX_MARGIN;
+    public static final int BOX_MAX = CityLayout.SIZE - 1 + CityLayout.WALL_OUTSET + BOX_MARGIN;
     /**
-     * How far the carve and fill may run past the box. An edge cell's structure start sits 84 blocks from the box
+     * How far the carve and fill may run past the box. An edge cell's structure start sits 86 blocks from the box
      * edge, and Minecraft only places pieces within about 128 blocks of a start.
      */
-    public static final int SLOPE_REACH = 44;
+    public static final int SLOPE_REACH = 42;
     public static final int EDGE_SEGMENT = 32;
     public static final int SEGMENTS_PER_SIDE = (BOX_MAX - BOX_MIN + EDGE_SEGMENT) / EDGE_SEGMENT;
     static final int MEDIAN_STEP = 24;
@@ -233,24 +234,27 @@ public final class CityTerrain {
         int plate = plan.plateY();
         int far = CityLayout.SIZE - 1;
         int wall = CityLayout.ROAD_WIDTH;
+        // The wall's outer face, on the low and high side of each axis.
+        int lo = -CityLayout.WALL_OUTSET;
+        int hi = far + CityLayout.WALL_OUTSET;
         // Which valley stretch, if any, this column faces, and whether it is outside the wall or under it.
         boolean outside = false;
         boolean under = false;
         if (lz < wall && valley(plan, Side.NORTH, lx)) {
-            outside |= lz < 0;
-            under |= lz >= 0;
+            outside |= lz < lo;
+            under |= lz >= lo;
         }
         if (lz > far - wall && valley(plan, Side.SOUTH, lx)) {
-            outside |= lz > far;
-            under |= lz <= far;
+            outside |= lz > hi;
+            under |= lz <= hi;
         }
         if (lx < wall && valley(plan, Side.WEST, lz)) {
-            outside |= lx < 0;
-            under |= lx >= 0;
+            outside |= lx < lo;
+            under |= lx >= lo;
         }
         if (lx > far - wall && valley(plan, Side.EAST, lz)) {
-            outside |= lx > far;
-            under |= lx <= far;
+            outside |= lx > hi;
+            under |= lx <= hi;
         }
         if (outside) {
             return new Column(Kind.CLEAR_ABOVE, plate, plate, false);

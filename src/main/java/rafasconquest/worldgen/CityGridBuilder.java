@@ -214,7 +214,7 @@ public final class CityGridBuilder {
     private void buildWalls(int cellX, int cellZ) {
         PlacedWall previous = null;
         for (CityLayout.WallSegment seg : CityLayout.wallSegments(cellX, cellZ)) {
-            StructurePoolElement element = firstElement(seg.gate() ? variant.gate() : variant.wall());
+            StructurePoolElement element = firstElement(seg.gate() ? variant.gate() : seg.corner() ? variant.corner() : variant.wall());
             if (element == null) {
                 return;
             }

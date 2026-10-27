@@ -34,6 +34,7 @@ public enum CityVariant {
     private final ResourceKey<StructureTemplatePool> decor;
     private final ResourceKey<StructureTemplatePool> wall;
     private final ResourceKey<StructureTemplatePool> gate;
+    private final ResourceKey<StructureTemplatePool> corner;
     private final BlockState road;
     private final BlockState bridge;
     private final BlockState ground;
@@ -46,6 +47,7 @@ public enum CityVariant {
         this.decor = vanillaPool(name, "decor");
         this.wall = modPool("city/wall/" + name);
         this.gate = modPool("city/gate/" + name);
+        this.corner = modPool("city/corner/" + name);
         this.road = road;
         this.bridge = bridge;
         this.ground = ground;
@@ -85,6 +87,11 @@ public enum CityVariant {
     /** rafasconquest:city/gate/&lt;variant&gt;: the wall segment with a gate where an avenue leaves the city. */
     public ResourceKey<StructureTemplatePool> gate() {
         return gate;
+    }
+
+    /** rafasconquest:city/corner/&lt;variant&gt;: the first segment of each side, lengthened to cover the corner. */
+    public ResourceKey<StructureTemplatePool> corner() {
+        return corner;
     }
 
     public BlockState road() {

@@ -95,7 +95,7 @@ class CityTerrainTest {
     @Test
     void cornersTakeTheSteeperSide() {
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z < CityTerrain.BOX_MIN ? 140 : 80), SEA);
-        CityTerrain.Column corner = CityTerrain.column(plan, CityTerrain.BOX_MIN - 44, CityTerrain.BOX_MIN - 44);
+        CityTerrain.Column corner = CityTerrain.column(plan, CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH, CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH);
         assertTrue(corner.high() >= 140);
     }
 
@@ -104,11 +104,12 @@ class CityTerrainTest {
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z > CityTerrain.BOX_MAX ? 10 : 80), SEA);
         assertEquals(CityTerrain.Edge.VALLEY, plan.edge(CityTerrain.Side.SOUTH, 6));
         int far = CityLayout.SIZE - 1;
+        int outerFace = far + CityLayout.WALL_OUTSET;
         // Outside the wall: nothing built, only anything above the plate cleared.
-        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, far + 1).kind());
+        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, outerFace + 1).kind());
         assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, CityTerrain.BOX_MAX).kind());
-        // Under the wall: bare stone fill, so the cliff face below the wall is natural.
-        for (int z = far - CityLayout.ROAD_WIDTH + 1; z <= far; z++) {
+        // Under the whole 5-wide wall: bare stone fill, so the cliff face below the wall is natural.
+        for (int z = far - CityLayout.ROAD_WIDTH + 1; z <= outerFace; z++) {
             assertEquals(CityTerrain.Kind.WALL_BASE, CityTerrain.column(plan, MID, z).kind());
         }
         // Just inside the wall: ordinary plate.

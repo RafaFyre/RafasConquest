@@ -35,13 +35,26 @@ public final class CityLayout {
     public static final int CLEARANCE = 64;
     /** The road that runs out through a gate on every side: the avenue beside the town centre. */
     public static final int GATE_ROAD = BLOCKS_PER_SIDE / 2;
+    public static final int WALL_WIDTH = 5;
+    /** How far the wall stands out past the city square: it covers the 3-wide edge road and 2 blocks beyond. */
+    public static final int WALL_OUTSET = WALL_WIDTH - ROAD_WIDTH;
 
     /**
-     * One 32-long wall segment, in city-local coordinates. The wall stands on the edge road band and is laid as a
-     * pinwheel: each side runs clockwise for 15 segments and its last one covers the corner, so 15 × 32 + 3 = 483
-     * closes exactly. {@code quarterTurns} rotates the template (whose outer face is local z = 0) clockwise.
+     * One wall segment, in city-local coordinates. The wall stands on the edge road band plus {@link #WALL_OUTSET}
+     * blocks outside it, and is laid as a pinwheel: each side runs clockwise for 15 segments of 32. The first segment
+     * of a side is a corner, {@link #WALL_OUTSET} longer at its start, so it also covers the corner the previous side
+     * leaves open: 2 + 15 × 32 + 5 = 487 closes exactly. {@code quarterTurns} rotates the template (whose outer face
+     * is template z = 0) clockwise.
      */
     public record WallSegment(Side side, int index, int originX, int originZ, int quarterTurns, boolean gate) {
+        public boolean corner() {
+            return index == 0;
+        }
+
+        /** Template length along the wall. */
+        public int length() {
+            return ROAD_PERIOD + (corner() ? WALL_OUTSET : 0);
+        }
     }
 
     public enum Side {
@@ -145,13 +158,15 @@ public final class CityLayout {
 
     static WallSegment wallSegment(Side side, int j) {
         int far = SIZE - 1;
-        int step = j * ROAD_PERIOD;
+        int out = WALL_OUTSET;
+        // A corner segment starts WALL_OUTSET early; every other one starts on its road.
+        int step = j * ROAD_PERIOD - (j == 0 ? out : 0);
         return switch (side) {
-            case NORTH -> new WallSegment(side, j, step, 0, 0, j == GATE_ROAD);
-            case EAST -> new WallSegment(side, j, far, step, 1, j == GATE_ROAD);
+            case NORTH -> new WallSegment(side, j, step, -out, 0, j == GATE_ROAD);
+            case EAST -> new WallSegment(side, j, far + out, step, 1, j == GATE_ROAD);
             // South and west run back toward the origin, so road k is met by segment 15 - k.
-            case SOUTH -> new WallSegment(side, j, far - step, far, 2, j == BLOCKS_PER_SIDE - GATE_ROAD);
-            case WEST -> new WallSegment(side, j, 0, far - step, 3, j == BLOCKS_PER_SIDE - GATE_ROAD);
+            case SOUTH -> new WallSegment(side, j, far - step, far + out, 2, j == BLOCKS_PER_SIDE - GATE_ROAD);
+            case WEST -> new WallSegment(side, j, -out, far - step, 3, j == BLOCKS_PER_SIDE - GATE_ROAD);
         };
     }
 
@@ -179,9 +194,9 @@ public final class CityLayout {
         };
     }
 
-    /** True if city-local (x, z) is on the wall: the outermost road band, all round. */
+    /** True if city-local (x, z) is on the wall: the outermost road band and the {@link #WALL_OUTSET} blocks past it. */
     public static boolean inWallBand(int localX, int localZ) {
-        if (localX < 0 || localZ < 0 || localX >= SIZE || localZ >= SIZE) {
+        if (localX < -WALL_OUTSET || localZ < -WALL_OUTSET || localX >= SIZE + WALL_OUTSET || localZ >= SIZE + WALL_OUTSET) {
             return false;
         }
         int inner = SIZE - ROAD_WIDTH;
@@ -190,7 +205,8 @@ public final class CityLayout {
 
     /** The city whose wall band contains world (x, z), if any. */
     public static Optional<Site> wallAt(long seed, WorldSettings s, int x, int z) {
-        for (Site city : allSitesInBox(seed, s, x - HALF_EXTENT - 1, z - HALF_EXTENT - 1, x + HALF_EXTENT + 1, z + HALF_EXTENT + 1)) {
+        int r = HALF_EXTENT + WALL_OUTSET + 1;
+        for (Site city : allSitesInBox(seed, s, x - r, z - r, x + r, z + r)) {
             if (inWallBand(x - city.originX(), z - city.originZ())) {
                 return Optional.of(city);
             }
@@ -202,10 +218,13 @@ public final class CityLayout {
     public static boolean chunkTouchesWall(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        for (Site city : allSitesInBox(seed, s, minX - HALF_EXTENT - 1, minZ - HALF_EXTENT - 1, minX + 15 + HALF_EXTENT + 1, minZ + 15 + HALF_EXTENT + 1)) {
+        int r = HALF_EXTENT + WALL_OUTSET + 1;
+        for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             int lx0 = minX - city.originX();
             int lz0 = minZ - city.originZ();
-            boolean overlapsCity = lx0 + 15 >= 0 && lz0 + 15 >= 0 && lx0 < SIZE && lz0 < SIZE;
+            int lo = -WALL_OUTSET;
+            int hi = SIZE + WALL_OUTSET;
+            boolean overlapsCity = lx0 + 15 >= lo && lz0 + 15 >= lo && lx0 < hi && lz0 < hi;
             int inner = SIZE - ROAD_WIDTH;
             boolean insideInner = lx0 >= ROAD_WIDTH && lz0 >= ROAD_WIDTH && lx0 + 15 < inner && lz0 + 15 < inner;
             if (overlapsCity && !insideInner) {

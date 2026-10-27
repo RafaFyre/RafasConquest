@@ -59,10 +59,10 @@ like any city, and falls back to plains where no style matches, so every Empire 
   jigsaws, as in vanilla. Zombie variants are skipped.
 - **Terrain:** before anything is built, the land is reshaped (`core/CityTerrain`, `worldgen/CityTerrainPiece`), all
   during world generation:
-  - The **box** is the city square plus 3 blocks past the wall. The **plate** is the median ground height over the box,
+  - The **box** is the city square plus the wall's 2-block outset plus 3 blocks past the wall. The **plate** is the median ground height over the box,
     never below sea level. Inside the box everything above the plate is cleared and everything below is filled (valleys,
     rivers and lakes included), with grass or sand on top and dirt or sandstone beneath.
-  - Outside the box, out to 44 blocks (the furthest a cell's structure start can reach), each 32-block stretch of the
+  - Outside the box, out to 42 blocks (the furthest a cell's structure start can reach), each 32-block stretch of the
     edge is one of:
     - **Carve** (land level or rising): land above a slope rising from the plate is removed. The slope is 1 up per 2
       out, steepened where needed so it meets the land at the end of its reach, so the carve never ends in a wall. How
@@ -87,12 +87,16 @@ like any city, and falls back to plains where no style matches, so every Empire 
   in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
   of a structure's start chunk. Every cell builds its share of the same grid, so they meet seamlessly and all 9 always
   generate together.
-- **Wall:** a 3-wide wall stands on the outermost road band all the way round, built from 32 × 8 × 3 jigsaw segments
-  (one street length each; templates `structures/city/wall/segment.nbt` and `gate.nbt`, regenerated with
-  `gradlew generateWallTemplates`). Each side is 15 segments laid as a pinwheel, so the ring closes exactly. The first
-  segment of each side in a cell is placed from the layout, and each next one is joined through its `wall_end` →
-  `wall_start` jigsaws. Segments stand rigid on the plate. One gate per side (3 wide, 4 high) sits where the avenue next to
-  the town centre meets the wall. Material comes from the pool's processor list: weathered stone bricks, or cut sandstone for desert.
+- **Wall:** a 5-wide wall runs all the way round on the outermost road band and the 2 blocks outside it, so the city
+  inside is unchanged. It is built from 32 × 8 × 5 jigsaw segments (one street length each; templates
+  `structures/city/wall/segment.nbt`, `gate.nbt` and `corner.nbt`, regenerated with `gradlew generateWallTemplates`).
+  Each side is 15 segments laid as a pinwheel. The first segment of each side is the 34-long corner, which also covers
+  the corner the wall makes past the city square, so the ring closes exactly. The first segment of each side in a cell
+  is placed from the layout, and each next one is joined through its `wall_end` → `wall_start` jigsaws. Segments stand
+  rigid on the plate. One gate per side (3 wide, 4 high, through the full width) sits where the avenue next to the
+  town centre meets the wall. Material comes from the pool's processor list: weathered stone bricks, or cut sandstone
+  for desert. Some south and west segments reach 3 blocks into the next cell, so a cell's terrain never removes wall
+  blocks, whichever is laid first.
   Houses never face the wall; the 4 corner plots face the alley between plots instead.
 - **Banners:** each segment carries 2 standing banners on top of its outer edge, at the quarter points. When a wall
   chunk loads (including its first load after generation), its banners are painted in the city owner's design: the
@@ -100,11 +104,11 @@ like any city, and falls back to plains where no style matches, so every Empire 
   next load. Each faction's
   design is a base colour plus two pattern layers derived from its id (`faction/FactionBanner`), and
   `/pve faction info` shows it.
-- **Wall guards:** every wall segment has one Recruits bowman on its walkway, in the middle of the segment, facing out
-  and told to hold that position. It belongs to the city owner's Recruits faction (team and colour) and is set up the
+- **Wall guards:** every wall segment has 3 Recruits bowmen on its walkway (180 per city), evenly spread and clear of
+  the banners, facing out and told to hold their positions. It belongs to the city owner's Recruits faction (team and colour) and is set up the
   way Recruits sets up its own patrol bowmen (chainmail, a bow, 64 arrows, never despawns). Guards spawn on the server
   thread the first time a wall chunk loads, since joining a faction's team can't happen during world generation. Each
-  post is recorded in save data, so a guard spawns once: reloading doesn't duplicate it, and a guard that dies isn't
+  post is recorded in save data, so each guard spawns once: reloading doesn't duplicate it, and a guard that dies isn't
   replaced. They aren't drawn from the faction's soldier pool (strength).
 - **Style:** picked from the biome at the city centre via the tags `rafasconquest:city/<plains|desert|savanna|snowy|taiga>`.
 - **Measured** with `/pve debug citystats 12` against vanilla villages at the same sites: every city exactly square,

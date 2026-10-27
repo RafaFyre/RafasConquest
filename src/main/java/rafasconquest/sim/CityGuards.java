@@ -14,14 +14,11 @@ import rafasconquest.dev.WallTemplates;
 import rafasconquest.faction.Faction;
 
 /**
- * Posts one archer of the city owner's faction on the walkway of every wall segment, facing out. Runs when a wall
+ * Posts 3 archers of the city owner's faction on the walkway of every wall segment, facing out. Runs when a wall
  * chunk loads (the first load after generation included); each post gets its guard once, recorded in save data, so a
  * guard that dies is not replaced. Server thread only.
  */
 final class CityGuards {
-    /** Template x of the guard's post: the middle of the segment. */
-    private static final int POST_X = WallTemplates.LENGTH / 2;
-
     private CityGuards() {
     }
 
@@ -29,26 +26,30 @@ final class CityGuards {
     static int postChunk(ServerLevel level, LevelChunk chunk, ConquestSavedData data, PoiPrecomputer precomputer, RecruitsBridge recruits) {
         int minX = chunk.getPos().getMinBlockX();
         int minZ = chunk.getPos().getMinBlockZ();
-        int r = CityLayout.HALF_EXTENT + 1;
+        int r = CityLayout.HALF_EXTENT + CityLayout.WALL_OUTSET + 1;
         int spawned = 0;
         for (CityLayout.Site site : CityLayout.allSitesInBox(level.getSeed(), data.settings(), minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (CityLayout.WallSegment seg : CityLayout.wallSegments()) {
-                int[] local = CityLayout.wallBlock(seg, POST_X, WallTemplates.WALKWAY_Z);
-                int x = site.originX() + local[0];
-                int z = site.originZ() + local[1];
-                if (x < minX || x > minX + 15 || z < minZ || z > minZ + 15) {
-                    continue;
-                }
-                // The walkway is the first free block above the wall's body.
-                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
-                BlockPos post = new BlockPos(x, top + 1, z);
-                if (data.guardSpawned(post) || !isWall(chunk.getBlockState(post.below()))) {
-                    continue;
-                }
-                Faction owner = CityBanners.owner(data, precomputer, site);
-                if (owner != null && recruits.spawnWallGuard(owner, post, outwardYaw(seg.side()))) {
-                    data.markGuardSpawned(post);
-                    spawned++;
+                // A corner segment's posts sit as on any other segment, past its lead.
+                int lead = seg.length() - WallTemplates.LENGTH;
+                for (int postX : WallTemplates.GUARD_X) {
+                    int[] local = CityLayout.wallBlock(seg, lead + postX, WallTemplates.WALKWAY_Z);
+                    int x = site.originX() + local[0];
+                    int z = site.originZ() + local[1];
+                    if (x < minX || x > minX + 15 || z < minZ || z > minZ + 15) {
+                        continue;
+                    }
+                    // The walkway is the first free block above the wall's body.
+                    int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
+                    BlockPos post = new BlockPos(x, top + 1, z);
+                    if (data.guardSpawned(post) || !isWall(chunk.getBlockState(post.below()))) {
+                        continue;
+                    }
+                    Faction owner = CityBanners.owner(data, precomputer, site);
+                    if (owner != null && recruits.spawnWallGuard(owner, post, outwardYaw(seg.side()))) {
+                        data.markGuardSpawned(post);
+                        spawned++;
+                    }
                 }
             }
         }
