@@ -8,6 +8,8 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
+import rafasconquest.battle.BattlePlan;
+import rafasconquest.bridge.RecruitsBattle;
 import rafasconquest.bridge.RecruitsFactions;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -69,7 +71,16 @@ public final class PveCommands {
                                         .executes(ctx -> cityStats(ctx, IntegerArgumentType.getInteger(ctx, "samples")))))
                         .then(Commands.literal("advance")
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 100_000))
-                                        .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))));
+                                        .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))
+                        .then(Commands.literal("battle")
+                                .executes(ctx -> battle(ctx, null, null))
+                                .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                .then(Commands.argument("first", StringArgumentType.string())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                        .then(Commands.argument("second", StringArgumentType.string())
+                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"),
+                                                        StringArgumentType.getString(ctx, "second"))))))));
     }
 
     private static ConquestServer server() throws CommandSyntaxException {
@@ -83,6 +94,50 @@ public final class PveCommands {
     private static List<String> factionNames() {
         ConquestServer server = ConquestServer.get();
         return server == null ? List.of() : server.data().factions().stream().map(Faction::name).toList();
+    }
+
+    private static List<String> quotedFactionNames() {
+        return factionNames().stream().map(n -> n.contains(" ") ? "\"" + n + "\"" : n).toList();
+    }
+
+    /**
+     * Deploys two armies of 5 formations of 20 a short way in front of the caller, marching at each other across
+     * their view. Without names, the two factions nearest the caller fight.
+     */
+    private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, @Nullable String second) throws CommandSyntaxException {
+        ConquestServer server = server();
+        Vec3 here = ctx.getSource().getPosition();
+        List<Faction> nearest = server.data().factions().stream()
+                .sorted(Comparator.comparingDouble(f -> f.origin().getCenter().distanceToSqr(here.x, f.origin().getY() + 0.5, here.z)))
+                .toList();
+        Faction a = first == null ? (nearest.isEmpty() ? null : nearest.get(0)) : byName(server, first);
+        Faction b = second == null ? (nearest.size() < 2 ? null : nearest.get(1)) : byName(server, second);
+        if (a == null || b == null || a == b) {
+            throw NO_FACTION.create();
+        }
+        // Look direction flattened; the armies' line of battle runs across it, so the caller watches from the side.
+        float yaw = ctx.getSource().getRotation().y;
+        double lookX = -Math.sin(Math.toRadians(yaw));
+        double lookZ = Math.cos(Math.toRadians(yaw));
+        BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
+        try {
+            String line = RecruitsBattle.start(server.overworld(), a, b, centre, -lookZ, lookX);
+            ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+        } catch (IllegalStateException e) {
+            throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
+        }
+        return 1;
+    }
+
+    private static int battleClear(CommandContext<CommandSourceStack> ctx) {
+        String line = RecruitsBattle.stop();
+        ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+        return 1;
+    }
+
+    @Nullable
+    private static Faction byName(ConquestServer server, String name) {
+        return server.data().factions().stream().filter(f -> f.name().equalsIgnoreCase(name.trim())).findFirst().orElse(null);
     }
 
     private static int factionList(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

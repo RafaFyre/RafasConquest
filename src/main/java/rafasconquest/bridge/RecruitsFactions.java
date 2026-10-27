@@ -18,6 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.ServerScoreboard;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.scores.PlayerTeam;
+import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionBanner;
@@ -141,20 +142,11 @@ public class RecruitsFactions implements RecruitsBridge {
      */
     @Override
     public boolean spawnWallGuard(Faction owner, BlockPos feet, float yaw) {
-        RecruitsFactionManager manager = FactionEvents.recruitsFactionManager;
-        if (manager == null) {
-            return false;
-        }
-        if (registeredId(manager, owner) == null) {
-            onFactionCreated(owner);
-        }
-        String id = registeredId(manager, owner);
-        PlayerTeam team = id == null ? null : overworld.getServer().getScoreboard().getPlayerTeam(id);
+        PlayerTeam team = team(owner);
         BowmanEntity bowman = ModEntityTypes.BOWMAN.get().create(overworld);
         if (team == null || bowman == null) {
             return false;
         }
-        applyTeamRules(team); // also covers teams registered before these rules were set
         Vec3 post = Vec3.atBottomCenterOf(feet);
         bowman.moveTo(post.x, post.y, post.z, yaw, 0);
         bowman.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
@@ -174,6 +166,27 @@ public class RecruitsFactions implements RecruitsBridge {
         overworld.addFreshEntity(bowman);
         FactionEvents.addRecruitToTeam(bowman, team, overworld);
         return true;
+    }
+
+    /**
+     * The faction's scoreboard team, registering the faction with Recruits first if needed, with its team rules
+     * applied (which also covers teams registered before these rules were set). Null if Recruits isn't ready.
+     */
+    @Nullable
+    PlayerTeam team(Faction faction) {
+        RecruitsFactionManager manager = FactionEvents.recruitsFactionManager;
+        if (manager == null) {
+            return null;
+        }
+        if (registeredId(manager, faction) == null) {
+            onFactionCreated(faction);
+        }
+        String id = registeredId(manager, faction);
+        PlayerTeam team = id == null ? null : overworld.getServer().getScoreboard().getPlayerTeam(id);
+        if (team != null) {
+            applyTeamRules(team);
+        }
+        return team;
     }
 
     /** The Recruits id this mod registered for a faction, or null. */

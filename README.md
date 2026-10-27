@@ -29,10 +29,11 @@ They are `runtimeOnly` dependencies in `build.gradle`, pinned in `gradle.propert
 ## Milestone 1 status
 
 Built: one Empire per Capital, Farms producing food, virtual POIs, ownership, the daily food tick, offline catch-up and debug commands.
-Not built (by design): battles, recruit spawning, captures, raids, City-states, Bandits, growth, resources other than food.
+Not built (by design): battles (beyond the prototype below), recruit spawning, captures, raids, City-states, Bandits, growth, resources other than food.
 
 Debug commands (permission level 2): `/pve faction list`, `/pve faction info <name|nearest>`, `/pve poi list [radius]`,
-`/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`, `/pve debug cityterrain`.
+`/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`, `/pve debug cityterrain`,
+`/pve debug battle [first second]`, `/pve debug battle clear`.
 
 ## Recruits integration
 
@@ -41,8 +42,33 @@ menu. Registration happens as factions are discovered, plus a catch-up pass when
 scoreboard team (Recruits factions are teams) in the faction's colour, plus a Recruits faction record holding the
 faction's name and banner. These factions have no player leader. Their leader id is the faction's id, which marks them
 as ours, and their leader name is the faction type ("Empire", "City-state"). Recruits saves them with the world.
-All Recruits calls live in `bridge/RecruitsFactions`, behind the `RecruitsBridge` interface. `/pve debug recruits` lists
-what Recruits holds.
+All Recruits calls live in the `bridge` package: `RecruitsFactions` behind the `RecruitsBridge` interface, and the
+debug battle in `RecruitsBattle`. `/pve debug recruits` lists what Recruits holds.
+
+## Battles (prototype)
+
+`/pve debug battle [first second]` deploys two armies of Recruits soldiers 45 blocks in front of you, marching at each
+other across your view. With no names given, the two factions nearest you fight; quote names that contain spaces. The
+player is a bystander: the two factions are made enemies in Recruits' diplomacy for the battle, so soldiers attack each
+other and leave you alone unless you strike first. The old relation is restored when the battle ends.
+
+- **Each army** is 100 soldiers in 5 formations of 20, each 10 wide and 2 deep. The front line holds 3 infantry
+  formations: swordsmen, a shieldwall, swordsmen. Archers stand 12 blocks behind its centre and cavalry off its right
+  wing, so the army is 1/5 archers and 1/5 cavalry.
+- **The commander** gives each formation an order every second (`battle/BattlePlan.order`):
+  - After 5 s in formation, the infantry marches 2 blocks a second in line, then breaks into a charge once an enemy is
+    within 10 blocks.
+  - Archers march until an enemy is within 30 blocks, then halt and shoot.
+  - Cavalry waits on the wing until its own infantry charges, or an enemy comes within 20 blocks, then rides for the
+    enemy archers.
+  - A charged soldier with no target is sent after the nearest enemy left.
+- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. After 5
+  minutes the battle is called a draw.
+- **Reports:** every 10 s the chat and server log get the soldiers left on each side and the server tick time.
+  `/pve debug battle clear` removes every soldier and horse the battle spawned. Only one battle runs at a time.
+- **Measured** on the dev server with no client connected, 200 soldiers on flat ground: about 10 ms per tick on
+  average, worst ticks 35–50 ms, and a steady 20 TPS. Battles ended in a rout after 60–100 s. On a small island,
+  cavalry that charged into the sea got stuck, so fight on open land.
 
 ## Faction Info and the Command Table
 

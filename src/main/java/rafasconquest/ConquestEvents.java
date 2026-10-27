@@ -10,6 +10,8 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import rafasconquest.bridge.RecruitsBattle;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import rafasconquest.command.PveCommands;
@@ -67,6 +69,21 @@ public final class ConquestEvents {
                 server.tick();
             }
         }
+    }
+
+    /** Drives the debug battle and times whole server ticks while it runs. */
+    @SubscribeEvent
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.START) {
+            RecruitsBattle.onServerTickStart();
+        } else {
+            RecruitsBattle.onServerTickEnd();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        RecruitsBattle.stop();
     }
 
     /** May run off the server thread, so it only queues the link; the server tick applies it. */

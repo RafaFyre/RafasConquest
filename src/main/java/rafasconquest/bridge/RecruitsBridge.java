@@ -6,8 +6,9 @@ import rafasconquest.faction.Faction;
 import java.util.Collection;
 
 /**
- * The only place this mod talks to Villager Recruits. {@link RecruitsFactions} implements it; {@link #NONE} is for
- * tests and for running without a server.
+ * How the simulation talks to Villager Recruits (this package is the only place that does; the debug battle,
+ * {@link RecruitsBattle}, lives here too). {@link RecruitsFactions} implements it; {@link #NONE} is for tests and for
+ * running without a server.
  */
 public interface RecruitsBridge {
     RecruitsBridge NONE = new RecruitsBridge() {
