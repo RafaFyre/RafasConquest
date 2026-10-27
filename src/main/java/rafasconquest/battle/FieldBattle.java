@@ -26,6 +26,7 @@ public final class FieldBattle {
 
     private final FieldArmy[] armies;
     private final Random random;
+    private final FieldRules.Rates rates;
     private int seconds;
     /** When a soldier last fell (0 before anyone has). */
     private int lastFall;
@@ -39,6 +40,13 @@ public final class FieldBattle {
      */
     public FieldBattle(General firstGeneral, int firstBlocks, General secondGeneral, int secondBlocks,
                        Point centre, double axisX, double axisZ, long seed) {
+        this(firstGeneral, firstBlocks, secondGeneral, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES);
+    }
+
+    /** The same, fought with other rates (for calibration). */
+    public FieldBattle(General firstGeneral, int firstBlocks, General secondGeneral, int secondBlocks,
+                       Point centre, double axisX, double axisZ, long seed, FieldRules.Rates rates) {
+        this.rates = rates;
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         armies = new FieldArmy[]{
@@ -417,7 +425,7 @@ public final class FieldBattle {
             double dx = target.x() - block.pos.x();
             double dz = target.z() - block.pos.z();
             double distance = Math.hypot(dx, dz);
-            double step = FieldRules.speed(block.arm);
+            double step = rates.speed(block.arm);
             block.pos = distance <= step ? target : block.pos.plus(dx / distance * step, dz / distance * step);
         }
     }
@@ -446,11 +454,11 @@ public final class FieldBattle {
                 double distance = block.distanceTo(foe);
                 if (distance <= reach) {
                     block.contactSeconds++;
-                    double fighters = block.champion ? FieldRules.WARRIOR_FIGHTS_AS : block.alive;
-                    double damage = fighters * FieldRules.meleeDps(block.arm)
-                            * FieldRules.meleeFactor(sideOf(foe, block), foe.arm);
+                    double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
+                    double damage = fighters * rates.meleeDps(block.arm)
+                            * rates.meleeFactor(sideOf(foe, block), foe.arm);
                     if (block.arm == Arm.CAVALRY && block.charged && block.contactSeconds <= FieldRules.CHARGE_SECONDS) {
-                        damage *= FieldRules.CHARGE_BONUS;
+                        damage *= rates.chargeBonus();
                     }
                     targets.add(foe);
                     damages.add(damage);
@@ -469,7 +477,7 @@ public final class FieldBattle {
         }
     }
 
-    private static void shoot(FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
+    private void shoot(FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
         FieldBlock foe = null;
         double best = FieldRules.ARCHER_RANGE;
         for (FieldBlock e : enemy.blocks) {
@@ -487,7 +495,7 @@ public final class FieldBattle {
         int shots = (int) Math.min(archers.arrows, Math.ceil(archers.alive * FieldRules.ARROWS_PER_SECOND));
         archers.arrows -= shots;
         targets.add(foe);
-        damages.add(shots * FieldRules.ARROW_DAMAGE * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm));
+        damages.add(shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm));
     }
 
     /** Where an attack from {@code attacker} falls on {@code defender}. */

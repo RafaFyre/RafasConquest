@@ -116,13 +116,13 @@ class FieldBattleTest {
     }
 
     @Test
-    void attacksFromTheFlankAndRearHurtMore() {
+    void aShieldwallIsStrongOnlyFromTheFront() {
         // Defender facing east (+x).
         assertEquals(Side.FRONT, FieldRules.side(1, 0, 10, 1));
         assertEquals(Side.FLANK, FieldRules.side(1, 0, 0, 10));
         assertEquals(Side.REAR, FieldRules.side(1, 0, -10, 0));
-        assertTrue(FieldRules.meleeFactor(Side.REAR, Arm.SWORDSMEN) > FieldRules.meleeFactor(Side.FLANK, Arm.SWORDSMEN));
-        assertTrue(FieldRules.meleeFactor(Side.FLANK, Arm.SWORDSMEN) > FieldRules.meleeFactor(Side.FRONT, Arm.SWORDSMEN));
+        assertEquals(1, FieldRules.meleeFactor(Side.REAR, Arm.SWORDSMEN), "as in Recruits, a blow does the same from any side");
+        assertTrue(FieldRules.meleeFactor(Side.FLANK, Arm.SHIELDWALL) > FieldRules.meleeFactor(Side.FRONT, Arm.SHIELDWALL));
         assertTrue(FieldRules.meleeFactor(Side.FRONT, Arm.SHIELDWALL) < FieldRules.meleeFactor(Side.FRONT, Arm.SWORDSMEN));
         assertTrue(FieldRules.arrowFactor(Side.FRONT, Arm.SHIELDWALL) < FieldRules.arrowFactor(Side.FLANK, Arm.SHIELDWALL));
     }

@@ -35,6 +35,9 @@ import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
+import rafasconquest.battle.Calibration;
+import rafasconquest.battle.FieldBattle;
+import rafasconquest.battle.FieldRules;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionBanner;
@@ -94,6 +97,14 @@ public final class RecruitsBattle {
     /** When a soldier last fell (0 before anyone has), and whether the battle has come to a final melee. */
     private int lastFall;
     private boolean finalMelee;
+    /** What this battle measured, and everything measured since the server started. */
+    private final Calibration calibration = new Calibration();
+    private static final Calibration SESSION_CALIBRATION = new Calibration();
+    private final Map<Formation, Double> lastHealth = new HashMap<>();
+    private final Map<Formation, Point> lastCentre = new HashMap<>();
+    /** How the same battle came out fought as numbers, for setting beside this one. */
+    @Nullable
+    private String prediction;
     private final int[] lastAlive = new int[2];
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
@@ -337,12 +348,12 @@ public final class RecruitsBattle {
     /**
      * Deploys both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
      * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army's general is a
-     * warrior or a tactician, 50/50. Each army is {@code firstSoldiers} or {@code secondSoldiers} strong, in whole
+     * warrior or a tactician, 50/50, unless given. Each army is {@code firstSoldiers} or {@code secondSoldiers} strong, in whole
      * blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Returns a line for the caller, or
      * throws if Recruits isn't ready.
      */
-    public static String start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
-                               Point centre, double axisX, double axisZ) {
+    public static String start(ServerLevel level, Faction first, int firstSoldiers, @Nullable General firstGeneral, Faction second,
+                               int secondSoldiers, @Nullable General secondGeneral, Point centre, double axisX, double axisZ) {
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
@@ -352,8 +363,8 @@ public final class RecruitsBattle {
             throw new IllegalStateException("Recruits isn't ready");
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
-        Army a = new Army(first, teamA, axisX, axisZ, rollGeneral(level), uniforms[0], markColor(first), banner(level, first));
-        Army b = new Army(second, teamB, -axisX, -axisZ, rollGeneral(level), uniforms[1], markColor(second), banner(level, second));
+        Army a = new Army(first, teamA, axisX, axisZ, firstGeneral != null ? firstGeneral : rollGeneral(level), uniforms[0], markColor(first), banner(level, first));
+        Army b = new Army(second, teamB, -axisX, -axisZ, secondGeneral != null ? secondGeneral : rollGeneral(level), uniforms[1], markColor(second), banner(level, second));
         RecruitsBattle battle = new RecruitsBattle(level, new Army[]{a, b});
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
@@ -365,6 +376,7 @@ public final class RecruitsBattle {
         long spawnStart = System.nanoTime();
         battle.deploy(a, fronts[0], BattlePlan.blocks(firstSoldiers));
         battle.deploy(b, fronts[1], BattlePlan.blocks(secondSoldiers));
+        battle.prediction = predict(a, BattlePlan.blocks(firstSoldiers), b, BattlePlan.blocks(secondSoldiers), centre, axisX, axisZ);
         long spawnMillis = (System.nanoTime() - spawnStart) / 1_000_000;
         battle.holdChunks();
         String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d (deployed in %d ms)",
@@ -400,6 +412,9 @@ public final class RecruitsBattle {
         RecruitsBattle battle = current;
         if (battle == null) {
             return "No battle to clear";
+        }
+        if (!battle.over) {
+            battle.reportCalibration();
         }
         current = null;
         int removed = 0;
@@ -519,6 +534,9 @@ public final class RecruitsBattle {
         soldier.setMoral(100);
         soldier.setAggroState(0); // neutral: fights monsters and enemies of its faction, and whoever attacks it
         ours.add(soldier.getUUID());
+        if (role == Role.SOLDIER || role == Role.LEADER) {
+            calibration.addSoldier(soldier.getHealth());
+        }
         if (role == Role.GENERAL) {
             backBanners.put(soldier.getId(), army.banner.copy());
         }
@@ -690,6 +708,7 @@ public final class RecruitsBattle {
             }
             lastAlive[side] = armies[side].living.size();
         }
+        measure();
         if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
             finalMelee = true;
             broadcast("[battle " + seconds + "s] the lines have stalled: everyone left charges");
@@ -1025,6 +1044,7 @@ public final class RecruitsBattle {
             return;
         }
         over = true;
+        reportCalibration();
         for (Army army : armies) {
             army.living.forEach(s -> s.setTarget(null));
         }
@@ -1051,6 +1071,172 @@ public final class RecruitsBattle {
             soldier.setShouldMovePos(true);
         }
         winner.living.forEach(s -> s.setFollowState(2)); // winners hold where they stand
+    }
+
+    // ---- measuring, to calibrate battles fought as numbers ----
+
+    /** A charged soldier this close to its target is taken to be striking it. */
+    private static final double STRIKING_DISTANCE = 4;
+
+    /**
+     * One second's measurements for {@link Calibration}: the health each block lost and who was striking it, decided
+     * by the numeric battle's own rules (a formed block strikes the nearest enemy block within its reach, archers
+     * shoot the nearest within range; a charged soldier strikes the target it is next to), and how fast blocks walk.
+     */
+    private void measure() {
+        Map<Integer, Formation> blockOf = new HashMap<>();
+        for (Army army : armies) {
+            for (Formation f : army.formations) {
+                for (AbstractRecruitEntity s : f.living) {
+                    blockOf.put(s.getId(), f);
+                }
+            }
+        }
+        Map<Formation, double[]> strikers = new HashMap<>();
+        for (int side = 0; side < 2; side++) {
+            Army army = armies[side];
+            Army enemy = armies[1 - side];
+            for (Formation f : army.formations) {
+                if (f.living.isEmpty() || f.duty == Duty.WITHDRAWING) {
+                    continue;
+                }
+                if (f.charged) {
+                    Calibration.Striker kind = melee(f.arm);
+                    for (AbstractRecruitEntity s : f.living) {
+                        LivingEntity target = s.getTarget();
+                        Formation struck = target == null || !target.isAlive() ? null : blockOf.get(target.getId());
+                        if (struck != null && struck != f && s.distanceTo(target) <= STRIKING_DISTANCE) {
+                            Point at = new Point(s.getX(), s.getZ());
+                            strike(strikers, struck, kind, FieldRules.meleeFactor(sideOf(enemy, struck, at), struck.arm));
+                        }
+                    }
+                    continue;
+                }
+                Point centre = f.centre();
+                Formation foe = null;
+                double best = Double.MAX_VALUE;
+                for (Formation e : enemy.formations) {
+                    if (!e.living.isEmpty()) {
+                        double d = frontDistance(army, centre, enemy, e.centre(), e.living.size());
+                        if (d < best) {
+                            best = d;
+                            foe = e;
+                        }
+                    }
+                }
+                if (foe == null) {
+                    continue;
+                }
+                if (best <= FieldRules.HOLDING_REACH) {
+                    strike(strikers, foe, melee(f.arm), f.living.size() * FieldRules.meleeFactor(sideOf(enemy, foe, centre), foe.arm));
+                } else if (f.arm == Arm.ARCHERS && arrows(f) > 0) {
+                    Formation shot = null;
+                    double nearest = FieldRules.ARCHER_RANGE;
+                    for (Formation e : enemy.formations) {
+                        if (!e.living.isEmpty() && e.centre().distanceTo(centre) <= nearest) {
+                            nearest = e.centre().distanceTo(centre);
+                            shot = e;
+                        }
+                    }
+                    if (shot != null) {
+                        strike(strikers, shot, Calibration.Striker.ARROWS,
+                                f.living.size() * FieldRules.arrowFactor(sideOf(enemy, shot, centre), shot.arm));
+                    }
+                }
+            }
+        }
+        for (Army army : armies) {
+            for (Formation f : army.formations) {
+                double health = 0;
+                for (AbstractRecruitEntity s : f.living) {
+                    health += s.getHealth();
+                }
+                Double before = lastHealth.put(f, health);
+                double[] struck = strikers.get(f);
+                if (before != null && (struck != null || before > health)) {
+                    calibration.addDamage(Math.max(0, before - health), struck == null ? new double[Calibration.Striker.values().length] : struck);
+                }
+                Point centre = f.centre();
+                Point was = lastCentre.put(f, centre);
+                if (was != null && !f.charged && !f.living.isEmpty() && centre.distanceTo(f.line) >= 8) {
+                    calibration.addSpeed(f.arm == Arm.CAVALRY, centre.distanceTo(was));
+                }
+            }
+        }
+    }
+
+    private static Calibration.Striker melee(Arm arm) {
+        return switch (arm) {
+            case SWORDSMEN, SHIELDWALL -> Calibration.Striker.INFANTRY;
+            case CAVALRY -> Calibration.Striker.CAVALRY;
+            case ARCHERS -> Calibration.Striker.ARCHER_MELEE;
+        };
+    }
+
+    private static void strike(Map<Formation, double[]> strikers, Formation struck, Calibration.Striker kind, double weight) {
+        strikers.computeIfAbsent(struck, k -> new double[Calibration.Striker.values().length])[kind.ordinal()] += weight;
+    }
+
+    /** Where a blow from {@code from} falls on a block of the army {@code defenders}, which faces the army's way. */
+    private static FieldRules.Side sideOf(Army defenders, Formation struck, Point from) {
+        Point at = struck.centre();
+        return FieldRules.side(defenders.facingX, defenders.facingZ, from.x() - at.x(), from.z() - at.z());
+    }
+
+    /** How far apart two blocks' front ranks are, each standing square to its army's facing. */
+    private static double frontDistance(Army army, Point at, Army enemy, Point enemyAt, int enemySoldiers) {
+        double hw = FieldRules.BLOCK_HALF_WIDTH;
+        double ehw = enemySoldiers > 1 ? FieldRules.BLOCK_HALF_WIDTH : FieldRules.LONE_HALF_WIDTH;
+        return FieldRules.segmentDistance(
+                at.x() - army.facingZ * hw, at.z() + army.facingX * hw, at.x() + army.facingZ * hw, at.z() - army.facingX * hw,
+                enemyAt.x() - enemy.facingZ * ehw, enemyAt.z() + enemy.facingX * ehw,
+                enemyAt.x() + enemy.facingZ * ehw, enemyAt.z() - enemy.facingX * ehw);
+    }
+
+    /** Arrows its archers carry, all together. */
+    private static int arrows(Formation f) {
+        int n = 0;
+        for (AbstractRecruitEntity s : f.living) {
+            for (int i = 0; i < s.getInventory().getContainerSize(); i++) {
+                ItemStack stack = s.getInventory().getItem(i);
+                if (stack.is(Items.ARROW)) {
+                    n += stack.getCount();
+                }
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Fights the same battle as numbers a few times (each army's general and size as here, different luck), so its
+     * end can be set beside the live one's.
+     */
+    private static String predict(Army a, int aBlocks, Army b, int bBlocks, Point centre, double axisX, double axisZ) {
+        int runs = Math.max(2, Math.min(20, 400 / (aBlocks + bBlocks)));
+        int[] wins = new int[3];
+        long seconds = 0;
+        long leftA = 0;
+        long leftB = 0;
+        for (int i = 0; i < runs; i++) {
+            FieldBattle battle = new FieldBattle(a.general, aBlocks, b.general, bBlocks, centre, axisX, axisZ, i);
+            FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
+            wins[outcome == null || outcome.winner() < 0 ? 2 : outcome.winner()]++;
+            seconds += battle.seconds();
+            leftA += battle.army(0).alive();
+            leftB += battle.army(1).alive();
+        }
+        return String.format(Locale.ROOT, "%s wins %d of %d, %s %d, draws %d; about %d s; %d and %d left",
+                a.faction.name(), wins[0], runs, b.faction.name(), wins[1], wins[2], seconds / runs, leftA / runs, leftB / runs);
+    }
+
+    /** Reports what this battle measured, and everything measured since the server started. */
+    private void reportCalibration() {
+        SESSION_CALIBRATION.addAll(calibration);
+        broadcast("[calibration] this battle: " + calibration.fit().describe());
+        broadcast("[calibration] all battles so far: " + SESSION_CALIBRATION.fit().describe());
+        if (prediction != null) {
+            broadcast("[calibration] as numbers: " + prediction);
+        }
     }
 
     // ---- keeping the field loaded ----

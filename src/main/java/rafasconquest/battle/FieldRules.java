@@ -6,19 +6,20 @@ import rafasconquest.battle.BattlePlan.Arm;
  * The numbers of a battle fought without entities ({@link FieldBattle}): how fast blocks move, how far they reach,
  * and how much harm they do. Plain functions, so they can be tested alone.
  * <p>
- * The rates are first guesses, set so a block of 20 holding a line against another loses half its soldiers in about
- * a minute, roughly what live Recruits lines do. They are to be calibrated against live battles.
+ * The rates are calibrated against live Recruits battles ({@link Calibration}): six battles of 100 to 500 a side
+ * measured the damage each kind of soldier does a second, riding speed and starting health, and the rates were then
+ * tuned so whole battles last about as long as the live ones.
  */
 public final class FieldRules {
     /** A soldier's health, and a warrior general's (Recruits' top level). */
-    public static final float SOLDIER_HEALTH = 20;
+    public static final float SOLDIER_HEALTH = 21;
     public static final float WARRIOR_HEALTH = 82;
     /** Damage dealt by one hit; a second's damage is dealt in hits this size, to random soldiers. */
     public static final float HIT = 4;
 
-    /** Blocks a second: infantry and archers on foot, cavalry. */
+    /** Blocks a second: infantry and archers on foot (not yet measured well), cavalry (measured). */
     public static final double FOOT_SPEED = 3;
-    public static final double HORSE_SPEED = 6;
+    public static final double HORSE_SPEED = 7;
 
     /** Half the width of a block's front rank, and of a lone soldier. */
     public static final double BLOCK_HALF_WIDTH = (BattlePlan.FILE_WIDTH - 1) * BattlePlan.SPACING / 2;
@@ -32,26 +33,32 @@ public final class FieldRules {
     public static final double CLOSE_REACH = 2.5;
 
     /** Damage a second dealt by one fighting soldier, by arm. */
-    public static final double INFANTRY_DPS = 0.15;
-    public static final double CAVALRY_DPS = 0.18;
+    public static final double INFANTRY_DPS = 0.12;
+    public static final double CAVALRY_DPS = 0.36;
     /** Archers in melee fight badly. */
-    public static final double ARCHER_MELEE_DPS = 0.07;
+    public static final double ARCHER_MELEE_DPS = 0.088;
     /** A warrior general fights like this many soldiers. */
     public static final double WARRIOR_FIGHTS_AS = 4;
 
-    /** Archers shoot this far, this many arrows a second each, each arrow on average (misses included) doing this much. */
-    public static final double ARCHER_RANGE = BattlePlan.ARCHER_RANGE;
-    public static final double ARROWS_PER_SECOND = 0.5;
-    public static final double ARROW_DAMAGE = 0.3;
+    /**
+     * Archers shoot this far (Recruits bowmen: 44, though they halt at {@link BattlePlan#ARCHER_RANGE}), about this many
+     * arrows a second each, each arrow on average (misses included) doing this much.
+     */
+    public static final double ARCHER_RANGE = 44;
+    public static final double ARROWS_PER_SECOND = 1;
+    public static final double ARROW_DAMAGE = 0.19;
     /** Arrows each archer carries (Recruits bowmen in battle get a stack). */
     public static final int ARROWS_EACH = 64;
 
     /** Cavalry that has just reached the enemy hits much harder for its first seconds. */
-    public static final double CHARGE_BONUS = 3;
+    public static final double CHARGE_BONUS = 1.5;
     public static final int CHARGE_SECONDS = 3;
-    /** Attacks on a block's flank or rear do more. */
-    public static final double FLANK_BONUS = 1.5;
-    public static final double REAR_BONUS = 2;
+    /**
+     * How much more attacks on a block's flank or rear do: nothing more, as in Recruits, where a blow does the same
+     * from any side (only a shield, held to the front, makes a difference).
+     */
+    public static final double FLANK_BONUS = 1;
+    public static final double REAR_BONUS = 1;
     /** A shieldwall takes less from the front: in melee, and from arrows. */
     public static final double SHIELD_MELEE = 0.6;
     public static final double SHIELD_ARROWS = 0.4;
@@ -59,18 +66,38 @@ public final class FieldRules {
     private FieldRules() {
     }
 
-    public static double speed(Arm arm) {
-        return arm == Arm.CAVALRY ? HORSE_SPEED : FOOT_SPEED;
+    /**
+     * The rates a battle is fought with, which calibration sets: damage a second of one fighting soldier by arm, of
+     * one arrow, how much a charge multiplies cavalry damage for its first seconds, walking and riding speeds, and how
+     * many soldiers a warrior general fights like.
+     */
+    public record Rates(double infantryDps, double cavalryDps, double archerMeleeDps, double arrowDamage, double chargeBonus,
+                        double footSpeed, double horseSpeed, double warriorFightsAs, double flankBonus, double rearBonus) {
+        public double meleeDps(Arm arm) {
+            return switch (arm) {
+                case SWORDSMEN, SHIELDWALL -> infantryDps;
+                case CAVALRY -> cavalryDps;
+                case ARCHERS -> archerMeleeDps;
+            };
+        }
+
+        public double speed(Arm arm) {
+            return arm == Arm.CAVALRY ? horseSpeed : footSpeed;
+        }
+
+        /** How much more (or less) a melee attack does, for where it falls and on whom. */
+        public double meleeFactor(Side side, Arm defender) {
+            return switch (side) {
+                case FRONT -> defender == Arm.SHIELDWALL ? SHIELD_MELEE : 1;
+                case FLANK -> flankBonus;
+                case REAR -> rearBonus;
+            };
+        }
     }
 
-    /** Melee damage a second for each fighting soldier of this arm. */
-    public static double meleeDps(Arm arm) {
-        return switch (arm) {
-            case SWORDSMEN, SHIELDWALL -> INFANTRY_DPS;
-            case CAVALRY -> CAVALRY_DPS;
-            case ARCHERS -> ARCHER_MELEE_DPS;
-        };
-    }
+    /** The rates battles are fought with. */
+    public static final Rates RATES = new Rates(INFANTRY_DPS, CAVALRY_DPS, ARCHER_MELEE_DPS, ARROW_DAMAGE, CHARGE_BONUS,
+            FOOT_SPEED, HORSE_SPEED, WARRIOR_FIGHTS_AS, FLANK_BONUS, REAR_BONUS);
 
     /** Where an attack falls on the defender: its front, a flank or its rear. */
     public enum Side {
@@ -92,11 +119,7 @@ public final class FieldRules {
 
     /** How much more (or less) a melee attack does, for where it falls and on whom. */
     public static double meleeFactor(Side side, Arm defender) {
-        return switch (side) {
-            case FRONT -> defender == Arm.SHIELDWALL ? SHIELD_MELEE : 1;
-            case FLANK -> FLANK_BONUS;
-            case REAR -> REAR_BONUS;
-        };
+        return RATES.meleeFactor(side, defender);
     }
 
     /** How much of a volley of arrows tells, for where it falls and on whom. */

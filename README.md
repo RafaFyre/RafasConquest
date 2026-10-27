@@ -111,18 +111,30 @@ first. The old relation is restored when the battle ends.
   whoever is within reach (`battle/FieldRules`):
   - A block holding its place reaches 12 blocks (its soldiers step out and return); one that has broken formation
     must close to 2.5.
-  - Each fighting soldier does about 0.15 damage a second (cavalry a little more, archers in melee half), dealt in
-    hits of 4 to random soldiers, so each soldier's health is kept. Archers shoot 30 blocks until their 64 arrows each
-    run out.
-  - A cavalry charge does triple damage for its first 3 s; attacks on a flank do 1.5 times as much, on the rear twice;
-    a shieldwall takes 60 % from the front, and 40 % of arrows. A warrior general fights like 4 soldiers.
-  - These rates are first guesses, set so a block holding a line loses half its soldiers in about a minute; they are
-    to be calibrated against live battles.
+  - Each fighting soldier does 0.12 damage a second (cavalry 0.36, archers in melee 0.088), dealt in hits of 4 to
+    random soldiers, so each soldier's health is kept. Archers shoot 44 blocks, an arrow a second doing 0.19 on
+    average, until their 64 arrows each run out.
+  - A cavalry charge does half as much again for its first 3 s; a shieldwall takes 60 % from the front, and 40 % of
+    arrows. A warrior general fights like 4 soldiers.
+  - **Calibration** (`battle/Calibration`): every live battle measures, each second, the health each block lost and
+    who was striking it (by the numeric battle's own reach rules), how fast blocks walk and how much health soldiers
+    start with, and fits a damage rate per kind of soldier. At its end it reports the fit (for the battle and all
+    battles since the server started) and, beside it, how the same battle came out fought as numbers. Over 12 live
+    battles of 100 to 500 a side the fits settled near: infantry 0.15 to 0.2 damage a second each, cavalry about 0.65,
+    archers in melee about 0.2, arrows about 0.18 an archer a second (Recruits bowmen shoot about once a second, out to
+    44 blocks), starting health 21. Recruits deals a blow the same from any side, so the numeric battle has no flank
+    or rear bonus any more. Walking speeds aren't measured well yet.
+  - **How well it matches:** a battle's length and its winner are in the right range, but not reliably. At 300 a side
+    live battles lasted 340 to 770 s against about 310 s as numbers; at 100 a side about 190 s against about 355 s.
+    As numbers a warrior general beats a tactician almost every time, while live the warrior won 3 of 5 at 300 a side
+    and the tactician won all 3 at 100. Live battles also vary much more.
+
+  `/pve debug battle <first> <soldiers> <second> <soldiers> [warrior|tactician] [warrior|tactician]` picks each
+  army's general, for calibration.
 
   `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
-  Measured: 2000 against 2000 lasts 7 to 11 minutes of battle with 30 to 60 blocks relieved on each side, and takes
-  about half a second to work out; 2000 against 500 is over in about a minute. In these first numbers a warrior
-  general tends to beat a tactician at 100 and 500 a side, and lose at 2000.
+  2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes about
+  half a second to work out.
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in
   the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the
