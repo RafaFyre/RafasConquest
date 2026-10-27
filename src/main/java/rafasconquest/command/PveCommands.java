@@ -37,6 +37,8 @@ import java.util.concurrent.CompletableFuture;
 
 public final class PveCommands {
     private static final int MAX_POI_LINES = 150;
+    /** Soldiers on each side of a debug battle when no number is given. */
+    private static final int DEFAULT_ARMY = 100;
     private static final SimpleCommandExceptionType NOT_RUNNING = new SimpleCommandExceptionType(Component.literal("RafasConquest is not running in this world"));
     private static final SimpleCommandExceptionType NO_FACTION = new SimpleCommandExceptionType(Component.literal("No faction with that name"));
 
@@ -73,14 +75,22 @@ public final class PveCommands {
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 100_000))
                                         .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))
                         .then(Commands.literal("battle")
-                                .executes(ctx -> battle(ctx, null, null))
+                                .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
                                 .then(Commands.argument("first", StringArgumentType.string())
                                         .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
                                         .then(Commands.argument("second", StringArgumentType.string())
                                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
-                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"),
-                                                        StringArgumentType.getString(ctx, "second"))))))));
+                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"), DEFAULT_ARMY,
+                                                        StringArgumentType.getString(ctx, "second"), DEFAULT_ARMY)))
+                                        .then(Commands.argument("firstSoldiers", IntegerArgumentType.integer(BattlePlan.MIN_SOLDIERS, BattlePlan.MAX_SOLDIERS))
+                                                .then(Commands.argument("second", StringArgumentType.string())
+                                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                        .then(Commands.argument("secondSoldiers", IntegerArgumentType.integer(BattlePlan.MIN_SOLDIERS, BattlePlan.MAX_SOLDIERS))
+                                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"),
+                                                                        IntegerArgumentType.getInteger(ctx, "firstSoldiers"),
+                                                                        StringArgumentType.getString(ctx, "second"),
+                                                                        IntegerArgumentType.getInteger(ctx, "secondSoldiers"))))))))));
     }
 
     private static ConquestServer server() throws CommandSyntaxException {
@@ -101,10 +111,12 @@ public final class PveCommands {
     }
 
     /**
-     * Deploys two armies of 5 formations of 20 a short way in front of the caller, marching at each other across
-     * their view. Without names, the two factions nearest the caller fight.
+     * Deploys two armies a short way in front of the caller, marching at each other across their view: {@code
+     * firstSoldiers} and {@code secondSoldiers} strong (100 each unless given), in blocks of 20. Without names, the two
+     * factions nearest the caller fight.
      */
-    private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, @Nullable String second) throws CommandSyntaxException {
+    private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
+                              int secondSoldiers) throws CommandSyntaxException {
         ConquestServer server = server();
         Vec3 here = ctx.getSource().getPosition();
         List<Faction> nearest = server.data().factions().stream()
@@ -121,7 +133,7 @@ public final class PveCommands {
         double lookZ = Math.cos(Math.toRadians(yaw));
         BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
         try {
-            String line = RecruitsBattle.start(server.overworld(), a, b, centre, -lookZ, lookX);
+            String line = RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX);
             ctx.getSource().sendSuccess(() -> Component.literal(line), true);
         } catch (IllegalStateException e) {
             throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();

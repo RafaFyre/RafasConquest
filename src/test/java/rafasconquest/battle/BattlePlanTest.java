@@ -5,6 +5,7 @@ import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Order;
 import rafasconquest.battle.BattlePlan.Point;
+import rafasconquest.battle.BattlePlan.Slot;
 
 import java.util.List;
 
@@ -18,34 +19,84 @@ class BattlePlanTest {
     private static final int FORMED = BattlePlan.FORMING_SECONDS;
 
     @Test
-    void anArmyIsFiveFormationsOfTwentyWithAFifthArchersAndAFifthCavalry() {
-        for (General general : General.values()) {
-            List<BattlePlan.Slot> slots = BattlePlan.deployment(general);
-            assertEquals(5, slots.size());
-            assertEquals(1, slots.stream().filter(s -> s.arm() == Arm.ARCHERS).count());
-            assertEquals(1, slots.stream().filter(s -> s.arm() == Arm.CAVALRY).count());
-            assertEquals(3, slots.stream().filter(s -> s.arm().infantry()).count());
-        }
-        assertEquals(0, BattlePlan.WARRIOR_DEPLOYMENT.stream().filter(BattlePlan.Slot::reserve).count());
-        assertEquals(1, BattlePlan.TACTICIAN_DEPLOYMENT.stream().filter(s -> s.reserve() && s.arm() == Arm.SWORDSMEN).count());
+    void armiesComeInWholeBlocksOfTwentyWithinTheLimits() {
+        assertEquals(5, BattlePlan.blocks(100));
+        assertEquals(100, BattlePlan.blocks(2000));
+        assertEquals(100, BattlePlan.blocks(5000));
+        assertEquals(1, BattlePlan.blocks(1));
+        assertEquals(8, BattlePlan.blocks(150), "rounded to the nearest block");
     }
 
     @Test
-    void frontLineFormationsDoNotOverlap() {
+    void anArmyIsAFifthArchersAndAFifthCavalry() {
+        for (General general : General.values()) {
+            for (int blocks : new int[]{5, 50, 100}) {
+                List<Slot> slots = BattlePlan.deployment(general, blocks);
+                assertEquals(blocks, slots.size());
+                assertEquals(blocks / 5, slots.stream().filter(s -> s.arm() == Arm.ARCHERS).count());
+                assertEquals(blocks / 5, slots.stream().filter(s -> s.arm() == Arm.CAVALRY).count());
+            }
+        }
+        List<Slot> lone = BattlePlan.deployment(General.WARRIOR, 1);
+        assertEquals(1, lone.size());
+        assertTrue(lone.get(0).arm().infantry(), "a single block is infantry");
+    }
+
+    @Test
+    void theHundredStrongArmiesKeepTheirOldShape() {
+        List<Slot> warrior = BattlePlan.deployment(General.WARRIOR, 5);
+        assertEquals(3, warrior.stream().filter(s -> s.arm().infantry() && s.line() == 0).count());
+        assertEquals(0, warrior.stream().filter(Slot::reserve).count());
+        List<Slot> tactician = BattlePlan.deployment(General.TACTICIAN, 5);
+        assertEquals(2, tactician.stream().filter(s -> s.arm().infantry() && s.line() == 0).count());
+        assertEquals(1, tactician.stream().filter(Slot::reserve).count());
+    }
+
+    @Test
+    void aBigArmyStandsInLinesBehindAFrontOfAtMostTenBlocks() {
+        List<Slot> slots = BattlePlan.deployment(General.TACTICIAN, 100);
+        List<Slot> infantry = slots.stream().filter(s -> s.arm().infantry() && !s.reserve()).toList();
+        assertEquals(BattlePlan.MAX_FRONT, infantry.stream().filter(s -> s.line() == 0).count());
+        int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
+        assertTrue(lines >= 4, "relief lines behind the front: " + lines);
+        assertEquals(12, slots.stream().filter(Slot::reserve).count(), "a fifth of 60 infantry blocks");
+        double reserveBack = slots.stream().filter(Slot::reserve).mapToDouble(Slot::back).min().orElseThrow();
+        assertTrue(reserveBack > infantry.stream().mapToDouble(Slot::back).max().orElseThrow(), "the reserve is behind every line");
+        assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.SHIELDWALL));
+    }
+
+    @Test
+    void blocksInALineDoNotOverlap() {
         double width = (BattlePlan.FILE_WIDTH - 1) * BattlePlan.SPACING;
         for (General general : General.values()) {
-            var front = BattlePlan.deployment(general).stream().filter(s -> s.back() == 0).map(BattlePlan.Slot::right).sorted().toList();
-            for (int i = 1; i < front.size(); i++) {
-                assertTrue(front.get(i) - front.get(i - 1) > width + 1, general + ": formations " + (i - 1) + " and " + i + " overlap");
+            List<Slot> slots = BattlePlan.deployment(general, 100);
+            for (int line = 0; line < 6; line++) {
+                int l = line;
+                List<Double> rights = slots.stream().filter(s -> s.arm().infantry() && !s.reserve() && s.line() == l)
+                        .map(Slot::right).sorted().toList();
+                for (int i = 1; i < rights.size(); i++) {
+                    assertTrue(rights.get(i) - rights.get(i - 1) > width + 1, general + " line " + l + " overlaps");
+                }
             }
         }
     }
 
     @Test
-    void aTacticianStaysWellBackAndAWarriorJustBehindTheLine() {
-        assertTrue(BattlePlan.generalBack(General.WARRIOR) < 10);
-        double behindEveryone = BattlePlan.TACTICIAN_DEPLOYMENT.stream().mapToDouble(BattlePlan.Slot::back).max().orElseThrow();
-        assertTrue(BattlePlan.generalBack(General.TACTICIAN) > behindEveryone + 3);
+    void cavalryStandsOnBothWingsBeyondTheLine() {
+        List<Slot> slots = BattlePlan.deployment(General.WARRIOR, 100);
+        double lineEnd = slots.stream().filter(s -> s.line() == 0).mapToDouble(s -> Math.abs(s.right())).max().orElseThrow();
+        List<Slot> cavalry = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).toList();
+        assertTrue(cavalry.stream().allMatch(s -> Math.abs(s.right()) > lineEnd + BattlePlan.BLOCK_PITCH / 2));
+        assertEquals(10, cavalry.stream().filter(s -> s.right() > 0).count());
+        assertEquals(10, cavalry.stream().filter(s -> s.right() < 0).count());
+    }
+
+    @Test
+    void aTacticianStaysBehindEverythingAndAWarriorJustBehindTheLine() {
+        assertTrue(BattlePlan.generalBack(General.WARRIOR, BattlePlan.deployment(General.WARRIOR, 100)) < 10);
+        List<Slot> slots = BattlePlan.deployment(General.TACTICIAN, 100);
+        double behindEveryone = slots.stream().mapToDouble(Slot::back).max().orElseThrow();
+        assertTrue(BattlePlan.generalBack(General.TACTICIAN, slots) >= behindEveryone + 3);
     }
 
     @Test
@@ -68,11 +119,11 @@ class BattlePlanTest {
     }
 
     @Test
-    void aWarriorHoldsWhileFormingThenAdvancesAndCharges() {
+    void aWarriorHoldsWhileFormingThenAdvancesAndFightsInLine() {
         General w = General.WARRIOR;
         assertEquals(Order.HOLD, BattlePlan.order(w, Arm.SWORDSMEN, 0, 5, false));
         assertEquals(Order.MARCH, BattlePlan.order(w, Arm.SWORDSMEN, FORMED, 50, false));
-        assertEquals(Order.CHARGE, BattlePlan.order(w, Arm.SHIELDWALL, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
+        assertEquals(Order.ENGAGE, BattlePlan.order(w, Arm.SHIELDWALL, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
         assertEquals(Order.MARCH, BattlePlan.order(w, Arm.ARCHERS, 10, 50, false));
         assertEquals(Order.HOLD, BattlePlan.order(w, Arm.ARCHERS, 10, BattlePlan.ARCHER_RANGE, true));
         assertEquals(Order.HOLD, BattlePlan.order(w, Arm.CAVALRY, 10, 50, false));
@@ -87,7 +138,7 @@ class BattlePlanTest {
         assertEquals(Order.MARCH, BattlePlan.order(t, Arm.ARCHERS, FORMED, 50, false));
         assertEquals(Order.MARCH, BattlePlan.order(t, Arm.SWORDSMEN, FORMED + BattlePlan.PATIENCE_SECONDS, 50, false));
         assertEquals(Order.MARCH, BattlePlan.order(t, Arm.SWORDSMEN, FORMED, BattlePlan.PATIENCE_RANGE, false), "an enemy close by ends the wait");
-        assertEquals(Order.CHARGE, BattlePlan.order(t, Arm.SHIELDWALL, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
+        assertEquals(Order.ENGAGE, BattlePlan.order(t, Arm.SHIELDWALL, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
     }
 
     @Test
@@ -100,20 +151,31 @@ class BattlePlanTest {
 
     @Test
     void theFlankRouteGoesPastTheEnemysEndThenBehindIt() {
-        // Facing east toward an enemy at the origin: our right is south (+z), behind the enemy is further east.
-        List<Point> route = BattlePlan.flankRoute(new Point(0, 0), 1, 0);
-        assertEquals(2, route.size());
-        assertTrue(route.get(0).z() > 30, "first wide past the end of the enemy line");
-        assertTrue(route.get(1).x() > 20, "then round behind it");
+        // Facing east toward an enemy line 100 wide at the origin: our right is south (+z), behind them is east.
+        List<Point> right = BattlePlan.flankRoute(new Point(0, 0), 1, 0, 1, 50);
+        assertEquals(2, right.size());
+        assertTrue(right.get(0).z() > 70, "first wide past the end of the enemy line");
+        assertTrue(right.get(1).x() > 20, "then round behind it");
+        List<Point> left = BattlePlan.flankRoute(new Point(0, 0), 1, 0, -1, 50);
+        assertTrue(left.get(0).z() < -70, "the left wing rides round the other end");
     }
 
     @Test
-    void theReserveGoesToTheWeakestFightingFormation() {
-        int[] started = {20, 20};
-        assertEquals(-1, BattlePlan.reserveToCommit(new int[]{20, 20}, started, new boolean[]{true, true}));
-        assertEquals(-1, BattlePlan.reserveToCommit(new int[]{5, 20}, started, new boolean[]{false, true}), "only once it is fighting");
-        assertEquals(1, BattlePlan.reserveToCommit(new int[]{11, 8}, started, new boolean[]{true, true}));
-        assertEquals(0, BattlePlan.reserveToCommit(new int[]{12, 20}, started, new boolean[]{true, true}));
+    void aBlockIsRelievedAtHalfStrengthByAFitOne() {
+        assertFalse(BattlePlan.needsRelief(11, 20));
+        assertTrue(BattlePlan.needsRelief(10, 20));
+        assertTrue(BattlePlan.needsRelief(0, 20));
+        assertTrue(BattlePlan.fitToRelieve(20, 20));
+        assertTrue(BattlePlan.fitToRelieve(12, 20));
+        assertFalse(BattlePlan.fitToRelieve(11, 20), "a worn block stays at the rear");
+    }
+
+    @Test
+    void theReserveGoesInWhenTheLinesRunOutOrTheArmyIsWorn() {
+        assertFalse(BattlePlan.commitReserve(1000, 1000, true, true));
+        assertTrue(BattlePlan.commitReserve(1000, 1000, true, false), "no fit block left to relieve with");
+        assertFalse(BattlePlan.commitReserve(1000, 1000, false, false));
+        assertTrue(BattlePlan.commitReserve(600, 1000, false, true), "the army is down to 60 %");
     }
 
     @Test

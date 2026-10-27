@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -94,6 +95,8 @@ public final class RecruitsBattle {
     private final TickTimes window = new TickTimes();
     private long tickStart;
     private int snapshotTicks;
+    /** Time spent on the battle's own work (orders, snapshots, chunks) since the last report, in nanoseconds. */
+    private long ownNanos;
     /** Chunks the battle keeps loaded and running, as {@link ChunkPos#toLong}. */
     private final Set<Long> heldChunks = new HashSet<>();
 
@@ -113,12 +116,24 @@ public final class RecruitsBattle {
         final int mark;
         final ItemStack banner;
         final List<Formation> formations = new ArrayList<>();
+        /** The block holding each file of the front line (it may have fallen; a relief then takes its place). */
+        Formation[] front = new Formation[0];
+        /** Half the width of the front line, for the enemy's cavalry to ride round. */
+        double halfWidth;
+        double generalBack;
         @Nullable
         AbstractRecruitEntity commander;
         @Nullable
         AbstractRecruitEntity bearer;
         boolean commanderCharged;
+        boolean reserveCommitted;
+        /** Front blocks relieved so far, for the reports. */
+        int reliefs;
         int started;
+        /** Its living soldiers, worked out once a second. */
+        List<AbstractRecruitEntity> living = List.of();
+        /** Hands out each block's place in its file's queue, in the order they joined it. */
+        int queueTicket;
 
         Army(Faction faction, PlayerTeam team, double facingX, double facingZ, General general, int uniform, int mark, ItemStack banner) {
             this.faction = faction;
@@ -131,34 +146,52 @@ public final class RecruitsBattle {
             this.banner = banner;
         }
 
-        List<AbstractRecruitEntity> alive() {
+        /** Works out every block's living soldiers, and the army's, for this second. */
+        void count() {
             List<AbstractRecruitEntity> all = new ArrayList<>();
-            formations.forEach(f -> all.addAll(f.alive()));
+            for (Formation f : formations) {
+                f.count();
+                all.addAll(f.living);
+            }
             for (AbstractRecruitEntity e : new AbstractRecruitEntity[]{commander, bearer}) {
                 if (e != null && e.isAlive()) {
                     all.add(e);
                 }
             }
-            return all;
+            living = all;
         }
 
         boolean infantryEngaged() {
-            return formations.stream().anyMatch(f -> f.arm.infantry() && f.charged);
+            for (Formation f : front) {
+                if (f.engaged && !f.living.isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
         }
 
-        /** The middle of the front line: the average of its (non-reserve) infantry formations' lines. */
+        /** The middle of the front line: the average of its blocks' lines. */
         Point frontCentre() {
             double x = 0;
             double z = 0;
-            int n = 0;
-            for (Formation f : formations) {
-                if (f.arm.infantry() && !f.reserve) {
-                    x += f.line.x();
-                    z += f.line.z();
-                    n++;
-                }
+            for (Formation f : front) {
+                x += f.line.x();
+                z += f.line.z();
             }
-            return n == 0 ? formations.get(0).line : new Point(x / n, z / n);
+            return front.length == 0 ? formations.get(0).line : new Point(x / front.length, z / front.length);
+        }
+
+        /** The blocks waiting behind the front in {@code file}, nearest the front first. */
+        List<Formation> queue(int file) {
+            return formations.stream().filter(f -> f.duty == Duty.LINE && f.file == file)
+                    .sorted(Comparator.comparingInt(f -> f.queueTicket)).toList();
+        }
+
+        /** Puts a block at the back of a file's queue. */
+        void join(Formation f, int file) {
+            f.duty = Duty.LINE;
+            f.file = file;
+            f.queueTicket = queueTicket++;
         }
 
         String describe() {
@@ -166,40 +199,87 @@ public final class RecruitsBattle {
         }
     }
 
+    /** What an infantry block is doing in the army's lines. */
+    private enum Duty {
+        /** Holding its file of the front line, marching or fighting. */
+        FRONT,
+        /** Waiting in its file's queue behind the front, to relieve it. */
+        LINE,
+        /** Marching up to take over its file of the front. */
+        RELIEVING,
+        /** Relieved: going back behind the lines, not fighting on the way. */
+        WITHDRAWING,
+        /** Back behind the lines, too worn to go forward again; fights only if the enemy reaches it. */
+        RESTING,
+        /** A tactician's reserve, waiting to be committed. */
+        RESERVE,
+        /** Archers and cavalry, which take their own orders. */
+        SUPPORT
+    }
+
+    /** A block of 20 soldiers, led by its captain. */
     private static final class Formation {
         final Arm arm;
-        final boolean reserve;
+        /** Where it stands across the army when not in a line (reserve, archers, cavalry). */
+        final double slotRight;
+        final double slotBack;
         final List<AbstractRecruitEntity> soldiers = new ArrayList<>();
         @Nullable
         AbstractRecruitEntity leader;
         /** The centre of its front rank, where its line is ordered to stand. */
         Point line;
+        Duty duty;
+        /** The file of the front line it holds, waits behind or relieves. */
+        int file;
+        int queueTicket;
+        /** When it took up its current duty, and where it withdraws to. */
+        int dutySince;
+        @Nullable
+        Point rear;
+        /** The block on its way to relieve it, if any. */
+        @Nullable
+        Formation relief;
+        /** In the front line and fighting. */
+        boolean engaged;
+        /** Broken formation to fight freely (cavalry). */
         boolean charged;
-        /** A reserve the general has sent into the fight. */
-        boolean committed;
         /** A flanking ride's waypoints, once it has set off, and when it did. */
         @Nullable
         List<Point> route;
         int routeIndex;
         int routeStarted;
+        /** Its living soldiers, worked out once a second. */
+        List<AbstractRecruitEntity> living = List.of();
 
         Formation(BattlePlan.Slot slot, Point line) {
             this.arm = slot.arm();
-            this.reserve = slot.reserve();
+            this.slotRight = slot.right();
+            this.slotBack = slot.back();
             this.line = line;
+            this.file = slot.file();
+            if (!slot.arm().infantry()) {
+                duty = Duty.SUPPORT;
+            } else if (slot.reserve()) {
+                duty = Duty.RESERVE;
+            } else {
+                duty = slot.line() == 0 ? Duty.FRONT : Duty.LINE;
+            }
+        }
+
+        void count() {
+            living = soldiers.stream().filter(LivingEntity::isAlive).toList();
         }
 
         List<AbstractRecruitEntity> alive() {
-            return soldiers.stream().filter(LivingEntity::isAlive).toList();
+            return living;
         }
 
         Point centre() {
-            List<AbstractRecruitEntity> alive = alive();
-            if (alive.isEmpty()) {
+            if (living.isEmpty()) {
                 return line;
             }
-            return new Point(alive.stream().mapToDouble(Entity::getX).average().orElse(line.x()),
-                    alive.stream().mapToDouble(Entity::getZ).average().orElse(line.z()));
+            return new Point(living.stream().mapToDouble(Entity::getX).average().orElse(line.x()),
+                    living.stream().mapToDouble(Entity::getZ).average().orElse(line.z()));
         }
     }
 
@@ -253,9 +333,12 @@ public final class RecruitsBattle {
     /**
      * Deploys both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
      * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army's general is a
-     * warrior or a tactician, 50/50. Returns a line for the caller, or throws if Recruits isn't ready.
+     * warrior or a tactician, 50/50. Each army is {@code firstSoldiers} or {@code secondSoldiers} strong, in whole
+     * blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Returns a line for the caller, or
+     * throws if Recruits isn't ready.
      */
-    public static String start(ServerLevel level, Faction first, Faction second, Point centre, double axisX, double axisZ) {
+    public static String start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                               Point centre, double axisX, double axisZ) {
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
@@ -275,11 +358,13 @@ public final class RecruitsBattle {
 
         current = battle; // before spawning, so the first players to see a general hear about its banner
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
-        battle.deploy(a, fronts[0]);
-        battle.deploy(b, fronts[1]);
+        long spawnStart = System.nanoTime();
+        battle.deploy(a, fronts[0], BattlePlan.blocks(firstSoldiers));
+        battle.deploy(b, fronts[1], BattlePlan.blocks(secondSoldiers));
+        long spawnMillis = (System.nanoTime() - spawnStart) / 1_000_000;
         battle.holdChunks();
-        String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d", a.describe(),
-                a.started, b.describe(), b.started, Math.round(centre.x()), Math.round(centre.z()));
+        String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d (deployed in %d ms)",
+                a.describe(), a.started, b.describe(), b.started, Math.round(centre.x()), Math.round(centre.z()), spawnMillis);
         RafasConquest.LOGGER.info("[battle] {}", line);
         return line;
     }
@@ -345,9 +430,14 @@ public final class RecruitsBattle {
 
     // ---- deployment ----
 
-    private void deploy(Army army, Point front) {
+    private void deploy(Army army, Point front, int blocks) {
         float yaw = (float) Math.toDegrees(Math.atan2(-army.facingX, army.facingZ));
-        for (BattlePlan.Slot slot : BattlePlan.deployment(army.general)) {
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(army.general, blocks);
+        loadGround(army, front, slots);
+        int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
+        army.front = new Formation[files];
+        army.halfWidth = files * BattlePlan.BLOCK_PITCH / 2;
+        for (BattlePlan.Slot slot : slots) {
             Point line = BattlePlan.place(front, army.facingX, army.facingZ, slot.right(), slot.back());
             Formation formation = new Formation(slot, line);
             for (int i = 0; i < BattlePlan.SOLDIERS_PER_FORMATION; i++) {
@@ -366,10 +456,16 @@ public final class RecruitsBattle {
             }
             army.started += formation.soldiers.size();
             army.formations.add(formation);
+            if (formation.duty == Duty.FRONT) {
+                army.front[slot.file()] = formation;
+            } else if (formation.duty == Duty.LINE) {
+                army.join(formation, slot.file());
+            }
             standInLine(army, formation);
         }
 
-        double back = BattlePlan.generalBack(army.general);
+        double back = BattlePlan.generalBack(army.general, slots);
+        army.generalBack = back;
         army.commander = spawn(ModEntityTypes.RECRUIT.get(), army, Role.GENERAL,
                 BattlePlan.place(front, army.facingX, army.facingZ, 0, back), yaw);
         army.bearer = spawn(ModEntityTypes.RECRUIT.get(), army, Role.BEARER,
@@ -517,9 +613,9 @@ public final class RecruitsBattle {
     private void charge(Formation formation, Army enemy) {
         formation.charged = true;
         List<AbstractRecruitEntity> archers = enemy.formations.stream()
-                .filter(f -> f.arm == Arm.ARCHERS).flatMap(f -> f.alive().stream()).toList();
+                .filter(f -> f.arm == Arm.ARCHERS).flatMap(f -> f.living.stream()).toList();
         for (AbstractRecruitEntity soldier : formation.alive()) {
-            release(soldier, formation.arm == Arm.CAVALRY && !archers.isEmpty() ? archers : enemy.alive());
+            release(soldier, formation.arm == Arm.CAVALRY && !archers.isEmpty() ? archers : enemy.living);
         }
     }
 
@@ -559,6 +655,7 @@ public final class RecruitsBattle {
         if (battle == null) {
             return;
         }
+        long ownStart = System.nanoTime();
         if (!battle.over) {
             battle.ticks++;
             if (battle.ticks % 20 == 0) {
@@ -570,6 +667,7 @@ public final class RecruitsBattle {
             battle.holdChunks();
             ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
         }
+        battle.ownNanos += System.nanoTime() - ownStart;
         if (battle.tickStart != 0) {
             long nanos = System.nanoTime() - battle.tickStart;
             battle.whole.add(nanos);
@@ -579,95 +677,235 @@ public final class RecruitsBattle {
 
     private void second() {
         int seconds = ticks / 20;
+        for (Army army : armies) {
+            army.count();
+        }
         for (int side = 0; side < 2; side++) {
             command(armies[side], armies[1 - side], seconds);
         }
         if (seconds % REPORT_SECONDS == 0) {
-            broadcast(String.format(Locale.ROOT, "[battle %ds] %s %d alive, %s %d alive | %s", seconds,
-                    armies[0].faction.name(), armies[0].alive().size(), armies[1].faction.name(), armies[1].alive().size(), window.describe()));
+            broadcast(String.format(Locale.ROOT, "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %s, of which battle orders %.1f ms/tick",
+                    seconds, armies[0].faction.name(), armies[0].living.size(), armies[0].reliefs, armies[1].faction.name(),
+                    armies[1].living.size(), armies[1].reliefs, window.describe(), window.count == 0 ? 0 : ownNanos / 1e6 / window.count));
             window.clear();
+            ownNanos = 0;
         }
         checkEnd(seconds);
     }
 
     /** One second of an army's general giving orders. */
     private void command(Army army, Army enemy, int seconds) {
-        List<AbstractRecruitEntity> foes = enemy.alive();
+        List<AbstractRecruitEntity> foes = enemy.living;
         boolean engaged = army.infantryEngaged();
-        if (army.general == General.TACTICIAN) {
-            commitReserve(army);
-        }
+        relieve(army, seconds);
         for (Formation formation : army.formations) {
             if (formation.arm == Arm.CAVALRY) {
                 armourHorses(army, formation);
             }
+            if (formation.living.isEmpty()) {
+                continue;
+            }
             if (formation.charged) {
-                formation.alive().forEach(s -> hunt(s, foes));
+                formation.living.forEach(s -> hunt(s, foes));
                 continue;
             }
-            if (formation.alive().isEmpty()) {
-                continue;
-            }
-            double nearest = foes.stream()
-                    .mapToDouble(e -> Math.hypot(e.getX() - formation.line.x(), e.getZ() - formation.line.z()))
-                    .min().orElse(Double.MAX_VALUE);
-            if (formation.route != null) {
-                ride(army, enemy, formation, seconds);
-                continue;
-            }
-            if (formation.reserve && !formation.committed) {
-                // Waits behind the front centre, moving up with it; fights only if the enemy reaches it.
-                if (nearest <= BattlePlan.INFANTRY_ENGAGE) {
-                    charge(formation, enemy);
-                } else {
-                    Point spot = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, 24);
-                    if (spot.distanceTo(formation.line) > 2) {
-                        formation.line = spot;
-                        standInLine(army, formation);
+            switch (formation.duty) {
+                case FRONT -> holdFront(army, formation, foes, seconds, engaged);
+                case LINE -> keepPlaceInFile(army, formation);
+                case RELIEVING -> {
+                    if (formation.centre().distanceTo(formation.line) <= BattlePlan.RELIEF_ARRIVED
+                            || seconds - formation.dutySince >= BattlePlan.RELIEF_SECONDS) {
+                        takeOver(army, formation, seconds);
                     }
                 }
-                continue;
-            }
-            switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
-                case HOLD -> {
+                case WITHDRAWING -> {
+                    if (formation.rear == null || formation.centre().distanceTo(formation.rear) <= BattlePlan.RELIEF_ARRIVED
+                            || seconds - formation.dutySince >= BattlePlan.RELIEF_SECONDS) {
+                        rest(army, formation);
+                    }
                 }
-                case MARCH -> {
-                    formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
-                    standInLine(army, formation);
+                case RESTING -> {
+                    // Stands behind the lines; its soldiers fight whoever comes within reach.
                 }
-                case FLANK -> {
-                    Point enemyCentre = centreOf(foes);
-                    formation.route = BattlePlan.flankRoute(enemyCentre, army.facingX, army.facingZ);
-                    formation.routeIndex = 0;
-                    formation.routeStarted = seconds;
-                    ride(army, enemy, formation, seconds);
-                }
-                case CHARGE -> charge(formation, enemy);
+                case RESERVE -> moveTo(army, formation,
+                        BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, formation.slotRight, formation.slotBack));
+                case SUPPORT -> support(army, enemy, formation, foes, seconds, engaged);
             }
         }
         commandGroup(army, enemy, foes, engaged);
     }
 
-    /** A tactician sends the reserve to the weakest fighting infantry formation once it is badly hurt. */
-    private void commitReserve(Army army) {
-        Formation reserve = army.formations.stream().filter(f -> f.reserve && !f.committed && !f.charged).findFirst().orElse(null);
-        if (reserve == null || reserve.alive().isEmpty()) {
+    /**
+     * A block holding its file of the front: marches with the line until the enemy is close, then stands and fights
+     * in line (its soldiers take on whoever comes within reach and return to their places), pressing on when the
+     * enemy in front of it is gone.
+     */
+    private void holdFront(Army army, Formation formation, List<AbstractRecruitEntity> foes, int seconds, boolean engaged) {
+        double nearest = nearest(formation.line, foes);
+        switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
+            case MARCH -> {
+                formation.engaged = false;
+                formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
+                standInLine(army, formation);
+            }
+            case ENGAGE -> formation.engaged = true;
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Sends a fresh block up to each file of the front whose block is down to half strength (or gone): from that
+     * file's queue if it has a fit block, else the nearest fit block from any file. A tactician commits the reserve
+     * when the lines run out of fit blocks, or the army is badly worn.
+     */
+    private void relieve(Army army, int seconds) {
+        boolean tactician = army.general == General.TACTICIAN;
+        if (tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.living.size(), army.started, false, true)) {
+            commitReserve(army);
+        }
+        for (int file = 0; file < army.front.length; file++) {
+            Formation held = army.front[file];
+            if (held.relief != null && !held.relief.living.isEmpty() && held.relief.duty == Duty.RELIEVING) {
+                continue; // already on its way
+            }
+            held.relief = null;
+            if (!BattlePlan.needsRelief(held.living.size(), held.soldiers.size())) {
+                continue;
+            }
+            Formation relief = pickRelief(army, file, held.line);
+            if (relief == null && tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.living.size(), army.started, true, false)) {
+                commitReserve(army);
+                relief = pickRelief(army, file, held.line);
+            }
+            if (relief == null) {
+                continue; // nobody left to send: the block fights on
+            }
+            relief.duty = Duty.RELIEVING;
+            relief.file = file;
+            relief.dutySince = seconds;
+            relief.line = held.line;
+            standInLine(army, relief);
+            held.relief = relief;
+        }
+    }
+
+    @Nullable
+    private static Formation pickRelief(Army army, int file, Point spot) {
+        for (Formation f : army.queue(file)) {
+            if (BattlePlan.fitToRelieve(f.living.size(), f.soldiers.size())) {
+                return f;
+            }
+        }
+        return army.formations.stream()
+                .filter(f -> f.duty == Duty.LINE && BattlePlan.fitToRelieve(f.living.size(), f.soldiers.size()))
+                .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
+    }
+
+    /** A relief has reached the front: it takes over the file, and the block it relieves withdraws. */
+    private void takeOver(Army army, Formation relief, int seconds) {
+        Formation relieved = army.front[relief.file];
+        army.reliefs++;
+        army.front[relief.file] = relief;
+        relief.duty = Duty.FRONT;
+        relief.engaged = false;
+        relief.dutySince = seconds;
+        relieved.relief = null;
+        relieved.engaged = false;
+        if (relieved.living.isEmpty()) {
+            relieved.duty = Duty.RESTING;
             return;
         }
-        List<Formation> front = army.formations.stream().filter(f -> f.arm.infantry() && !f.reserve).toList();
-        int[] alive = front.stream().mapToInt(f -> f.alive().size()).toArray();
-        int[] started = front.stream().mapToInt(f -> f.soldiers.size()).toArray();
-        boolean[] fighting = new boolean[front.size()];
-        for (int i = 0; i < fighting.length; i++) {
-            fighting[i] = front.get(i).charged;
+        // Back through the file's queue to behind its last block, not fighting on the way.
+        relieved.duty = Duty.WITHDRAWING;
+        relieved.dutySince = seconds;
+        int behind = army.queue(relieved.file).size() + 1;
+        relieved.rear = BattlePlan.place(relief.line, army.facingX, army.facingZ, 0, behind * BattlePlan.LINE_GAP + BattlePlan.LINE_GAP);
+        relieved.line = relieved.rear;
+        for (AbstractRecruitEntity soldier : relieved.living) {
+            soldier.setTarget(null);
+            soldier.setAggroState(3); // passive
         }
-        int pick = BattlePlan.reserveToCommit(alive, started, fighting);
-        if (pick >= 0) {
-            reserve.committed = true;
-            reserve.line = front.get(pick).centre();
-            standInLine(army, reserve);
-            broadcast(army.faction.name() + "'s general commits the reserve");
+        standInLine(army, relieved);
+    }
+
+    /** A withdrawn block is back behind the lines: it rejoins its file's queue if still fit, else stands at the rear. */
+    private void rest(Army army, Formation formation) {
+        for (AbstractRecruitEntity soldier : formation.living) {
+            soldier.setAggroState(0);
         }
+        if (BattlePlan.fitToRelieve(formation.living.size(), formation.soldiers.size())) {
+            army.join(formation, formation.file);
+        } else {
+            formation.duty = Duty.RESTING;
+        }
+    }
+
+    /** A block waiting in its file's queue keeps its place: a line gap behind the one in front of it. */
+    private void keepPlaceInFile(Army army, Formation formation) {
+        int place = army.queue(formation.file).indexOf(formation) + 1;
+        Point spot = BattlePlan.place(army.front[formation.file].line, army.facingX, army.facingZ, 0, place * BattlePlan.LINE_GAP);
+        moveTo(army, formation, spot);
+    }
+
+    /** The reserve joins the lines: each block at the back of the file with the fewest blocks waiting. */
+    private void commitReserve(Army army) {
+        army.reserveCommitted = true;
+        for (Formation f : army.formations) {
+            if (f.duty == Duty.RESERVE && !f.living.isEmpty()) {
+                int shortest = 0;
+                for (int file = 1; file < army.front.length; file++) {
+                    if (army.queue(file).size() < army.queue(shortest).size()) {
+                        shortest = file;
+                    }
+                }
+                army.join(f, shortest);
+            }
+        }
+        broadcast(army.faction.name() + "'s general commits the reserve");
+    }
+
+    /** Archers and cavalry: their own orders. */
+    private void support(Army army, Army enemy, Formation formation, List<AbstractRecruitEntity> foes, int seconds, boolean engaged) {
+        if (formation.route != null) {
+            ride(army, enemy, formation, seconds);
+            return;
+        }
+        double nearest = nearest(formation.line, foes);
+        switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
+            case MARCH -> {
+                formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
+                standInLine(army, formation);
+            }
+            case FLANK -> {
+                int side = formation.slotRight >= 0 ? 1 : -1;
+                formation.route = BattlePlan.flankRoute(centreOf(foes), army.facingX, army.facingZ, side, enemy.halfWidth);
+                formation.routeIndex = 0;
+                formation.routeStarted = seconds;
+                ride(army, enemy, formation, seconds);
+            }
+            case CHARGE -> charge(formation, enemy);
+            default -> {
+            }
+        }
+    }
+
+    /** Moves a block's line to a spot, unless it is already ordered close to there. */
+    private void moveTo(Army army, Formation formation, Point spot) {
+        if (spot.distanceTo(formation.line) > 2) {
+            formation.line = spot;
+            standInLine(army, formation);
+        }
+    }
+
+    private static double nearest(Point from, List<AbstractRecruitEntity> foes) {
+        double best = Double.MAX_VALUE;
+        for (AbstractRecruitEntity foe : foes) {
+            double dx = foe.getX() - from.x();
+            double dz = foe.getZ() - from.z();
+            best = Math.min(best, dx * dx + dz * dz);
+        }
+        return Math.sqrt(best);
     }
 
     /** Moves a flanking formation along its route, charging from behind when it gets round (or takes too long). */
@@ -703,11 +941,11 @@ public final class RecruitsBattle {
         }
         if (army.general == General.WARRIOR && engaged) {
             army.commanderCharged = true;
-            release(general, enemy.alive());
+            release(general, enemy.living);
             broadcast(army.faction.name() + "'s warrior general charges");
             return;
         }
-        hold(general, BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.generalBack(army.general)));
+        hold(general, BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, army.generalBack));
     }
 
     /** Recruits gives cavalry their horse on their first tick; dress each horse in the army's colour once. */
@@ -725,8 +963,8 @@ public final class RecruitsBattle {
     }
 
     private void checkEnd(int seconds) {
-        int aliveA = armies[0].alive().size();
-        int aliveB = armies[1].alive().size();
+        int aliveA = armies[0].living.size();
+        int aliveB = armies[1].living.size();
         boolean routA = BattlePlan.routs(aliveA, armies[0].started);
         boolean routB = BattlePlan.routs(aliveB, armies[1].started);
         String result;
@@ -744,7 +982,7 @@ public final class RecruitsBattle {
         }
         over = true;
         for (Army army : armies) {
-            army.alive().forEach(s -> s.setTarget(null));
+            army.living.forEach(s -> s.setTarget(null));
         }
         restoreRelations();
         broadcast(String.format(Locale.ROOT, "[battle over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
@@ -761,14 +999,14 @@ public final class RecruitsBattle {
 
     /** The routed army stops fighting and runs back the way it came. */
     private void flee(Army loser, Army winner) {
-        for (AbstractRecruitEntity soldier : loser.alive()) {
+        for (AbstractRecruitEntity soldier : loser.living) {
             soldier.setAggroState(3); // passive
             BlockPos away = ground(new Point(soldier.getX() - loser.facingX * 60, soldier.getZ() - loser.facingZ * 60));
             soldier.setMovePos(away);
             soldier.setFollowState(0);
             soldier.setShouldMovePos(true);
         }
-        winner.alive().forEach(s -> s.setFollowState(2)); // winners hold where they stand
+        winner.living.forEach(s -> s.setFollowState(2)); // winners hold where they stand
     }
 
     // ---- keeping the field loaded ----
@@ -809,6 +1047,33 @@ public final class RecruitsBattle {
         });
     }
 
+    /**
+     * Loads, and holds, the ground an army is about to deploy on, before anyone is spawned: a big army stands far
+     * beyond what the players around keep loaded, and soldiers put down in unloaded ground would be lost.
+     */
+    private void loadGround(Army army, Point front, List<BattlePlan.Slot> slots) {
+        double margin = BattlePlan.BLOCK_PITCH;
+        Set<Long> chunks = new HashSet<>();
+        for (BattlePlan.Slot slot : slots) {
+            for (double dr = -margin; dr <= margin; dr += 8) {
+                for (double db = -8; db <= 16; db += 8) {
+                    Point p = BattlePlan.place(front, army.facingX, army.facingZ, slot.right() + dr, slot.back() + db);
+                    chunks.add(ChunkPos.asLong(Mth.floor(p.x()) >> 4, Mth.floor(p.z()) >> 4));
+                }
+            }
+        }
+        double back = BattlePlan.generalBack(army.general, slots);
+        Point general = BattlePlan.place(front, army.facingX, army.facingZ, 0, back);
+        chunks.add(ChunkPos.asLong(Mth.floor(general.x()) >> 4, Mth.floor(general.z()) >> 4));
+        for (long chunk : chunks) {
+            if (heldChunks.add(chunk)) {
+                ChunkPos pos = new ChunkPos(chunk);
+                level.getChunkSource().addRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
+            }
+            level.getChunk(ChunkPos.getX(chunk), ChunkPos.getZ(chunk)); // loads it now, not when the ticket is processed
+        }
+    }
+
     private void releaseChunks() {
         for (long chunk : heldChunks) {
             ChunkPos pos = new ChunkPos(chunk);
@@ -825,12 +1090,15 @@ public final class RecruitsBattle {
      */
     private List<FormationSnapshot> snapshots() {
         List<FormationSnapshot> all = new ArrayList<>();
+        for (Army army : armies) {
+            army.count(); // also after the battle is decided, when orders (and counting) stop
+        }
         for (int side = 0; side < 2; side++) {
             Army army = armies[side];
             int base = side * IDS_PER_ARMY;
             for (int i = 0; i < army.formations.size(); i++) {
                 Formation f = army.formations.get(i);
-                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged, f.leader).ifPresent(all::add);
+                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged || f.engaged, f.leader).ifPresent(all::add);
             }
             soloSnapshot(base + IDS_PER_ARMY - 2, FormationSnapshot.Kind.GENERAL, army, army.commander, army.commanderCharged).ifPresent(all::add);
             soloSnapshot(base + IDS_PER_ARMY - 1, FormationSnapshot.Kind.BEARER, army, army.bearer, false).ifPresent(all::add);

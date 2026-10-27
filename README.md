@@ -47,46 +47,60 @@ debug battle in `RecruitsBattle`. `/pve debug recruits` lists what Recruits hold
 
 ## Battles (prototype)
 
-`/pve debug battle [first second]` deploys two armies of Recruits soldiers 45 blocks in front of you, marching at each
-other across your view. With no names given, the two factions nearest you fight; quote names that contain spaces. The
-player is a bystander: the two factions are made enemies in Recruits' diplomacy for the battle, so soldiers attack each
-other and leave you alone unless you strike first. The old relation is restored when the battle ends.
+`/pve debug battle [first [firstSoldiers] second [secondSoldiers]]` deploys two armies of Recruits soldiers 45 blocks
+in front of you, marching at each other across your view: for example `/pve debug battle Osford 2000 Valoia 500`.
+Each side is 20 to 2000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
+the two factions nearest you fight; quote names that contain spaces. The player is a bystander: the two factions are
+made enemies in Recruits' diplomacy for the battle, so soldiers attack each other and leave you alone unless you strike
+first. The old relation is restored when the battle ends.
 
-- **Each army** is one faction: 100 soldiers in 5 formations of 20, each 10 wide and 2 deep, plus a general and a
-  standard-bearer (102 in all). There are 3 infantry formations (swordsmen, a shieldwall, swordsmen), 1 of archers and
-  1 of cavalry, so the army is 1/5 archers and 1/5 cavalry.
+- **Each army** is one faction, in blocks of 20 soldiers (10 wide, 2 deep), each led by a captain, plus a general and
+  a standard-bearer. A fifth of the blocks are archers and a fifth cavalry (rounded); the rest is infantry, with a
+  shieldwall every third file (`battle/BattlePlan.deployment`).
+- **Lines:** the infantry stands in a front line at most 10 blocks wide, with relief lines 16 blocks apart behind it
+  (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. Archers
+  stand in rows just behind the front line, and the cavalry on both wings, in columns of blocks. The ground is loaded
+  before anyone is spawned.
 - **Uniforms:** everyone wears full leather dyed the faction's main colour (its banner's base colour), and cavalry
   horses wear dyed leather horse armour. If both factions share a colour, the second side wears a darker shade, or a
   lighter one if the colour is already very dark. The head shows rank:
   - **Ranks:** a dyed leather cap.
-  - **Formation leader** (one per formation, cavalry and archers included): the faction banner, worn on the head.
+  - **Captain** (one per block, cavalry and archers included): the faction banner, worn on the head.
   - **General:** a gold helmet and the faction banner on the back, like a sashimono (`client/BackBannerLayer`; the server
     tells each client which soldiers wear one).
   - **Standard-bearer:** a dyed cap and the faction banner carried in hand. They stay at the general's side and don't fight.
 - **Battle soldiers can't pick up items, and drop nothing when they die**, so nobody swaps the uniform for loot and
   the field stays clear.
-- **The general** is rolled 50/50 for each army, and gives each formation an order every second
+- **Line fighting:** front blocks march in line until an enemy is within 10 blocks, then stand and fight in line.
+  Recruits soldiers holding a place take on whoever comes within reach and return to it, so the line holds instead of
+  dissolving into a melee. A block whose enemy in front is gone presses on.
+- **Relief:** a front block down to half its soldiers is relieved by the first fit block (at least 60 % strong)
+  waiting in its file, or the nearest fit block from another file. When the relief arrives (or after 20 s) it takes
+  over, and the worn block withdraws behind the last block of its file, passive on the way. It stays there, fighting
+  only if the enemy reaches it. This rotation keeps fresh soldiers at the front and makes a big battle last; with no
+  fit block left, a front block fights on.
+- **The general** is rolled 50/50 for each army, and gives every block an order every second
   (`battle/BattlePlan.order`).
   - **Warrior:** a Recruits soldier at the top level (20 by Recruits' default config, about 80 health) with an iron
-    sword. They stand just behind the front line and charge in when the infantry does. Simple orders:
-    - After 5 s in formation, the infantry marches 2 blocks a second in line, then charges once an enemy is within
-      10 blocks.
+    sword. They stand just behind the front line and charge in once it is fighting. Simple orders:
+    - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
     - Archers march until an enemy is within 30 blocks, then halt and shoot.
-    - Cavalry waits on the right wing until its infantry charges, or an enemy comes within 20 blocks, then rides for
+    - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
       the enemy archers.
-  - **Tactician:** stays 32 blocks behind the front centre, out of the fight, and commands better:
+  - **Tactician:** stays behind all the lines, out of the fight, and commands better:
     - **Patience:** the infantry holds for 20 s while the archers advance and shoot, unless an enemy comes within
       25 blocks first.
-    - **Cavalry flanking:** once the lines lock, the cavalry rides wide past the end of the enemy line, then round
-      behind it, and charges from the rear. A ride that takes more than 40 s charges anyway.
-    - **A reserve:** the front line is only the shieldwall and one swordsmen formation, while the other swordsmen wait
-      24 blocks behind it. When a fighting infantry formation is down to 60 %, the reserve goes to it.
-  - With either general, a charged soldier with no target is sent after the nearest enemy left.
-- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. After 5
+    - **Cavalry flanking:** once the lines lock, each cavalry block rides wide past its end of the enemy line, then
+      round behind it, and charges from the rear. A ride that takes more than 40 s charges anyway.
+    - **A reserve:** a fifth of the infantry waits behind the last line. It is committed, joining the files with the
+      fewest blocks waiting, when a front block needs relief and no fit block is left, or the army is down to 60 %.
+  - Cavalry that has charged, and a warrior general, send any soldier with no target after the nearest enemy left.
+- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. After 30
   minutes the battle is called a draw.
-- **Reports:** every 10 s the chat and server log get the soldiers left on each side and the server tick time. The
-  start and end name each general's type, and the end says whether each general and standard survived.
-  `/pve debug battle clear` removes every soldier and horse the battle spawned. Only one battle runs at a time.
+- **Reports:** every 10 s the chat and server log get the soldiers left on each side, the blocks relieved so far, the
+  server tick time, and how much of it the battle's own orders take. The start and end name each general's type, and
+  the end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse
+  the battle spawned. Only one battle runs at a time.
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in
   the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the
