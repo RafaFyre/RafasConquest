@@ -64,7 +64,13 @@ what Recruits holds.
 A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state
 cities each spawn a `CITY_STATE` faction (no territory claims), tracked as a `CITY` POI. **Every Empire's capital is a
 city too**, centred on its Capital site and tracked as its `CAPITAL` POI. A capital takes its style from its biome
-like any city, and falls back to plains where no style matches, so every Empire always has its capital.
+like any city, and falls back to plains where no style matches.
+
+**No cities or farms on ocean:** no part of a city's flattened box, and no part of a farm's plot, may lie on a biome
+in the tag `rafasconquest:no_settlement` (all oceans; packs can add more). Biomes are sampled at sea level, every 16
+blocks over a city and at the corners and centre of a farm (`worldgen/SettlementBiomes`). A Capital site that fails
+this has no capital city and so no Empire, and a city site that fails it has no City-state. On seed 12345 that leaves
+2 of the 6 storm-wall Empires and 11 factions within 8,000 blocks (25 before).
 
 - **Grid:** a 483 × 483 square. 3-wide roads run every 32 blocks in both directions, with an edge road all round,
   making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town centre

@@ -22,6 +22,11 @@ public class FarmStructure extends Structure {
         ChunkPos chunk = ctx.chunkPos();
         int x = chunk.getMiddleBlockX();
         int z = chunk.getMiddleBlockZ();
+        // The structure's biome tag checks the centre; no part of the plot may be on ocean either.
+        if (SettlementBiomes.touches(ctx, x - PlaceholderPiece.HALF, z - PlaceholderPiece.HALF,
+                x + PlaceholderPiece.HALF, z + PlaceholderPiece.HALF, PlaceholderPiece.HALF)) {
+            return Optional.empty();
+        }
         int y = ctx.chunkGenerator().getFirstOccupiedHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, ctx.heightAccessor(), ctx.randomState());
         BlockPos pos = new BlockPos(x, y, z);
         return Optional.of(new GenerationStub(pos, builder -> builder.addPiece(new FarmPiece(pos))));

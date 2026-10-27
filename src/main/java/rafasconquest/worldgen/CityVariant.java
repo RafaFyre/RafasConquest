@@ -103,10 +103,14 @@ public enum CityVariant {
     }
 
     /**
-     * The style of a city. A City-state city exists only where its centre biome matches a style; an Empire capital
-     * always exists, falling back to plains where no style matches.
+     * The style of a city. No city stands where any of it would be on ocean ({@link SettlementBiomes}). Otherwise, a
+     * City-state city exists only where its centre biome matches a style, and an Empire capital falls back to plains
+     * where no style matches.
      */
     public static Optional<CityVariant> forSite(Structure.GenerationContext ctx, rafasconquest.core.CityLayout.Site site) {
+        if (SettlementBiomes.blocksCity(ctx, site)) {
+            return Optional.empty();
+        }
         Optional<CityVariant> variant = at(ctx, site.x(), site.z());
         return variant.isPresent() || !site.capital() ? variant : Optional.of(PLAINS);
     }
