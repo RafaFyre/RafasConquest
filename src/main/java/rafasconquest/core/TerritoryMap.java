@@ -49,28 +49,4 @@ public final class TerritoryMap {
         }
         return empires;
     }
-
-    /**
-     * The holder of every map pixel, as an index into {@code claims} (-1 for no one). Pixel (px, pz) covers the
-     * {@code blocksPerPixel}-wide square starting at (minX + px × bpp, minZ + pz × bpp) and is sampled at its centre.
-     * Pixels beyond {@code visibleRadius} of the world origin (the storm wall) are left at -1.
-     */
-    public static int[] rasterize(List<Claim> claims, int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius) {
-        List<OwnershipResolver.Candidate> empires = empires(claims);
-        List<UUID> ids = claims.stream().map(Claim::factionId).toList();
-        int[] owners = new int[width * height];
-        long visible2 = (long) visibleRadius * visibleRadius;
-        for (int pz = 0; pz < height; pz++) {
-            int z = minZ + pz * blocksPerPixel + blocksPerPixel / 2;
-            for (int px = 0; px < width; px++) {
-                int x = minX + px * blocksPerPixel + blocksPerPixel / 2;
-                int index = -1;
-                if ((long) x * x + (long) z * z <= visible2) {
-                    index = holder(x, z, claims, empires).map(ids::indexOf).orElse(-1);
-                }
-                owners[pz * width + px] = index;
-            }
-        }
-        return owners;
-    }
 }

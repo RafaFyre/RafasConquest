@@ -40,8 +40,18 @@ public final class BiomePalette {
     private BiomePalette() {
     }
 
-    public static boolean isOcean(Holder<Biome> biome) {
+    /**
+     * The sea: no province covers it, and provinces don't like to cross it. Rivers are not: they run through
+     * provinces, and only lean borders onto them (crossing one is a biome edge each way).
+     */
+    public static boolean isSea(Holder<Biome> biome) {
         return biome.is(BiomeTags.IS_OCEAN);
+    }
+
+    /** Hard country, where provinces are larger: deserts, badlands, snow and peaks. */
+    public static boolean isRough(Holder<Biome> biome) {
+        return biome.is(Tags.Biomes.IS_DESERT) || biome.is(BiomeTags.IS_BADLANDS) || biome.is(Tags.Biomes.IS_SNOWY)
+                || biome.is(Tags.Biomes.IS_PEAK);
     }
 
     /** Colour of a column whose surface is {@code height}, on a world whose sea is at {@code seaLevel}. */
@@ -53,7 +63,7 @@ public final class BiomePalette {
                 return FROZEN_WATER;
             }
             float depth = Math.min(1, Math.max(0, (seaLevel - height) / 40F));
-            return lerp(SHALLOW_WATER, DEEP_WATER, depth);
+            return MapColors.lerp(SHALLOW_WATER, DEEP_WATER, depth);
         }
         if (biome.is(BiomeTags.IS_RIVER)) {
             return frozen ? FROZEN_WATER : RIVER;
@@ -64,20 +74,5 @@ public final class BiomePalette {
             }
         }
         return DEFAULT_LAND;
-    }
-
-    public static int lerp(int a, int b, float t) {
-        int r = (int) (((a >> 16) & 0xFF) + (((b >> 16) & 0xFF) - ((a >> 16) & 0xFF)) * t);
-        int g = (int) (((a >> 8) & 0xFF) + (((b >> 8) & 0xFF) - ((a >> 8) & 0xFF)) * t);
-        int bl = (int) ((a & 0xFF) + ((b & 0xFF) - (a & 0xFF)) * t);
-        return (r << 16) | (g << 8) | bl;
-    }
-
-    /** Brightens (factor > 1) or darkens (factor < 1) a colour. */
-    public static int shade(int color, float factor) {
-        int r = Math.min(255, Math.max(0, (int) (((color >> 16) & 0xFF) * factor)));
-        int g = Math.min(255, Math.max(0, (int) (((color >> 8) & 0xFF) * factor)));
-        int b = Math.min(255, Math.max(0, (int) ((color & 0xFF) * factor)));
-        return (r << 16) | (g << 8) | b;
     }
 }

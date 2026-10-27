@@ -158,6 +158,13 @@ tasks.register('generateWallTemplates', JavaExec) {
     args file('src/main/resources/data/rafasconquest/structures/city/wall').absolutePath
 }
 
+// Renders a dev world's political map to a PNG from dev/MapPreview: gradlew mapPreview -Pworld=run/world -Pout=map.png
+tasks.register('mapPreview', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'rafasconquest.dev.MapPreview'
+    args file(project.findProperty('world') ?: 'run/world').absolutePath, file(project.findProperty('out') ?: 'build/map-preview.png').absolutePath
+}
+
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 // When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.

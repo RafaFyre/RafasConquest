@@ -9,18 +9,23 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
+import rafasconquest.core.CityLayout;
+import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.WorldSettings;
 
+import java.util.List;
 import java.util.stream.IntStream;
 
 /**
- * Draws the base map from the seed alone: terrain height from the noise generator (sampled every few pixels and
- * smoothed between), the biome at the surface for colour, water shaded by depth and land lit from the north-west.
- * Nothing is generated or loaded, so the whole area inside the storm wall is known at once. Runs off the server thread.
+ * Draws the world map from the seed alone: terrain height from the noise generator (sampled every few pixels and
+ * smoothed between), the biome at the surface for colour, water shaded by depth and land lit from the north-west. Then
+ * splits the land into provinces ({@link ProvinceMap}). Nothing is generated or loaded, so the whole known world is
+ * drawn at once. Runs off the server thread.
  */
 public final class BaseMapGenerator {
     /** Finest detail: one pixel per 16 blocks (a chunk). */
     static final int MIN_BLOCKS_PER_PIXEL = 16;
-    /** Largest map side in pixels; a bigger storm wall gets coarser pixels instead. */
+    /** Largest map side in pixels; a bigger known world gets coarser pixels instead. */
     static final int MAX_SIZE = 1024;
     /** Heights are sampled every this many pixels; they change slowly and each sample is costly. */
     static final int HEIGHT_STEP = 4;
@@ -28,7 +33,7 @@ public final class BaseMapGenerator {
     private BaseMapGenerator() {
     }
 
-    public static BaseMap generate(ServerLevel level, int visibleRadius) {
+    public static BaseMap generate(ServerLevel level, WorldSettings settings, int visibleRadius, int stormWallRadius) {
         int bpp = Math.max(MIN_BLOCKS_PER_PIXEL, (2 * visibleRadius + MAX_SIZE - 1) / MAX_SIZE);
         int size = (2 * visibleRadius + bpp - 1) / bpp;
         int minX = -size * bpp / 2;
@@ -42,43 +47,61 @@ public final class BaseMapGenerator {
 
         // Coarse heights, one sample every HEIGHT_STEP pixels (plus a border for the smoothing and the shading).
         int hw = size / HEIGHT_STEP + 3;
-        int[] heights = new int[hw * hw];
+        int[] coarse = new int[hw * hw];
         IntStream.range(0, hw).parallel().forEach(j -> {
             for (int i = 0; i < hw; i++) {
                 int x = minX + (i - 1) * HEIGHT_STEP * bpp;
                 int z = minZ + (j - 1) * HEIGHT_STEP * bpp;
-                heights[j * hw + i] = (long) x * x + (long) z * z <= reach
+                coarse[j * hw + i] = (long) x * x + (long) z * z <= reach
                         ? generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random)
                         : sea;
             }
         });
 
         long visible2 = (long) visibleRadius * visibleRadius;
-        int[] pixels = new int[size * size];
+        int n = size * size;
+        int[] pixels = new int[n];
+        boolean[] water = new boolean[n];
+        float[] heights = new float[n];
+        int[] biomeIds = new int[n];
+        boolean[] rough = new boolean[n];
         IntStream.range(0, size).parallel().forEach(pz -> {
             for (int px = 0; px < size; px++) {
+                int index = pz * size + px;
                 int x = minX + px * bpp + bpp / 2;
                 int z = minZ + pz * bpp + bpp / 2;
                 if ((long) x * x + (long) z * z > visible2) {
-                    continue; // beyond the storm wall: left transparent
+                    water[index] = true; // beyond the known world: transparent, and in no province
+                    continue;
                 }
-                float h = height(heights, hw, px, pz);
+                float h = height(coarse, hw, px, pz);
+                heights[index] = h;
                 Holder<Biome> biome = biomes.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(Math.max((int) h, sea)),
                         QuartPos.fromBlock(z), sampler);
+                biomeIds[index] = System.identityHashCode(biome.value());
+                water[index] = BiomePalette.isSea(biome);
+                rough[index] = BiomePalette.isRough(biome);
                 int color = BiomePalette.color(biome, (int) h, sea);
-                if (h >= sea && !BiomePalette.isOcean(biome)) {
-                    // Light from the north-west: slopes facing it brighter, slopes away darker; high ground a little paler.
-                    // Measured across a full height-sample step, so the smoothing between samples doesn't show as facets.
-                    float slope = height(heights, hw, px - HEIGHT_STEP / 2, pz - HEIGHT_STEP / 2)
-                            - height(heights, hw, px + HEIGHT_STEP / 2, pz + HEIGHT_STEP / 2);
+                if (!water[index] && h >= sea) {
+                    // Light from the north-west, measured across a full height-sample step so the smoothing between
+                    // samples doesn't show as facets. High ground a little paler.
+                    float slope = height(coarse, hw, px - HEIGHT_STEP / 2, pz - HEIGHT_STEP / 2)
+                            - height(coarse, hw, px + HEIGHT_STEP / 2, pz + HEIGHT_STEP / 2);
                     float light = 1 + Math.max(-0.25F, Math.min(0.25F, slope * 0.02F));
-                    color = BiomePalette.shade(color, light);
-                    color = BiomePalette.lerp(color, 0xE8E8E8, Math.max(0, Math.min(0.35F, (h - sea - 60) / 160F)));
+                    color = MapColors.shade(color, light);
+                    color = MapColors.lerp(color, 0xE8E8E8, Math.max(0, Math.min(0.35F, (h - sea - 60) / 160F)));
                 }
-                pixels[pz * size + px] = 0xFF000000 | color;
+                pixels[index] = 0xFF000000 | color;
             }
         });
-        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, pixels);
+
+        // Provinces, with every city (City-state home or Empire capital) at the centre of one.
+        ProvinceMap.Terrain terrain = new ProvinceMap.Terrain(minX, minZ, bpp, size, size, water, heights, biomeIds, rough);
+        List<int[]> cities = CityLayout.allSitesInBox(level.getSeed(), settings, minX, minZ, minX + size * bpp, minZ + size * bpp)
+                .stream().map(s -> new int[]{s.x(), s.z()}).toList();
+        List<ProvinceMap.Centre> centres = ProvinceMap.centres(level.getSeed(), terrain, cities);
+        int[] provinces = ProvinceMap.assign(terrain, centres);
+        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres);
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

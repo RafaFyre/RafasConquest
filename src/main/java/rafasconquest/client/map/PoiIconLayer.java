@@ -44,7 +44,7 @@ public class PoiIconLayer implements MapLayer {
 
     /** An item icon centred on a world position, optionally in a coloured frame. */
     private static void icon(GuiGraphics g, MapView view, MapContext map, BlockPos pos, ItemStack stack, float size, int frame) {
-        if (!map.insideStormWall(pos.getX(), pos.getZ())) {
+        if (!map.insideKnownWorld(pos.getX(), pos.getZ())) {
             return;
         }
         double x = view.screenX(pos.getX());

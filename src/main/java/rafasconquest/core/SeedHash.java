@@ -14,6 +14,7 @@ public final class SeedHash {
     public static final long SALT_TIE = 0x54494542L;
     public static final long SALT_ID = 0x49444944L;
     public static final long SALT_CITY = 0x43495459L;
+    public static final long SALT_PROVINCE = 0x50524F56L;
 
     private static final long GOLDEN = 0x9E3779B97F4A7C15L;
 

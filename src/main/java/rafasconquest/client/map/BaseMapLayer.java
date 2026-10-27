@@ -3,21 +3,28 @@ package rafasconquest.client.map;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import rafasconquest.map.PoliticalStyle;
 
 import java.util.List;
 
-/** Layer 1, the bottom: the terrain from the server, and the storm wall around it. Beyond the wall is unexplored. */
+/**
+ * Layer 1, the bottom: the world from the server, washed to parchment, and the storm wall drawn as a dashed ring.
+ * The known world reaches past the wall; beyond its edge is unexplored.
+ */
 public class BaseMapLayer implements MapLayer {
     public static final int UNEXPLORED = 0xFF1E2126;
-    private static final int STORM_WALL = 0xFFB7A6E0;
-    private static final int RING_SEGMENTS = 512;
+    private static final int STORM_WALL = 0xFF6B4FA8;
+    private static final int RING_SEGMENTS = 720;
 
     @Override
     public void render(GuiGraphics g, MapView view, MapContext map, int mouseX, int mouseY) {
         g.fill(view.left, view.top, view.right, view.bottom, UNEXPLORED);
         drawAligned(g, view, map, MapContext.BASE_TEXTURE);
-        // The storm wall: a ring of short dashes at its radius.
-        double r = map.base.visibleRadius();
+    }
+
+    /** The storm wall: a ring of short dashes at its radius. Drawn over the territories, so it shows through them. */
+    static void drawStormWall(GuiGraphics g, MapView view, MapContext map) {
+        double r = map.base.stormWallRadius();
         for (int i = 0; i < RING_SEGMENTS; i += 2) {
             double a = Math.PI * 2 * i / RING_SEGMENTS;
             double x = view.screenX(Math.cos(a) * r);
@@ -43,14 +50,16 @@ public class BaseMapLayer implements MapLayer {
     public List<LegendEntry> legend() {
         return List.of(
                 new LegendEntry((g, x, y) -> {
-                    g.fill(x, y, x + 10, y + 10, 0xFF88B85C);
-                    g.fill(x + 5, y, x + 10, y + 10, 0xFF4F86C6);
+                    g.fill(x, y, x + 10, y + 10, 0xFF000000 | PoliticalStyle.PARCHMENT_LAND);
+                    g.fill(x + 5, y, x + 10, y + 10, 0xFF000000 | PoliticalStyle.PARCHMENT_SEA);
                 }, Component.translatable("gui.rafasconquest.map.legend.terrain")),
                 new LegendEntry((g, x, y) -> {
-                    g.fill(x, y, x + 10, y + 10, UNEXPLORED);
+                    g.fill(x, y, x + 10, y + 10, 0xFF000000 | PoliticalStyle.PARCHMENT_LAND);
                     for (int i = 0; i < 10; i += 3) {
                         g.fill(x + i, y + 4, x + i + 2, y + 6, STORM_WALL);
                     }
-                }, Component.translatable("gui.rafasconquest.map.legend.storm_wall")));
+                }, Component.translatable("gui.rafasconquest.map.legend.storm_wall")),
+                new LegendEntry((g, x, y) -> g.fill(x, y, x + 10, y + 10, UNEXPLORED),
+                        Component.translatable("gui.rafasconquest.map.legend.unexplored")));
     }
 }

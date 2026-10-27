@@ -33,12 +33,4 @@ class TerritoryMapTest {
         assertEquals(Optional.of(CITY), TerritoryMap.holder(-1000 + TerritoryMap.CITY_STATE_RADIUS, 0, claims, empires));
         assertEquals(Optional.of(BIG), TerritoryMap.holder(-1000 + TerritoryMap.CITY_STATE_RADIUS + 1, 0, claims, empires));
     }
-
-    @Test
-    void rasterStopsAtTheStormWall() {
-        int[] owners = TerritoryMap.rasterize(claims, -4000, -4000, 100, 80, 80, 4000);
-        assertEquals(0, owners[40 * 80 + 40], "the centre pixel belongs to the big Empire");
-        assertEquals(-1, owners[0], "the corner is beyond the storm wall");
-        assertEquals(2, owners[40 * 80 + 30], "x = -950 is the City-state's");
-    }
 }

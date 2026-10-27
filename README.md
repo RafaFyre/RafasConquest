@@ -62,36 +62,61 @@ what Recruits holds.
 ## World map
 
 Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). It is a
-strategy-game map of everything inside the storm wall, known from the start. Drag to pan and scroll to zoom. The legend
-is bottom left and the cursor's coordinates are bottom right. Double-click a faction's name to open its Faction Info,
-and ✕ (or Esc) goes back.
+political map in the style of Crusader Kings 3, out to twice the storm wall's radius (8,000 blocks at default settings),
+all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
+bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
 
 It is drawn as layers, bottom to top, each its own class, listed in order in `FactionMapScreen.layers`:
 
-1. **Base map** (`BaseMapLayer`): terrain from the server, with the storm wall drawn as a dashed ring.
-   Beyond the wall is unexplored.
-2. **Territory** (`TerritoryLayer`): see-through globs in each faction's banner colour, with a stronger edge.
-   - Empires hold what they would own a Farm in (`core/TerritoryMap`, using the same `OwnershipResolver`).
-   - City-states hold a 400-block circle round their city, which they keep inside an Empire's radius.
-   - This is drawn on the client from the faction data, on top of the base map, not mixed into it. City-state land
-     is map-only for now: Farms there still go to the Empire.
+1. **Base map** (`BaseMapLayer`): the world, washed to parchment with its relief and sea depth still faint. Beyond the
+   known world is unexplored.
+2. **Realms** (`TerritoryLayer`): each realm fills the provinces it holds in its own colour.
+   - Thin lines run between the provinces.
+   - A dark line runs round the realm, coasts included, with a soft shadow inside it.
+   - Unclaimed provinces get faint lines only.
+   - The storm wall is a dashed ring drawn on top.
 3. **Cities and POIs** (`PoiIconLayer`): a capital is its banner in a gold frame, a City-state its banner in a silver
    frame, and a Farm a wheat sheaf once zoomed in.
 4. **Paths and roads** (`RoadLayer`): empty for now; it holds the place for roads.
 5. **Armies and moving things** (`UnitLayer`): you as an arrow, and other loaded players.
-6. **Names and labels** (`LabelLayer`): each faction's name at the middle of its territory, sized to it.
+6. **Names and labels** (`LabelLayer`): an Empire's name in capitals across its realm.
+   - The name is turned along the way the realm runs (up to 60°) and letter-spaced to stretch along it.
+   - Letters never grow past 1.2× normal text size.
+   - A City-state's name sits small under its city.
 
 Each layer adds its own rows to the legend.
 
-The **base map** is drawn by the server from the seed alone (`map/BaseMapGenerator`), so nothing is generated or
-loaded:
+**Provinces** (`core/ProvinceMap`) split the land like CK3's counties:
+- **Centres:** they sit on a seeded, jittered grid every 384 blocks. Deserts, badlands, snow and peaks drop half of
+  theirs, so provinces are larger there. Every city (City-state home or Empire capital) is a centre itself.
+- **Shapes:** each land pixel joins the centre that is cheapest to reach in a straight line. The sea costs a lot (coasts
+  become borders, and islands get their own provinces). A ridge rising above both ends of the path costs (mountain
+  ranges become borders). Crossing a biome edge costs a little (borders lean onto rivers and biome edges).
+- **Smoothing:** two passes give each pixel the province most of its neighbours have, which clears ragged edges.
+- **Tiles:** everything a pixel looks at is within 1,152 blocks of it, so any area computed with that margin matches
+  the whole map. That allows tiled provinces beyond the map later.
+
+**Who holds a province** (`map/PoliticalMap`) is whoever holds its centre:
+- the City-state, within 400 blocks of its city;
+- otherwise the Empire that would own a Farm there (`core/TerritoryMap`, using `OwnershipResolver`).
+
+Province ownership is map-only for now: Farms still go by the original rule.
+
+**Colours:** a realm's colour starts from its banner's main colour, softened to a map tone and varied a little per
+faction. Where two neighbouring realms would look alike, one takes a lighter, darker or hue-shifted shade instead
+(`map/PoliticalStyle`).
+
+The **base map and provinces** are drawn by the server from the seed alone (`map/BaseMapGenerator`), so nothing is
+generated or loaded:
 - Terrain height comes from the noise generator every 64 blocks, smoothed between samples.
-- Colour comes from the surface biome (`map/BiomePalette`, by biome tag). Water is shaded by depth, and land is lit from
-  the north-west.
-- At default settings it is 500 × 500 pixels of 16 blocks, drawn in about 5.5 s on a background thread when the
-  server starts.
-- It is kept in `data/rafasconquest_basemap.bin` in the world folder (about 200 KB) and sent to clients compressed,
-  in parts.
+- Colour comes from the surface biome (`map/BiomePalette`).
+- At default settings it is 1,000 × 1,000 pixels of 16 blocks with about 880 provinces, drawn in about 21 s on a
+  background thread when the server first starts.
+- It is kept in `data/rafasconquest_basemap.bin` in the world folder (about 1 MB) and sent to clients compressed, in
+  parts.
+
+The client builds the political layers from it and the faction data. `gradlew mapPreview -Pworld=run/<world>
+-Pout=<png>` renders the same political map for a dev world, without the game.
 
 ## Cities (City-states and Empire capitals)
 
