@@ -258,7 +258,10 @@ public final class CityGridBuilder {
                 if (entrance == null) {
                     continue;
                 }
-                BlockPos pos = new BlockPos(ex - entrance.pos().getX(), ground.y() - entrance.pos().getY(), ez - entrance.pos().getZ());
+                // Like vanilla attaching a rigid house to a terrain-following street: the entrance jigsaw sits on the
+                // first free block above the ground, not in it. One lower sinks the house and its villagers.
+                int entranceY = ground.y() + 1;
+                BlockPos pos = new BlockPos(ex - entrance.pos().getX(), entranceY - entrance.pos().getY(), ez - entrance.pos().getZ());
                 BoundingBox box = element.getBoundingBox(templates, pos, rotation);
                 if (box.minX() >= plot.minX() && box.maxX() <= plot.maxX() && box.minZ() >= plot.minZ() && box.maxZ() <= plot.maxZ()) {
                     place(element, pos, rotation, box, 0);
