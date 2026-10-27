@@ -32,6 +32,7 @@ import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
+import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionBanner;
 import rafasconquest.faction.FactionBannerNbt;
@@ -62,6 +63,10 @@ public final class RecruitsBattle {
     private static final int REPORT_SECONDS = 10;
     /** A flanking ride that hasn't got round in this long charges anyway. */
     private static final int FLANK_SECONDS = 40;
+    /** How often clients hear where the formations stand. */
+    private static final int SNAPSHOT_TICKS = 20;
+    /** Snapshot ids each army has: up to 6 formations, then the general and the standard-bearer. */
+    private static final int IDS_PER_ARMY = 8;
 
     @Nullable
     private static RecruitsBattle current;
@@ -79,6 +84,7 @@ public final class RecruitsBattle {
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
     private long tickStart;
+    private int snapshotTicks;
 
     private RecruitsBattle(ServerLevel level, Army[] armies) {
         this.level = level;
@@ -92,6 +98,8 @@ public final class RecruitsBattle {
         final double facingZ;
         final General general;
         final int uniform;
+        /** The banner's first pattern colour, flown on distant leaders' flags. */
+        final int mark;
         final ItemStack banner;
         final List<Formation> formations = new ArrayList<>();
         @Nullable
@@ -101,13 +109,14 @@ public final class RecruitsBattle {
         boolean commanderCharged;
         int started;
 
-        Army(Faction faction, PlayerTeam team, double facingX, double facingZ, General general, int uniform, ItemStack banner) {
+        Army(Faction faction, PlayerTeam team, double facingX, double facingZ, General general, int uniform, int mark, ItemStack banner) {
             this.faction = faction;
             this.team = team;
             this.facingX = facingX;
             this.facingZ = facingZ;
             this.general = general;
             this.uniform = uniform;
+            this.mark = mark;
             this.banner = banner;
         }
 
@@ -150,6 +159,8 @@ public final class RecruitsBattle {
         final Arm arm;
         final boolean reserve;
         final List<AbstractRecruitEntity> soldiers = new ArrayList<>();
+        @Nullable
+        AbstractRecruitEntity leader;
         /** The centre of its front rank, where its line is ordered to stand. */
         Point line;
         boolean charged;
@@ -243,8 +254,8 @@ public final class RecruitsBattle {
             throw new IllegalStateException("Recruits isn't ready");
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
-        Army a = new Army(first, teamA, axisX, axisZ, rollGeneral(level), uniforms[0], banner(level, first));
-        Army b = new Army(second, teamB, -axisX, -axisZ, rollGeneral(level), uniforms[1], banner(level, second));
+        Army a = new Army(first, teamA, axisX, axisZ, rollGeneral(level), uniforms[0], markColor(first), banner(level, first));
+        Army b = new Army(second, teamB, -axisX, -axisZ, rollGeneral(level), uniforms[1], markColor(second), banner(level, second));
         RecruitsBattle battle = new RecruitsBattle(level, new Army[]{a, b});
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
@@ -267,7 +278,15 @@ public final class RecruitsBattle {
 
     /** The faction's main colour (its banner's base dye) as RGB, the way vanilla dyes leather with it. */
     private static int mainColor(Faction faction) {
-        float[] c = DyeColor.byId(FactionBanner.of(faction.id()).base()).getTextureDiffuseColors();
+        return rgb(DyeColor.byId(FactionBanner.of(faction.id()).base()));
+    }
+
+    private static int markColor(Faction faction) {
+        return rgb(DyeColor.byId(FactionBanner.of(faction.id()).layers().get(0).color()));
+    }
+
+    private static int rgb(DyeColor dye) {
+        float[] c = dye.getTextureDiffuseColors();
         return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
     }
 
@@ -295,6 +314,7 @@ public final class RecruitsBattle {
                 removed++;
             }
         }
+        battle.clearSnapshots();
         battle.restoreRelations();
         return "Cleared the battle (" + removed + " soldiers removed)";
     }
@@ -326,6 +346,9 @@ public final class RecruitsBattle {
                 AbstractRecruitEntity soldier = spawn(type(slot.arm()), army, role, p, yaw);
                 if (soldier != null) {
                     formation.soldiers.add(soldier);
+                    if (role == Role.LEADER) {
+                        formation.leader = soldier;
+                    }
                 }
             }
             army.started += formation.soldiers.size();
@@ -529,6 +552,10 @@ public final class RecruitsBattle {
                 battle.second();
             }
         }
+        // Survivors still stand (or run) after the battle is decided, so keep showing them until it is cleared.
+        if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
+            ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
+        }
         if (battle.tickStart != 0) {
             long nanos = System.nanoTime() - battle.tickStart;
             battle.whole.add(nanos);
@@ -728,6 +755,58 @@ public final class RecruitsBattle {
             soldier.setShouldMovePos(true);
         }
         winner.alive().forEach(s -> s.setFollowState(2)); // winners hold where they stand
+    }
+
+    // ---- distant view ----
+
+    /**
+     * Every formation still standing, for clients to draw beyond the range at which they see soldiers. Ids are the
+     * side times {@link #IDS_PER_ARMY} plus the formation's place, with the general and the standard-bearer last.
+     */
+    private List<FormationSnapshot> snapshots() {
+        List<FormationSnapshot> all = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            Army army = armies[side];
+            int base = side * IDS_PER_ARMY;
+            for (int i = 0; i < army.formations.size(); i++) {
+                Formation f = army.formations.get(i);
+                boolean leader = f.leader != null && f.leader.isAlive();
+                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged, leader).ifPresent(all::add);
+            }
+            soloSnapshot(base + IDS_PER_ARMY - 2, FormationSnapshot.Kind.GENERAL, army, army.commander, army.commanderCharged).ifPresent(all::add);
+            soloSnapshot(base + IDS_PER_ARMY - 1, FormationSnapshot.Kind.BEARER, army, army.bearer, false).ifPresent(all::add);
+        }
+        return all;
+    }
+
+    private static Optional<FormationSnapshot> soloSnapshot(int id, FormationSnapshot.Kind kind, Army army,
+                                                            @Nullable AbstractRecruitEntity soldier, boolean fighting) {
+        return soldier == null || !soldier.isAlive() ? Optional.empty() : snapshot(id, kind, army, List.of(soldier), fighting, false);
+    }
+
+    private static Optional<FormationSnapshot> snapshot(int id, FormationSnapshot.Kind kind, Army army,
+                                                        List<AbstractRecruitEntity> soldiers, boolean fighting, boolean leader) {
+        if (soldiers.isEmpty()) {
+            return Optional.empty();
+        }
+        int n = soldiers.size();
+        double[] xs = new double[n];
+        double[] ys = new double[n];
+        double[] zs = new double[n];
+        for (int i = 0; i < n; i++) {
+            AbstractRecruitEntity s = soldiers.get(i);
+            // A rider stands on the ground where their horse does, not up in the saddle.
+            Entity feet = s.getVehicle() != null ? s.getVehicle() : s;
+            xs[i] = feet.getX();
+            ys[i] = feet.getY();
+            zs[i] = feet.getZ();
+        }
+        return Optional.of(FormationSnapshot.of(id, kind, army.uniform, army.mark, xs, ys, zs, army.facingX, army.facingZ, fighting, leader));
+    }
+
+    /** Tells everyone in the level that the battle's formations are gone. */
+    private void clearSnapshots() {
+        ConquestNetwork.sendBattleSnapshot(level.players(), List.of());
     }
 
     /** To every player; the server log gets it too. */

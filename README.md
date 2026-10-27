@@ -87,6 +87,17 @@ other and leave you alone unless you strike first. The old relation is restored 
 - **Reports:** every 10 s the chat and server log get the soldiers left on each side and the server tick time. The
   start and end name each general's type, and the end says whether each general and standard survived.
   `/pve debug battle clear` removes every soldier and horse the battle spawned. Only one battle runs at a time.
+- **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
+  by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in
+  the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the
+  back, the standard-bearer with a flag on a pole, cavalry on a horse in the army's colour
+  (`client/DistantArmyRenderer`). Once a second the server sends each player a summary of every formation (where it
+  stands, which way it faces, how wide and deep it is, how many are left; `battle/FormationSnapshot`), not every
+  soldier, so it stays small as battles grow. The client lays the soldiers out in ranks across that space (scattered a
+  little once a formation is fighting) and glides each formation to its newest place over the next second. The camera
+  sees only 4 render distances; figures further away are pulled in along the line of sight and shrunk to match, so
+  they look the same on screen (`battle/DistantDepth`). Without Distant Horizons there is no terrain beyond the render
+  distance, so figures out there stand over empty sky; Distant Horizons support is planned.
 - **Measured** on the dev server with no client connected, 200 soldiers on flat ground: about 10 ms per tick on
   average, worst ticks 35–50 ms, and a steady 20 TPS. Battles ended in a rout after 60–100 s. On a small island,
   cavalry that charged into the sea got stuck, so fight on open land.

@@ -12,7 +12,9 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import rafasconquest.RafasConquest;
 import net.minecraft.world.item.ItemStack;
+import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.client.BackBanners;
+import rafasconquest.client.DistantArmies;
 import rafasconquest.client.ClientScreens;
 import rafasconquest.sim.ConquestServer;
 
@@ -24,10 +26,11 @@ import java.util.function.Supplier;
 /**
  * The mod's network channel. The Faction Info screen and the world map ask the server for faction data; the map also
  * asks for the base map, which comes back compressed and in parts (a single packet to a client is limited to 1 MB).
- * Battles tell clients which soldiers wear a banner on their back.
+ * Battles tell clients which soldiers wear a banner on their back, and where every formation stands so it can be drawn
+ * beyond the range at which soldiers are seen.
  */
 public final class ConquestNetwork {
-    private static final String VERSION = "3";
+    private static final String VERSION = "4";
     private static final int MAP_PART_BYTES = 256 * 1024;
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);
@@ -63,6 +66,70 @@ public final class ConquestNetwork {
                 .decoder(BackBanner::read)
                 .consumerMainThread(ConquestNetwork::handleBackBanner)
                 .add();
+        CHANNEL.messageBuilder(BattleSnapshot.class, 5, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(BattleSnapshot::write)
+                .decoder(BattleSnapshot::read)
+                .consumerMainThread(ConquestNetwork::handleBattleSnapshot)
+                .add();
+    }
+
+    /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */
+    public static void sendBattleSnapshot(List<ServerPlayer> players, List<FormationSnapshot> formations) {
+        BattleSnapshot msg = new BattleSnapshot(formations);
+        for (ServerPlayer player : players) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), msg);
+        }
+    }
+
+    /** Server → client: every formation of the battle still standing. */
+    public record BattleSnapshot(List<FormationSnapshot> formations) {
+        private static final FormationSnapshot.Kind[] KINDS = FormationSnapshot.Kind.values();
+
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(formations.size());
+            for (FormationSnapshot f : formations) {
+                buf.writeVarInt(f.id());
+                buf.writeByte(f.kind().ordinal());
+                buf.writeInt(f.rgb());
+                buf.writeInt(f.mark());
+                buf.writeVarInt(f.alive());
+                buf.writeDouble(f.x());
+                buf.writeFloat((float) f.y());
+                buf.writeDouble(f.z());
+                buf.writeFloat((float) f.facingX());
+                buf.writeFloat((float) f.facingZ());
+                buf.writeFloat((float) f.halfWidth());
+                buf.writeFloat((float) f.halfDepth());
+                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0));
+            }
+        }
+
+        static BattleSnapshot read(FriendlyByteBuf buf) {
+            int n = buf.readVarInt();
+            List<FormationSnapshot> formations = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                int id = buf.readVarInt();
+                FormationSnapshot.Kind kind = KINDS[buf.readByte()];
+                int rgb = buf.readInt();
+                int mark = buf.readInt();
+                int alive = buf.readVarInt();
+                double x = buf.readDouble();
+                double y = buf.readFloat();
+                double z = buf.readDouble();
+                double facingX = buf.readFloat();
+                double facingZ = buf.readFloat();
+                double halfWidth = buf.readFloat();
+                double halfDepth = buf.readFloat();
+                int flags = buf.readByte();
+                formations.add(new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth,
+                        (flags & 1) != 0, (flags & 2) != 0));
+            }
+            return new BattleSnapshot(formations);
+        }
+    }
+
+    private static void handleBattleSnapshot(BattleSnapshot msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> DistantArmies.receive(msg.formations()));
     }
 
     /** Tells a player that an entity they now see wears this banner on its back (a battle's general). */
