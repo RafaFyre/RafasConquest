@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "rafasconquest:block/command_table" },
+    "facing=east": { "model": "rafasconquest:block/command_table", "y": 90 },
+    "facing=south": { "model": "rafasconquest:block/command_table", "y": 180 },
+    "facing=west": { "model": "rafasconquest:block/command_table", "y": 270 }
+  }
+}

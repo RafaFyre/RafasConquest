@@ -44,6 +44,21 @@ as ours, and their leader name is the faction type ("Empire", "City-state"). Rec
 All Recruits calls live in `bridge/RecruitsFactions`, behind the `RecruitsBridge` interface. `/pve debug recruits` lists
 what Recruits holds.
 
+## Faction Info and the Command Table
+
+- **Faction Info button:** Recruits' faction menu (its faction key, or the Command Table) has a third button,
+  **Faction Info** (`client/ClientEvents`). It opens a screen showing one faction at a time, nearest first. Use
+  ◀ ▶ to switch faction and ✕ to go back. Each faction shows its banner and name, then a scrolling box with:
+  - type, strength (claim radius, 1–10; City-states claim none) and military strength (soldier pool, of 400,000);
+  - capital (or a City-state's home city) and how far away it is;
+  - structures owned, with a count per type (capitals, cities, farms) and every one's location.
+  The screen asks the server for the data when it opens (`net/ConquestNetwork`, `net/FactionInfo`; at most the 64
+  nearest known factions). It shows factions in precomputed regions, so the far outer world fills in as players
+  explore.
+- **Command Table** (`rafasconquest:command_table`): a lectern with an open book. Using it opens Recruits' faction menu,
+  Faction Info button included. It faces whoever placed it, breaks with an axe, and drops itself. It has no crafting
+  recipe yet; it is in the mod's own creative tab, **Rafa's Conquest**.
+
 ## Cities (City-states and Empire capitals)
 
 A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state

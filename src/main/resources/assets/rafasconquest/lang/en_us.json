@@ -1,4 +1,28 @@
 {
   "gamerule.PassIngameTimeForIRLTime": "Pass in-game time for real time",
-  "gamerule.PassIngameTimeForIRLTime.description": "In game days are caught up when the server is offline. One hour ~= 3 days worth of resource collection. Off by default."
+  "gamerule.PassIngameTimeForIRLTime.description": "In game days are caught up when the server is offline. One hour ~= 3 days worth of resource collection. Off by default.",
+
+  "block.rafasconquest.command_table": "Command Table",
+  "itemGroup.rafasconquest": "Rafa's Conquest",
+
+  "gui.rafasconquest.faction_info": "Faction Info",
+  "gui.rafasconquest.faction_info.loading": "Loading factions...",
+  "gui.rafasconquest.faction_info.none": "No factions discovered yet",
+  "gui.rafasconquest.faction_info.page": "Faction %s of %s (nearest first)",
+  "gui.rafasconquest.faction_info.overview": "Overview",
+  "gui.rafasconquest.faction_info.type": "Type: %s",
+  "gui.rafasconquest.faction_info.strength": "Strength: %s / 10",
+  "gui.rafasconquest.faction_info.no_claims": "City-states claim no land around them",
+  "gui.rafasconquest.faction_info.military": "Military strength: %s / 400,000",
+  "gui.rafasconquest.faction_info.capital": "Capital: %s",
+  "gui.rafasconquest.faction_info.home_city": "Home city: %s",
+  "gui.rafasconquest.faction_info.distance": "%s blocks from you",
+  "gui.rafasconquest.faction_info.banner": "Banner: %s",
+  "gui.rafasconquest.faction_info.structures": "Structures owned: %s",
+  "gui.rafasconquest.faction_info.location": "%s  (%s blocks away)",
+  "gui.rafasconquest.faction_type.empire": "Empire",
+  "gui.rafasconquest.faction_type.city_state": "City-state",
+  "gui.rafasconquest.structure.capital": "Capitals: %s",
+  "gui.rafasconquest.structure.city": "Cities: %s",
+  "gui.rafasconquest.structure.farm": "Farms: %s"
 }

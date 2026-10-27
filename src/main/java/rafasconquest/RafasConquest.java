@@ -7,6 +7,8 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+import rafasconquest.content.ConquestContent;
+import rafasconquest.net.ConquestNetwork;
 import rafasconquest.worldgen.ConquestWorldgen;
 
 @Mod(RafasConquest.MOD_ID)
@@ -17,6 +19,8 @@ public class RafasConquest {
     public RafasConquest(FMLJavaModLoadingContext context) {
         IEventBus modBus = context.getModEventBus();
         ConquestWorldgen.register(modBus);
+        ConquestContent.register(modBus);
+        ConquestNetwork.register();
         modBus.addListener(this::commonSetup);
         context.registerConfig(ModConfig.Type.COMMON, ConquestConfig.SPEC);
         LOGGER.info("RafasConquest loaded");
