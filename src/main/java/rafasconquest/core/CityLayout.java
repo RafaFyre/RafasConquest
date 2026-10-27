@@ -246,9 +246,10 @@ public final class CityLayout {
         if (Math.sqrt((double) x * x + (double) z * z) < s.eyeRadius() + HALF_EXTENT) {
             return Optional.empty();
         }
-        // Capitals are whole cities too, so keep a full city width (plus clearance) away from them.
+        // Capitals are whole cities too, so keep a full city width (plus clearance) away from them. Their seeded
+        // sites: a Capital that moves to land keeps clear of City-states itself.
         int clear = SIZE + CLEARANCE;
-        for (CapitalLayout.Site capital : CapitalLayout.sitesInBox(seed, s, x - clear, z - clear, x + clear, z + clear)) {
+        for (CapitalLayout.Site capital : CapitalLayout.rawSitesInBox(seed, s, x - clear, z - clear, x + clear, z + clear)) {
             if (Math.abs(capital.x() - x) <= clear && Math.abs(capital.z() - z) <= clear) {
                 return Optional.empty();
             }

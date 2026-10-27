@@ -68,9 +68,17 @@ like any city, and falls back to plains where no style matches.
 
 **No cities or farms on ocean:** no part of a city's flattened box, and no part of a farm's plot, may lie on a biome
 in the tag `rafasconquest:no_settlement` (all oceans; packs can add more). Biomes are sampled at sea level, every 16
-blocks over a city and at the corners and centre of a farm (`worldgen/SettlementBiomes`). A Capital site that fails
-this has no capital city and so no Empire, and a city site that fails it has no City-state. On seed 12345 that leaves
-2 of the 6 storm-wall Empires and 11 factions within 8,000 blocks (25 before).
+blocks over a city and at the corners and centre of a farm (`worldgen/SettlementBiomes`). A City-state site that fails
+this has no City-state.
+
+**Capitals move to land:** a Capital site whose city would touch ocean moves to the nearest spot, searched every 32
+blocks up to 1,024 away, where the whole city fits on land. The new spot also stays out of the eye and keeps a city's
+width clear of City-state sites and other Capitals (`CapitalLayout.relocated`). Everything that looks Capitals up
+(placement, walls, banners, guards, farm spacing, ownership) gets the moved site. City-states keep their distance from
+the seeded sites, so the two layouts don't depend on each other. The search needs the world's biomes, published when
+the overworld loads, and runs once per site, on first use. On seed 12345 it adds about 4.5 s to the first startup, and
+all 6 storm-wall Empires keep their capitals (4 of them moved). Only a site with no land within 1,024 blocks loses its
+Empire.
 
 - **Grid:** a 483 × 483 square. 3-wide roads run every 32 blocks in both directions, with an edge road all round,
   making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town centre

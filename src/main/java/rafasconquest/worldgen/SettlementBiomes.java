@@ -6,8 +6,11 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import rafasconquest.RafasConquest;
+import rafasconquest.core.CapitalLayout;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.CityTerrain;
 
@@ -34,19 +37,38 @@ public final class SettlementBiomes {
 
     /** True if any part of a city's flattened box lies on a forbidden biome. */
     public static boolean blocksCity(Structure.GenerationContext ctx, CityLayout.Site site) {
-        return CITY_BLOCKED.computeIfAbsent(new CityKey(ctx.seed(), site), k -> touches(ctx,
-                site.originX() + CityTerrain.BOX_MIN, site.originZ() + CityTerrain.BOX_MIN,
-                site.originX() + CityTerrain.BOX_MAX, site.originZ() + CityTerrain.BOX_MAX, CITY_STEP));
+        return CITY_BLOCKED.computeIfAbsent(new CityKey(ctx.seed(), site), k -> cityTouches(ctx.biomeSource(),
+                ctx.randomState().sampler(), ctx.chunkGenerator().getSeaLevel(), site.x(), site.z(), CITY_STEP));
+    }
+
+    /**
+     * The check Capitals use to find land ({@link CapitalLayout.Land}): exactly {@link #blocksCity}'s test, after a
+     * coarser pass that rules out most ocean spots cheaply.
+     */
+    public static CapitalLayout.Land land(BiomeSource source, Climate.Sampler sampler, int seaLevel) {
+        return (x, z) -> !cityTouches(source, sampler, seaLevel, x, z, 2 * CITY_STEP)
+                && !cityTouches(source, sampler, seaLevel, x, z, CITY_STEP);
+    }
+
+    private static boolean cityTouches(BiomeSource source, Climate.Sampler sampler, int seaLevel, int centreX, int centreZ, int step) {
+        int originX = centreX - CityLayout.HALF_EXTENT;
+        int originZ = centreZ - CityLayout.HALF_EXTENT;
+        return touches(source, sampler, seaLevel, originX + CityTerrain.BOX_MIN, originZ + CityTerrain.BOX_MIN,
+                originX + CityTerrain.BOX_MAX, originZ + CityTerrain.BOX_MAX, step);
+    }
+
+    public static boolean touches(Structure.GenerationContext ctx, int minX, int minZ, int maxX, int maxZ, int step) {
+        return touches(ctx.biomeSource(), ctx.randomState().sampler(), ctx.chunkGenerator().getSeaLevel(), minX, minZ, maxX, maxZ, step);
     }
 
     /**
      * True if any biome sampled every {@code step} blocks over the box, its far edges included, is forbidden.
      */
-    public static boolean touches(Structure.GenerationContext ctx, int minX, int minZ, int maxX, int maxZ, int step) {
-        int y = QuartPos.fromBlock(ctx.chunkGenerator().getSeaLevel());
+    public static boolean touches(BiomeSource source, Climate.Sampler sampler, int seaLevel, int minX, int minZ, int maxX, int maxZ, int step) {
+        int y = QuartPos.fromBlock(seaLevel);
         for (int x = minX; ; x = Math.min(maxX, x + step)) {
             for (int z = minZ; ; z = Math.min(maxZ, z + step)) {
-                Holder<Biome> biome = ctx.biomeSource().getNoiseBiome(QuartPos.fromBlock(x), y, QuartPos.fromBlock(z), ctx.randomState().sampler());
+                Holder<Biome> biome = source.getNoiseBiome(QuartPos.fromBlock(x), y, QuartPos.fromBlock(z), sampler);
                 if (biome.is(NO_SETTLEMENT)) {
                     return true;
                 }

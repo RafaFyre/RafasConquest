@@ -13,7 +13,10 @@ import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import rafasconquest.command.PveCommands;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import rafasconquest.core.CapitalLayout;
 import rafasconquest.core.CityLayout;
+import rafasconquest.worldgen.SettlementBiomes;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.poi.PoiType;
@@ -32,6 +35,9 @@ public final class ConquestEvents {
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             ConquestSavedData data = ConquestSavedData.get(level, ConquestConfig.snapshot());
             ConquestRuntime.publish(data.settings());
+            ChunkGenerator generator = level.getChunkSource().getGenerator();
+            CapitalLayout.setLand(level.getSeed(), SettlementBiomes.land(generator.getBiomeSource(),
+                    level.getChunkSource().randomState().sampler(), generator.getSeaLevel()));
             ConquestServer.attach(level, data);
         }
     }
@@ -41,6 +47,7 @@ public final class ConquestEvents {
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             ConquestServer.detach();
             ConquestRuntime.publish(null);
+            CapitalLayout.setLand(0, null);
         }
     }
 
