@@ -17,6 +17,7 @@ import rafasconquest.RafasConquest;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.dev.CityStats;
+import rafasconquest.faction.FactionBanner;
 import rafasconquest.faction.FactionType;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.ResourceType;
@@ -106,6 +107,7 @@ public final class PveCommands {
                 zone(data.settings(), distanceFromSpawn(faction)), Math.round(distanceFromSpawn(faction)))), false);
         source.sendSuccess(() -> Component.literal(String.format("%s | strength %,d", claims(faction), faction.strength())), false);
         source.sendSuccess(() -> Component.literal(String.format("Stockpile: food %,d", faction.stock(ResourceType.FOOD))), false);
+        source.sendSuccess(() -> Component.literal("Banner: " + FactionBanner.of(faction.id()).describe()), false);
         source.sendSuccess(() -> Component.literal(String.format("POIs owned: %d (%d farms, capital included)", data.poiCount(faction.id()), farms)), false);
         return 1;
     }

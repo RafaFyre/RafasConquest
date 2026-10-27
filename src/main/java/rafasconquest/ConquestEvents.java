@@ -13,6 +13,8 @@ import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import rafasconquest.command.PveCommands;
+import rafasconquest.core.CityLayout;
+import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.poi.PoiType;
 import rafasconquest.sim.ConquestServer;
@@ -65,6 +67,10 @@ public final class ConquestEvents {
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (!(event.getChunk() instanceof LevelChunk chunk) || !(event.getLevel() instanceof ServerLevel level) || level.dimension() != Level.OVERWORLD) {
             return;
+        }
+        WorldSettings settings = ConquestRuntime.settings();
+        if (settings != null && settings.citiesEnabled() && CityLayout.chunkTouchesWall(level.getSeed(), settings, chunk.getPos().x, chunk.getPos().z)) {
+            ConquestServer.queueBannerChunk(chunk.getPos());
         }
         for (Structure structure : chunk.getAllStarts().keySet()) {
             StructureType<?> type = structure.type();

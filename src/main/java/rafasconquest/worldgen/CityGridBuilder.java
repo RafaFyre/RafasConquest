@@ -21,6 +21,7 @@ import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElement;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+import rafasconquest.RafasConquest;
 import rafasconquest.core.CityLayout;
 
 import java.util.List;
@@ -37,6 +38,7 @@ public final class CityGridBuilder {
     /** How deep to follow a building's own jigsaw links (building → villager is 1). */
     private static final int MAX_CHILD_DEPTH = 2;
     private static final String ENTRANCE = "minecraft:building_entrance";
+    private static final String WALL_END = "rafasconquest:wall_end";
 
     /** The terrain top at a column; {@code waterDepth} is 0 on land. */
     public record Ground(int y, int waterDepth) {
@@ -123,14 +125,101 @@ public final class CityGridBuilder {
                     for (int qz = 0; qz < 2; qz++) {
                         int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
                         int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
-                        Direction toRoad = random.nextBoolean()
-                                ? (qx == 0 ? Direction.WEST : Direction.EAST)
-                                : (qz == 0 ? Direction.NORTH : Direction.SOUTH);
-                        house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1), toRoad);
+                        house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
+                                facing(bx, bz, qx, qz));
                     }
                 }
             }
         }
+
+        // Walls last, so they stand on top of the edge road and reclaimed ground.
+        buildWalls(cellX, cellZ);
+    }
+
+    /**
+     * Which side of a plot its entrance faces: one of the two roads it touches, but never the wall. The 4 plots in
+     * the city's corners touch only the wall, so they face the alley between plots instead.
+     */
+    private Direction facing(int bx, int bz, int qx, int qz) {
+        int last = CityLayout.BLOCKS_PER_SIDE - 1;
+        Direction xRoad = qx == 0 ? Direction.WEST : Direction.EAST;
+        Direction zRoad = qz == 0 ? Direction.NORTH : Direction.SOUTH;
+        boolean xIsWall = (qx == 0 && bx == 0) || (qx == 1 && bx == last);
+        boolean zIsWall = (qz == 0 && bz == 0) || (qz == 1 && bz == last);
+        boolean pickX = random.nextBoolean();
+        if (xIsWall && zIsWall) {
+            return pickX ? xRoad.getOpposite() : zRoad.getOpposite();
+        }
+        if (xIsWall) {
+            return zRoad;
+        }
+        if (zIsWall) {
+            return xRoad;
+        }
+        return pickX ? xRoad : zRoad;
+    }
+
+    /**
+     * This cell's share of the wall ring. The first segment of each side in the cell is placed from the layout; each
+     * following one is joined to the previous segment through its wall_end → wall_start jigsaws. The layout position
+     * is checked against the jigsaw position, so a template with misplaced connectors shows up in the log.
+     */
+    private void buildWalls(int cellX, int cellZ) {
+        PlacedWall previous = null;
+        for (CityLayout.WallSegment seg : CityLayout.wallSegments(cellX, cellZ)) {
+            StructurePoolElement element = firstElement(seg.gate() ? variant.gate() : variant.wall());
+            if (element == null) {
+                return;
+            }
+            Rotation rotation = Rotation.values()[seg.quarterTurns()];
+            int x = site.originX() + seg.originX();
+            int z = site.originZ() + seg.originZ();
+            BlockPos laidOut = new BlockPos(x, ground(ctx, x, z).y(), z);
+            BlockPos pos = laidOut;
+            if (previous != null && previous.segment.side() == seg.side() && previous.segment.index() == seg.index() - 1) {
+                BlockPos joined = joinWall(previous, element, rotation);
+                if (joined == null || joined.getX() != laidOut.getX() || joined.getZ() != laidOut.getZ()) {
+                    RafasConquest.LOGGER.warn("City wall segment {} {} does not line up with its jigsaw (layout {}, jigsaw {})",
+                            seg.side(), seg.index(), laidOut, joined);
+                } else {
+                    pos = joined;
+                }
+            }
+            pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation,
+                    element.getBoundingBox(templates, pos, rotation)));
+            previous = new PlacedWall(seg, element, pos, rotation);
+        }
+    }
+
+    private record PlacedWall(CityLayout.WallSegment segment, StructurePoolElement element, BlockPos pos, Rotation rotation) {
+    }
+
+    /** Where {@code next} goes so its wall_start jigsaw meets the previous segment's wall_end jigsaw, or null. */
+    private BlockPos joinWall(PlacedWall previous, StructurePoolElement next, Rotation rotation) {
+        for (StructureTemplate.StructureBlockInfo end : previous.element.getShuffledJigsawBlocks(templates, previous.pos, previous.rotation, random)) {
+            if (end.nbt() == null || !WALL_END.equals(end.nbt().getString("name"))) {
+                continue;
+            }
+            for (StructureTemplate.StructureBlockInfo start : next.getShuffledJigsawBlocks(templates, BlockPos.ZERO, rotation, random)) {
+                if (JigsawBlock.canAttach(end, start)) {
+                    return end.pos().relative(JigsawBlock.getFrontFacing(end.state())).subtract(start.pos());
+                }
+            }
+        }
+        return null;
+    }
+
+    private StructurePoolElement firstElement(ResourceKey<StructureTemplatePool> key) {
+        Optional<? extends Holder<StructureTemplatePool>> pool = pools.getHolder(key);
+        if (pool.isEmpty()) {
+            return null;
+        }
+        for (StructurePoolElement element : pool.get().value().getShuffledTemplates(random)) {
+            if (element != EmptyPoolElement.INSTANCE) {
+                return element;
+            }
+        }
+        return null;
     }
 
     /** Places a building on the plot with its entrance on the plot edge facing {@code toRoad}. */

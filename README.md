@@ -38,6 +38,18 @@ a `CITY_STATE` faction (no territory claims) and is tracked as a `CITY` POI.
   in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
   of a structure's start chunk. Every cell builds its share of the same grid, so they meet seamlessly and all 9 always
   generate together.
+- **Wall:** a 3-wide wall stands on the outermost road band all the way round, built from 32 × 8 × 3 jigsaw segments
+  (one street length each; templates `structures/city/wall/segment.nbt` and `gate.nbt`, regenerated with
+  `gradlew generateWallTemplates`). Each side is 15 segments laid as a pinwheel, so the ring closes exactly. The first
+  segment of each side in a cell is placed from the layout, and each next one is joined through its `wall_end` →
+  `wall_start` jigsaws. Segments follow the terrain. One gate per side sits where the avenue next to the town centre
+  meets the wall. Material comes from the pool's processor list: weathered stone bricks, or cut sandstone for desert.
+  Houses never face the wall; the 4 corner plots face the alley between plots instead.
+- **Banners:** each segment carries 2 standing banners on top of its outer edge, at the quarter points. When a wall
+  chunk loads (including its first load after generation), its banners are painted in the city owner's design. Today
+  the owner is the City-state; if the city changes hands later, the banners follow on the next load. Each faction's
+  design is a base colour plus two pattern layers derived from its id (`faction/FactionBanner`), and
+  `/pve faction info` shows it.
 - **Style:** picked from the biome at the city centre via the tags `rafasconquest:city/<plains|desert|savanna|snowy|taiga>`.
 - **Measured** with `/pve debug citystats 12` against vanilla villages at the same sites: every city exactly square,
   99.5% of plots built (all empty ones over deep water), **6× buildings per area, 3.14× width**, about 890 buildings

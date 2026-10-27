@@ -147,6 +147,13 @@ tasks.named('test', Test).configure {
     useJUnitPlatform()
 }
 
+// Regenerates the city wall structure templates from dev/WallTemplates.
+tasks.register('generateWallTemplates', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'rafasconquest.dev.WallTemplates'
+    args file('src/main/resources/data/rafasconquest/structures/city/wall').absolutePath
+}
+
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
 // When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.

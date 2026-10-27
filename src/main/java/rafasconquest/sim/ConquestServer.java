@@ -3,6 +3,7 @@ package rafasconquest.sim;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.ConquestGameRules;
 import rafasconquest.RafasConquest;
@@ -28,6 +29,7 @@ public final class ConquestServer {
     private static final int PLAYER_SCAN_INTERVAL = 20;
 
     private static final Queue<StructureLink> PENDING_LINKS = new ConcurrentLinkedQueue<>();
+    private static final Queue<ChunkPos> PENDING_BANNER_CHUNKS = new ConcurrentLinkedQueue<>();
 
     @Nullable
     private static ConquestServer current;
@@ -58,6 +60,7 @@ public final class ConquestServer {
     /** Overworld loaded: read the offline gap now, before anything can save and overwrite lastSavedRealTime. */
     public static void attach(ServerLevel overworld, ConquestSavedData data) {
         PENDING_LINKS.clear();
+        PENDING_BANNER_CHUNKS.clear();
         current = new ConquestServer(overworld, data);
         if (overworld.getGameRules().getBoolean(ConquestGameRules.PASS_INGAME_TIME_FOR_IRL_TIME)) {
             current.catchUpRemaining = DayClock.missedDays(System.currentTimeMillis(), data.lastSavedRealTime(), data.settings().maxCatchUpDays());
@@ -67,10 +70,16 @@ public final class ConquestServer {
     public static void detach() {
         current = null;
         PENDING_LINKS.clear();
+        PENDING_BANNER_CHUNKS.clear();
     }
 
     public static void queueStructureLink(ChunkPos chunk, PoiType type) {
         PENDING_LINKS.add(new StructureLink(chunk, type));
+    }
+
+    /** A loaded chunk that holds part of a city wall; its banners get the owner's colours on the next tick. */
+    public static void queueBannerChunk(ChunkPos chunk) {
+        PENDING_BANNER_CHUNKS.add(chunk);
     }
 
     public ConquestSavedData data() {
@@ -105,6 +114,7 @@ public final class ConquestServer {
             return;
         }
         drainStructureLinks();
+        drainBannerChunks();
         if (overworld.getGameTime() % PLAYER_SCAN_INTERVAL == 0) {
             queueRegionsNearPlayers();
         }
@@ -153,6 +163,16 @@ public final class ConquestServer {
             } else if (!poi.generated()) {
                 poi.setGenerated(true);
                 // Extension point: apply the owner's banners and colours to the structure here.
+            }
+        }
+    }
+
+    private void drainBannerChunks() {
+        ChunkPos pos;
+        while ((pos = PENDING_BANNER_CHUNKS.poll()) != null) {
+            LevelChunk chunk = overworld.getChunkSource().getChunkNow(pos.x, pos.z);
+            if (chunk != null) {
+                CityBanners.paintChunk(overworld, chunk, data, precomputer);
             }
         }
     }

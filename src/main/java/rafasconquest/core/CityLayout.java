@@ -32,6 +32,20 @@ public final class CityLayout {
     public static final int DISTRICT_SPACING = BLOCKS_PER_CELL * ROAD_PERIOD;
     /** Extra gap kept between a city's edge and a Capital or Farm. */
     public static final int CLEARANCE = 64;
+    /** The road that runs out through a gate on every side: the avenue beside the town centre. */
+    public static final int GATE_ROAD = BLOCKS_PER_SIDE / 2;
+
+    /**
+     * One 32-long wall segment, in city-local coordinates. The wall stands on the edge road band and is laid as a
+     * pinwheel: each side runs clockwise for 15 segments and its last one covers the corner, so 15 × 32 + 3 = 483
+     * closes exactly. {@code quarterTurns} rotates the template (whose outer face is local z = 0) clockwise.
+     */
+    public record WallSegment(Side side, int index, int originX, int originZ, int quarterTurns, boolean gate) {
+    }
+
+    public enum Side {
+        NORTH, EAST, SOUTH, WEST
+    }
 
     private CityLayout() {
     }
@@ -99,6 +113,101 @@ public final class CityLayout {
 
     public static int cellMax(int cell) {
         return roadStart((cell + 1) * BLOCKS_PER_CELL) + ROAD_WIDTH - 1;
+    }
+
+    /** All wall segments, every side, in clockwise order. */
+    public static List<WallSegment> wallSegments() {
+        List<WallSegment> all = new ArrayList<>();
+        for (Side side : Side.values()) {
+            for (int j = 0; j < BLOCKS_PER_SIDE; j++) {
+                all.add(wallSegment(side, j));
+            }
+        }
+        return all;
+    }
+
+    /** The wall segments a cell builds, in clockwise order along each side. */
+    public static List<WallSegment> wallSegments(int cellX, int cellZ) {
+        List<WallSegment> mine = new ArrayList<>();
+        for (WallSegment seg : wallSegments()) {
+            int[] cell = wallCell(seg);
+            if (cell[0] == cellX && cell[1] == cellZ) {
+                mine.add(seg);
+            }
+        }
+        return mine;
+    }
+
+    static WallSegment wallSegment(Side side, int j) {
+        int far = SIZE - 1;
+        int step = j * ROAD_PERIOD;
+        return switch (side) {
+            case NORTH -> new WallSegment(side, j, step, 0, 0, j == GATE_ROAD);
+            case EAST -> new WallSegment(side, j, far, step, 1, j == GATE_ROAD);
+            // South and west run back toward the origin, so road k is met by segment 15 - k.
+            case SOUTH -> new WallSegment(side, j, far - step, far, 2, j == BLOCKS_PER_SIDE - GATE_ROAD);
+            case WEST -> new WallSegment(side, j, 0, far - step, 3, j == BLOCKS_PER_SIDE - GATE_ROAD);
+        };
+    }
+
+    private static int[] wallCell(WallSegment seg) {
+        int along = seg.index() / BLOCKS_PER_CELL;
+        int last = CELLS_PER_SIDE - 1;
+        return switch (seg.side()) {
+            case NORTH -> new int[]{along, 0};
+            case EAST -> new int[]{last, along};
+            case SOUTH -> new int[]{last - along, last};
+            case WEST -> new int[]{0, last - along};
+        };
+    }
+
+    /**
+     * City-local (x, z) of template block (tx, tz) for a segment, matching vanilla's clockwise template rotation
+     * about the template origin.
+     */
+    public static int[] wallBlock(WallSegment seg, int tx, int tz) {
+        return switch (seg.quarterTurns()) {
+            case 0 -> new int[]{seg.originX() + tx, seg.originZ() + tz};
+            case 1 -> new int[]{seg.originX() - tz, seg.originZ() + tx};
+            case 2 -> new int[]{seg.originX() - tx, seg.originZ() - tz};
+            default -> new int[]{seg.originX() + tz, seg.originZ() - tx};
+        };
+    }
+
+    /** True if city-local (x, z) is on the wall: the outermost road band, all round. */
+    public static boolean inWallBand(int localX, int localZ) {
+        if (localX < 0 || localZ < 0 || localX >= SIZE || localZ >= SIZE) {
+            return false;
+        }
+        int inner = SIZE - ROAD_WIDTH;
+        return localX < ROAD_WIDTH || localZ < ROAD_WIDTH || localX >= inner || localZ >= inner;
+    }
+
+    /** The city whose wall band contains world (x, z), if any. */
+    public static Optional<Site> wallAt(long seed, WorldSettings s, int x, int z) {
+        for (Site city : sitesInBox(seed, s, x - HALF_EXTENT - 1, z - HALF_EXTENT - 1, x + HALF_EXTENT + 1, z + HALF_EXTENT + 1)) {
+            if (inWallBand(x - city.originX(), z - city.originZ())) {
+                return Optional.of(city);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** True if any block of the chunk lies on some city's wall. Cheap; safe on any thread. */
+    public static boolean chunkTouchesWall(long seed, WorldSettings s, int chunkX, int chunkZ) {
+        int minX = chunkX << 4;
+        int minZ = chunkZ << 4;
+        for (Site city : sitesInBox(seed, s, minX - HALF_EXTENT - 1, minZ - HALF_EXTENT - 1, minX + 15 + HALF_EXTENT + 1, minZ + 15 + HALF_EXTENT + 1)) {
+            int lx0 = minX - city.originX();
+            int lz0 = minZ - city.originZ();
+            boolean overlapsCity = lx0 + 15 >= 0 && lz0 + 15 >= 0 && lx0 < SIZE && lz0 < SIZE;
+            int inner = SIZE - ROAD_WIDTH;
+            boolean insideInner = lx0 >= ROAD_WIDTH && lz0 >= ROAD_WIDTH && lx0 + 15 < inner && lz0 + 15 < inner;
+            if (overlapsCity && !insideInner) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static Optional<Site> gridSite(long seed, WorldSettings s, int cellX, int cellZ) {

@@ -31,6 +31,8 @@ public enum CityVariant {
     private final TagKey<Biome> biomes;
     private final ResourceKey<StructureTemplatePool> townCenters;
     private final ResourceKey<StructureTemplatePool> houses;
+    private final ResourceKey<StructureTemplatePool> wall;
+    private final ResourceKey<StructureTemplatePool> gate;
     private final BlockState road;
     private final BlockState bridge;
     private final BlockState ground;
@@ -40,6 +42,8 @@ public enum CityVariant {
         this.biomes = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "city/" + name));
         this.townCenters = vanillaPool(name, "town_centers");
         this.houses = vanillaPool(name, "houses");
+        this.wall = modPool("city/wall/" + name);
+        this.gate = modPool("city/gate/" + name);
         this.road = road;
         this.bridge = bridge;
         this.ground = ground;
@@ -62,6 +66,16 @@ public enum CityVariant {
         return houses;
     }
 
+    /** rafasconquest:city/wall/&lt;variant&gt;: the plain wall segment, with this style's materials. */
+    public ResourceKey<StructureTemplatePool> wall() {
+        return wall;
+    }
+
+    /** rafasconquest:city/gate/&lt;variant&gt;: the wall segment with a gate where an avenue leaves the city. */
+    public ResourceKey<StructureTemplatePool> gate() {
+        return gate;
+    }
+
     public BlockState road() {
         return road;
     }
@@ -80,6 +94,10 @@ public enum CityVariant {
             }
         }
         return Optional.empty();
+    }
+
+    private static ResourceKey<StructureTemplatePool> modPool(String path) {
+        return ResourceKey.create(Registries.TEMPLATE_POOL, ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, path));
     }
 
     private static ResourceKey<StructureTemplatePool> vanillaPool(String variant, String pool) {
