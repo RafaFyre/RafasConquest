@@ -34,6 +34,7 @@ class ConquestSavedDataTest {
         data.addPoi(new Poi(new BlockPos(-6000, 80, 6000), PoiType.FARM, null, 6, true));
         data.markRegionPrecomputed(0, 0);
         data.markRegionPrecomputed(-3, 2);
+        data.markGuardSpawned(new BlockPos(2016, 78, -241));
         return data;
     }
 
@@ -52,6 +53,8 @@ class ConquestSavedDataTest {
         assertEquals(42, reloaded.lastProcessedDay());
         assertEquals(1_800_000_000_000L, reloaded.lastSavedRealTime());
         assertEquals(original.precomputedRegions(), reloaded.precomputedRegions());
+        assertEquals(true, reloaded.guardSpawned(new BlockPos(2016, 78, -241)), "a manned wall post stays manned after reload");
+        assertEquals(false, reloaded.guardSpawned(new BlockPos(2016, 78, -240)));
 
         Faction a = reloaded.faction(new UUID(1, 2));
         assertNotNull(a);

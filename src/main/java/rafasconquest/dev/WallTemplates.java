@@ -17,21 +17,21 @@ import java.util.Map;
 /**
  * Generates the city wall structure templates (run with {@code gradlew generateWallTemplates}).
  * <p>
- * A segment is 32 long (one street length: a 29-block street plus its 3-wide crossing) × 16 tall × 3 wide, in template
+ * A segment is 32 long (one street length: a 29-block street plus its 3-wide crossing) × 8 tall × 3 wide, in template
  * coordinates x = along the wall, y = up, z = across with z = 0 the outer face:
  * <ul>
- *   <li>y 0–13: solid body (y 0 sits flush with the ground, replacing the surface block, like vanilla streets)</li>
- *   <li>y 14: outer parapet, walkway behind it</li>
- *   <li>y 15: crenellations along the outer edge, with 2 standing banners at x = 8 and x = 24, facing out</li>
+ *   <li>y 0–5: solid body (y 0 sits flush with the ground, replacing the surface block, like vanilla streets)</li>
+ *   <li>y 6: outer parapet, walkway behind it (where a guard stands)</li>
+ *   <li>y 7: crenellations along the outer edge, with 2 standing banners at x = 8 and x = 24, facing out</li>
  *   <li>jigsaws at both ends (in the body just above the gate opening): {@code wall_start} faces back,
  *       {@code wall_end} faces forward and targets the next segment's {@code wall_start}</li>
  * </ul>
- * The gate variant has a 3-wide, 8-tall opening at x 0–2 (left as structure void, so the road beneath shows through).
+ * The gate variant has a 3-wide, 4-tall opening at x 0–2 (left as structure void, so the road beneath shows through).
  * Banners are white here; the owning faction's colours are applied when the chunk loads.
  */
 public final class WallTemplates {
     public static final int LENGTH = 32;
-    public static final int HEIGHT = 16;
+    public static final int HEIGHT = 8;
     public static final int WIDTH = 3;
     public static final int[] BANNER_X = {8, 24};
     /** Top layer: crenellations and banners. The layer below is the parapet; everything under that is solid. */
@@ -39,7 +39,10 @@ public final class WallTemplates {
     private static final int PARAPET_Y = HEIGHT - 2;
     public static final int GATE_WIDTH = 3;
     /** Clear height of the gate opening above the road. */
-    public static final int GATE_HEIGHT = 8;
+    public static final int GATE_HEIGHT = 4;
+    /** The walkway: standing on the solid body, behind the parapet. Guards stand here. */
+    public static final int WALKWAY_Y = HEIGHT - 2;
+    public static final int WALKWAY_Z = 1;
     public static final int JIGSAW_Y = GATE_HEIGHT + 1;
     /** Minecraft 1.20.1. */
     private static final int DATA_VERSION = 3465;

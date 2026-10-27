@@ -1,5 +1,6 @@
 package rafasconquest.bridge;
 
+import net.minecraft.core.BlockPos;
 import rafasconquest.faction.Faction;
 
 import java.util.Collection;
@@ -18,5 +19,13 @@ public interface RecruitsBridge {
 
     /** Makes sure every given faction exists on the Recruits side (for factions created before the bridge did). */
     default void syncAll(Collection<Faction> factions) {
+    }
+
+    /**
+     * Spawns an archer of {@code owner}'s faction standing at {@code feet}, facing {@code yaw}, holding that position.
+     * Returns false if it couldn't (Recruits not ready, or the faction has no Recruits team).
+     */
+    default boolean spawnWallGuard(Faction owner, BlockPos feet, float yaw) {
+        return false;
     }
 }

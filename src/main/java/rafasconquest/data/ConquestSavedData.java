@@ -34,6 +34,8 @@ public class ConquestSavedData extends SavedData {
     private long lastProcessedDay;
     private long lastSavedRealTime;
     private final Set<Long> precomputedRegions = new LinkedHashSet<>();
+    /** Wall posts (guard positions, as BlockPos longs) that have had their guard spawned; each gets one, ever. */
+    private final Set<Long> spawnedGuards = new LinkedHashSet<>();
 
     // Rebuilt from the fields above; never saved.
     private final Map<Long, Map<PoiType, Long>> poiByChunk = new HashMap<>();
@@ -130,6 +132,14 @@ public class ConquestSavedData extends SavedData {
         return precomputedRegions;
     }
 
+    public boolean guardSpawned(BlockPos post) {
+        return spawnedGuards.contains(post.asLong());
+    }
+
+    public void markGuardSpawned(BlockPos post) {
+        spawnedGuards.add(post.asLong());
+    }
+
     public static long xzKey(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFFFFFFL);
     }
@@ -158,6 +168,7 @@ public class ConquestSavedData extends SavedData {
         tag.putLong("lastProcessedDay", lastProcessedDay);
         tag.putLong("lastSavedRealTime", lastSavedRealTime);
         tag.put("precomputedRegions", new LongArrayTag(precomputedRegions.stream().mapToLong(Long::longValue).toArray()));
+        tag.put("spawnedGuards", new LongArrayTag(spawnedGuards.stream().mapToLong(Long::longValue).toArray()));
         return tag;
     }
 
@@ -174,6 +185,9 @@ public class ConquestSavedData extends SavedData {
         }
         for (long key : tag.getLongArray("precomputedRegions")) {
             data.precomputedRegions.add(key);
+        }
+        for (long key : tag.getLongArray("spawnedGuards")) {
+            data.spawnedGuards.add(key);
         }
         return data;
     }

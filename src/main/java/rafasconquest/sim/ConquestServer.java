@@ -80,7 +80,10 @@ public final class ConquestServer {
         PENDING_LINKS.add(new StructureLink(chunk, type));
     }
 
-    /** A loaded chunk that holds part of a city wall; its banners get the owner's colours on the next tick. */
+    /**
+     * A loaded chunk that holds part of a city wall; on the next tick its banners get the owner's colours and any
+     * unmanned wall posts in it get their guard.
+     */
     public static void queueBannerChunk(ChunkPos chunk) {
         PENDING_BANNER_CHUNKS.add(chunk);
     }
@@ -181,6 +184,7 @@ public final class ConquestServer {
             LevelChunk chunk = overworld.getChunkSource().getChunkNow(pos.x, pos.z);
             if (chunk != null) {
                 CityBanners.paintChunk(overworld, chunk, data, precomputer);
+                CityGuards.postChunk(overworld, chunk, data, precomputer, recruits);
             }
         }
     }

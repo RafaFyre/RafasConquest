@@ -1,6 +1,15 @@
 package rafasconquest.bridge;
 
 import com.talhanation.recruits.FactionEvents;
+import com.talhanation.recruits.entities.AbstractRecruitEntity;
+import com.talhanation.recruits.entities.BowmanEntity;
+import com.talhanation.recruits.init.ModEntityTypes;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 import com.talhanation.recruits.world.RecruitsFaction;
 import com.talhanation.recruits.world.RecruitsFactionManager;
 import net.minecraft.ChatFormatting;
@@ -32,6 +41,9 @@ public class RecruitsFactions implements RecruitsBridge {
             ChatFormatting.YELLOW, ChatFormatting.GREEN, ChatFormatting.LIGHT_PURPLE, ChatFormatting.DARK_GRAY,
             ChatFormatting.GRAY, ChatFormatting.DARK_AQUA, ChatFormatting.DARK_PURPLE, ChatFormatting.BLUE,
             ChatFormatting.GOLD, ChatFormatting.DARK_GREEN, ChatFormatting.RED, ChatFormatting.BLACK};
+
+    /** Recruits' follow state for "hold your position". */
+    private static final int HOLD_POSITION = 2;
 
     private final ServerLevel overworld;
 
@@ -108,6 +120,56 @@ public class RecruitsFactions implements RecruitsBridge {
             case CITY_STATE -> "City-state";
             case BANDIT -> "Bandits";
         };
+    }
+
+    /**
+     * A bowman set up the way Recruits sets up its own patrol bowmen (chainmail, a bow, arrows, never despawns), on the
+     * owner's team, told to hold its post.
+     */
+    @Override
+    public boolean spawnWallGuard(Faction owner, BlockPos feet, float yaw) {
+        RecruitsFactionManager manager = FactionEvents.recruitsFactionManager;
+        if (manager == null) {
+            return false;
+        }
+        if (registeredId(manager, owner) == null) {
+            onFactionCreated(owner);
+        }
+        String id = registeredId(manager, owner);
+        PlayerTeam team = id == null ? null : overworld.getServer().getScoreboard().getPlayerTeam(id);
+        BowmanEntity bowman = ModEntityTypes.BOWMAN.get().create(overworld);
+        if (team == null || bowman == null) {
+            return false;
+        }
+        Vec3 post = Vec3.atBottomCenterOf(feet);
+        bowman.moveTo(post.x, post.y, post.z, yaw, 0);
+        bowman.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        bowman.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.CHAINMAIL_CHESTPLATE));
+        bowman.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
+        bowman.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.CHAINMAIL_BOOTS));
+        bowman.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        bowman.getInventory().addItem(new ItemStack(Items.ARROW, 64));
+        AbstractRecruitEntity.applyBiomeAndVariant(bowman);
+        bowman.setPersistenceRequired();
+        bowman.setHunger(100);
+        bowman.setMoral(100);
+        // Hold this spot on the wall.
+        bowman.setHoldPos(post);
+        bowman.setShouldHoldPos(true);
+        bowman.setFollowState(HOLD_POSITION);
+        overworld.addFreshEntity(bowman);
+        FactionEvents.addRecruitToTeam(bowman, team, overworld);
+        return true;
+    }
+
+    /** The Recruits id this mod registered for a faction, or null. */
+    private static String registeredId(RecruitsFactionManager manager, Faction faction) {
+        for (RecruitsFaction rf : manager.getFactions()) {
+            if (faction.id().equals(rf.getTeamLeaderUUID())) {
+                return rf.getStringID();
+            }
+        }
+        return null;
     }
 
     private void publish() {

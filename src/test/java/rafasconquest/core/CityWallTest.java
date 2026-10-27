@@ -32,9 +32,9 @@ class CityWallTest {
     }
 
     @Test
-    void segmentIsOneStreetLongSixteenTallThreeWide() {
+    void segmentIsOneStreetLongEightTallThreeWide() {
         assertEquals(CityLayout.ROAD_PERIOD, WallTemplates.LENGTH);
-        assertEquals(16, WallTemplates.HEIGHT);
+        assertEquals(8, WallTemplates.HEIGHT);
         assertTrue(WallTemplates.JIGSAW_Y > WallTemplates.GATE_HEIGHT && WallTemplates.JIGSAW_Y < WallTemplates.BANNER_Y - 1,
                 "the connectors must sit in solid wall above the gate");
         assertEquals(3, WallTemplates.WIDTH);

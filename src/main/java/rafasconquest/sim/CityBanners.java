@@ -42,19 +42,23 @@ final class CityBanners {
             if (site.isEmpty()) {
                 continue;
             }
-            ChunkPos cityChunk = new ChunkPos(site.get().x() >> 4, site.get().z() >> 4);
-            precomputer.precomputeRegion(PoiPrecomputer.regionOf(site.get().x()), PoiPrecomputer.regionOf(site.get().z()));
-            // A city-state's home city, or an Empire's capital city.
-            Poi city = data.poiInChunk(cityChunk, PoiType.CITY);
-            if (city == null) {
-                city = data.poiInChunk(cityChunk, PoiType.CAPITAL);
-            }
-            Faction owner = city == null ? null : data.faction(city.owner());
+            Faction owner = owner(data, precomputer, site.get());
             if (owner != null && paint(level, pos, FactionBanner.of(owner.id()))) {
                 painted++;
             }
         }
         return painted;
+    }
+
+    /** The current owner of a city: the City-state for its home city, the Empire for its capital. */
+    static Faction owner(ConquestSavedData data, PoiPrecomputer precomputer, CityLayout.Site site) {
+        ChunkPos cityChunk = new ChunkPos(site.x() >> 4, site.z() >> 4);
+        precomputer.precomputeRegion(PoiPrecomputer.regionOf(site.x()), PoiPrecomputer.regionOf(site.z()));
+        Poi city = data.poiInChunk(cityChunk, PoiType.CITY);
+        if (city == null) {
+            city = data.poiInChunk(cityChunk, PoiType.CAPITAL);
+        }
+        return city == null ? null : data.faction(city.owner());
     }
 
     private static boolean paint(ServerLevel level, BlockPos pos, FactionBanner design) {
