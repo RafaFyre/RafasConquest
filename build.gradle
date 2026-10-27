@@ -138,6 +138,10 @@ dependencies {
     // Villager Recruits. fg.deobf remaps it to dev mappings so dev runs load it.
     implementation fg.deobf("maven.modrinth:villager-recruits:${recruits_version}")
 
+    // Recommended client mods: present in dev runs, but not dependencies of this mod.
+    runtimeOnly fg.deobf("maven.modrinth:embeddium:${embeddium_version}")
+    runtimeOnly fg.deobf("maven.modrinth:distanthorizons:${distant_horizons_version}")
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

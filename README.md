@@ -14,6 +14,18 @@ gradlew runServer      # dev server (needs eula=true in run/eula.txt)
 
 Recruits is pulled from Modrinth's maven, pinned by version ID in `gradle.properties` (`recruits_version`; currently 1.15.2).
 
+## Recommended mods
+
+Not required (they aren't in `mods.toml`), but recommended for everyone, and loaded in dev runs:
+
+- [Embeddium](https://modrinth.com/mod/embeddium) (0.3.31+mc1.20.1): rendering performance.
+- [Distant Horizons](https://modrinth.com/mod/distanthorizons) (3.3.3-1.20.1): far-away terrain, so cities and their
+  walls can be seen from a distance. Its distant generation runs normal world generation, cities included, for far
+  chunks, so expect background CPU use while it fills in.
+
+They are `runtimeOnly` dependencies in `build.gradle`, pinned in `gradle.properties` (`embeddium_version`,
+`distant_horizons_version`).
+
 ## Milestone 1 status
 
 Built: one Empire per Capital, Farms producing food, virtual POIs, ownership, the daily food tick, offline catch-up and debug commands.
