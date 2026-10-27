@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.ConquestGameRules;
 import rafasconquest.RafasConquest;
 import rafasconquest.bridge.RecruitsBridge;
+import rafasconquest.bridge.RecruitsFactions;
 import rafasconquest.core.DayClock;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.poi.Poi;
@@ -37,6 +38,7 @@ public final class ConquestServer {
     private final ServerLevel overworld;
     private final ConquestSavedData data;
     private final PoiPrecomputer precomputer;
+    private final RecruitsBridge recruits;
     private final Deque<long[]> pendingRegions = new ArrayDeque<>();
     private final Set<Long> queuedRegions = new HashSet<>();
     private boolean started;
@@ -49,7 +51,8 @@ public final class ConquestServer {
     private ConquestServer(ServerLevel overworld, ConquestSavedData data) {
         this.overworld = overworld;
         this.data = data;
-        this.precomputer = new PoiPrecomputer(overworld, data, RecruitsBridge.NONE);
+        this.recruits = new RecruitsFactions(overworld);
+        this.precomputer = new PoiPrecomputer(overworld, data, recruits);
     }
 
     @Nullable
@@ -106,6 +109,8 @@ public final class ConquestServer {
         if (catchUpRemaining > 0) {
             RafasConquest.LOGGER.info("Offline catch-up: {} days to process", catchUpRemaining);
         }
+        // Recruits sets up its faction manager while the server starts, so this is the first point it can take ours.
+        recruits.syncAll(data.factions());
         started = true;
     }
 
@@ -158,6 +163,9 @@ public final class ConquestServer {
             ChunkPos chunk = link.chunk();
             precomputer.precomputeRegion(PoiPrecomputer.regionOf(chunk.getMiddleBlockX()), PoiPrecomputer.regionOf(chunk.getMiddleBlockZ()));
             Poi poi = data.poiInChunk(chunk, link.type());
+            if (poi == null && link.type() == PoiType.CITY) {
+                poi = data.poiInChunk(chunk, PoiType.CAPITAL); // capitals are cities too
+            }
             if (poi == null) {
                 RafasConquest.LOGGER.warn("A {} structure generated in chunk {} but no POI was predicted there", link.type(), chunk);
             } else if (!poi.generated()) {

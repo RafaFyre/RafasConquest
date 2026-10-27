@@ -19,12 +19,25 @@ Recruits is pulled from Modrinth's maven, pinned by version ID in `gradle.proper
 Built: one Empire per Capital, Farms producing food, virtual POIs, ownership, the daily food tick, offline catch-up and debug commands.
 Not built (by design): battles, recruit spawning, captures, raids, City-states, Bandits, growth, resources other than food.
 
-Debug commands (permission level 2): `/pve faction list`, `/pve faction info <name|nearest>`, `/pve poi list [radius]`, `/pve debug advance <days>`.
+Debug commands (permission level 2): `/pve faction list`, `/pve faction info <name|nearest>`, `/pve poi list [radius]`,
+`/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`.
 
-## Cities (City-state origins)
+## Recruits integration
 
-A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. Each one spawns
-a `CITY_STATE` faction (no territory claims) and is tracked as a `CITY` POI.
+Every faction this mod creates is also registered as a Villager Recruits faction, so it appears in the Recruits faction
+menu. Registration happens as factions are discovered, plus a catch-up pass when the server starts. Each one is a
+scoreboard team (Recruits factions are teams) in the faction's colour, plus a Recruits faction record holding the
+faction's name and banner. These factions have no player leader. Their leader id is the faction's id, which marks them
+as ours, and their leader name is the faction type ("Empire", "City-state"). Recruits saves them with the world.
+All Recruits calls live in `bridge/RecruitsFactions`, behind the `RecruitsBridge` interface. `/pve debug recruits` lists
+what Recruits holds.
+
+## Cities (City-states and Empire capitals)
+
+A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state
+cities each spawn a `CITY_STATE` faction (no territory claims), tracked as a `CITY` POI. **Every Empire's capital is a
+city too**, centred on its Capital site and tracked as its `CAPITAL` POI. A capital takes its style from its biome
+like any city, and falls back to plains where no style matches, so every Empire always has its capital.
 
 - **Grid:** a 483 × 483 square. 3-wide roads run every 32 blocks in both directions, with an edge road all round,
   making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town centre
@@ -38,24 +51,28 @@ a `CITY_STATE` faction (no territory claims) and is tracked as a `CITY` POI.
   in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
   of a structure's start chunk. Every cell builds its share of the same grid, so they meet seamlessly and all 9 always
   generate together.
-- **Wall:** a 3-wide wall stands on the outermost road band all the way round, built from 32 × 8 × 3 jigsaw segments
+- **Wall:** a 3-wide wall stands on the outermost road band all the way round, built from 32 × 16 × 3 jigsaw segments
   (one street length each; templates `structures/city/wall/segment.nbt` and `gate.nbt`, regenerated with
   `gradlew generateWallTemplates`). Each side is 15 segments laid as a pinwheel, so the ring closes exactly. The first
   segment of each side in a cell is placed from the layout, and each next one is joined through its `wall_end` →
-  `wall_start` jigsaws. Segments follow the terrain. One gate per side sits where the avenue next to the town centre
-  meets the wall. Material comes from the pool's processor list: weathered stone bricks, or cut sandstone for desert.
+  `wall_start` jigsaws. Segments follow the terrain. One gate per side (3 wide, 8 high) sits where the avenue next to
+  the town centre meets the wall. Material comes from the pool's processor list: weathered stone bricks, or cut sandstone for desert.
   Houses never face the wall; the 4 corner plots face the alley between plots instead.
 - **Banners:** each segment carries 2 standing banners on top of its outer edge, at the quarter points. When a wall
-  chunk loads (including its first load after generation), its banners are painted in the city owner's design. Today
-  the owner is the City-state; if the city changes hands later, the banners follow on the next load. Each faction's
+  chunk loads (including its first load after generation), its banners are painted in the city owner's design: the
+  City-state for its home city, the Empire for its capital. If a city changes hands later, the banners follow on the
+  next load. Each faction's
   design is a base colour plus two pattern layers derived from its id (`faction/FactionBanner`), and
   `/pve faction info` shows it.
 - **Style:** picked from the biome at the city centre via the tags `rafasconquest:city/<plains|desert|savanna|snowy|taiga>`.
 - **Measured** with `/pve debug citystats 12` against vanilla villages at the same sites: every city exactly square,
   99.5% of plots built (all empty ones over deep water), **6× buildings per area, 3.14× width**, about 890 buildings
   per city.
-- **Placement:** one city per 3,000-block grid cell, at least 400 blocks inside the cell, outside the eye, and clear of
-  Capitals. Farms are never placed inside a city.
+- **Placement:** City-state cities: one per 3,000-block grid cell, at least 400 blocks inside the cell, outside the eye,
+  and a full city width clear of capital cities. Capital cities sit on the Capital sites. Farms are never placed inside
+  any city.
+- **Old Capital structure:** the stone-keep placeholder Capital is gone. Worlds that already generated one will log an
+  unknown-structure error for it on load.
 - **Cost:** generating a city's area takes about 1.3× the chunk-generation time of plain terrain (force-loading a
   city's area took 28 s, the same area of plain terrain 22 s).
 - **Older worlds:** worlds created before cities existed load with cities disabled, since their settings are frozen.

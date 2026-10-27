@@ -49,7 +49,7 @@ class CityLayoutTest {
 
     @Test
     void everyCellStaysWithinTheEnginesReachOfItsStart() {
-        CityLayout.Site site = new CityLayout.Site(1000, -2000);
+        CityLayout.Site site = new CityLayout.Site(1000, -2000, false);
         for (CityLayout.District d : CityLayout.districts(site)) {
             int minX = site.originX() + CityLayout.cellMin(d.cellX());
             int maxX = site.originX() + CityLayout.cellMax(d.cellX());
@@ -66,9 +66,10 @@ class CityLayoutTest {
             assertFalse(cities.isEmpty());
             for (CityLayout.Site c : cities) {
                 assertTrue(Math.hypot(c.x(), c.z()) >= s.eyeRadius() + CityLayout.HALF_EXTENT);
-                int clear = CityLayout.HALF_EXTENT + CityLayout.CLEARANCE;
+                // Capitals are whole cities, so the two squares must not overlap.
+                int clear = CityLayout.SIZE + CityLayout.CLEARANCE;
                 for (CapitalLayout.Site cap : CapitalLayout.sitesInBox(seed, s, c.x() - clear, c.z() - clear, c.x() + clear, c.z() + clear)) {
-                    assertFalse(Math.abs(cap.x() - c.x()) <= clear && Math.abs(cap.z() - c.z()) <= clear, "city overlaps a capital");
+                    assertFalse(Math.abs(cap.x() - c.x()) <= clear && Math.abs(cap.z() - c.z()) <= clear, "city overlaps a capital city");
                 }
                 for (CityLayout.Site other : cities) {
                     if (other != c) {
@@ -101,6 +102,29 @@ class CityLayoutTest {
     }
 
     @Test
+    void everyCapitalIsACity() {
+        for (CapitalLayout.Site cap : CapitalLayout.sitesInBox(12345L, s, -20_000, -20_000, 20_000, 20_000)) {
+            CityLayout.Site city = CityLayout.siteInChunk(12345L, s, cap.x() >> 4, cap.z() >> 4).orElseThrow();
+            assertEquals(new CityLayout.Site(cap.x(), cap.z(), true), city);
+            for (CityLayout.District d : CityLayout.districts(city)) {
+                assertEquals(d, CityLayout.districtInChunk(12345L, s, d.x() >> 4, d.z() >> 4).orElseThrow());
+            }
+            for (int dx = -CityLayout.HALF_EXTENT; dx <= CityLayout.HALF_EXTENT + 1; dx += 16) {
+                for (int dz = -CityLayout.HALF_EXTENT; dz <= CityLayout.HALF_EXTENT + 1; dz += 16) {
+                    assertFalse(FarmLayout.isFarmChunk(12345L, s, (cap.x() + dx) >> 4, (cap.z() + dz) >> 4), "farm inside capital city " + cap);
+                }
+            }
+        }
+    }
+
+    @Test
+    void capitalCitiesStayClearOfTheEye() {
+        for (CapitalLayout.Site cap : CapitalLayout.ringSites(12345L, s)) {
+            assertTrue(cap.distanceFromSpawn() - CityLayout.HALF_EXTENT > s.eyeRadius());
+        }
+    }
+
+    @Test
     void disabledCitiesProduceNothing() {
         WorldSettings d = s;
         WorldSettings off = new WorldSettings(d.eyeRadius(), d.warZoneOuterEdge(), d.ringCapitalCount(), d.ringDistance(), d.ringJitter(),
@@ -110,5 +134,9 @@ class CityLayoutTest {
                 d.maxCatchUpDays(), d.initialPrecomputeRadius(), d.lazyPrecomputeDistance(), 0, 0, 0, 0, 0);
         assertTrue(CityLayout.sitesInBox(1L, off, -50_000, -50_000, 50_000, 50_000).isEmpty());
         assertFalse(CityLayout.nearCity(1L, off, 0, 0, 1000));
+        // Capitals are still cities when City-states are switched off.
+        assertTrue(CityLayout.allSitesInBox(1L, off, -5_000, -5_000, 5_000, 5_000).stream().allMatch(CityLayout.Site::capital));
+        assertEquals(off.ringCapitalCount(), CityLayout.allSitesInBox(1L, off, -4_000, -4_000, 4_000, 4_000).stream()
+                .filter(c -> Math.hypot(c.x(), c.z()) <= off.warZoneOuterEdge()).count());
     }
 }

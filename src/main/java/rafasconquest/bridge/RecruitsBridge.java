@@ -2,15 +2,21 @@ package rafasconquest.bridge;
 
 import rafasconquest.faction.Faction;
 
+import java.util.Collection;
+
 /**
- * The only place this mod will talk to Villager Recruits. Milestone 1 makes no Recruits calls, so every hook is a
- * no-op; later milestones implement it to map factions to Recruits teams and spawn soldiers from the pool in battle.
+ * The only place this mod talks to Villager Recruits. {@link RecruitsFactions} implements it; {@link #NONE} is for
+ * tests and for running without a server.
  */
 public interface RecruitsBridge {
     RecruitsBridge NONE = new RecruitsBridge() {
     };
 
-    /** A faction was discovered by the precompute. Future: create its Recruits team. */
+    /** A faction was discovered by the precompute. */
     default void onFactionCreated(Faction faction) {
+    }
+
+    /** Makes sure every given faction exists on the Recruits side (for factions created before the bridge did). */
+    default void syncAll(Collection<Faction> factions) {
     }
 }

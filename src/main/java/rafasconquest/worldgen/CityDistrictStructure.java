@@ -27,7 +27,7 @@ public class CityDistrictStructure extends Structure {
             return Optional.empty();
         }
         return CityLayout.districtInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z).flatMap(d ->
-                CityVariant.at(ctx, d.city().x(), d.city().z()).map(variant -> {
+                CityVariant.forSite(ctx, d.city()).map(variant -> {
                     BlockPos pos = new BlockPos(d.x(), CityGridBuilder.ground(ctx, d.x(), d.z()).y(), d.z());
                     return new GenerationStub(pos, pieces -> CityGridBuilder.build(ctx, d.city(), variant, d.cellX(), d.cellZ(), pieces));
                 }));

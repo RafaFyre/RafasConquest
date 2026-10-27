@@ -32,9 +32,11 @@ class CityWallTest {
     }
 
     @Test
-    void segmentIsOneStreetLongEightTallThreeWide() {
+    void segmentIsOneStreetLongSixteenTallThreeWide() {
         assertEquals(CityLayout.ROAD_PERIOD, WallTemplates.LENGTH);
-        assertEquals(8, WallTemplates.HEIGHT);
+        assertEquals(16, WallTemplates.HEIGHT);
+        assertTrue(WallTemplates.JIGSAW_Y > WallTemplates.GATE_HEIGHT && WallTemplates.JIGSAW_Y < WallTemplates.BANNER_Y - 1,
+                "the connectors must sit in solid wall above the gate");
         assertEquals(3, WallTemplates.WIDTH);
         assertEquals(CityLayout.ROAD_WIDTH, WallTemplates.WIDTH);
         // Two banners, evenly spaced along the segment.
@@ -86,7 +88,7 @@ class CityWallTest {
 
     @Test
     void eachCellBuildsOnlyWallWithinReachOfItsStart() {
-        CityLayout.Site site = new CityLayout.Site(0, 0);
+        CityLayout.Site site = new CityLayout.Site(0, 0, false);
         int total = 0;
         for (int cx = 0; cx < CityLayout.CELLS_PER_SIDE; cx++) {
             for (int cz = 0; cz < CityLayout.CELLS_PER_SIDE; cz++) {

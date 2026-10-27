@@ -6,7 +6,9 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
+import rafasconquest.bridge.RecruitsFactions;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -55,6 +57,7 @@ public final class PveCommands {
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 30_000))
                                         .executes(ctx -> poiList(ctx, IntegerArgumentType.getInteger(ctx, "radius"))))))
                 .then(Commands.literal("debug")
+                        .then(Commands.literal("recruits").executes(PveCommands::recruitsFactions))
                         .then(Commands.literal("citystats")
                                 .executes(ctx -> cityStats(ctx, 12))
                                 .then(Commands.argument("samples", IntegerArgumentType.integer(1, 200))
@@ -145,6 +148,18 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("Ran the daily tick " + days + " times (the in-game clock is unchanged)"), true);
         return days;
+    }
+
+    /** Lists the Recruits factions this mod registered, as Recruits sees them. */
+    private static int recruitsFactions(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        var ours = RecruitsFactions.ours(server().data().factions());
+        ctx.getSource().sendSuccess(() -> Component.literal(ours.size() + " factions registered with Recruits:"), false);
+        for (var rf : ours) {
+            ctx.getSource().sendSuccess(() -> Component.literal(String.format("%s | id %s | leader %s | colour %s | banner %s",
+                    rf.getTeamDisplayName(), rf.getStringID(), rf.getTeamLeaderName(), ChatFormatting.getById(rf.getTeamColor()),
+                    rf.getBanner().getString("id"))), false);
+        }
+        return ours.size();
     }
 
     private static String claims(Faction f) {

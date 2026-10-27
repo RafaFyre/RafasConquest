@@ -76,9 +76,8 @@ public final class ConquestEvents {
             StructureType<?> type = structure.type();
             if (type == ConquestWorldgen.FARM_STRUCTURE.get()) {
                 ConquestServer.queueStructureLink(chunk.getPos(), PoiType.FARM);
-            } else if (type == ConquestWorldgen.CAPITAL_STRUCTURE.get()) {
-                ConquestServer.queueStructureLink(chunk.getPos(), PoiType.CAPITAL);
             } else if (type == ConquestWorldgen.CITY_STRUCTURE.get()) {
+                // A City-state home or an Empire capital; the link step tells them apart by the POI recorded there.
                 ConquestServer.queueStructureLink(chunk.getPos(), PoiType.CITY);
             }
         }

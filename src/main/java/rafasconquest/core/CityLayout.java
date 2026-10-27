@@ -13,7 +13,8 @@ import java.util.Optional;
  * which keeps every piece inside the engine's 128-block reach from its start. Every cell builds its share of the same
  * grid, so cells meet seamlessly.
  * <p>
- * One seeded site per city grid cell; sites inside the eye or too close to a Capital are dropped.
+ * City-state cities: one seeded site per city grid cell; sites inside the eye or too close to a Capital are dropped.
+ * Every Empire capital is a city too, at its Capital site.
  */
 public final class CityLayout {
     public static final int ROAD_PERIOD = 32;
@@ -50,7 +51,11 @@ public final class CityLayout {
     private CityLayout() {
     }
 
-    public record Site(int x, int z) {
+    /**
+     * A city's centre. {@code capital} cities are Empire capitals (at the Capital sites); the rest are City-state
+     * homes from the city grid. Both are built the same way.
+     */
+    public record Site(int x, int z, boolean capital) {
         /** World x of the city's west edge (local 0). */
         public int originX() {
             return x - HALF_EXTENT;
@@ -185,7 +190,7 @@ public final class CityLayout {
 
     /** The city whose wall band contains world (x, z), if any. */
     public static Optional<Site> wallAt(long seed, WorldSettings s, int x, int z) {
-        for (Site city : sitesInBox(seed, s, x - HALF_EXTENT - 1, z - HALF_EXTENT - 1, x + HALF_EXTENT + 1, z + HALF_EXTENT + 1)) {
+        for (Site city : allSitesInBox(seed, s, x - HALF_EXTENT - 1, z - HALF_EXTENT - 1, x + HALF_EXTENT + 1, z + HALF_EXTENT + 1)) {
             if (inWallBand(x - city.originX(), z - city.originZ())) {
                 return Optional.of(city);
             }
@@ -197,7 +202,7 @@ public final class CityLayout {
     public static boolean chunkTouchesWall(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        for (Site city : sitesInBox(seed, s, minX - HALF_EXTENT - 1, minZ - HALF_EXTENT - 1, minX + 15 + HALF_EXTENT + 1, minZ + 15 + HALF_EXTENT + 1)) {
+        for (Site city : allSitesInBox(seed, s, minX - HALF_EXTENT - 1, minZ - HALF_EXTENT - 1, minX + 15 + HALF_EXTENT + 1, minZ + 15 + HALF_EXTENT + 1)) {
             int lx0 = minX - city.originX();
             int lz0 = minZ - city.originZ();
             boolean overlapsCity = lx0 + 15 >= 0 && lz0 + 15 >= 0 && lx0 < SIZE && lz0 < SIZE;
@@ -222,16 +227,26 @@ public final class CityLayout {
         if (Math.sqrt((double) x * x + (double) z * z) < s.eyeRadius() + HALF_EXTENT) {
             return Optional.empty();
         }
-        int clear = HALF_EXTENT + CLEARANCE;
+        // Capitals are whole cities too, so keep a full city width (plus clearance) away from them.
+        int clear = SIZE + CLEARANCE;
         for (CapitalLayout.Site capital : CapitalLayout.sitesInBox(seed, s, x - clear, z - clear, x + clear, z + clear)) {
             if (Math.abs(capital.x() - x) <= clear && Math.abs(capital.z() - z) <= clear) {
                 return Optional.empty();
             }
         }
-        return Optional.of(new Site(x, z));
+        return Optional.of(new Site(x, z, false));
     }
 
-    /** Every city site with minX <= x <= maxX and minZ <= z <= maxZ. */
+    /** Every city, City-state homes and Empire capitals alike, whose centre lies in the box. */
+    public static List<Site> allSitesInBox(long seed, WorldSettings s, int minX, int minZ, int maxX, int maxZ) {
+        List<Site> sites = sitesInBox(seed, s, minX, minZ, maxX, maxZ);
+        for (CapitalLayout.Site capital : CapitalLayout.sitesInBox(seed, s, minX, minZ, maxX, maxZ)) {
+            sites.add(new Site(capital.x(), capital.z(), true));
+        }
+        return sites;
+    }
+
+    /** Every City-state city site with minX <= x <= maxX and minZ <= z <= maxZ (capital cities not included). */
     public static List<Site> sitesInBox(long seed, WorldSettings s, int minX, int minZ, int maxX, int maxZ) {
         List<Site> sites = new ArrayList<>();
         if (!s.citiesEnabled()) {
@@ -248,11 +263,11 @@ public final class CityLayout {
         return sites;
     }
 
-    /** The city whose centre block lies in this chunk, if any. */
+    /** The city (City-state or capital) whose centre block lies in this chunk, if any. */
     public static Optional<Site> siteInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        List<Site> sites = sitesInBox(seed, s, minX, minZ, minX + 15, minZ + 15);
+        List<Site> sites = allSitesInBox(seed, s, minX, minZ, minX + 15, minZ + 15);
         return sites.isEmpty() ? Optional.empty() : Optional.of(sites.get(0));
     }
 
@@ -274,7 +289,7 @@ public final class CityLayout {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
         int r = DISTRICT_SPACING;
-        for (Site city : sitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
+        for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (District d : districts(city)) {
                 if (d.x() >= minX && d.x() <= minX + 15 && d.z() >= minZ && d.z() <= minZ + 15) {
                     return Optional.of(d);
@@ -287,7 +302,7 @@ public final class CityLayout {
     /** True if (x, z) lies within a city's footprint plus {@code margin} blocks. Site-level, so it ignores biome checks. */
     public static boolean nearCity(long seed, WorldSettings s, int x, int z, int margin) {
         int r = HALF_EXTENT + 1 + margin;
-        for (Site city : sitesInBox(seed, s, x - r, z - r, x + r, z + r)) {
+        for (Site city : allSitesInBox(seed, s, x - r, z - r, x + r, z + r)) {
             if (Math.abs(city.x() - x) <= r && Math.abs(city.z() - z) <= r) {
                 return true;
             }

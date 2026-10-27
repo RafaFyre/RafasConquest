@@ -1,18 +1,13 @@
 package rafasconquest.sim;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
-import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -20,6 +15,7 @@ import rafasconquest.core.CityLayout;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionBanner;
+import rafasconquest.faction.FactionBannerNbt;
 import rafasconquest.poi.Poi;
 import rafasconquest.poi.PoiType;
 
@@ -37,7 +33,6 @@ final class CityBanners {
     /** Returns how many banners were repainted. */
     static int paintChunk(ServerLevel level, LevelChunk chunk, ConquestSavedData data, PoiPrecomputer precomputer) {
         int painted = 0;
-        Registry<BannerPattern> patterns = level.registryAccess().registryOrThrow(Registries.BANNER_PATTERN);
         for (BlockEntity be : new ArrayList<>(chunk.getBlockEntities().values())) {
             if (!(be instanceof BannerBlockEntity)) {
                 continue;
@@ -49,32 +44,26 @@ final class CityBanners {
             }
             ChunkPos cityChunk = new ChunkPos(site.get().x() >> 4, site.get().z() >> 4);
             precomputer.precomputeRegion(PoiPrecomputer.regionOf(site.get().x()), PoiPrecomputer.regionOf(site.get().z()));
+            // A city-state's home city, or an Empire's capital city.
             Poi city = data.poiInChunk(cityChunk, PoiType.CITY);
+            if (city == null) {
+                city = data.poiInChunk(cityChunk, PoiType.CAPITAL);
+            }
             Faction owner = city == null ? null : data.faction(city.owner());
-            if (owner != null && paint(level, pos, FactionBanner.of(owner.id()), patterns)) {
+            if (owner != null && paint(level, pos, FactionBanner.of(owner.id()))) {
                 painted++;
             }
         }
         return painted;
     }
 
-    private static boolean paint(ServerLevel level, BlockPos pos, FactionBanner design, Registry<BannerPattern> patterns) {
+    private static boolean paint(ServerLevel level, BlockPos pos, FactionBanner design) {
         BlockState state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof BannerBlock)) {
             return false;
         }
-        ListTag layers = new ListTag();
-        for (FactionBanner.Layer layer : design.layers()) {
-            BannerPattern pattern = patterns.get(ResourceLocation.fromNamespaceAndPath("minecraft", layer.pattern()));
-            if (pattern == null) {
-                continue;
-            }
-            CompoundTag tag = new CompoundTag();
-            tag.putString("Pattern", pattern.getHashname());
-            tag.putInt("Color", layer.color());
-            layers.add(tag);
-        }
-        Block colored = BannerBlock.byColor(DyeColor.byId(design.base()));
+        ListTag layers = FactionBannerNbt.patterns(level.registryAccess(), design);
+        Block colored = BannerBlock.byColor(FactionBannerNbt.baseColor(design));
         BlockEntity current = level.getBlockEntity(pos);
         if (state.getBlock() == colored && current != null && layers.equals(current.saveWithoutMetadata().getList("Patterns", 10))) {
             return false;

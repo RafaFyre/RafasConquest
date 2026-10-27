@@ -10,9 +10,9 @@ import rafasconquest.core.WorldSettings;
 import java.util.Optional;
 
 /**
- * A city's middle cell, holding the town centre. The 8 surrounding cells are {@link CityDistrictStructure}s. The city
- * exists only where the centre's surface biome maps to a {@link CityVariant}; districts check the same thing, so the
- * whole square always generates together.
+ * A city's middle cell, holding the town centre. The 8 surrounding cells are {@link CityDistrictStructure}s. Used both
+ * for City-state homes and for Empire capitals. Whether the city exists, and its style, come from
+ * {@link CityVariant#forSite}; districts ask the same thing, so the whole square always generates together.
  */
 public class CityStructure extends Structure {
     public static final Codec<CityStructure> CODEC = simpleCodec(CityStructure::new);
@@ -28,7 +28,7 @@ public class CityStructure extends Structure {
             return Optional.empty();
         }
         return CityLayout.siteInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z).flatMap(site ->
-                CityVariant.at(ctx, site.x(), site.z()).map(variant -> {
+                CityVariant.forSite(ctx, site).map(variant -> {
                     BlockPos pos = new BlockPos(site.x(), CityGridBuilder.ground(ctx, site.x(), site.z()).y(), site.z());
                     return new GenerationStub(pos, pieces -> CityGridBuilder.build(ctx, site, variant, 1, 1, pieces));
                 }));

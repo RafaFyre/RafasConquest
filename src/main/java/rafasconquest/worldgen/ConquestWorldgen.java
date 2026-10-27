@@ -18,23 +18,19 @@ public final class ConquestWorldgen {
     private static final DeferredRegister<StructurePieceType> PIECE_TYPES = DeferredRegister.create(Registries.STRUCTURE_PIECE, RafasConquest.MOD_ID);
 
     public static final RegistryObject<StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
-    public static final RegistryObject<StructureType<CapitalStructure>> CAPITAL_STRUCTURE = STRUCTURE_TYPES.register("capital", () -> () -> CapitalStructure.CODEC);
     public static final RegistryObject<StructureType<CityStructure>> CITY_STRUCTURE = STRUCTURE_TYPES.register("city", () -> () -> CityStructure.CODEC);
     public static final RegistryObject<StructureType<CityDistrictStructure>> CITY_DISTRICT_STRUCTURE = STRUCTURE_TYPES.register("city_district", () -> () -> CityDistrictStructure.CODEC);
 
     public static final RegistryObject<StructurePlacementType<FarmPlacement>> FARM_PLACEMENT = PLACEMENT_TYPES.register("farm_spread", () -> () -> FarmPlacement.CODEC);
-    public static final RegistryObject<StructurePlacementType<CapitalPlacement>> CAPITAL_PLACEMENT = PLACEMENT_TYPES.register("capital_sites", () -> () -> CapitalPlacement.CODEC);
     public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_PLACEMENT = PLACEMENT_TYPES.register("city_sites", () -> () -> CityPlacement.CENTER_CODEC);
     public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_DISTRICT_PLACEMENT = PLACEMENT_TYPES.register("city_district_sites", () -> () -> CityPlacement.DISTRICT_CODEC);
 
     public static final RegistryObject<StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
-    public static final RegistryObject<StructurePieceType> CAPITAL_PIECE = PIECE_TYPES.register("capital", () -> (context, tag) -> new CapitalPiece(tag));
 
     public static final RegistryObject<StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
     public static final RegistryObject<StructurePieceType> CITY_FILL_PIECE = PIECE_TYPES.register("city_fill", () -> (context, tag) -> new CityFillPiece(tag));
 
     public static final ResourceKey<Structure> FARM = key("farm");
-    public static final ResourceKey<Structure> CAPITAL = key("capital");
     public static final ResourceKey<Structure> CITY = key("city");
     public static final ResourceKey<Structure> CITY_DISTRICT = key("city_district");
 

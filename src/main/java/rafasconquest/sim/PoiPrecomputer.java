@@ -45,8 +45,7 @@ public class PoiPrecomputer {
     private final long seed;
     @Nullable
     private final Structure farm;
-    @Nullable
-    private final Structure capital;
+    /** Both City-state homes and Empire capitals are cities. */
     @Nullable
     private final Structure city;
     /** Sites whose structure can't generate (biome check failed). Deterministic, so safe to cache. */
@@ -61,9 +60,8 @@ public class PoiPrecomputer {
         this.seed = level.getSeed();
         Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
         this.farm = structures.get(ConquestWorldgen.FARM);
-        this.capital = structures.get(ConquestWorldgen.CAPITAL);
         this.city = structures.get(ConquestWorldgen.CITY);
-        if (farm == null || capital == null || city == null) {
+        if (farm == null || city == null) {
             RafasConquest.LOGGER.error("RafasConquest structures are missing from the registry; POI precompute is disabled");
         }
     }
@@ -91,7 +89,7 @@ public class PoiPrecomputer {
     }
 
     public void precomputeRegion(int regionX, int regionZ) {
-        if (farm == null || capital == null || city == null || data.isRegionPrecomputed(regionX, regionZ)) {
+        if (farm == null || city == null || data.isRegionPrecomputed(regionX, regionZ)) {
             return;
         }
         int size = WorldSettings.REGION_SIZE;
@@ -140,15 +138,18 @@ public class PoiPrecomputer {
         return OwnershipResolver.resolve(x, z, candidates).orElse(null);
     }
 
-    /** The Empire at this Capital site, creating it on first sight. Null if the Capital can't generate there. */
+    /**
+     * The Empire at this Capital site, creating it on first sight. Its capital is a city centred on the site.
+     * Null if the city can't generate there.
+     */
     @Nullable
     private Faction ensureCapital(CapitalLayout.Site site) {
         Faction existing = data.factionAtOrigin(site.x(), site.z());
         long key = ConquestSavedData.xzKey(site.x(), site.z());
-        if (existing != null || rejectedCapitalSites.contains(key) || capital == null) {
+        if (existing != null || rejectedCapitalSites.contains(key) || city == null) {
             return existing;
         }
-        Optional<BlockPos> pos = findValid(capital, new ChunkPos(site.x() >> 4, site.z() >> 4));
+        Optional<BlockPos> pos = findValid(city, new ChunkPos(site.x() >> 4, site.z() >> 4));
         if (pos.isEmpty()) {
             rejectedCapitalSites.add(key);
             return null;

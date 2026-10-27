@@ -11,7 +11,10 @@ import rafasconquest.core.WorldSettings;
 
 import java.util.Optional;
 
-/** Places city centres, or with {@code districts} set, the 8 district starts around each centre. */
+/**
+ * Places city centres (City-state homes and Empire capitals), or with {@code districts} set, the 8 district starts
+ * around each centre.
+ */
 public class CityPlacement extends StructurePlacement {
     public static final Codec<CityPlacement> CENTER_CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, CityPlacement::center));
     public static final Codec<CityPlacement> DISTRICT_CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, CityPlacement::district));
@@ -33,8 +36,9 @@ public class CityPlacement extends StructurePlacement {
 
     @Override
     protected boolean isPlacementChunk(ChunkGeneratorStructureState state, int chunkX, int chunkZ) {
+        // Not gated on citiesEnabled: Empire capitals are cities in every world.
         WorldSettings settings = ConquestRuntime.settings();
-        if (settings == null || !settings.citiesEnabled()) {
+        if (settings == null) {
             return false;
         }
         long seed = state.getLevelSeed();
