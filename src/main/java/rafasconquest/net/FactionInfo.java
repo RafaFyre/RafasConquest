@@ -2,6 +2,8 @@ package rafasconquest.net;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import rafasconquest.core.SeedHash;
+import rafasconquest.core.TerritoryMap;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionType;
@@ -11,26 +13,33 @@ import rafasconquest.poi.PoiType;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * What the Faction Info screen shows about one faction, as sent from the server: its stats, and every structure it
- * owns, by type. {@code origin} is the Empire's capital or the City-state's home city.
+ * What the Faction Info screen and the world map show about one faction, as sent from the server: its stats, and
+ * every structure it owns, by type. {@code origin} is the Empire's capital or the City-state's home city; {@code tie}
+ * is the seeded tie-break that settles who holds land where Empires of equal strength overlap.
  */
-public record FactionInfo(UUID id, String name, FactionType type, int radiusSteps, int strength, BlockPos origin,
+public record FactionInfo(UUID id, String name, FactionType type, int radiusSteps, int strength, long tie, BlockPos origin,
                           Map<PoiType, List<BlockPos>> structures) {
     /** Most factions sent in one reply. Nearest first, so these are the ones a player can reach. */
-    public static final int MAX_FACTIONS = 64;
+    public static final int MAX_FACTIONS = 256;
 
     public int structureCount() {
         return structures.values().stream().mapToInt(List::size).sum();
     }
 
+    /** This faction's claim on the map's territory layer. */
+    public TerritoryMap.Claim claim() {
+        return new TerritoryMap.Claim(id, origin.getX(), origin.getZ(), type == FactionType.CITY_STATE, radiusSteps, strength, tie);
+    }
+
     /** Every known faction, nearest origin first, with the structures each owns (nearest to its origin first). */
-    public static List<FactionInfo> collect(ConquestSavedData data, BlockPos near) {
-        Map<UUID, Map<PoiType, List<BlockPos>>> owned = new java.util.HashMap<>();
+    public static List<FactionInfo> collect(ConquestSavedData data, BlockPos near, long seed) {
+        Map<UUID, Map<PoiType, List<BlockPos>>> owned = new HashMap<>();
         for (Poi poi : data.pois()) {
             if (poi.owner() != null) {
                 owned.computeIfAbsent(poi.owner(), k -> new EnumMap<>(PoiType.class))
@@ -41,13 +50,15 @@ public record FactionInfo(UUID id, String name, FactionType type, int radiusStep
         data.factions().stream()
                 .sorted(Comparator.comparingDouble(f -> f.origin().distSqr(near)))
                 .limit(MAX_FACTIONS)
-                .forEach(f -> infos.add(of(f, owned.getOrDefault(f.id(), new EnumMap<>(PoiType.class)))));
+                .forEach(f -> infos.add(of(f, owned.getOrDefault(f.id(), new EnumMap<>(PoiType.class)), seed)));
         return infos;
     }
 
-    private static FactionInfo of(Faction f, Map<PoiType, List<BlockPos>> structures) {
+    private static FactionInfo of(Faction f, Map<PoiType, List<BlockPos>> structures, long seed) {
         structures.values().forEach(list -> list.sort(Comparator.comparingDouble(p -> p.distSqr(f.origin()))));
-        return new FactionInfo(f.id(), f.name(), f.type(), f.radiusSteps(), f.strength(), f.origin(), structures);
+        // The same tie-break the precompute uses when it gives a Farm to an Empire.
+        long tie = SeedHash.hash(seed, SeedHash.SALT_TIE, f.origin().getX(), f.origin().getZ());
+        return new FactionInfo(f.id(), f.name(), f.type(), f.radiusSteps(), f.strength(), tie, f.origin(), structures);
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -56,6 +67,7 @@ public record FactionInfo(UUID id, String name, FactionType type, int radiusStep
         buf.writeEnum(type);
         buf.writeVarInt(radiusSteps);
         buf.writeVarInt(strength);
+        buf.writeLong(tie);
         buf.writeBlockPos(origin);
         buf.writeVarInt(structures.size());
         structures.forEach((poiType, positions) -> {
@@ -71,6 +83,7 @@ public record FactionInfo(UUID id, String name, FactionType type, int radiusStep
         FactionType type = buf.readEnum(FactionType.class);
         int radiusSteps = buf.readVarInt();
         int strength = buf.readVarInt();
+        long tie = buf.readLong();
         BlockPos origin = buf.readBlockPos();
         Map<PoiType, List<BlockPos>> structures = new EnumMap<>(PoiType.class);
         int types = buf.readVarInt();
@@ -83,6 +96,6 @@ public record FactionInfo(UUID id, String name, FactionType type, int radiusStep
             }
             structures.put(poiType, positions);
         }
-        return new FactionInfo(id, name, type, radiusSteps, strength, origin, structures);
+        return new FactionInfo(id, name, type, radiusSteps, strength, tie, origin, structures);
     }
 }

@@ -18,6 +18,7 @@ import rafasconquest.poi.PoiType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Faction Info: one faction at a time (◀ ▶ to switch, nearest first), with its banner, stats and every structure it
@@ -44,6 +45,8 @@ public class FactionInfoScreen extends Screen {
 
     private final Screen parent;
     @Nullable
+    private final UUID focus;
+    @Nullable
     private List<FactionInfo> factions;
     private int index;
     private ItemStack banner = ItemStack.EMPTY;
@@ -56,8 +59,14 @@ public class FactionInfoScreen extends Screen {
     }
 
     public FactionInfoScreen(Screen parent) {
+        this(parent, null);
+    }
+
+    /** Opens on {@code focus} (or the nearest faction, if null), as the world map does for a double-clicked name. */
+    public FactionInfoScreen(Screen parent, @Nullable UUID focus) {
         super(Component.translatable("gui.rafasconquest.faction_info"));
         this.parent = parent;
+        this.focus = focus;
     }
 
     @Override
@@ -79,7 +88,13 @@ public class FactionInfoScreen extends Screen {
     /** The server's reply. */
     public void setFactions(List<FactionInfo> factions) {
         this.factions = factions;
-        select(0);
+        int start = 0;
+        for (int i = 0; i < factions.size(); i++) {
+            if (factions.get(i).id().equals(focus)) {
+                start = i;
+            }
+        }
+        select(start);
     }
 
     private void select(int i) {

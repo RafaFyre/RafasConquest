@@ -59,6 +59,40 @@ what Recruits holds.
   Faction Info button included. It faces whoever placed it, breaks with an axe, and drops itself. It has no crafting
   recipe yet; it is in the mod's own creative tab, **Rafa's Conquest**.
 
+## World map
+
+Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). It is a
+strategy-game map of everything inside the storm wall, known from the start. Drag to pan and scroll to zoom. The legend
+is bottom left and the cursor's coordinates are bottom right. Double-click a faction's name to open its Faction Info,
+and ✕ (or Esc) goes back.
+
+It is drawn as layers, bottom to top, each its own class, listed in order in `FactionMapScreen.layers`:
+
+1. **Base map** (`BaseMapLayer`): terrain from the server, with the storm wall drawn as a dashed ring.
+   Beyond the wall is unexplored.
+2. **Territory** (`TerritoryLayer`): see-through globs in each faction's banner colour, with a stronger edge.
+   - Empires hold what they would own a Farm in (`core/TerritoryMap`, using the same `OwnershipResolver`).
+   - City-states hold a 400-block circle round their city, which they keep inside an Empire's radius.
+   - This is drawn on the client from the faction data, on top of the base map, not mixed into it. City-state land
+     is map-only for now: Farms there still go to the Empire.
+3. **Cities and POIs** (`PoiIconLayer`): a capital is its banner in a gold frame, a City-state its banner in a silver
+   frame, and a Farm a wheat sheaf once zoomed in.
+4. **Paths and roads** (`RoadLayer`): empty for now; it holds the place for roads.
+5. **Armies and moving things** (`UnitLayer`): you as an arrow, and other loaded players.
+6. **Names and labels** (`LabelLayer`): each faction's name at the middle of its territory, sized to it.
+
+Each layer adds its own rows to the legend.
+
+The **base map** is drawn by the server from the seed alone (`map/BaseMapGenerator`), so nothing is generated or
+loaded:
+- Terrain height comes from the noise generator every 64 blocks, smoothed between samples.
+- Colour comes from the surface biome (`map/BiomePalette`, by biome tag). Water is shaded by depth, and land is lit from
+  the north-west.
+- At default settings it is 500 × 500 pixels of 16 blocks, drawn in about 5.5 s on a background thread when the
+  server starts.
+- It is kept in `data/rafasconquest_basemap.bin` in the world folder (about 200 KB) and sent to clients compressed,
+  in parts.
+
 ## Cities (City-states and Empire capitals)
 
 A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state

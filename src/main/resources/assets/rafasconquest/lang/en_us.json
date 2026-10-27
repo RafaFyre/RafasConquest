@@ -24,5 +24,17 @@
   "gui.rafasconquest.faction_type.city_state": "City-state",
   "gui.rafasconquest.structure.capital": "Capitals: %s",
   "gui.rafasconquest.structure.city": "Cities: %s",
-  "gui.rafasconquest.structure.farm": "Farms: %s"
+  "gui.rafasconquest.structure.farm": "Farms: %s",
+
+  "gui.rafasconquest.map": "World Map",
+  "gui.rafasconquest.map.drawing": "Drawing the map...",
+  "gui.rafasconquest.map.legend": "Legend",
+  "gui.rafasconquest.map.legend.terrain": "Land and water",
+  "gui.rafasconquest.map.legend.storm_wall": "Storm wall (edge of the known world)",
+  "gui.rafasconquest.map.legend.territory": "Territory, in its faction's banner colour",
+  "gui.rafasconquest.map.legend.capital": "Empire capital",
+  "gui.rafasconquest.map.legend.city_state": "City-state",
+  "gui.rafasconquest.map.legend.farm": "Farm (zoom in)",
+  "gui.rafasconquest.map.legend.you": "You",
+  "gui.rafasconquest.map.legend.name": "Faction name (double-click for info)"
 }

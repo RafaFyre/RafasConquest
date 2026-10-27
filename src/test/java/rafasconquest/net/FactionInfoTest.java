@@ -37,7 +37,7 @@ class FactionInfoTest {
 
     @Test
     void nearestFactionFirstWithItsStructuresByType() {
-        List<FactionInfo> infos = FactionInfo.collect(sample(), BlockPos.ZERO);
+        List<FactionInfo> infos = FactionInfo.collect(sample(), BlockPos.ZERO, 42L);
         assertEquals(List.of("Sararmere", "Valdoria"), infos.stream().map(FactionInfo::name).toList());
         FactionInfo valdoria = infos.get(1);
         assertEquals(3, valdoria.structureCount());
@@ -50,7 +50,7 @@ class FactionInfoTest {
 
     @Test
     void survivesTheNetworkRoundTrip() {
-        for (FactionInfo info : FactionInfo.collect(sample(), BlockPos.ZERO)) {
+        for (FactionInfo info : FactionInfo.collect(sample(), BlockPos.ZERO, 42L)) {
             FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
             info.write(buf);
             assertEquals(info, FactionInfo.read(buf));

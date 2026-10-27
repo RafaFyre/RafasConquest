@@ -3,6 +3,8 @@ package rafasconquest.client;
 import com.talhanation.recruits.client.gui.faction.FactionMainScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
+import rafasconquest.client.map.ClientMapCache;
+import rafasconquest.client.map.FactionMapScreen;
 import rafasconquest.net.FactionInfo;
 
 import java.util.List;
@@ -20,6 +22,14 @@ public final class ClientScreens {
     public static void receiveFactionInfo(List<FactionInfo> factions) {
         if (Minecraft.getInstance().screen instanceof FactionInfoScreen screen) {
             screen.setFactions(factions);
+        } else if (Minecraft.getInstance().screen instanceof FactionMapScreen screen) {
+            screen.setFactions(factions);
+        }
+    }
+
+    public static void receiveBaseMapPart(int index, int count, byte[] bytes) {
+        if (ClientMapCache.accept(index, count, bytes) && Minecraft.getInstance().screen instanceof FactionMapScreen screen) {
+            screen.onBaseMap();
         }
     }
 }

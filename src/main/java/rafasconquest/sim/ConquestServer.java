@@ -11,6 +11,8 @@ import rafasconquest.bridge.RecruitsBridge;
 import rafasconquest.bridge.RecruitsFactions;
 import rafasconquest.core.DayClock;
 import rafasconquest.data.ConquestSavedData;
+import rafasconquest.map.BaseMapStore;
+import rafasconquest.net.ConquestNetwork;
 import rafasconquest.poi.Poi;
 import rafasconquest.poi.PoiType;
 
@@ -39,6 +41,7 @@ public final class ConquestServer {
     private final ConquestSavedData data;
     private final PoiPrecomputer precomputer;
     private final RecruitsBridge recruits;
+    private final BaseMapStore mapStore;
     private final Deque<long[]> pendingRegions = new ArrayDeque<>();
     private final Set<Long> queuedRegions = new HashSet<>();
     private boolean started;
@@ -53,6 +56,11 @@ public final class ConquestServer {
         this.data = data;
         this.recruits = new RecruitsFactions(overworld);
         this.precomputer = new PoiPrecomputer(overworld, data, recruits);
+        this.mapStore = new BaseMapStore(overworld, data.settings().warZoneOuterEdge(), ConquestNetwork::sendBaseMap);
+    }
+
+    public BaseMapStore mapStore() {
+        return mapStore;
     }
 
     @Nullable
@@ -114,6 +122,7 @@ public final class ConquestServer {
         }
         // Recruits sets up its faction manager while the server starts, so this is the first point it can take ours.
         recruits.syncAll(data.factions());
+        mapStore.start(); // the world map draws in the background
         started = true;
     }
 
