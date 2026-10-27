@@ -95,12 +95,34 @@ first. The old relation is restored when the battle ends.
     - **A reserve:** a fifth of the infantry waits behind the last line. It is committed, joining the files with the
       fewest blocks waiting, when a front block needs relief and no fit block is left, or the army is down to 60 %.
   - Cavalry that has charged, and a warrior general, send any soldier with no target after the nearest enemy left.
-- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. After 30
-  minutes the battle is called a draw.
+- **Archers never march past their own front line**, so they don't walk out alone while the infantry waits.
+- **No open files:** a front file whose block has fallen, with no fit block left to send, is filled by any block still
+  in the lines (worn or not), else the nearest resting block.
+- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. If nobody
+  has fallen for 30 s once fighting has begun, the lines have stalled and everyone left charges. After 30 minutes the
+  battle is called a draw.
 - **Reports:** every 10 s the chat and server log get the soldiers left on each side, the blocks relieved so far, the
   server tick time, and how much of it the battle's own orders take. The start and end name each general's type, and
   the end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse
   the battle spawned. Only one battle runs at a time.
+- **Battles as numbers** (`battle/FieldBattle`, the first step toward battles too big for live soldiers): the same
+  battle fought block by block, one second at a time, with no entities. The generals give the same orders as in a
+  live battle (`BattlePlan`); blocks walk to where they are ordered (3 blocks a second on foot, 6 mounted) and fight
+  whoever is within reach (`battle/FieldRules`):
+  - A block holding its place reaches 12 blocks (its soldiers step out and return); one that has broken formation
+    must close to 2.5.
+  - Each fighting soldier does about 0.15 damage a second (cavalry a little more, archers in melee half), dealt in
+    hits of 4 to random soldiers, so each soldier's health is kept. Archers shoot 30 blocks until their 64 arrows each
+    run out.
+  - A cavalry charge does triple damage for its first 3 s; attacks on a flank do 1.5 times as much, on the rear twice;
+    a shieldwall takes 60 % from the front, and 40 % of arrows. A warrior general fights like 4 soldiers.
+  - These rates are first guesses, set so a block holding a line loses half its soldiers in about a minute; they are
+    to be calibrated against live battles.
+
+  `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
+  Measured: 2000 against 2000 lasts 7 to 11 minutes of battle with 30 to 60 blocks relieved on each side, and takes
+  about half a second to work out; 2000 against 500 is over in about a minute. In these first numbers a warrior
+  general tends to beat a tactician at 100 and 500 a side, and lose at 2000.
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in
   the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the

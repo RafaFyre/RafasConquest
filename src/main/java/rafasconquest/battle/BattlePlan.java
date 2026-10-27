@@ -73,6 +73,11 @@ public final class BattlePlan {
     public static final double ROUT_SHARE = 0.2;
     /** The battle is called a draw after this long. */
     public static final int TIME_LIMIT_SECONDS = 1800;
+    /**
+     * Once fighting has begun, a battle where nobody has fallen for this long has stalled (what is left of the lines
+     * can't reach each other): everyone left charges.
+     */
+    public static final int STALL_SECONDS = 30;
 
     public enum Arm {
         SWORDSMEN, SHIELDWALL, ARCHERS, CAVALRY;
@@ -257,6 +262,19 @@ public final class BattlePlan {
     /** Whether a front block with {@code alive} of its {@code started} soldiers should be relieved. */
     public static boolean needsRelief(int alive, int started) {
         return alive <= started * RELIEF_SHARE;
+    }
+
+    /**
+     * Whether archers whose line is {@code behindFront} blocks behind their own front line (negative: ahead of it)
+     * may march another step: never past the line, so they don't walk out alone ahead of infantry that is waiting.
+     */
+    public static boolean archersMayAdvance(double behindFront) {
+        return behindFront - MARCH_STEP >= ARCHER_BACK;
+    }
+
+    /** Whether a battle has stalled: fighting began, and nobody has fallen for {@link #STALL_SECONDS}. */
+    public static boolean stalled(int seconds, int lastFall) {
+        return lastFall > 0 && seconds - lastFall >= STALL_SECONDS;
     }
 
     /** Whether a block with {@code alive} of its {@code started} soldiers is fit to go forward and relieve another. */

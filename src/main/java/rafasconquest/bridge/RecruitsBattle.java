@@ -91,6 +91,10 @@ public final class RecruitsBattle {
     private final Map<Integer, ItemStack> backBanners = new HashMap<>();
     private int ticks;
     private boolean over;
+    /** When a soldier last fell (0 before anyone has), and whether the battle has come to a final melee. */
+    private int lastFall;
+    private boolean finalMelee;
+    private final int[] lastAlive = new int[2];
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
     private long tickStart;
@@ -681,6 +685,23 @@ public final class RecruitsBattle {
             army.count();
         }
         for (int side = 0; side < 2; side++) {
+            if (lastAlive[side] != 0 && armies[side].living.size() < lastAlive[side]) {
+                lastFall = seconds;
+            }
+            lastAlive[side] = armies[side].living.size();
+        }
+        if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
+            finalMelee = true;
+            broadcast("[battle " + seconds + "s] the lines have stalled: everyone left charges");
+            for (int side = 0; side < 2; side++) {
+                for (Formation f : armies[side].formations) {
+                    if (!f.living.isEmpty()) {
+                        charge(f, armies[1 - side]);
+                    }
+                }
+            }
+        }
+        for (int side = 0; side < 2; side++) {
             command(armies[side], armies[1 - side], seconds);
         }
         if (seconds % REPORT_SECONDS == 0) {
@@ -778,6 +799,9 @@ public final class RecruitsBattle {
                 commitReserve(army);
                 relief = pickRelief(army, file, held.line);
             }
+            if (relief == null && held.living.isEmpty()) {
+                relief = lastStand(army, held.line);
+            }
             if (relief == null) {
                 continue; // nobody left to send: the block fights on
             }
@@ -800,6 +824,18 @@ public final class RecruitsBattle {
         return army.formations.stream()
                 .filter(f -> f.duty == Duty.LINE && BattlePlan.fitToRelieve(f.living.size(), f.soldiers.size()))
                 .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
+    }
+
+    /**
+     * A front file whose block has fallen, with no fit block left to send: any block still in the lines goes, worn or
+     * not, else the nearest resting block, so the line doesn't stay open.
+     */
+    @Nullable
+    private static Formation lastStand(Army army, Point spot) {
+        return army.formations.stream()
+                .filter(f -> !f.living.isEmpty() && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
+                .min(Comparator.comparingInt((Formation f) -> f.duty == Duty.LINE ? 0 : 1)
+                        .thenComparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
 
     /** A relief has reached the front: it takes over the file, and the block it relieves withdraws. */
@@ -874,8 +910,10 @@ public final class RecruitsBattle {
         double nearest = nearest(formation.line, foes);
         switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
             case MARCH -> {
-                formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
-                standInLine(army, formation);
+                if (formation.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, formation.line))) {
+                    formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
+                    standInLine(army, formation);
+                }
             }
             case FLANK -> {
                 int side = formation.slotRight >= 0 ? 1 : -1;
@@ -888,6 +926,12 @@ public final class RecruitsBattle {
             default -> {
             }
         }
+    }
+
+    /** How far behind its army's front line a point is (negative: ahead of it). */
+    private static double behindFront(Army army, Point at) {
+        Point front = army.frontCentre();
+        return (front.x() - at.x()) * army.facingX + (front.z() - at.z()) * army.facingZ;
     }
 
     /** Moves a block's line to a spot, unless it is already ordered close to there. */
