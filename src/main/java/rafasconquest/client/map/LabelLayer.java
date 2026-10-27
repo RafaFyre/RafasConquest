@@ -25,6 +25,9 @@ public class LabelLayer implements MapLayer {
     private static final int OUTLINE = 0xFF151515;
     /** Smallest a name is drawn; a City-state's territory smaller than this on screen gets no name. */
     private static final float MIN_SCALE = 0.6F;
+    /** Largest an Empire's name is drawn, however big its land: names mark territory, they shouldn't cover it. */
+    private static final float MAX_EMPIRE_SCALE = 1.2F;
+    private static final float MAX_CITY_STATE_SCALE = 1.0F;
 
     private final Consumer<UUID> openFaction;
     private final List<Hit> hits = new ArrayList<>();
@@ -58,7 +61,7 @@ public class LabelLayer implements MapLayer {
             if (scale < MIN_SCALE && !empire) {
                 continue;
             }
-            scale = Mth.clamp(scale, MIN_SCALE, empire ? 3.5F : 1.5F);
+            scale = Mth.clamp(scale, MIN_SCALE, empire ? MAX_EMPIRE_SCALE : MAX_CITY_STATE_SCALE);
             float x = (float) view.screenX(t.centerX());
             float y = (float) view.screenY(t.centerZ());
             float w = width * scale;
