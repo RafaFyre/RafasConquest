@@ -19,37 +19,68 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
-import rafasconquest.battle.FormationSnapshot.Kind;
 import rafasconquest.battle.FormationSnapshot.Sprite;
 
 import java.util.List;
 
 /**
- * Draws a battle's soldiers where the game no longer draws them: each is a flat, upright figure turned to face the
- * camera, in the army's uniform colour, standing where its formation's snapshot lays it out. Leaders carry a flag in
- * the banner's colour, the general a gold helmet and a flag on the back, the standard-bearer a flag on a pole;
- * cavalry ride a horse in the army's colour. A figure appears just beyond the distance at which the game stops drawing
- * that kind of mob, so the two hand over to each other. Beyond what the camera can see, figures are pulled in
- * ({@link DistantDepth}) so they look the same on screen.
+ * Draws a battle's soldiers where the game no longer shows them: each is a flat, upright figure turned to face the
+ * camera, in the army's uniform colour. Leaders carry a flag in the banner's colour, the general a gold helmet and a
+ * flag on the back, the standard-bearer a flag on a pole; cavalry ride a horse in the army's colour.
+ * <p>
+ * The real soldiers hand over to figures at {@link #handover}: where the game stops drawing them, or sooner where
+ * Distant Horizons starts fading the world into its own terrain (it would fade them too). Past that, the real soldiers
+ * and their horses are hidden ({@link #hides}). A soldier the client still has is drawn exactly where it stands, so
+ * nothing jumps at the handover; the rest stand in their formation's ranks. Beyond what the camera can see, figures
+ * are pulled in ({@link DistantDepth}) so they look the same on screen. With Distant Horizons drawing, soldiers
+ * beyond the game's own terrain are left to {@link DistantHorizonsArmies}.
  */
 public final class DistantArmyRenderer {
     private static final int SKIN = 0xBD8E6E;
     private static final int GOLD = 0xF9D84A;
     private static final int POLE = 0x6B4A2B;
     private static final int HOOVES = 0x3B2A1C;
+    /**
+     * The client is sent the soldiers within this many chunks less than its render distance (the server's entity
+     * tracking range), and Recruits sends none further than 10 chunks. A formation nearer than that, less a margin,
+     * should be all there, so a soldier missing from it has fallen.
+     */
+    private static final int TRACKED_CHUNKS_SHORT = 1;
+    private static final int TRACKED_CHUNKS_MAX = 10;
+    private static final double TRACKED_MARGIN = 24;
+
+    /** This frame's handover distance, worked out before anything is drawn. Render thread only. */
+    private static double handover = Double.MAX_VALUE;
 
     private DistantArmyRenderer() {
     }
 
-    public static void render(PoseStack pose, Camera camera) {
+    /** Before the frame's world is drawn: where the real soldiers hand over to figures this frame. */
+    public static void prepare(float partialTick) {
+        double drawn = drawnWithin(ModEntityTypes.RECRUIT.get());
+        double fade = DistantHorizonsLink.fadeStart(partialTick);
+        handover = fade > 0 ? Math.min(drawn, fade) : drawn;
+    }
+
+    /** Whether to hide this real soldier (or its horse) because a figure stands in for it. */
+    public static boolean hides(Entity entity, Vec3 eye, float partialTick) {
+        if (!DistantArmies.isOurs(entity)) {
+            return false;
+        }
+        Entity rider = entity.getPassengers().isEmpty() ? entity : entity.getPassengers().get(0);
+        Vec3 feet = DistantArmies.feet(rider, partialTick);
+        return feet != null && feet.distanceTo(eye) > handover;
+    }
+
+    public static void render(PoseStack pose, Camera camera, float partialTick) {
         List<FormationSnapshot> formations = DistantArmies.now();
         if (formations.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
-        double soldierRange = drawnWithin(ModEntityTypes.RECRUIT.get());
-        double horseRange = drawnWithin(EntityType.HORSE);
+        int renderChunks = mc.options.getEffectiveRenderDistance();
+        double renderBlocks = renderChunks * 16.0;
+        double tracked = Math.min(renderChunks - TRACKED_CHUNKS_SHORT, TRACKED_CHUNKS_MAX) * 16.0 - TRACKED_MARGIN;
         Vec3 eye = camera.getPosition();
         Vector3f left = camera.getLeftVector();
         double length = Math.hypot(left.x(), left.z());
@@ -62,16 +93,21 @@ public final class DistantArmyRenderer {
         BufferBuilder buffer = Tesselator.getInstance().getBuilder();
         buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
+        boolean farInDistantHorizons = DistantHorizonsLink.drawsFarSoldiers();
+        FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
         int drawn = 0;
         for (FormationSnapshot formation : formations) {
-            double range = formation.kind() == Kind.CAVALRY ? horseRange : soldierRange;
-            for (Sprite sprite : formation.layout()) {
+            boolean missingHaveFallen = Math.hypot(formation.x() - eye.x, formation.z() - eye.z) < tracked;
+            for (Sprite sprite : formation.place(positions, missingHaveFallen)) {
                 double dx = sprite.x() - eye.x;
-                double dy = formation.y() - eye.y;
+                double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
                 double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance <= range) {
-                    continue; // close enough that the game draws the soldier itself
+                if (distance <= handover) {
+                    continue; // close enough to see the soldier itself
+                }
+                if (farInDistantHorizons && !onGameTerrain(dx, dz, renderBlocks)) {
+                    continue; // drawn in Distant Horizons' terrain instead
                 }
                 double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
                 figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale);
@@ -90,7 +126,18 @@ public final class DistantArmyRenderer {
         RenderSystem.enableCull();
     }
 
-    /** How far away the game still draws a mob of this type (vanilla's {@code Entity.shouldRenderAtSqrDistance}). */
+    /**
+     * Whether a soldier ({@code dx}, {@code dz}) from the camera stands within the game's own terrain (the render
+     * distance) rather than Distant Horizons'.
+     */
+    static boolean onGameTerrain(double dx, double dz, double renderBlocks) {
+        return dx * dx + dz * dz <= renderBlocks * renderBlocks;
+    }
+
+    /**
+     * How far away the game still draws a soldier (vanilla's {@code Entity.shouldRenderAtSqrDistance}); a horse is
+     * drawn further, but hands over with its rider.
+     */
     private static double drawnWithin(EntityType<?> type) {
         EntityDimensions size = type.getDimensions();
         return (size.width * 2 + size.height) / 3 * 64 * Entity.getViewScale();

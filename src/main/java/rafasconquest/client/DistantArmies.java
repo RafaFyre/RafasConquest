@@ -1,12 +1,18 @@
 package rafasconquest.client;
 
 import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.FormationSnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The battle's formations as the server last described them, for drawing beyond the range at which soldiers are seen.
@@ -19,6 +25,8 @@ public final class DistantArmies {
 
     private static Map<Integer, FormationSnapshot> from = new HashMap<>();
     private static Map<Integer, FormationSnapshot> to = new HashMap<>();
+    /** Entity ids of every soldier of the battle, as of the last snapshot. */
+    private static Set<Integer> soldiers = new HashSet<>();
     private static long receivedAt;
 
     private DistantArmies() {
@@ -29,7 +37,13 @@ public final class DistantArmies {
         now().forEach(f -> drawn.put(f.id(), f));
         from = drawn;
         to = new HashMap<>();
-        formations.forEach(f -> to.put(f.id(), f));
+        soldiers = new HashSet<>();
+        for (FormationSnapshot f : formations) {
+            to.put(f.id(), f);
+            for (int id : f.soldierIds()) {
+                soldiers.add(id);
+            }
+        }
         receivedAt = Util.getMillis();
     }
 
@@ -44,8 +58,44 @@ public final class DistantArmies {
         return formations;
     }
 
+    /** Whether this entity is one of the battle's soldiers, or the horse under one. */
+    public static boolean isOurs(Entity entity) {
+        if (soldiers.contains(entity.getId())) {
+            return true;
+        }
+        for (Entity rider : entity.getPassengers()) {
+            if (soldiers.contains(rider.getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Where a soldier's feet are drawn this frame, if the client has it alive: on the ground under its horse for a
+     * rider, as the server measures it too. A horse and its rider share the spot, so they hand over together.
+     */
+    @Nullable
+    public static Vec3 feet(@Nullable Entity entity, float partialTick) {
+        if (entity == null || !entity.isAlive()) {
+            return null;
+        }
+        Entity ground = entity.getVehicle() != null ? entity.getVehicle() : entity;
+        return ground.getPosition(partialTick);
+    }
+
+    /** Where the client has each soldier this frame, for {@link FormationSnapshot#place}. */
+    public static FormationSnapshot.Positions positions(float partialTick) {
+        Minecraft mc = Minecraft.getInstance();
+        return id -> {
+            Vec3 at = mc.level == null ? null : feet(mc.level.getEntity(id), partialTick);
+            return at == null ? null : new double[]{at.x, at.y, at.z};
+        };
+    }
+
     public static void clear() {
         from = new HashMap<>();
         to = new HashMap<>();
+        soldiers = new HashSet<>();
     }
 }

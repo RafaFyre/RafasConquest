@@ -101,6 +101,8 @@ public final class ConquestNetwork {
                 buf.writeFloat((float) f.halfWidth());
                 buf.writeFloat((float) f.halfDepth());
                 buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0));
+                buf.writeVarIntArray(f.soldierIds());
+                buf.writeVarInt(f.leaderId() + 1);
             }
         }
 
@@ -122,7 +124,7 @@ public final class ConquestNetwork {
                 double halfDepth = buf.readFloat();
                 int flags = buf.readByte();
                 formations.add(new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth,
-                        (flags & 1) != 0, (flags & 2) != 0));
+                        (flags & 1) != 0, (flags & 2) != 0, buf.readVarIntArray(), buf.readVarInt() - 1));
             }
             return new BattleSnapshot(formations);
         }

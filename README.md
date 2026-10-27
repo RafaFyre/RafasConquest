@@ -92,12 +92,28 @@ other and leave you alone unless you strike first. The old relation is restored 
   the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the
   back, the standard-bearer with a flag on a pole, cavalry on a horse in the army's colour
   (`client/DistantArmyRenderer`). Once a second the server sends each player a summary of every formation (where it
-  stands, which way it faces, how wide and deep it is, how many are left; `battle/FormationSnapshot`), not every
-  soldier, so it stays small as battles grow. The client lays the soldiers out in ranks across that space (scattered a
-  little once a formation is fighting) and glides each formation to its newest place over the next second. The camera
+  stands, which way it faces, how wide and deep it is, its soldiers' entity ids; `battle/FormationSnapshot`). A
+  soldier the client still has (out to about its render distance) is drawn exactly where it stands, so nothing jumps
+  when the real soldier gives way to its figure. Further out, the client lays the soldiers out in ranks across the
+  formation's space (scattered a little once it is fighting) and glides each formation to its newest place over the
+  next second.
+- **The handover:** with Distant Horizons, the game's world fades into its terrain near the render distance, and it
+  would fade real soldiers with it (from 1.5 times its near clip distance plus a chunk; about 45 blocks at 6 chunks).
+  So real soldiers hand over to figures where that fade starts, if it is nearer than 67 blocks, and past the handover
+  the real soldiers and their horses are hidden. The figures are drawn after the fade, so they stay solid. The camera
   sees only 4 render distances; figures further away are pulled in along the line of sight and shrunk to match, so
   they look the same on screen (`battle/DistantDepth`). Without Distant Horizons there is no terrain beyond the render
-  distance, so figures out there stand over empty sky; Distant Horizons support is planned.
+  distance, so figures out there stand over empty sky.
+- **The battle keeps its own ground loaded:** the chunks around every living soldier stay loaded and running, the way
+  `/forceload` does, while the battle lasts (not saved with the world). So a player can fly far off to watch, and the
+  battle carries on instead of unloading, which would freeze its soldiers and count them as fallen. A server with no
+  players at all still stops running entities after 15 s, as vanilla does.
+- **With Distant Horizons** (optional, recommended): soldiers beyond the render distance are drawn inside its terrain
+  instead, as little figures of coloured boxes (uniform, face and cap, the leaders' and general's flags, the general's
+  gold helmet, cavalry on armoured horses), so its far hills hide them and they stand on its ground. They are rebuilt
+  ten times a second through its generic rendering API (`client/DistantHorizonsArmies`, the only class that touches
+  it). Nearer soldiers keep the flat figures. If Distant Horizons is missing, its rendering is off, or its "generic
+  rendering" option is off, the flat figures cover the whole field as before.
 - **Measured** on the dev server with no client connected, 200 soldiers on flat ground: about 10 ms per tick on
   average, worst ticks 35–50 ms, and a steady 20 TPS. Battles ended in a rout after 60–100 s. On a small island,
   cavalry that charged into the sea got stuck, so fight on open land.

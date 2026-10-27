@@ -1,11 +1,14 @@
 package rafasconquest.client;
 
 import com.talhanation.recruits.client.gui.faction.FactionMainScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -49,11 +52,27 @@ public final class ClientEvents {
         DistantArmies.clear();
     }
 
-    /** Distant battle formations, drawn after the world so its terrain hides any behind hills. */
+    /**
+     * Distant battle formations, drawn after the world so its terrain hides any behind hills: after the tripwire
+     * layer, the last of it, because Distant Horizons fades the world into its own terrain just before that layer and
+     * would fade them too. Those in Distant Horizons' terrain are moved before the world is drawn.
+     */
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
-        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
-            DistantArmyRenderer.render(event.getPoseStack(), event.getCamera());
+        if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY) {
+            DistantArmyRenderer.prepare(event.getPartialTick());
+            DistantHorizonsLink.update();
+        } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
+            DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
+        }
+    }
+
+    /** A battle soldier (or its horse) past the handover is hidden; its figure stands in for it. */
+    @SubscribeEvent
+    public static void onRenderLiving(RenderLivingEvent.Pre<?, ?> event) {
+        Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        if (DistantArmyRenderer.hides(event.getEntity(), eye, event.getPartialTick())) {
+            event.setCanceled(true);
         }
     }
 

@@ -1,5 +1,7 @@
 package rafasconquest.battle;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,10 +18,13 @@ import java.util.List;
  * @param halfDepth half its depth front to back
  * @param fighting  broken up into a melee, rather than standing in ranks
  * @param leader    its leader (wearing the faction banner) is still alive
+ * @param soldierIds the entity ids of its living soldiers, so a client that still has them can draw each where it
+ *                  really stands
+ * @param leaderId  the leader's entity id, or -1 once the leader has fallen
  */
 public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive, double x, double y, double z,
                                 double facingX, double facingZ, double halfWidth, double halfDepth, boolean fighting,
-                                boolean leader) {
+                                boolean leader, int[] soldierIds, int leaderId) {
     public enum Kind {
         SWORDSMEN, SHIELDWALL, ARCHERS, CAVALRY, GENERAL, BEARER;
 
@@ -33,8 +38,8 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         }
     }
 
-    /** One soldier to draw, on the ground at ({@code x}, {@code z}). */
-    public record Sprite(double x, double z, boolean leader) {
+    /** One soldier to draw, its feet at ({@code x}, {@code y}, {@code z}). */
+    public record Sprite(double x, double y, double z, boolean leader) {
     }
 
     /**
@@ -51,7 +56,8 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
      * {@code facingZ}), a unit vector. There must be at least one.
      */
     public static FormationSnapshot of(int id, Kind kind, int rgb, int mark, double[] xs, double[] ys, double[] zs,
-                                       double facingX, double facingZ, boolean fighting, boolean leader) {
+                                       double facingX, double facingZ, boolean fighting, boolean leader, int[] soldierIds,
+                                       int leaderId) {
         int n = xs.length;
         double cx = mean(xs);
         double cy = mean(ys);
@@ -70,7 +76,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         }
         double halfWidth = Math.sqrt(sumRight / n) * HALF_EXTENT_PER_SD;
         double halfDepth = Math.sqrt(sumBack / n) * HALF_EXTENT_PER_SD;
-        return new FormationSnapshot(id, kind, rgb, mark, n, cx, cy, cz, facingX, facingZ, halfWidth, halfDepth, fighting, leader);
+        return new FormationSnapshot(id, kind, rgb, mark, n, cx, cy, cz, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId);
     }
 
     private static double mean(double[] values) {
@@ -109,7 +115,39 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
                 right += jitter(i, 0) * cellRight;
                 back += jitter(i, 1) * cellBack;
             }
-            sprites.add(new Sprite(x + rightX * right - facingX * back, z + rightZ * right - facingZ * back, i == leaderAt));
+            sprites.add(new Sprite(x + rightX * right - facingX * back, y, z + rightZ * right - facingZ * back, i == leaderAt));
+        }
+        return sprites;
+    }
+
+    /** Where a client has a soldier: its feet, or null if the client doesn't have it. */
+    @FunctionalInterface
+    public interface Positions {
+        @Nullable
+        double[] of(int entityId);
+    }
+
+    /**
+     * Where to draw each of its soldiers, preferring where they really are: a soldier the client has stands at its
+     * own position, so it doesn't jump when the game stops drawing it. The rest take their place in the ranks
+     * ({@link #layout}), unless {@code missingHaveFallen}: when the client should have every soldier this close, a
+     * missing one died since the snapshot.
+     */
+    public List<Sprite> place(Positions positions, boolean missingHaveFallen) {
+        List<Sprite> ranks = null;
+        List<Sprite> sprites = new ArrayList<>(soldierIds.length);
+        for (int i = 0; i < soldierIds.length; i++) {
+            double[] feet = positions.of(soldierIds[i]);
+            if (feet != null) {
+                sprites.add(new Sprite(feet[0], feet[1], feet[2], soldierIds[i] == leaderId));
+            } else if (!missingHaveFallen) {
+                if (ranks == null) {
+                    ranks = layout();
+                }
+                if (i < ranks.size()) {
+                    sprites.add(ranks.get(i));
+                }
+            }
         }
         return sprites;
     }
@@ -136,7 +174,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
             fz /= length;
         }
         return new FormationSnapshot(id, kind, rgb, mark, alive, lerp(from.x, x, t), lerp(from.y, y, t), lerp(from.z, z, t),
-                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader);
+                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader, soldierIds, leaderId);
     }
 
     private static double lerp(double a, double b, double t) {

@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FormationSnapshotTest {
+    /** Entity ids 100 to 119, one for each soldier of a formation of 20. */
+    private static final int[] IDS = java.util.stream.IntStream.range(100, 120).toArray();
+
     /** A formation of 20 in two ranks of 10 facing east (+x), its front rank at x = 0, centred on z = 0. */
     private static FormationSnapshot twoRanksFacingEast(boolean fighting) {
         double[] xs = new double[20];
@@ -20,7 +23,7 @@ class FormationSnapshotTest {
             ys[i] = 63;
             zs[i] = (i % 10 - 4.5) * BattlePlan.SPACING;
         }
-        return FormationSnapshot.of(3, Kind.SWORDSMEN, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true);
+        return FormationSnapshot.of(3, Kind.SWORDSMEN, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true, IDS, IDS[BattlePlan.LEADER_INDEX]);
     }
 
     @Test
@@ -65,7 +68,8 @@ class FormationSnapshotTest {
 
     @Test
     void aGeneralIsOneSpriteWhereTheyStand() {
-        FormationSnapshot general = FormationSnapshot.of(6, Kind.GENERAL, 0, 0, new double[]{5}, new double[]{70}, new double[]{-2}, 0, 1, false, false);
+        FormationSnapshot general = FormationSnapshot.of(6, Kind.GENERAL, 0, 0, new double[]{5}, new double[]{70}, new double[]{-2}, 0, 1, false, false,
+                new int[]{900}, -1);
         List<Sprite> sprites = general.layout();
         assertEquals(1, sprites.size());
         assertEquals(5, sprites.get(0).x(), 1e-9);
@@ -75,12 +79,37 @@ class FormationSnapshotTest {
     @Test
     void glidesBetweenSnapshots() {
         FormationSnapshot a = twoRanksFacingEast(false);
-        FormationSnapshot b = new FormationSnapshot(3, Kind.SWORDSMEN, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false);
+        FormationSnapshot b = new FormationSnapshot(3, Kind.SWORDSMEN, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false, new int[18], -1);
         FormationSnapshot half = b.from(a, 0.5);
         assertEquals(a.x() + 5, half.x(), 1e-9);
         assertEquals(1, Math.hypot(half.facingX(), half.facingZ()), 1e-9, "still a direction");
         assertEquals(18, half.alive(), "counts don't glide");
         assertEquals(b.x(), b.from(a, 1).x(), 1e-9);
+    }
+
+    @Test
+    void soldiersTheClientHasStandWhereTheyReallyAre() {
+        FormationSnapshot s = twoRanksFacingEast(false);
+        List<Sprite> sprites = s.place(id -> new double[]{id, 70, -id}, false);
+        assertEquals(20, sprites.size());
+        assertEquals(new Sprite(100, 70, -100, false), sprites.get(0));
+        assertEquals(1, sprites.stream().filter(Sprite::leader).count());
+        assertTrue(sprites.get(BattlePlan.LEADER_INDEX).leader(), "the leader is known by its entity id");
+    }
+
+    @Test
+    void soldiersTheClientLacksTakeTheirPlaceInTheRanks() {
+        FormationSnapshot s = twoRanksFacingEast(false);
+        List<Sprite> ranks = s.layout();
+        List<Sprite> sprites = s.place(id -> id < 110 ? new double[]{0, 0, 0} : null, false);
+        assertEquals(20, sprites.size());
+        assertEquals(ranks.get(15), sprites.get(15));
+    }
+
+    @Test
+    void closeByAMissingSoldierHasFallen() {
+        List<Sprite> sprites = twoRanksFacingEast(false).place(id -> id % 2 == 0 ? new double[]{0, 0, 0} : null, true);
+        assertEquals(10, sprites.size());
     }
 
     @Test

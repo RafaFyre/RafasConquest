@@ -11,6 +11,8 @@ import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -63,6 +65,13 @@ public final class RecruitsBattle {
     private static final int REPORT_SECONDS = 10;
     /** A flanking ride that hasn't got round in this long charges anyway. */
     private static final int FLANK_SECONDS = 40;
+    /**
+     * Keeps the battle's chunks loaded with its soldiers running, as a forceloaded chunk is, but only while it lasts
+     * (not saved with the world).
+     */
+    private static final TicketType<ChunkPos> BATTLE_TICKET = TicketType.create(RafasConquest.MOD_ID + "_battle", Comparator.comparingLong(ChunkPos::toLong));
+    /** A soldier's chunk and those this many chunks around it stay loaded: more than a soldier walks in a second. */
+    private static final int HELD_RADIUS = 1;
     /** How often clients hear where the formations stand. */
     private static final int SNAPSHOT_TICKS = 20;
     /** Snapshot ids each army has: up to 6 formations, then the general and the standard-bearer. */
@@ -85,6 +94,8 @@ public final class RecruitsBattle {
     private final TickTimes window = new TickTimes();
     private long tickStart;
     private int snapshotTicks;
+    /** Chunks the battle keeps loaded and running, as {@link ChunkPos#toLong}. */
+    private final Set<Long> heldChunks = new HashSet<>();
 
     private RecruitsBattle(ServerLevel level, Army[] armies) {
         this.level = level;
@@ -266,6 +277,7 @@ public final class RecruitsBattle {
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         battle.deploy(a, fronts[0]);
         battle.deploy(b, fronts[1]);
+        battle.holdChunks();
         String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d", a.describe(),
                 a.started, b.describe(), b.started, Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
@@ -315,6 +327,7 @@ public final class RecruitsBattle {
             }
         }
         battle.clearSnapshots();
+        battle.releaseChunks();
         battle.restoreRelations();
         return "Cleared the battle (" + removed + " soldiers removed)";
     }
@@ -554,6 +567,7 @@ public final class RecruitsBattle {
         }
         // Survivors still stand (or run) after the battle is decided, so keep showing them until it is cleared.
         if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
+            battle.holdChunks();
             ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
         }
         if (battle.tickStart != 0) {
@@ -757,6 +771,52 @@ public final class RecruitsBattle {
         winner.alive().forEach(s -> s.setFollowState(2)); // winners hold where they stand
     }
 
+    // ---- keeping the field loaded ----
+
+    /**
+     * Keeps the chunks around every living soldier loaded and running, wherever the players are, and lets go of the
+     * rest. Without this, a player who flies off to watch from afar unloads the battle: its soldiers stop, and count
+     * as fallen.
+     */
+    private void holdChunks() {
+        Set<Long> wanted = new HashSet<>();
+        for (AbstractRecruitEntity soldier : spawned) {
+            if (!soldier.isAlive()) {
+                continue;
+            }
+            ChunkPos at = soldier.chunkPosition();
+            for (int dx = -HELD_RADIUS; dx <= HELD_RADIUS; dx++) {
+                for (int dz = -HELD_RADIUS; dz <= HELD_RADIUS; dz++) {
+                    wanted.add(ChunkPos.asLong(at.x + dx, at.z + dz));
+                }
+            }
+        }
+        for (long chunk : wanted) {
+            if (heldChunks.add(chunk)) {
+                ChunkPos pos = new ChunkPos(chunk);
+                // Distance 2 makes the chunk itself entity-ticking, as /forceload does; forcing ticks (a Forge addition)
+                // lets its soldiers run with no player within simulation distance.
+                level.getChunkSource().addRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
+            }
+        }
+        heldChunks.removeIf(chunk -> {
+            if (wanted.contains(chunk)) {
+                return false;
+            }
+            ChunkPos pos = new ChunkPos(chunk);
+            level.getChunkSource().removeRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
+            return true;
+        });
+    }
+
+    private void releaseChunks() {
+        for (long chunk : heldChunks) {
+            ChunkPos pos = new ChunkPos(chunk);
+            level.getChunkSource().removeRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
+        }
+        heldChunks.clear();
+    }
+
     // ---- distant view ----
 
     /**
@@ -770,8 +830,7 @@ public final class RecruitsBattle {
             int base = side * IDS_PER_ARMY;
             for (int i = 0; i < army.formations.size(); i++) {
                 Formation f = army.formations.get(i);
-                boolean leader = f.leader != null && f.leader.isAlive();
-                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged, leader).ifPresent(all::add);
+                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged, f.leader).ifPresent(all::add);
             }
             soloSnapshot(base + IDS_PER_ARMY - 2, FormationSnapshot.Kind.GENERAL, army, army.commander, army.commanderCharged).ifPresent(all::add);
             soloSnapshot(base + IDS_PER_ARMY - 1, FormationSnapshot.Kind.BEARER, army, army.bearer, false).ifPresent(all::add);
@@ -781,11 +840,12 @@ public final class RecruitsBattle {
 
     private static Optional<FormationSnapshot> soloSnapshot(int id, FormationSnapshot.Kind kind, Army army,
                                                             @Nullable AbstractRecruitEntity soldier, boolean fighting) {
-        return soldier == null || !soldier.isAlive() ? Optional.empty() : snapshot(id, kind, army, List.of(soldier), fighting, false);
+        return soldier == null || !soldier.isAlive() ? Optional.empty() : snapshot(id, kind, army, List.of(soldier), fighting, null);
     }
 
     private static Optional<FormationSnapshot> snapshot(int id, FormationSnapshot.Kind kind, Army army,
-                                                        List<AbstractRecruitEntity> soldiers, boolean fighting, boolean leader) {
+                                                        List<AbstractRecruitEntity> soldiers, boolean fighting,
+                                                        @Nullable AbstractRecruitEntity leader) {
         if (soldiers.isEmpty()) {
             return Optional.empty();
         }
@@ -793,6 +853,7 @@ public final class RecruitsBattle {
         double[] xs = new double[n];
         double[] ys = new double[n];
         double[] zs = new double[n];
+        int[] ids = new int[n];
         for (int i = 0; i < n; i++) {
             AbstractRecruitEntity s = soldiers.get(i);
             // A rider stands on the ground where their horse does, not up in the saddle.
@@ -800,8 +861,11 @@ public final class RecruitsBattle {
             xs[i] = feet.getX();
             ys[i] = feet.getY();
             zs[i] = feet.getZ();
+            ids[i] = s.getId();
         }
-        return Optional.of(FormationSnapshot.of(id, kind, army.uniform, army.mark, xs, ys, zs, army.facingX, army.facingZ, fighting, leader));
+        boolean leads = leader != null && leader.isAlive();
+        return Optional.of(FormationSnapshot.of(id, kind, army.uniform, army.mark, xs, ys, zs, army.facingX, army.facingZ, fighting,
+                leads, ids, leads ? leader.getId() : -1));
     }
 
     /** Tells everyone in the level that the battle's formations are gone. */

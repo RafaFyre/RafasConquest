@@ -140,7 +140,9 @@ dependencies {
 
     // Recommended client mods: present in dev runs, but not dependencies of this mod.
     runtimeOnly fg.deobf("maven.modrinth:embeddium:${embeddium_version}")
-    runtimeOnly fg.deobf("maven.modrinth:distanthorizons:${distant_horizons_version}")
+    // Distant Horizons is also compiled against, to draw battles in its terrain. Only client/DistantHorizonsArmies
+    // touches it, and only when it is installed.
+    implementation fg.deobf("maven.modrinth:distanthorizons:${distant_horizons_version}")
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
