@@ -52,19 +52,40 @@ other across your view. With no names given, the two factions nearest you fight;
 player is a bystander: the two factions are made enemies in Recruits' diplomacy for the battle, so soldiers attack each
 other and leave you alone unless you strike first. The old relation is restored when the battle ends.
 
-- **Each army** is 100 soldiers in 5 formations of 20, each 10 wide and 2 deep. The front line holds 3 infantry
-  formations: swordsmen, a shieldwall, swordsmen. Archers stand 12 blocks behind its centre and cavalry off its right
-  wing, so the army is 1/5 archers and 1/5 cavalry.
-- **The commander** gives each formation an order every second (`battle/BattlePlan.order`):
-  - After 5 s in formation, the infantry marches 2 blocks a second in line, then breaks into a charge once an enemy is
-    within 10 blocks.
-  - Archers march until an enemy is within 30 blocks, then halt and shoot.
-  - Cavalry waits on the wing until its own infantry charges, or an enemy comes within 20 blocks, then rides for the
-    enemy archers.
-  - A charged soldier with no target is sent after the nearest enemy left.
+- **Each army** is one faction: 100 soldiers in 5 formations of 20, each 10 wide and 2 deep, plus a general and a
+  standard-bearer (102 in all). There are 3 infantry formations (swordsmen, a shieldwall, swordsmen), 1 of archers and
+  1 of cavalry, so the army is 1/5 archers and 1/5 cavalry.
+- **Uniforms:** everyone wears full leather dyed the faction's main colour (its banner's base colour), and cavalry
+  horses wear dyed leather horse armour. If both factions share a colour, the second side wears a darker shade, or a
+  lighter one if the colour is already very dark. The head shows rank:
+  - **Ranks:** a dyed leather cap.
+  - **Formation leader** (one per formation, cavalry and archers included): the faction banner, worn on the head.
+  - **General:** a gold helmet and the faction banner on the back, like a sashimono (`client/BackBannerLayer`; the server
+    tells each client which soldiers wear one).
+  - **Standard-bearer:** a dyed cap and the faction banner carried in hand. They stay at the general's side and don't fight.
+- **Battle soldiers can't pick up items, and drop nothing when they die**, so nobody swaps the uniform for loot and
+  the field stays clear.
+- **The general** is rolled 50/50 for each army, and gives each formation an order every second
+  (`battle/BattlePlan.order`).
+  - **Warrior:** a Recruits soldier at the top level (20 by Recruits' default config, about 80 health) with an iron
+    sword. They stand just behind the front line and charge in when the infantry does. Simple orders:
+    - After 5 s in formation, the infantry marches 2 blocks a second in line, then charges once an enemy is within
+      10 blocks.
+    - Archers march until an enemy is within 30 blocks, then halt and shoot.
+    - Cavalry waits on the right wing until its infantry charges, or an enemy comes within 20 blocks, then rides for
+      the enemy archers.
+  - **Tactician:** stays 32 blocks behind the front centre, out of the fight, and commands better:
+    - **Patience:** the infantry holds for 20 s while the archers advance and shoot, unless an enemy comes within
+      25 blocks first.
+    - **Cavalry flanking:** once the lines lock, the cavalry rides wide past the end of the enemy line, then round
+      behind it, and charges from the rear. A ride that takes more than 40 s charges anyway.
+    - **A reserve:** the front line is only the shieldwall and one swordsmen formation, while the other swordsmen wait
+      24 blocks behind it. When a fighting infantry formation is down to 60 %, the reserve goes to it.
+  - With either general, a charged soldier with no target is sent after the nearest enemy left.
 - **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. After 5
   minutes the battle is called a draw.
-- **Reports:** every 10 s the chat and server log get the soldiers left on each side and the server tick time.
+- **Reports:** every 10 s the chat and server log get the soldiers left on each side and the server tick time. The
+  start and end name each general's type, and the end says whether each general and standard survived.
   `/pve debug battle clear` removes every soldier and horse the battle spawned. Only one battle runs at a time.
 - **Measured** on the dev server with no client connected, 200 soldiers on flat ground: about 10 ms per tick on
   average, worst ticks 35–50 ms, and a steady 20 TPS. Battles ended in a rout after 60–100 s. On a small island,

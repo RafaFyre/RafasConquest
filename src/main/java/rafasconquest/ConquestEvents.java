@@ -11,6 +11,10 @@ import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import rafasconquest.bridge.RecruitsBattle;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -84,6 +88,26 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         RecruitsBattle.stop();
+    }
+
+    /** A battle's dead drop nothing: no loot to clutter the field, and no armour for others to swap into. */
+    @SubscribeEvent
+    public static void onLivingDeath(LivingDeathEvent event) {
+        RecruitsBattle.onDeath(event.getEntity());
+    }
+
+    @SubscribeEvent
+    public static void onLivingDrops(LivingDropsEvent event) {
+        if (RecruitsBattle.isOurs(event.getEntity())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onStartTracking(PlayerEvent.StartTracking event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            RecruitsBattle.onStartTracking(player, event.getTarget());
+        }
     }
 
     /** May run off the server thread, so it only queues the link; the server tick applies it. */

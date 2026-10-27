@@ -11,6 +11,8 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 import rafasconquest.RafasConquest;
+import net.minecraft.world.item.ItemStack;
+import rafasconquest.client.BackBanners;
 import rafasconquest.client.ClientScreens;
 import rafasconquest.sim.ConquestServer;
 
@@ -22,9 +24,10 @@ import java.util.function.Supplier;
 /**
  * The mod's network channel. The Faction Info screen and the world map ask the server for faction data; the map also
  * asks for the base map, which comes back compressed and in parts (a single packet to a client is limited to 1 MB).
+ * Battles tell clients which soldiers wear a banner on their back.
  */
 public final class ConquestNetwork {
-    private static final String VERSION = "2";
+    private static final String VERSION = "3";
     private static final int MAP_PART_BYTES = 256 * 1024;
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);
@@ -55,6 +58,32 @@ public final class ConquestNetwork {
                 .decoder(BaseMapPart::read)
                 .consumerMainThread(ConquestNetwork::handleMapPart)
                 .add();
+        CHANNEL.messageBuilder(BackBanner.class, 4, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(BackBanner::write)
+                .decoder(BackBanner::read)
+                .consumerMainThread(ConquestNetwork::handleBackBanner)
+                .add();
+    }
+
+    /** Tells a player that an entity they now see wears this banner on its back (a battle's general). */
+    public static void sendBackBanner(ServerPlayer player, int entityId, ItemStack banner) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BackBanner(entityId, banner));
+    }
+
+    /** Server → client: entity {@code entityId} wears {@code banner} on its back. */
+    public record BackBanner(int entityId, ItemStack banner) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(entityId);
+            buf.writeItem(banner);
+        }
+
+        static BackBanner read(FriendlyByteBuf buf) {
+            return new BackBanner(buf.readVarInt(), buf.readItem());
+        }
+    }
+
+    private static void handleBackBanner(BackBanner msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> BackBanners.put(msg.entityId(), msg.banner()));
     }
 
     public static void requestFactionInfo() {
