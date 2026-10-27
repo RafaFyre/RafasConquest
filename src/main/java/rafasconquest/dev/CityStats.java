@@ -11,6 +11,7 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import rafasconquest.core.CityLayout;
+import rafasconquest.core.CityTerrain;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.worldgen.CityGridBuilder;
 import rafasconquest.worldgen.CityVariant;
@@ -144,6 +145,31 @@ public final class CityStats {
             }
         }
         return n;
+    }
+
+    /**
+     * The terrain plan of the city nearest (x, z): plate height, then each side's edge stretches as one letter each
+     * (E eased, V valley rim, C cliff left natural), west to east or north to south.
+     */
+    public static List<String> describeTerrain(ServerLevel level, WorldSettings settings, int x, int z) {
+        int r = 3 * CityLayout.SIZE;
+        Optional<CityLayout.Site> nearest = CityLayout.allSitesInBox(level.getSeed(), settings, x - r, z - r, x + r, z + r).stream()
+                .min(java.util.Comparator.comparingLong(s -> (long) (s.x() - x) * (s.x() - x) + (long) (s.z() - z) * (s.z() - z)));
+        if (nearest.isEmpty()) {
+            return List.of("No city within " + r + " blocks");
+        }
+        CityLayout.Site site = nearest.get();
+        CityTerrain.Plan plan = CityGridBuilder.terrainPlan(context(level, new ChunkPos(site.x() >> 4, site.z() >> 4)), site);
+        List<String> lines = new ArrayList<>();
+        lines.add(String.format("%s at %d, %d: plate y %d", site.capital() ? "Capital city" : "City", site.x(), site.z(), plan.plateY()));
+        for (CityTerrain.Side side : CityTerrain.Side.values()) {
+            StringBuilder sb = new StringBuilder();
+            for (int s = 0; s < CityTerrain.SEGMENTS_PER_SIDE; s++) {
+                sb.append(plan.edge(side, s).name().charAt(0));
+            }
+            lines.add(side + ": " + sb);
+        }
+        return lines;
     }
 
     private static Structure.GenerationContext context(ServerLevel level, ChunkPos chunk) {

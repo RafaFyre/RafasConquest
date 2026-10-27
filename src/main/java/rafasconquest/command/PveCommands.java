@@ -58,6 +58,7 @@ public final class PveCommands {
                                         .executes(ctx -> poiList(ctx, IntegerArgumentType.getInteger(ctx, "radius"))))))
                 .then(Commands.literal("debug")
                         .then(Commands.literal("recruits").executes(PveCommands::recruitsFactions))
+                        .then(Commands.literal("cityterrain").executes(PveCommands::cityTerrain))
                         .then(Commands.literal("citystats")
                                 .executes(ctx -> cityStats(ctx, 12))
                                 .then(Commands.argument("samples", IntegerArgumentType.integer(1, 200))
@@ -148,6 +149,15 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("Ran the daily tick " + days + " times (the in-game clock is unchanged)"), true);
         return days;
+    }
+
+    /** Prints the terrain plan of the city nearest the caller. */
+    private static int cityTerrain(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ConquestServer server = server();
+        Vec3 here = ctx.getSource().getPosition();
+        List<String> lines = CityStats.describeTerrain(server.overworld(), server.data().settings(), (int) here.x, (int) here.z);
+        lines.forEach(line -> ctx.getSource().sendSuccess(() -> Component.literal(line), false));
+        return lines.size();
     }
 
     /** Lists the Recruits factions this mod registered, as Recruits sees them. */

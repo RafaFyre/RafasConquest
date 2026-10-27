@@ -79,7 +79,7 @@ public final class CityGridBuilder {
         this.plate = plan.plateY();
     }
 
-    static CityTerrain.Plan terrainPlan(Structure.GenerationContext ctx, CityLayout.Site site) {
+    public static CityTerrain.Plan terrainPlan(Structure.GenerationContext ctx, CityLayout.Site site) {
         long key = SeedHash.hash(ctx.seed(), site.x(), site.z());
         CityTerrain.Plan cached = PLANS.get(key);
         if (cached != null) {

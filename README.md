@@ -20,7 +20,7 @@ Built: one Empire per Capital, Farms producing food, virtual POIs, ownership, th
 Not built (by design): battles, recruit spawning, captures, raids, City-states, Bandits, growth, resources other than food.
 
 Debug commands (permission level 2): `/pve faction list`, `/pve faction info <name|nearest>`, `/pve poi list [radius]`,
-`/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`.
+`/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`, `/pve debug cityterrain`.
 
 ## Recruits integration
 
@@ -45,8 +45,19 @@ like any city, and falls back to plains where no style matches, so every Empire 
 - **Buildings:** every plot gets a building from the vanilla village houses pool of the city's style, turned so its
   entrance faces a road and placed against it. Villagers, cats and other add-ons attach through the building's own
   jigsaws, as in vanilla. Zombie variants are skipped.
-- **Water:** shallow water (up to 24 deep) inside the square is filled in with earth before building, so rivers and
-  lakes don't leave holes. Over deeper water, roads become plank bridges and plots stay empty.
+- **Terrain:** before anything is built, the land is reshaped (`core/CityTerrain`, `worldgen/CityTerrainPiece`), all
+  during world generation:
+  - The **box** is the city square plus 3 blocks past the wall. The **plate** is the median ground height over the box,
+    never below sea level. Inside the box everything above the plate is cleared and everything below is filled (valleys,
+    rivers and lakes included), with grass or sand on top and dirt or sandstone beneath.
+  - Each 32-block stretch of the box edge is eased into the land around it with a 1-up-2-out slope: filled with stone
+    (topped with the biome's own surface block) where the land is lower, cut back into a bowl where it is higher.
+  - A slope is only used if it meets the ground within 44 blocks, the furthest a cell's structure start can reach.
+    Otherwise that stretch faces a valley or cliff and gets no slope. Over a valley the plate ends in a sheer face whose
+    top 2 blocks are wall brick. A cliff is left natural.
+  - The plan is computed once per city from the original terrain (about 2 s, on a worldgen thread) and logged.
+    `/pve debug cityterrain` prints the plan of the nearest city: one letter per edge stretch, E eased, V valley, C cliff.
+  - Roads, houses, the town centre and the walls all sit on the plate; the walls are rigid rather than terrain-following.
 - **Cells:** the square is cut into 3 × 3 cells of 5 × 5 blocks. Each cell is its own structure start (`rafasconquest:city`
   in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
   of a structure's start chunk. Every cell builds its share of the same grid, so they meet seamlessly and all 9 always
@@ -73,8 +84,10 @@ like any city, and falls back to plains where no style matches, so every Empire 
   any city.
 - **Old Capital structure:** the stone-keep placeholder Capital is gone. Worlds that already generated one will log an
   unknown-structure error for it on load.
-- **Cost:** generating a city's area takes about 1.3× the chunk-generation time of plain terrain (force-loading a
-  city's area took 28 s, the same area of plain terrain 22 s).
+- **Cost:** force-loading a capital city with its slopes (580 × 580 blocks) took 34 s; before flattening, the city alone
+  (488 × 488) took 28 s and the same area of plain terrain 22 s.
+- **Villagers:** some villagers suffocate standing on beds or job blocks in vanilla's low snowy houses. Vanilla snowy
+  villages do the same: 10 of them lost 12 of 122 villagers in 3 minutes, against 21 of 428 in a snowy capital city.
 - **Older worlds:** worlds created before cities existed load with cities disabled, since their settings are frozen.
 
 Grid sizes are constants in `core/CityLayout`; the builder is `worldgen/CityGridBuilder`. `/pve debug citystats [samples]`
