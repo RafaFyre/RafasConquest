@@ -23,28 +23,33 @@ Debug commands (permission level 2): `/pve faction list`, `/pve faction info <na
 
 ## Cities (City-state origins)
 
-A city is a vanilla-village-style settlement 3× as wide as a village and about 2× as dense. Each one spawns a
-`CITY_STATE` faction (no territory claims) and is tracked as a `CITY` POI.
+A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. Each one spawns
+a `CITY_STATE` faction (no territory claims) and is tracked as a `CITY` POI.
 
-- **Layout:** a 3 × 3 grid of 160-block cells (480 blocks across). The middle cell is the town centre
-  (`rafasconquest:city`); each of the 8 outer cells is a district (`rafasconquest:city_district`). Each cell is its own
-  structure start, because Minecraft only places pieces within about 128 blocks of a structure's start chunk.
-  Districts over ocean, river or beach are skipped.
+- **Grid:** a 483 × 483 square. 3-wide roads run every 32 blocks in both directions, with an edge road all round,
+  making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town centre
+  (well or meeting point).
+- **Buildings:** every plot gets a building from the vanilla village houses pool of the city's style, turned so its
+  entrance faces a road and placed against it. Villagers, cats and other add-ons attach through the building's own
+  jigsaws, as in vanilla. Zombie variants are skipped.
+- **Water:** shallow water (up to 24 deep) inside the square is filled in with earth before building, so rivers and
+  lakes don't leave holes. Over deeper water, roads become plank bridges and plots stay empty.
+- **Cells:** the square is cut into 3 × 3 cells of 5 × 5 blocks. Each cell is its own structure start (`rafasconquest:city`
+  in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
+  of a structure's start chunk. Every cell builds its share of the same grid, so they meet seamlessly and all 9 always
+  generate together.
 - **Style:** picked from the biome at the city centre via the tags `rafasconquest:city/<plains|desert|savanna|snowy|taiga>`.
-- **Density:** the city pools (`data/rafasconquest/worldgen/template_pool/city/`) reuse the vanilla village templates.
-  Custom pool elements (`rafasconquest:city_legacy_single`, `rafasconquest:city_single`) redirect their jigsaws to the city's
-  street and house pools. City pools drop vanilla's "empty" house picks and zombie variants and triple crossroad and
-  square weights. Measured with `/pve debug citystats 12` against vanilla villages at the same sites:
-  **2.13× buildings per area, 3.14× width**.
+- **Measured** with `/pve debug citystats 12` against vanilla villages at the same sites: every city exactly square,
+  99.5% of plots built (all empty ones over deep water), **6× buildings per area, 3.14× width**, about 890 buildings
+  per city.
 - **Placement:** one city per 3,000-block grid cell, at least 400 blocks inside the cell, outside the eye, and clear of
   Capitals. Farms are never placed inside a city.
-- **Cost:** generating a city's area takes about 2× the chunk-generation time of plain terrain (measured by force-loading
-  a 480 × 480 area with and without a city).
+- **Cost:** generating a city's area takes about 1.3× the chunk-generation time of plain terrain (force-loading a
+  city's area took 28 s, the same area of plain terrain 22 s).
 - **Older worlds:** worlds created before cities existed load with cities disabled, since their settings are frozen.
 
-To change city pool weights, edit `dev/PoolExporter`, run `/pve debug exportpools` on a dev server, copy
-`run/rafasconquest-export/city/data` into `src/main/resources/data`, then check the result with `/pve debug citystats`
-(it runs in the background and writes results to the server log).
+Grid sizes are constants in `core/CityLayout`; the builder is `worldgen/CityGridBuilder`. `/pve debug citystats [samples]`
+runs in the background and writes its results to the server log.
 
 ## Decisions the design doc left open
 

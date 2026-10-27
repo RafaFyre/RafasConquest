@@ -7,7 +7,6 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType;
-import net.minecraft.world.level.levelgen.structure.pools.StructurePoolElementType;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
@@ -17,7 +16,6 @@ public final class ConquestWorldgen {
     private static final DeferredRegister<StructureType<?>> STRUCTURE_TYPES = DeferredRegister.create(Registries.STRUCTURE_TYPE, RafasConquest.MOD_ID);
     private static final DeferredRegister<StructurePlacementType<?>> PLACEMENT_TYPES = DeferredRegister.create(Registries.STRUCTURE_PLACEMENT, RafasConquest.MOD_ID);
     private static final DeferredRegister<StructurePieceType> PIECE_TYPES = DeferredRegister.create(Registries.STRUCTURE_PIECE, RafasConquest.MOD_ID);
-    private static final DeferredRegister<StructurePoolElementType<?>> POOL_ELEMENT_TYPES = DeferredRegister.create(Registries.STRUCTURE_POOL_ELEMENT, RafasConquest.MOD_ID);
 
     public static final RegistryObject<StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
     public static final RegistryObject<StructureType<CapitalStructure>> CAPITAL_STRUCTURE = STRUCTURE_TYPES.register("capital", () -> () -> CapitalStructure.CODEC);
@@ -32,8 +30,8 @@ public final class ConquestWorldgen {
     public static final RegistryObject<StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
     public static final RegistryObject<StructurePieceType> CAPITAL_PIECE = PIECE_TYPES.register("capital", () -> (context, tag) -> new CapitalPiece(tag));
 
-    public static final RegistryObject<StructurePoolElementType<CityPoolElements.Single>> CITY_SINGLE_ELEMENT = POOL_ELEMENT_TYPES.register("city_single", () -> () -> CityPoolElements.Single.CODEC);
-    public static final RegistryObject<StructurePoolElementType<CityPoolElements.Legacy>> CITY_LEGACY_ELEMENT = POOL_ELEMENT_TYPES.register("city_legacy_single", () -> () -> CityPoolElements.Legacy.CODEC);
+    public static final RegistryObject<StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
+    public static final RegistryObject<StructurePieceType> CITY_FILL_PIECE = PIECE_TYPES.register("city_fill", () -> (context, tag) -> new CityFillPiece(tag));
 
     public static final ResourceKey<Structure> FARM = key("farm");
     public static final ResourceKey<Structure> CAPITAL = key("capital");
@@ -51,6 +49,5 @@ public final class ConquestWorldgen {
         STRUCTURE_TYPES.register(modBus);
         PLACEMENT_TYPES.register(modBus);
         PIECE_TYPES.register(modBus);
-        POOL_ELEMENT_TYPES.register(modBus);
     }
 }

@@ -17,7 +17,6 @@ import rafasconquest.RafasConquest;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.dev.CityStats;
-import rafasconquest.dev.PoolExporter;
 import rafasconquest.faction.FactionType;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.ResourceType;
@@ -27,7 +26,6 @@ import rafasconquest.sim.ConquestServer;
 import rafasconquest.sim.EconomyTick;
 import rafasconquest.sim.PoiPrecomputer;
 
-import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -56,7 +54,6 @@ public final class PveCommands {
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 30_000))
                                         .executes(ctx -> poiList(ctx, IntegerArgumentType.getInteger(ctx, "radius"))))))
                 .then(Commands.literal("debug")
-                        .then(Commands.literal("exportpools").executes(PveCommands::exportPools))
                         .then(Commands.literal("citystats")
                                 .executes(ctx -> cityStats(ctx, 12))
                                 .then(Commands.argument("samples", IntegerArgumentType.integer(1, 200))
@@ -146,18 +143,6 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("Ran the daily tick " + days + " times (the in-game clock is unchanged)"), true);
         return days;
-    }
-
-    private static int exportPools(CommandContext<CommandSourceStack> ctx) {
-        Path root = ctx.getSource().getServer().getServerDirectory().toPath().resolve("rafasconquest-export");
-        try {
-            int n = PoolExporter.exportVanilla(ctx.getSource().getServer(), root) + PoolExporter.exportCity(ctx.getSource().getServer(), root);
-            ctx.getSource().sendSuccess(() -> Component.literal("Exported " + n + " pools to " + root.toAbsolutePath()), false);
-            return n;
-        } catch (Exception e) {
-            ctx.getSource().sendFailure(Component.literal("Export failed: " + e));
-            return 0;
-        }
     }
 
     private static String claims(Faction f) {
