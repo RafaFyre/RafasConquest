@@ -63,7 +63,6 @@ public final class CityStats {
         Totals villages = new Totals();
         int minSide = Integer.MAX_VALUE;
         long plotsFilled = 0;
-        long waterTotal = 0;
 
         int size = settings.cityCellSize();
         for (int ring = 0; ring < 40 && cities.count < samples; ring++) {
@@ -93,24 +92,22 @@ public final class CityStats {
                     }
 
                     int cityBuildings = buildings(center);
-                    BoundingBox cityBox = center.getBoundingBox();
+                    BoundingBox cityBox = footprint(center);
                     int districts = 0;
                     for (CityLayout.District d : CityLayout.districts(s)) {
                         StructureStart start = generate(level, district, new ChunkPos(d.x() >> 4, d.z() >> 4));
                         if (start.isValid()) {
                             districts++;
                             cityBuildings += buildings(start);
-                            cityBox = BoundingBox.encapsulatingBoxes(List.of(cityBox, start.getBoundingBox())).orElse(cityBox);
+                            cityBox = BoundingBox.encapsulatingBoxes(List.of(cityBox, footprint(start))).orElse(cityBox);
                         }
                     }
                     cities.add(cityBuildings, cityBox);
                     villages.add(buildings(villageStart), villageStart.getBoundingBox());
                     minSide = Math.min(minSide, Math.min(cityBox.getXSpan(), cityBox.getZSpan()));
-                    int water = waterPlots(level, s, centerChunk);
-                    waterTotal += water;
                     plotsFilled += cityBuildings;
-                    lines.add(String.format("%s city at %d, %d: %d buildings (%.0f%% of plots, %d plots on deep water), %d districts, %dx%d | village there: %d buildings, %dx%d",
-                            variant.get().id(), s.x(), s.z(), cityBuildings, 100.0 * cityBuildings / PLOTS, water, districts, cityBox.getXSpan(), cityBox.getZSpan(),
+                    lines.add(String.format("%s city at %d, %d: %d buildings (%.0f%% of plots), %d districts, %dx%d | village there: %d buildings, %dx%d",
+                            variant.get().id(), s.x(), s.z(), cityBuildings, 100.0 * cityBuildings / PLOTS, districts, cityBox.getXSpan(), cityBox.getZSpan(),
                             buildings(villageStart), villageStart.getBoundingBox().getXSpan(), villageStart.getBoundingBox().getZSpan()));
                 }
             }
@@ -125,31 +122,18 @@ public final class CityStats {
                 (double) cities.width / cities.count, cities.density()));
         lines.add(String.format("Ratio over %d sites: density x%.2f, width x%.2f, buildings x%.2f", cities.count,
                 cities.density() / villages.density(), (double) cities.width / villages.width, (double) cities.buildings / villages.buildings));
-        lines.add(String.format("City outline: smallest side %d (grid %d + 12-block terrain margin each side); plots filled %.1f%% of all, %.1f%% of land plots",
-                minSide, CityLayout.SIZE, 100.0 * plotsFilled / ((long) PLOTS * cities.count),
-                100.0 * plotsFilled / ((long) PLOTS * cities.count - waterTotal)));
+        lines.add(String.format("City outline: smallest side %d (grid %d); plots filled %.1f%%",
+                minSide, CityLayout.SIZE, 100.0 * plotsFilled / ((long) PLOTS * cities.count)));
         return lines;
     }
 
-    /** Plots whose middle is on water too deep to reclaim; the grid leaves those empty. */
-    private static int waterPlots(ServerLevel level, CityLayout.Site site, ChunkPos chunk) {
-        Structure.GenerationContext ctx = context(level, chunk);
-        int water = 0;
-        for (int bx = 0; bx < CityLayout.BLOCKS_PER_SIDE; bx++) {
-            for (int bz = 0; bz < CityLayout.BLOCKS_PER_SIDE; bz++) {
-                if (bx == CityLayout.CENTER_BLOCK && bz == CityLayout.CENTER_BLOCK) {
-                    continue;
-                }
-                for (int q = 0; q < 4; q++) {
-                    int x = site.originX() + CityLayout.blockStart(bx) + (q % 2) * (CityLayout.PLOT_SIZE + 1) + CityLayout.PLOT_SIZE / 2;
-                    int z = site.originZ() + CityLayout.blockStart(bz) + (q / 2) * (CityLayout.PLOT_SIZE + 1) + CityLayout.PLOT_SIZE / 2;
-                    if (CityGridBuilder.ground(ctx, x, z).deepWater()) {
-                        water++;
-                    }
-                }
-            }
-        }
-        return water;
+    /** Bounds of a cell's roads, buildings and walls; the terrain piece reaches further out to ease slopes. */
+    private static BoundingBox footprint(StructureStart start) {
+        List<BoundingBox> boxes = start.getPieces().stream()
+                .filter(p -> !(p instanceof rafasconquest.worldgen.CityTerrainPiece))
+                .map(StructurePiece::getBoundingBox)
+                .toList();
+        return BoundingBox.encapsulatingBoxes(boxes).orElse(start.getBoundingBox());
     }
 
     private static int buildings(StructureStart start) {

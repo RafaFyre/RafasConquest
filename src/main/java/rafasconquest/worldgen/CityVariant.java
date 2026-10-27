@@ -49,9 +49,19 @@ public enum CityVariant {
         this.ground = ground;
     }
 
-    /** Top block of reclaimed land. */
+    /** Top block of the city plate and of reclaimed land. */
     public BlockState ground() {
         return ground;
+    }
+
+    /** What lies just under the plate's surface. */
+    public BlockState subsoil() {
+        return this == DESERT ? Blocks.SANDSTONE.defaultBlockState() : Blocks.DIRT.defaultBlockState();
+    }
+
+    /** The wall's brick, as its processor list makes it; used to cap sheer edges over valleys. */
+    public BlockState wallBrick() {
+        return this == DESERT ? Blocks.CUT_SANDSTONE.defaultBlockState() : Blocks.STONE_BRICKS.defaultBlockState();
     }
 
     public String id() {

@@ -23,13 +23,18 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.CityLayout;
+import rafasconquest.core.CityTerrain;
+import rafasconquest.core.SeedHash;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Builds one cell of a city's planned grid: its share of the roads, then a vanilla building on every plot (or the
- * town centre on the middle block). Buildings are turned so their entrance faces a road and placed against it;
+ * Builds one cell of a city's planned grid: first its share of the flattened ground ({@link CityTerrainPiece}), then
+ * its roads, a vanilla building on every plot (or the town centre on the middle block), and its part of the wall,
+ * all at the plate height. Buildings are turned so their entrance faces a road and placed against it;
  * anything they link to through their own jigsaws (villagers, cats, golems) is attached the way vanilla does it.
  */
 public final class CityGridBuilder {
@@ -45,11 +50,6 @@ public final class CityGridBuilder {
         public boolean water() {
             return waterDepth > 0;
         }
-
-        /** Water the city can't reclaim; nothing is built there. */
-        public boolean deepWater() {
-            return waterDepth > CityFillPiece.MAX_DEPTH;
-        }
     }
 
     private final Structure.GenerationContext ctx;
@@ -59,6 +59,13 @@ public final class CityGridBuilder {
     private final WorldgenRandom random;
     private final StructureTemplateManager templates;
     private final Registry<StructureTemplatePool> pools;
+    private final CityTerrain.Plan plan;
+    /** Height of the flattened plate: the ground level of every road, building and wall in the city. */
+    private final int plate;
+
+    /** Terrain plans by city, so the 9 cells of a city plan it once. Plans are deterministic, so any copy is right. */
+    private static final Map<Long, CityTerrain.Plan> PLANS = new ConcurrentHashMap<>();
+    private static final int MAX_CACHED_PLANS = 256;
 
     private CityGridBuilder(Structure.GenerationContext ctx, CityLayout.Site site, CityVariant variant, StructurePiecesBuilder pieces) {
         this.ctx = ctx;
@@ -68,6 +75,35 @@ public final class CityGridBuilder {
         this.random = ctx.random();
         this.templates = ctx.structureTemplateManager();
         this.pools = ctx.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
+        this.plan = terrainPlan(ctx, site);
+        this.plate = plan.plateY();
+    }
+
+    static CityTerrain.Plan terrainPlan(Structure.GenerationContext ctx, CityLayout.Site site) {
+        long key = SeedHash.hash(ctx.seed(), site.x(), site.z());
+        CityTerrain.Plan cached = PLANS.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        if (PLANS.size() >= MAX_CACHED_PLANS) {
+            PLANS.clear();
+        }
+        // computeIfAbsent makes the other cells of this city wait for the first one's plan instead of redoing it.
+        return PLANS.computeIfAbsent(key, k -> planAndLog(ctx, site));
+    }
+
+    private static CityTerrain.Plan planAndLog(Structure.GenerationContext ctx, CityLayout.Site site) {
+        long start = System.nanoTime();
+        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> ground(ctx, x, z).y(), ctx.chunkGenerator().getSeaLevel());
+        int[] counts = new int[CityTerrain.Edge.values().length];
+        for (CityTerrain.Edge[] side : plan.edges()) {
+            for (CityTerrain.Edge e : side) {
+                counts[e.ordinal()]++;
+            }
+        }
+        RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} eased / {} valley / {} cliff, in {} ms",
+                site.x(), site.z(), plan.plateY(), counts[0], counts[1], counts[2], (System.nanoTime() - start) / 1_000_000);
+        return plan;
     }
 
     static void build(Structure.GenerationContext ctx, CityLayout.Site site, CityVariant variant, int cellX, int cellZ, StructurePiecesBuilder pieces) {
@@ -101,22 +137,23 @@ public final class CityGridBuilder {
         int cellMinZ = oz + CityLayout.cellMin(cellZ);
         int cellMaxZ = oz + CityLayout.cellMax(cellZ);
 
-        // Roads first, so buildings placed afterwards win wherever they touch.
+        // The ground first: everything else in the cell is built on the flattened plate.
+        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, minY, maxY));
+
+        // Roads next, so buildings placed afterwards win wherever they touch.
         for (int k : CityLayout.roadsInCell(cellX)) {
             int x = ox + CityLayout.roadStart(k);
-            pieces.addPiece(new CityRoadPiece(new BoundingBox(x, minY, cellMinZ, x + CityLayout.ROAD_WIDTH - 1, maxY, cellMaxZ), variant));
+            pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, cellMinZ, x + CityLayout.ROAD_WIDTH - 1, plate, cellMaxZ), variant));
         }
         for (int k : CityLayout.roadsInCell(cellZ)) {
             int z = oz + CityLayout.roadStart(k);
-            pieces.addPiece(new CityRoadPiece(new BoundingBox(cellMinX, minY, z, cellMaxX, maxY, z + CityLayout.ROAD_WIDTH - 1), variant));
+            pieces.addPiece(new CityRoadPiece(new BoundingBox(cellMinX, plate, z, cellMaxX, plate, z + CityLayout.ROAD_WIDTH - 1), variant));
         }
 
         for (int bx : CityLayout.blocksInCell(cellX)) {
             for (int bz : CityLayout.blocksInCell(cellZ)) {
                 int blockX = ox + CityLayout.blockStart(bx);
                 int blockZ = oz + CityLayout.blockStart(bz);
-                int blockSize = CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH;
-                pieces.addPiece(new CityFillPiece(new BoundingBox(blockX, minY, blockZ, blockX + blockSize - 1, maxY, blockZ + blockSize - 1), variant));
                 if (bx == CityLayout.CENTER_BLOCK && bz == CityLayout.CENTER_BLOCK) {
                     townCenter(blockX, blockZ);
                     continue;
@@ -132,7 +169,7 @@ public final class CityGridBuilder {
             }
         }
 
-        // Walls last, so they stand on top of the edge road and reclaimed ground.
+        // Walls last, so they stand on top of the edge road.
         buildWalls(cellX, cellZ);
     }
 
@@ -174,7 +211,8 @@ public final class CityGridBuilder {
             Rotation rotation = Rotation.values()[seg.quarterTurns()];
             int x = site.originX() + seg.originX();
             int z = site.originZ() + seg.originZ();
-            BlockPos laidOut = new BlockPos(x, ground(ctx, x, z).y(), z);
+            // Rigid on the plate: its bottom layer replaces the plate's surface, like a street.
+            BlockPos laidOut = new BlockPos(x, plate, z);
             BlockPos pos = laidOut;
             if (previous != null && previous.segment.side() == seg.side() && previous.segment.index() == seg.index() - 1) {
                 BlockPos joined = joinWall(previous, element, rotation);
@@ -235,10 +273,6 @@ public final class CityGridBuilder {
             case SOUTH -> plot.maxZ();
             default -> plot.minZ() + half;
         };
-        Ground ground = ground(ctx, ex, ez);
-        if (ground.deepWater()) {
-            return;
-        }
         Optional<? extends Holder<StructureTemplatePool>> pool = pools.getHolder(variant.houses());
         if (pool.isEmpty()) {
             return;
@@ -260,7 +294,7 @@ public final class CityGridBuilder {
                 }
                 // Like vanilla attaching a rigid house to a terrain-following street: the entrance jigsaw sits on the
                 // first free block above the ground, not in it. One lower sinks the house and its villagers.
-                int entranceY = ground.y() + 1;
+                int entranceY = plate + 1;
                 BlockPos pos = new BlockPos(ex - entrance.pos().getX(), entranceY - entrance.pos().getY(), ez - entrance.pos().getZ());
                 BoundingBox box = element.getBoundingBox(templates, pos, rotation);
                 if (box.minX() >= plot.minX() && box.maxX() <= plot.maxX() && box.minZ() >= plot.minZ() && box.maxZ() <= plot.maxZ()) {
@@ -288,14 +322,14 @@ public final class CityGridBuilder {
         }
         int cx = blockX + (CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH) / 2;
         int cz = blockZ + (CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH) / 2;
-        Ground ground = ground(ctx, cx, cz);
         for (StructurePoolElement element : pool.get().value().getShuffledTemplates(random)) {
             if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/")) {
                 continue;
             }
             Rotation rotation = Rotation.getRandom(random);
             BoundingBox at = element.getBoundingBox(templates, new BlockPos(cx, 0, cz), rotation);
-            BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), ground.y() - at.minY(), cz + (cz - at.getCenter().getZ()));
+            // Bottom layer replaces the plate's surface, as vanilla does for a village's town centre.
+            BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), plate - at.minY(), cz + (cz - at.getCenter().getZ()));
             place(element, pos, rotation, element.getBoundingBox(templates, pos, rotation), 0);
             return;
         }

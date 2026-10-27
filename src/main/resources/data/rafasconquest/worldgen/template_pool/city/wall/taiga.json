@@ -1,4 +1,4 @@
-{
+﻿{
   "fallback": "minecraft:empty",
   "elements": [
     {
@@ -7,7 +7,7 @@
         "element_type": "minecraft:single_pool_element",
         "location": "rafasconquest:city/wall/segment",
         "processors": "rafasconquest:city_wall_stone",
-        "projection": "terrain_matching"
+        "projection": "rigid"
       }
     }
   ]

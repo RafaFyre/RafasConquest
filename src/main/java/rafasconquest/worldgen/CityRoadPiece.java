@@ -6,17 +6,12 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 
-/**
- * A straight city road segment that follows the terrain. Over shallow water the road is built on reclaimed land;
- * over deep water it becomes a plank bridge.
- */
+/** A straight city road segment, laid into the surface of the flattened plate (its bounding box's y). */
 public class CityRoadPiece extends StructurePiece {
     private final CityVariant variant;
 
@@ -40,17 +35,10 @@ public class CityRoadPiece extends StructurePiece {
     public void postProcess(WorldGenLevel level, StructureManager structures, ChunkGenerator generator, RandomSource random,
                             BoundingBox chunkBox, ChunkPos chunkPos, BlockPos pivot) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int y = boundingBox.minY();
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
-                pos.set(x, level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 1, z);
-                BlockState top = level.getBlockState(pos);
-                boolean water = !top.getFluidState().isEmpty();
-                boolean deep = water && CityFillPiece.reclaim(level, x, z, variant.road()) == Integer.MIN_VALUE;
-                if (!water) {
-                    level.setBlock(pos, variant.road(), 2);
-                } else if (deep) {
-                    level.setBlock(pos, variant.bridge(), 2);
-                }
+                level.setBlock(pos.set(x, y, z), variant.road(), 2);
             }
         }
     }
