@@ -6,14 +6,19 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import rafasconquest.RafasConquest;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
+import rafasconquest.dev.CityStats;
+import rafasconquest.dev.PoolExporter;
+import rafasconquest.faction.FactionType;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.ResourceType;
 import rafasconquest.poi.Poi;
@@ -22,8 +27,10 @@ import rafasconquest.sim.ConquestServer;
 import rafasconquest.sim.EconomyTick;
 import rafasconquest.sim.PoiPrecomputer;
 
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public final class PveCommands {
     private static final int MAX_POI_LINES = 150;
@@ -49,6 +56,11 @@ public final class PveCommands {
                                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 30_000))
                                         .executes(ctx -> poiList(ctx, IntegerArgumentType.getInteger(ctx, "radius"))))))
                 .then(Commands.literal("debug")
+                        .then(Commands.literal("exportpools").executes(PveCommands::exportPools))
+                        .then(Commands.literal("citystats")
+                                .executes(ctx -> cityStats(ctx, 12))
+                                .then(Commands.argument("samples", IntegerArgumentType.integer(1, 200))
+                                        .executes(ctx -> cityStats(ctx, IntegerArgumentType.getInteger(ctx, "samples")))))
                         .then(Commands.literal("advance")
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 100_000))
                                         .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))));
@@ -75,9 +87,9 @@ public final class PveCommands {
         CommandSourceStack source = ctx.getSource();
         source.sendSuccess(() -> Component.literal(factions.size() + " known factions (distance from spawn = world origin 0, 0):"), false);
         for (Faction f : factions) {
-            source.sendSuccess(() -> Component.literal(String.format("%s | %s | %s | origin %d, %d | %,d blocks | radius %d (%,d blocks) | strength %,d",
+            source.sendSuccess(() -> Component.literal(String.format("%s | %s | %s | origin %d, %d | %,d blocks | %s | strength %,d",
                     f.name(), f.type(), zone(data.settings(), distanceFromSpawn(f)), f.origin().getX(), f.origin().getZ(),
-                    Math.round(distanceFromSpawn(f)), f.radiusSteps(), f.radiusSteps() * WorldSettings.RADIUS_STEP_BLOCKS, f.strength())), false);
+                    Math.round(distanceFromSpawn(f)), claims(f), f.strength())), false);
         }
         return factions.size();
     }
@@ -95,8 +107,7 @@ public final class PveCommands {
         source.sendSuccess(() -> Component.literal(String.format("Origin %d, %d, %d | %s | %,d blocks from spawn",
                 faction.origin().getX(), faction.origin().getY(), faction.origin().getZ(),
                 zone(data.settings(), distanceFromSpawn(faction)), Math.round(distanceFromSpawn(faction)))), false);
-        source.sendSuccess(() -> Component.literal(String.format("Radius %d (%,d blocks) | strength %,d",
-                faction.radiusSteps(), faction.radiusSteps() * WorldSettings.RADIUS_STEP_BLOCKS, faction.strength())), false);
+        source.sendSuccess(() -> Component.literal(String.format("%s | strength %,d", claims(faction), faction.strength())), false);
         source.sendSuccess(() -> Component.literal(String.format("Stockpile: food %,d", faction.stock(ResourceType.FOOD))), false);
         source.sendSuccess(() -> Component.literal(String.format("POIs owned: %d (%d farms, capital included)", data.poiCount(faction.id()), farms)), false);
         return 1;
@@ -135,6 +146,36 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("Ran the daily tick " + days + " times (the in-game clock is unchanged)"), true);
         return days;
+    }
+
+    private static int exportPools(CommandContext<CommandSourceStack> ctx) {
+        Path root = ctx.getSource().getServer().getServerDirectory().toPath().resolve("rafasconquest-export");
+        try {
+            int n = PoolExporter.exportVanilla(ctx.getSource().getServer(), root) + PoolExporter.exportCity(ctx.getSource().getServer(), root);
+            ctx.getSource().sendSuccess(() -> Component.literal("Exported " + n + " pools to " + root.toAbsolutePath()), false);
+            return n;
+        } catch (Exception e) {
+            ctx.getSource().sendFailure(Component.literal("Export failed: " + e));
+            return 0;
+        }
+    }
+
+    private static String claims(Faction f) {
+        return f.type() == FactionType.EMPIRE
+                ? String.format("radius %d (%,d blocks)", f.radiusSteps(), f.radiusSteps() * WorldSettings.RADIUS_STEP_BLOCKS)
+                : "no claims";
+    }
+
+    /** Generating many cities takes longer than the watchdog allows on the server thread, so this runs in the background. */
+    private static int cityStats(CommandContext<CommandSourceStack> ctx, int samples) throws CommandSyntaxException {
+        ConquestServer server = server();
+        CompletableFuture.runAsync(() -> {
+            long start = System.nanoTime();
+            CityStats.measure(server.overworld(), server.data().settings(), samples).forEach(line -> RafasConquest.LOGGER.info("[citystats] {}", line));
+            RafasConquest.LOGGER.info("[citystats] done in {} s", (System.nanoTime() - start) / 1_000_000_000);
+        }, Util.backgroundExecutor());
+        ctx.getSource().sendSuccess(() -> Component.literal("Measuring " + samples + " cities in the background; results go to the server log"), false);
+        return 1;
     }
 
     private static double distanceFromSpawn(Faction f) {

@@ -1,0 +1,49 @@
+{
+  "fallback": "minecraft:empty",
+  "elements": [
+    {
+      "weight": 100,
+      "element": {
+        "location": "minecraft:village/savanna/town_centers/savanna_meeting_point_1",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid",
+        "element_type": "rafasconquest:city_legacy_single"
+      }
+    },
+    {
+      "weight": 50,
+      "element": {
+        "location": "minecraft:village/savanna/town_centers/savanna_meeting_point_2",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid",
+        "element_type": "rafasconquest:city_legacy_single"
+      }
+    },
+    {
+      "weight": 150,
+      "element": {
+        "location": "minecraft:village/savanna/town_centers/savanna_meeting_point_3",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid",
+        "element_type": "rafasconquest:city_legacy_single"
+      }
+    },
+    {
+      "weight": 150,
+      "element": {
+        "location": "minecraft:village/savanna/town_centers/savanna_meeting_point_4",
+        "processors": {
+          "processors": []
+        },
+        "projection": "rigid",
+        "element_type": "rafasconquest:city_legacy_single"
+      }
+    }
+  ]
+}

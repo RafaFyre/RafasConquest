@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class ConquestSavedDataTest {
     private static ConquestSavedData sample() {
         WorldSettings settings = new WorldSettings(1100, 4200, 7, 2600, 350, 9000, 900, 30, 10, 6,
-                1, 3, 310, 1490, 6, 10, 3600, 4900, 21000, 12, 7000, 3900);
+                1, 3, 310, 1490, 6, 10, 3600, 4900, 21000, 12, 7000, 3900,
+                3500, 450, 320, 790, 4);
         ConquestSavedData data = new ConquestSavedData(settings, 42, 1_700_000_000_000L);
         Faction a = new Faction(new UUID(1, 2), "Valdoria", FactionType.EMPIRE, new BlockPos(2500, 71, -30), 2, 845);
         a.addStock(ResourceType.FOOD, 1234);
@@ -66,6 +67,18 @@ class ConquestSavedDataTest {
         assertEquals(true, unowned.generated());
         assertEquals(6, unowned.dailyOutput());
         assertEquals(2, reloaded.poiCount(a.id()));
+    }
+
+    @Test
+    void worldsSavedBeforeCitiesLoadWithCitiesDisabled() {
+        CompoundTag tag = sample().save(new CompoundTag());
+        CompoundTag settings = tag.getCompound("settings");
+        for (String key : new String[]{"cityCellSize", "cityCellMargin", "cityStrengthMin", "cityStrengthMax", "cityDailyOutput"}) {
+            settings.remove(key);
+        }
+        WorldSettings loaded = ConquestSavedData.load(tag).settings();
+        assertEquals(false, loaded.citiesEnabled());
+        assertEquals(1100, loaded.eyeRadius());
     }
 
     @Test

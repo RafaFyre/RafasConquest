@@ -72,6 +72,8 @@ public final class ConquestEvents {
                 ConquestServer.queueStructureLink(chunk.getPos(), PoiType.FARM);
             } else if (type == ConquestWorldgen.CAPITAL_STRUCTURE.get()) {
                 ConquestServer.queueStructureLink(chunk.getPos(), PoiType.CAPITAL);
+            } else if (type == ConquestWorldgen.CITY_STRUCTURE.get()) {
+                ConquestServer.queueStructureLink(chunk.getPos(), PoiType.CITY);
             }
         }
     }

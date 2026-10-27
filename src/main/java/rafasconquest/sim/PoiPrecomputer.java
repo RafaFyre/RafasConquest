@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.bridge.RecruitsBridge;
 import rafasconquest.core.CapitalLayout;
+import rafasconquest.core.CityLayout;
 import rafasconquest.core.FarmLayout;
 import rafasconquest.core.OriginRoller;
 import rafasconquest.core.OwnershipResolver;
@@ -46,8 +47,11 @@ public class PoiPrecomputer {
     private final Structure farm;
     @Nullable
     private final Structure capital;
-    /** Capital sites whose structure can't generate (biome check failed). Deterministic, so safe to cache. */
+    @Nullable
+    private final Structure city;
+    /** Sites whose structure can't generate (biome check failed). Deterministic, so safe to cache. */
     private final Set<Long> rejectedCapitalSites = new HashSet<>();
+    private final Set<Long> rejectedCitySites = new HashSet<>();
 
     public PoiPrecomputer(ServerLevel level, ConquestSavedData data, RecruitsBridge bridge) {
         this.level = level;
@@ -58,7 +62,8 @@ public class PoiPrecomputer {
         Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
         this.farm = structures.get(ConquestWorldgen.FARM);
         this.capital = structures.get(ConquestWorldgen.CAPITAL);
-        if (farm == null || capital == null) {
+        this.city = structures.get(ConquestWorldgen.CITY);
+        if (farm == null || capital == null || city == null) {
             RafasConquest.LOGGER.error("RafasConquest structures are missing from the registry; POI precompute is disabled");
         }
     }
@@ -86,7 +91,7 @@ public class PoiPrecomputer {
     }
 
     public void precomputeRegion(int regionX, int regionZ) {
-        if (farm == null || capital == null || data.isRegionPrecomputed(regionX, regionZ)) {
+        if (farm == null || capital == null || city == null || data.isRegionPrecomputed(regionX, regionZ)) {
             return;
         }
         int size = WorldSettings.REGION_SIZE;
@@ -98,6 +103,9 @@ public class PoiPrecomputer {
         for (CapitalLayout.Site site : CapitalLayout.sitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
             ensureCapital(site);
         }
+        for (CityLayout.Site site : CityLayout.sitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
+            ensureCity(site);
+        }
 
         int spacing = settings.farmSpacingChunks();
         for (int cellX = Math.floorDiv(minX >> 4, spacing); cellX <= Math.floorDiv(maxX >> 4, spacing); cellX++) {
@@ -106,7 +114,8 @@ public class PoiPrecomputer {
                 ChunkPos chunk = new ChunkPos(c.x(), c.z());
                 int x = chunk.getMiddleBlockX();
                 int z = chunk.getMiddleBlockZ();
-                if (x < minX || x > maxX || z < minZ || z > maxZ || data.poiInChunk(chunk, PoiType.FARM) != null) {
+                if (x < minX || x > maxX || z < minZ || z > maxZ || data.poiInChunk(chunk, PoiType.FARM) != null
+                        || !FarmLayout.isFarmChunk(seed, settings, c.x(), c.z())) {
                     continue;
                 }
                 findValid(farm, chunk).ifPresent(pos ->
@@ -148,6 +157,33 @@ public class PoiPrecomputer {
         Faction faction = new Faction(roll.id(), roll.name(), FactionType.EMPIRE, pos.get(), roll.radiusSteps(), roll.strength());
         data.addFaction(faction);
         data.addPoi(new Poi(pos.get(), PoiType.CAPITAL, faction.id(), 0, false));
+        bridge.onFactionCreated(faction);
+        return faction;
+    }
+
+    /**
+     * The City-state at this city site, creating it on first sight. Its origin and POI sit on the site itself (which
+     * is always inside the start chunk), at the town centre's surface height.
+     */
+    @Nullable
+    private Faction ensureCity(CityLayout.Site site) {
+        Faction existing = data.factionAtOrigin(site.x(), site.z());
+        long key = ConquestSavedData.xzKey(site.x(), site.z());
+        if (existing != null || rejectedCitySites.contains(key) || city == null) {
+            return existing;
+        }
+        Optional<BlockPos> stub = findValid(city, new ChunkPos(site.x() >> 4, site.z() >> 4));
+        if (stub.isEmpty()) {
+            rejectedCitySites.add(key);
+            return null;
+        }
+        BlockPos pos = new BlockPos(site.x(), stub.get().getY(), site.z());
+        OriginRoller.Roll roll = OriginRoller.roll(seed, site.x(), site.z(), settings);
+        int strength = SeedHash.intInRange(SeedHash.hash(seed, SeedHash.SALT_STRENGTH, site.x(), site.z()),
+                settings.cityStrengthMin(), settings.cityStrengthMax());
+        Faction faction = new Faction(roll.id(), roll.name(), FactionType.CITY_STATE, pos, 0, strength);
+        data.addFaction(faction);
+        data.addPoi(new Poi(pos, PoiType.CITY, faction.id(), settings.cityDailyOutput(), false));
         bridge.onFactionCreated(faction);
         return faction;
     }

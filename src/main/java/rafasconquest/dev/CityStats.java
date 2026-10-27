@@ -1,0 +1,141 @@
+package rafasconquest.dev;
+
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
+import rafasconquest.core.CityLayout;
+import rafasconquest.core.WorldSettings;
+import rafasconquest.worldgen.CityVariant;
+import rafasconquest.worldgen.ConquestWorldgen;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Dev tool: compares cities with vanilla villages of the same style generated at the same sites, in memory only.
+ * Buildings = pieces from a houses pool. Footprint = the bounding box of all of a settlement's pieces.
+ */
+public final class CityStats {
+    private CityStats() {
+    }
+
+    private static final class Totals {
+        long buildings;
+        long area;
+        long width;
+        int count;
+
+        void add(int buildings, BoundingBox box) {
+            this.buildings += buildings;
+            this.area += (long) box.getXSpan() * box.getZSpan();
+            this.width += Math.max(box.getXSpan(), box.getZSpan());
+            count++;
+        }
+
+        double density() {
+            return area == 0 ? 0 : buildings * 10_000.0 / area;
+        }
+    }
+
+    public static List<String> measure(ServerLevel level, WorldSettings settings, int samples) {
+        List<String> lines = new ArrayList<>();
+        if (!settings.citiesEnabled()) {
+            lines.add("Cities are disabled in this world");
+            return lines;
+        }
+        Registry<Structure> structures = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Structure city = structures.get(ConquestWorldgen.CITY);
+        Structure district = structures.get(ConquestWorldgen.CITY_DISTRICT);
+        long seed = level.getSeed();
+        Totals cities = new Totals();
+        Totals villages = new Totals();
+
+        int size = settings.cityCellSize();
+        for (int ring = 0; ring < 40 && cities.count < samples; ring++) {
+            for (int cx = -ring; cx <= ring && cities.count < samples; cx++) {
+                for (int cz = -ring; cz <= ring && cities.count < samples; cz++) {
+                    if (Math.max(Math.abs(cx), Math.abs(cz)) != ring) {
+                        continue;
+                    }
+                    Optional<CityLayout.Site> site = CityLayout.gridSite(seed, settings, cx, cz);
+                    if (site.isEmpty()) {
+                        continue;
+                    }
+                    CityLayout.Site s = site.get();
+                    ChunkPos centerChunk = new ChunkPos(s.x() >> 4, s.z() >> 4);
+                    StructureStart center = generate(level, city, centerChunk);
+                    if (!center.isValid()) {
+                        continue;
+                    }
+                    Optional<CityVariant> variant = CityVariant.at(context(level, centerChunk), s.x(), s.z());
+                    Structure village = variant.map(v -> structures.get(ResourceLocation.fromNamespaceAndPath("minecraft", "village_" + v.id()))).orElse(null);
+                    if (village == null) {
+                        continue;
+                    }
+                    StructureStart villageStart = generate(level, village, centerChunk);
+                    if (!villageStart.isValid()) {
+                        continue;
+                    }
+
+                    int cityBuildings = buildings(center);
+                    BoundingBox cityBox = center.getBoundingBox();
+                    int districts = 0;
+                    for (CityLayout.District d : CityLayout.districts(s)) {
+                        StructureStart start = generate(level, district, new ChunkPos(d.x() >> 4, d.z() >> 4));
+                        if (start.isValid()) {
+                            districts++;
+                            cityBuildings += buildings(start);
+                            cityBox = BoundingBox.encapsulatingBoxes(List.of(cityBox, start.getBoundingBox())).orElse(cityBox);
+                        }
+                    }
+                    cities.add(cityBuildings, cityBox);
+                    villages.add(buildings(villageStart), villageStart.getBoundingBox());
+                    lines.add(String.format("%s city at %d, %d: %d buildings, %d districts, %dx%d | village there: %d buildings, %dx%d",
+                            variant.get().id(), s.x(), s.z(), cityBuildings, districts, cityBox.getXSpan(), cityBox.getZSpan(),
+                            buildings(villageStart), villageStart.getBoundingBox().getXSpan(), villageStart.getBoundingBox().getZSpan()));
+                }
+            }
+        }
+        if (cities.count == 0) {
+            lines.add("No cities found to sample");
+            return lines;
+        }
+        lines.add(String.format("Villages: %.1f buildings, %.0f blocks wide, %.2f buildings per 100x100", (double) villages.buildings / villages.count,
+                (double) villages.width / villages.count, villages.density()));
+        lines.add(String.format("Cities:   %.1f buildings, %.0f blocks wide, %.2f buildings per 100x100", (double) cities.buildings / cities.count,
+                (double) cities.width / cities.count, cities.density()));
+        lines.add(String.format("Ratio over %d sites: density x%.2f, width x%.2f, buildings x%.2f", cities.count,
+                cities.density() / villages.density(), (double) cities.width / villages.width, (double) cities.buildings / villages.buildings));
+        return lines;
+    }
+
+    private static int buildings(StructureStart start) {
+        int n = 0;
+        for (StructurePiece piece : start.getPieces()) {
+            if (piece.toString().contains("/houses/")) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static Structure.GenerationContext context(ServerLevel level, ChunkPos chunk) {
+        ServerChunkCache chunks = level.getChunkSource();
+        return new Structure.GenerationContext(level.registryAccess(), chunks.getGenerator(), chunks.getGenerator().getBiomeSource(),
+                chunks.randomState(), level.getStructureManager(), level.getSeed(), chunk, level, b -> true);
+    }
+
+    private static StructureStart generate(ServerLevel level, Structure structure, ChunkPos chunk) {
+        ServerChunkCache chunks = level.getChunkSource();
+        return structure.generate(level.registryAccess(), chunks.getGenerator(), chunks.getGenerator().getBiomeSource(), chunks.randomState(),
+                level.getStructureManager(), level.getSeed(), chunk, 0, level, b -> true);
+    }
+}

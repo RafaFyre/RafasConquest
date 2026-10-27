@@ -1,6 +1,7 @@
 package rafasconquest;
 
 import net.minecraftforge.common.ForgeConfigSpec;
+import rafasconquest.core.CityLayout;
 import rafasconquest.core.WorldSettings;
 
 /**
@@ -32,6 +33,11 @@ public final class ConquestConfig {
     private static final ForgeConfigSpec.IntValue MAX_CATCH_UP_DAYS;
     private static final ForgeConfigSpec.IntValue INITIAL_PRECOMPUTE_RADIUS;
     private static final ForgeConfigSpec.IntValue LAZY_PRECOMPUTE_DISTANCE;
+    private static final ForgeConfigSpec.IntValue CITY_CELL_SIZE;
+    private static final ForgeConfigSpec.IntValue CITY_CELL_MARGIN;
+    private static final ForgeConfigSpec.IntValue CITY_STRENGTH_MIN;
+    private static final ForgeConfigSpec.IntValue CITY_STRENGTH_MAX;
+    private static final ForgeConfigSpec.IntValue CITY_OUTPUT;
 
     static {
         WorldSettings d = WorldSettings.defaults();
@@ -67,6 +73,18 @@ public final class ConquestConfig {
                 .defineInRange("dailyOutput", d.farmDailyOutput(), 0, 1_000_000);
         b.pop();
 
+        b.push("cities");
+        CITY_CELL_SIZE = b.comment("City grid cell size in blocks; at most one city (and its City-state) per cell. 0 disables cities.")
+                .defineInRange("cellSize", d.cityCellSize(), 0, 100_000);
+        CITY_CELL_MARGIN = b.comment("Cities stay at least this far inside their cell's edges, in blocks. Raised to " + CityLayout.HALF_EXTENT
+                        + " if lower, so cities never overlap.")
+                .defineInRange("cellMargin", d.cityCellMargin(), 0, 50_000);
+        CITY_STRENGTH_MIN = b.defineInRange("strengthMin", d.cityStrengthMin(), 0, WorldSettings.MAX_STRENGTH);
+        CITY_STRENGTH_MAX = b.defineInRange("strengthMax", d.cityStrengthMax(), 0, WorldSettings.MAX_STRENGTH);
+        CITY_OUTPUT = b.comment("Food a city produces per in-game day for its City-state.")
+                .defineInRange("dailyOutput", d.cityDailyOutput(), 0, 1_000_000);
+        b.pop();
+
         b.push("empireRolls");
         STORM_RADIUS_MIN = b.defineInRange("stormWallRadiusMin", d.stormWallRadiusMin(), 1, WorldSettings.MAX_RADIUS_STEPS);
         STORM_RADIUS_MAX = b.defineInRange("stormWallRadiusMax", d.stormWallRadiusMax(), 1, WorldSettings.MAX_RADIUS_STEPS);
@@ -98,6 +116,9 @@ public final class ConquestConfig {
 
     public static WorldSettings snapshot() {
         int spacing = FARM_SPACING.get();
+        int cityMargin = Math.max(CITY_CELL_MARGIN.get(), CityLayout.HALF_EXTENT);
+        // A cell must fit a whole city inside its margins.
+        int cityCell = CITY_CELL_SIZE.get() == 0 ? 0 : Math.max(CITY_CELL_SIZE.get(), 2 * cityMargin + 1);
         return new WorldSettings(
                 EYE_RADIUS.get(), WAR_ZONE_OUTER_EDGE.get(),
                 RING_CAPITAL_COUNT.get(), RING_DISTANCE.get(), RING_JITTER.get(),
@@ -108,6 +129,8 @@ public final class ConquestConfig {
                 FAR_RADIUS_MIN.get(), Math.max(FAR_RADIUS_MIN.get(), FAR_RADIUS_MAX.get()),
                 FAR_STRENGTH_MIN.get(), Math.max(FAR_STRENGTH_MIN.get(), FAR_STRENGTH_MAX.get()),
                 FAR_DISTANCE_OFFSET.get(), MAX_CATCH_UP_DAYS.get(),
-                INITIAL_PRECOMPUTE_RADIUS.get(), LAZY_PRECOMPUTE_DISTANCE.get());
+                INITIAL_PRECOMPUTE_RADIUS.get(), LAZY_PRECOMPUTE_DISTANCE.get(),
+                cityCell, cityCell == 0 ? 0 : Math.min(cityMargin, (cityCell - 1) / 2),
+                CITY_STRENGTH_MIN.get(), Math.max(CITY_STRENGTH_MIN.get(), CITY_STRENGTH_MAX.get()), CITY_OUTPUT.get());
     }
 }

@@ -28,7 +28,12 @@ public record WorldSettings(
         int farDistanceOffset,
         int maxCatchUpDays,
         int initialPrecomputeRadius,
-        int lazyPrecomputeDistance) {
+        int lazyPrecomputeDistance,
+        int cityCellSize,
+        int cityCellMargin,
+        int cityStrengthMin,
+        int cityStrengthMax,
+        int cityDailyOutput) {
 
     public static final int REGION_SIZE = 2048;
     public static final int RADIUS_STEP_BLOCKS = 1000;
@@ -39,7 +44,12 @@ public record WorldSettings(
 
     public static WorldSettings defaults() {
         return new WorldSettings(1000, 4000, 6, 2500, 400, 8000, 1000, 32, 12, 5,
-                1, 3, 300, 1500, 6, 10, 3500, 5000, 20000, 0, 8000, 4000);
+                1, 3, 300, 1500, 6, 10, 3500, 5000, 20000, 0, 8000, 4000,
+                3000, 400, 300, 800, 0);
+    }
+
+    public boolean citiesEnabled() {
+        return cityCellSize > 0;
     }
 
     public CompoundTag save() {
@@ -66,8 +76,15 @@ public record WorldSettings(
         tag.putInt("maxCatchUpDays", maxCatchUpDays);
         tag.putInt("initialPrecomputeRadius", initialPrecomputeRadius);
         tag.putInt("lazyPrecomputeDistance", lazyPrecomputeDistance);
+        tag.putInt("cityCellSize", cityCellSize);
+        tag.putInt("cityCellMargin", cityCellMargin);
+        tag.putInt("cityStrengthMin", cityStrengthMin);
+        tag.putInt("cityStrengthMax", cityStrengthMax);
+        tag.putInt("cityDailyOutput", cityDailyOutput);
         return tag;
     }
+
+    /** Worlds created before cities existed have no city keys; they load with cities disabled (cell size 0). */
 
     public static WorldSettings load(CompoundTag tag) {
         return new WorldSettings(
@@ -92,6 +109,11 @@ public record WorldSettings(
                 tag.getInt("farDistanceOffset"),
                 tag.getInt("maxCatchUpDays"),
                 tag.getInt("initialPrecomputeRadius"),
-                tag.getInt("lazyPrecomputeDistance"));
+                tag.getInt("lazyPrecomputeDistance"),
+                tag.getInt("cityCellSize"),
+                tag.getInt("cityCellMargin"),
+                tag.getInt("cityStrengthMin"),
+                tag.getInt("cityStrengthMax"),
+                tag.getInt("cityDailyOutput"));
     }
 }

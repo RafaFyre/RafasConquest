@@ -1,0 +1,12 @@
+{
+  "structures": [
+    {
+      "structure": "rafasconquest:city",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "rafasconquest:city_sites",
+    "salt": 2002917742
+  }
+}

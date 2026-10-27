@@ -22,7 +22,7 @@ public class FarmPlacement extends StructurePlacement {
     @Override
     protected boolean isPlacementChunk(ChunkGeneratorStructureState state, int chunkX, int chunkZ) {
         WorldSettings settings = ConquestRuntime.settings();
-        return settings != null && FarmLayout.isCandidateChunk(state.getLevelSeed(), settings, chunkX, chunkZ);
+        return settings != null && FarmLayout.isFarmChunk(state.getLevelSeed(), settings, chunkX, chunkZ);
     }
 
     @Override
