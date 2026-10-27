@@ -44,6 +44,12 @@ public final class CityGridBuilder {
     private static final int MAX_CHILD_DEPTH = 2;
     private static final String ENTRANCE = "minecraft:building_entrance";
     private static final String WALL_END = "rafasconquest:wall_end";
+    /**
+     * How far below the plate the city's spawn protection reaches. The city structures' spawn_overrides block hostile
+     * spawns inside every piece's bounding box; the terrain piece's box starts this far down, so caves deep under the
+     * city keep their mobs.
+     */
+    private static final int SPAWN_PROTECTION_DEPTH = 16;
 
     /** The terrain top at a column; {@code waterDepth} is 0 on land. */
     public record Ground(int y, int waterDepth) {
@@ -62,6 +68,8 @@ public final class CityGridBuilder {
     private final CityTerrain.Plan plan;
     /** Height of the flattened plate: the ground level of every road, building and wall in the city. */
     private final int plate;
+    /** Bounding boxes of everything placed in the current city block, so lamp posts can avoid them. */
+    private final List<BoundingBox> occupied = new java.util.ArrayList<>();
 
     /** Terrain plans by city, so the 9 cells of a city plan it once. Plans are deterministic, so any copy is right. */
     private static final Map<Long, CityTerrain.Plan> PLANS = new ConcurrentHashMap<>();
@@ -101,7 +109,7 @@ public final class CityGridBuilder {
                 counts[e.ordinal()]++;
             }
         }
-        RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} eased / {} valley / {} cliff, in {} ms",
+        RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} carve / {} fill / {} valley, in {} ms",
                 site.x(), site.z(), plan.plateY(), counts[0], counts[1], counts[2], (System.nanoTime() - start) / 1_000_000);
         return plan;
     }
@@ -138,7 +146,7 @@ public final class CityGridBuilder {
         int cellMaxZ = oz + CityLayout.cellMax(cellZ);
 
         // The ground first: everything else in the cell is built on the flattened plate.
-        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, minY, maxY));
+        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY));
 
         // Roads next, so buildings placed afterwards win wherever they touch.
         for (int k : CityLayout.roadsInCell(cellX)) {
@@ -154,18 +162,20 @@ public final class CityGridBuilder {
             for (int bz : CityLayout.blocksInCell(cellZ)) {
                 int blockX = ox + CityLayout.blockStart(bx);
                 int blockZ = oz + CityLayout.blockStart(bz);
+                occupied.clear();
                 if (bx == CityLayout.CENTER_BLOCK && bz == CityLayout.CENTER_BLOCK) {
                     townCenter(blockX, blockZ);
-                    continue;
-                }
-                for (int qx = 0; qx < 2; qx++) {
-                    for (int qz = 0; qz < 2; qz++) {
-                        int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
-                        int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
-                        house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
-                                facing(bx, bz, qx, qz));
+                } else {
+                    for (int qx = 0; qx < 2; qx++) {
+                        for (int qz = 0; qz < 2; qz++) {
+                            int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
+                            int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
+                            house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
+                                    facing(bx, bz, qx, qz));
+                        }
                     }
                 }
+                lamps(blockX, blockZ);
             }
         }
 
@@ -335,7 +345,65 @@ public final class CityGridBuilder {
         }
     }
 
+    /**
+     * Lamp posts in the city block's alleys: where each alley meets the road (lighting the street about every 15
+     * blocks) and where the alleys cross. Each uses this style's own lamp if it fits without touching a building,
+     * otherwise the 1-wide taiga lamp post, which always fits an alley.
+     */
+    private void lamps(int blockX, int blockZ) {
+        int alley = CityLayout.PLOT_SIZE;
+        int last = CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH - 1;
+        int[][] spots = {{alley, 1}, {alley, last - 1}, {1, alley}, {last - 1, alley}, {alley, alley}};
+        BoundingBox block = new BoundingBox(blockX, ctx.heightAccessor().getMinBuildHeight(), blockZ,
+                blockX + last, ctx.heightAccessor().getMaxBuildHeight() - 1, blockZ + last);
+        List<StructurePoolElement> own = lampElements(variant.decor());
+        List<StructurePoolElement> fallback = lampElements(CityVariant.TAIGA.decor());
+        for (int[] spot : spots) {
+            if (!lamp(own, blockX + spot[0], blockZ + spot[1], block)) {
+                lamp(fallback, blockX + spot[0], blockZ + spot[1], block);
+            }
+        }
+    }
+
+    /** Places the first lamp from {@code candidates} that fits centred on (x, z). Returns false if none fits. */
+    private boolean lamp(List<StructurePoolElement> candidates, int x, int z, BoundingBox block) {
+        for (StructurePoolElement element : candidates) {
+            for (Rotation rotation : Rotation.getShuffled(random)) {
+                BoundingBox at = element.getBoundingBox(templates, BlockPos.ZERO, rotation);
+                // Seat it like vanilla seats decor on a street: its downward jigsaw on the first block above the ground.
+                int baseY = at.minY();
+                for (StructureTemplate.StructureBlockInfo jigsaw : element.getShuffledJigsawBlocks(templates, BlockPos.ZERO, rotation, random)) {
+                    if (JigsawBlock.getFrontFacing(jigsaw.state()) == Direction.DOWN) {
+                        baseY = jigsaw.pos().getY();
+                        break;
+                    }
+                }
+                BlockPos pos = new BlockPos(x - (at.minX() + at.maxX()) / 2, plate + 1 - baseY, z - (at.minZ() + at.maxZ()) / 2);
+                BoundingBox box = element.getBoundingBox(templates, pos, rotation);
+                boolean inside = box.minX() >= block.minX() && box.maxX() <= block.maxX() && box.minZ() >= block.minZ() && box.maxZ() <= block.maxZ();
+                if (inside && occupied.stream().noneMatch(box::intersects)) {
+                    place(element, pos, rotation, box, MAX_CHILD_DEPTH);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The lamp posts in a decor pool, each once, in random order. */
+    private List<StructurePoolElement> lampElements(ResourceKey<StructureTemplatePool> decorPool) {
+        Optional<? extends Holder<StructureTemplatePool>> pool = pools.getHolder(decorPool);
+        if (pool.isEmpty()) {
+            return List.of();
+        }
+        return pool.get().value().getShuffledTemplates(random).stream()
+                .filter(e -> e.toString().contains("lamp"))
+                .distinct()
+                .toList();
+    }
+
     private void place(StructurePoolElement element, BlockPos pos, Rotation rotation, BoundingBox box, int depth) {
+        occupied.add(box);
         pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation, box));
         if (depth >= MAX_CHILD_DEPTH) {
             return;

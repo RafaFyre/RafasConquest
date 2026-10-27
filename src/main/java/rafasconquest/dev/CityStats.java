@@ -93,6 +93,7 @@ public final class CityStats {
                     }
 
                     int cityBuildings = buildings(center);
+                    int lamps = count(center, "lamp");
                     BoundingBox cityBox = footprint(center);
                     int districts = 0;
                     for (CityLayout.District d : CityLayout.districts(s)) {
@@ -100,6 +101,7 @@ public final class CityStats {
                         if (start.isValid()) {
                             districts++;
                             cityBuildings += buildings(start);
+                            lamps += count(start, "lamp");
                             cityBox = BoundingBox.encapsulatingBoxes(List.of(cityBox, footprint(start))).orElse(cityBox);
                         }
                     }
@@ -107,8 +109,8 @@ public final class CityStats {
                     villages.add(buildings(villageStart), villageStart.getBoundingBox());
                     minSide = Math.min(minSide, Math.min(cityBox.getXSpan(), cityBox.getZSpan()));
                     plotsFilled += cityBuildings;
-                    lines.add(String.format("%s city at %d, %d: %d buildings (%.0f%% of plots), %d districts, %dx%d | village there: %d buildings, %dx%d",
-                            variant.get().id(), s.x(), s.z(), cityBuildings, 100.0 * cityBuildings / PLOTS, districts, cityBox.getXSpan(), cityBox.getZSpan(),
+                    lines.add(String.format("%s city at %d, %d: %d buildings (%.0f%% of plots), %d lamp posts, %d districts, %dx%d | village there: %d buildings, %dx%d",
+                            variant.get().id(), s.x(), s.z(), cityBuildings, 100.0 * cityBuildings / PLOTS, lamps, districts, cityBox.getXSpan(), cityBox.getZSpan(),
                             buildings(villageStart), villageStart.getBoundingBox().getXSpan(), villageStart.getBoundingBox().getZSpan()));
                 }
             }
@@ -138,9 +140,13 @@ public final class CityStats {
     }
 
     private static int buildings(StructureStart start) {
+        return count(start, "/houses/");
+    }
+
+    private static int count(StructureStart start, String marker) {
         int n = 0;
         for (StructurePiece piece : start.getPieces()) {
-            if (piece.toString().contains("/houses/")) {
+            if (piece.toString().contains(marker)) {
                 n++;
             }
         }
@@ -149,7 +155,8 @@ public final class CityStats {
 
     /**
      * The terrain plan of the city nearest (x, z): plate height, then each side's edge stretches as one letter each
-     * (E eased, V valley rim, C cliff left natural), west to east or north to south.
+     * (C carve, F fill, V valley), west to east or north to south, and how far above the plate each stretch's carve
+     * has to reach.
      */
     public static List<String> describeTerrain(ServerLevel level, WorldSettings settings, int x, int z) {
         int r = 3 * CityLayout.SIZE;
@@ -164,10 +171,12 @@ public final class CityStats {
         lines.add(String.format("%s at %d, %d: plate y %d", site.capital() ? "Capital city" : "City", site.x(), site.z(), plan.plateY()));
         for (CityTerrain.Side side : CityTerrain.Side.values()) {
             StringBuilder sb = new StringBuilder();
+            StringBuilder carve = new StringBuilder();
             for (int s = 0; s < CityTerrain.SEGMENTS_PER_SIDE; s++) {
                 sb.append(plan.edge(side, s).name().charAt(0));
+                carve.append(' ').append(plan.carveTo()[side.ordinal()][s]);
             }
-            lines.add(side + ": " + sb);
+            lines.add(side + ": " + sb + "  carve to:" + carve);
         }
         return lines;
     }

@@ -59,6 +59,10 @@ public final class PveCommands {
                 .then(Commands.literal("debug")
                         .then(Commands.literal("recruits").executes(PveCommands::recruitsFactions))
                         .then(Commands.literal("cityterrain").executes(PveCommands::cityTerrain))
+                        .then(Commands.literal("column")
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                .executes(ctx -> column(ctx, IntegerArgumentType.getInteger(ctx, "x"), IntegerArgumentType.getInteger(ctx, "z"))))))
                         .then(Commands.literal("citystats")
                                 .executes(ctx -> cityStats(ctx, 12))
                                 .then(Commands.argument("samples", IntegerArgumentType.integer(1, 200))
@@ -149,6 +153,15 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("Ran the daily tick " + days + " times (the in-game clock is unchanged)"), true);
         return days;
+    }
+
+    /** Prints the ground height at a column (top solid block, ignoring leaves and plants). Loads the chunk if needed. */
+    private static int column(CommandContext<CommandSourceStack> ctx, int x, int z) throws CommandSyntaxException {
+        // getChunk loads (or generates) the chunk; the level's own getHeight would report the floor for unloaded ones.
+        int top = server().overworld().getChunk(x >> 4, z >> 4)
+                .getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
+        ctx.getSource().sendSuccess(() -> Component.literal("column " + x + " " + z + " top " + top), false);
+        return top;
     }
 
     /** Prints the terrain plan of the city nearest the caller. */

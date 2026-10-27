@@ -12,26 +12,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CityTerrainTest {
     private static final CityLayout.Site SITE = new CityLayout.Site(5000, -3000, false);
     private static final int SEA = 63;
+    private static final int MID = 200;
 
     /** Local-coordinate terrain, wrapped as world heights for the site. */
     private static CityTerrain.Heights local(java.util.function.IntBinaryOperator f) {
         return (x, z) -> f.applyAsInt(x - SITE.originX(), z - SITE.originZ());
     }
 
-    @Test
-    void flatLandIsEasedAllRound() {
-        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> 80), SEA);
-        assertEquals(80, plan.plateY());
-        for (CityTerrain.Side side : CityTerrain.Side.values()) {
-            for (int s = 0; s < CityTerrain.SEGMENTS_PER_SIDE; s++) {
-                assertEquals(CityTerrain.Edge.EASED, plan.edge(side, s));
-            }
-        }
+    /** Plate at 80; land north of the box at {@code north}, everywhere else level with the plate. */
+    private static CityTerrain.Plan northAt(int north) {
+        return CityTerrain.plan(SITE, local((x, z) -> z < CityTerrain.BOX_MIN ? north : 80), SEA);
     }
 
     @Test
     void plateIsTheMedianOfTheWholeBox() {
-        // West half of the box at 70, east half at 100: median lands on one of them, not the mean.
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> x < 200 ? 70 : 100), SEA);
         assertEquals(100, plan.plateY());
     }
@@ -42,63 +36,87 @@ class CityTerrainTest {
     }
 
     @Test
-    void gentleHillOutsideIsEasedDeepValleyAndCliffAreNot() {
-        // Plate at 80. North: land 15 lower (a slope reaches it). South: 60 lower (valley). East: 60 higher (cliff).
-        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> {
-            if (z < CityTerrain.BOX_MIN) {
-                return 65;
+    void levelOrRisingLandIsCarvedNeverFilled() {
+        for (int north : new int[]{80, 95, 140}) {
+            CityTerrain.Plan plan = northAt(north);
+            assertEquals(CityTerrain.Edge.CARVE, plan.edge(CityTerrain.Side.NORTH, 6), "land at " + north);
+            for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
+                assertFalse(CityTerrain.column(plan, MID, CityTerrain.BOX_MIN - d).fill(), "fill on rising land, " + d + " out");
             }
-            if (z > CityTerrain.BOX_MAX) {
-                return 20;
-            }
-            if (x > CityTerrain.BOX_MAX) {
-                return 140;
-            }
-            return 80;
-        }), SEA);
-        assertEquals(80, plan.plateY());
-        assertEquals(CityTerrain.Edge.EASED, plan.edge(CityTerrain.Side.NORTH, 5));
-        assertEquals(CityTerrain.Edge.VALLEY, plan.edge(CityTerrain.Side.SOUTH, 5));
-        assertEquals(CityTerrain.Edge.CLIFF, plan.edge(CityTerrain.Side.EAST, 5));
-        assertEquals(CityTerrain.Edge.EASED, plan.edge(CityTerrain.Side.WEST, 5));
-    }
-
-    @Test
-    void slopeDropsOneBlockForEveryTwoOut() {
-        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> 80), SEA);
-        int along = 200;
-        for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
-            CityTerrain.Column c = CityTerrain.column(plan, along, CityTerrain.BOX_MIN - d);
-            assertEquals(CityTerrain.Kind.SLOPE, c.kind());
-            assertEquals(80 - (d + 1) / 2, c.low(), "fill height " + d + " out");
-            assertEquals(80 + (d + 1) / 2, c.high(), "cut height " + d + " out");
         }
-        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(plan, along, CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH - 1).kind());
     }
 
     @Test
-    void slopesFormAPyramidAtTheCorners() {
-        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> 80), SEA);
-        // Diagonal out from the north-west corner: height follows the larger of the two distances.
-        CityTerrain.Column c = CityTerrain.column(plan, CityTerrain.BOX_MIN - 10, CityTerrain.BOX_MIN - 4);
-        assertEquals(80 - 5, c.low());
+    void fallingLandIsFilledAtOneUpTwoOut() {
+        CityTerrain.Plan plan = northAt(65);
+        assertEquals(CityTerrain.Edge.FILL, plan.edge(CityTerrain.Side.NORTH, 6));
+        for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
+            CityTerrain.Column c = CityTerrain.column(plan, MID, CityTerrain.BOX_MIN - d);
+            assertTrue(c.fill());
+            assertEquals(80 - (d + 1) / 2, c.low(), "fill height " + d + " out");
+        }
     }
 
     @Test
-    void valleySideGetsABrickRimAndNoSlope() {
+    void gentleCarveIsOneUpTwoOut() {
+        CityTerrain.Plan plan = northAt(95); // 15 above the plate: 1:2 reaches it well within 44 blocks
+        for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
+            assertEquals(80 + (d + 1) / 2, CityTerrain.column(plan, MID, CityTerrain.BOX_MIN - d).high());
+        }
+    }
+
+    @Test
+    void steepLandIsCarvedSteeperSoTheCarveNeverEndsInAWall() {
+        CityTerrain.Plan plan = northAt(140); // 60 above the plate; 1:2 would only reach +22
+        assertEquals(60, plan.carveTo()[CityTerrain.Side.NORTH.ordinal()][6]);
+        CityTerrain.Column atReach = CityTerrain.column(plan, MID, CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH);
+        assertTrue(atReach.high() >= 140, "carve ends at " + atReach.high() + ", below the land at 140");
+        int previous = 80;
+        for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
+            int high = CityTerrain.column(plan, MID, CityTerrain.BOX_MIN - d).high();
+            assertTrue(high >= previous && high - previous <= 2, "carve jumps from " + previous + " to " + high + " at " + d);
+            previous = high;
+        }
+    }
+
+    @Test
+    void carveBlendsBetweenStretches() {
+        // A mountain rising only in front of the west half of the north edge.
+        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z < CityTerrain.BOX_MIN && x < 240 ? 150 : 80), SEA);
+        int z = CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH;
+        int previous = CityTerrain.column(plan, CityTerrain.BOX_MIN, z).high();
+        for (int x = CityTerrain.BOX_MIN + 1; x <= CityTerrain.BOX_MAX; x++) {
+            int high = CityTerrain.column(plan, x, z).high();
+            assertTrue(Math.abs(high - previous) <= 3, "carve steps from " + previous + " to " + high + " at x " + x);
+            previous = high;
+        }
+    }
+
+    @Test
+    void cornersTakeTheSteeperSide() {
+        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z < CityTerrain.BOX_MIN ? 140 : 80), SEA);
+        CityTerrain.Column corner = CityTerrain.column(plan, CityTerrain.BOX_MIN - 44, CityTerrain.BOX_MIN - 44);
+        assertTrue(corner.high() >= 140);
+    }
+
+    @Test
+    void valleyHasNoFillAndTheWallStandsOnTheCliff() {
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z > CityTerrain.BOX_MAX ? 10 : 80), SEA);
-        assertEquals(CityTerrain.Kind.RIM, CityTerrain.column(plan, 200, CityTerrain.BOX_MAX).kind());
-        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, 200, CityTerrain.BOX_MAX - 1).kind());
-        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(plan, 200, CityTerrain.BOX_MAX + 5).kind());
-        // The north edge faces flat land, so it gets no rim.
-        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, 200, CityTerrain.BOX_MIN).kind());
-    }
-
-    @Test
-    void cliffSideIsLeftAlone() {
-        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> x > CityTerrain.BOX_MAX ? 200 : 80), SEA);
-        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, CityTerrain.BOX_MAX, 200).kind());
-        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(plan, CityTerrain.BOX_MAX + 3, 200).kind());
+        assertEquals(CityTerrain.Edge.VALLEY, plan.edge(CityTerrain.Side.SOUTH, 6));
+        int far = CityLayout.SIZE - 1;
+        // Outside the wall: nothing built, only anything above the plate cleared.
+        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, far + 1).kind());
+        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, CityTerrain.BOX_MAX).kind());
+        // Under the wall: bare stone fill, so the cliff face below the wall is natural.
+        for (int z = far - CityLayout.ROAD_WIDTH + 1; z <= far; z++) {
+            assertEquals(CityTerrain.Kind.WALL_BASE, CityTerrain.column(plan, MID, z).kind());
+        }
+        // Just inside the wall: ordinary plate.
+        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, far - CityLayout.ROAD_WIDTH).kind());
+        // Beyond the box: no fill down into the valley.
+        assertFalse(CityTerrain.column(plan, MID, CityTerrain.BOX_MAX + 10).fill());
+        // A side facing level land keeps its ledge.
+        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, CityTerrain.BOX_MIN).kind());
     }
 
     @Test
@@ -125,8 +143,6 @@ class CityTerrainTest {
                 }
             }
         }
-        assertFalse(seen.isEmpty());
-        // The whole box plus slopes is covered.
         assertEquals(CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH, CityTerrain.ownedMin(0));
         assertEquals(CityTerrain.BOX_MAX + CityTerrain.SLOPE_REACH, CityTerrain.ownedMax(CityLayout.CELLS_PER_SIDE - 1));
     }

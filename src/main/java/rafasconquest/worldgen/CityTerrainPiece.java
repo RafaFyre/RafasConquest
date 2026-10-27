@@ -19,12 +19,13 @@ import rafasconquest.core.CityTerrain;
 
 /**
  * Reshapes the land under one cell of a city, following its {@link CityTerrain.Plan}: flattens the cell's share of
- * the box to the plate, eases the surroundings with slopes, and caps sheer valley edges with wall brick. It is the
- * first piece of every cell, so the city is built on the finished ground. Each cell only touches the columns it owns,
- * so neighbouring cells never work on the same column.
+ * the box to the plate, carves rising land back and fills falling land in, and leaves valley edges as natural cliffs
+ * under the wall. It is the first piece of every cell, so the city is built on the finished ground. Each cell only
+ * touches the columns it owns, so neighbouring cells never work on the same column.
  * <p>
  * It runs during world generation, on the chunk being generated, so nothing here causes block updates, physics or
- * lighting work.
+ * lighting work. Its bounding box starts a little below the plate: it also bounds where the city keeps hostile mobs
+ * from spawning, and caves deep under the city should keep their mobs.
  */
 public class CityTerrainPiece extends StructurePiece {
     private static final int SUBSOIL_DEPTH = 3;
@@ -50,12 +51,18 @@ public class CityTerrainPiece extends StructurePiece {
         this.originX = tag.getInt("originX");
         this.originZ = tag.getInt("originZ");
         this.variant = CityVariant.valueOf(tag.getString("variant"));
+        int sides = CityTerrain.Side.values().length;
+        int segments = CityTerrain.SEGMENTS_PER_SIDE;
         String encoded = tag.getString("edges");
-        CityTerrain.Edge[][] edges = new CityTerrain.Edge[CityTerrain.Side.values().length][CityTerrain.SEGMENTS_PER_SIDE];
-        for (int i = 0; i < encoded.length(); i++) {
-            edges[i / CityTerrain.SEGMENTS_PER_SIDE][i % CityTerrain.SEGMENTS_PER_SIDE] = CityTerrain.Edge.values()[encoded.charAt(i) - '0'];
+        int[] carve = tag.getIntArray("carveTo");
+        CityTerrain.Edge[][] edges = new CityTerrain.Edge[sides][segments];
+        int[][] carveTo = new int[sides][segments];
+        for (int i = 0; i < sides * segments; i++) {
+            edges[i / segments][i % segments] = i < encoded.length()
+                    ? CityTerrain.Edge.values()[encoded.charAt(i) - '0'] : CityTerrain.Edge.CARVE;
+            carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
-        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges);
+        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo);
     }
 
     @Override
@@ -65,12 +72,16 @@ public class CityTerrainPiece extends StructurePiece {
         tag.putString("variant", variant.name());
         tag.putInt("plateY", plan.plateY());
         StringBuilder edges = new StringBuilder();
-        for (CityTerrain.Edge[] side : plan.edges()) {
-            for (CityTerrain.Edge e : side) {
-                edges.append((char) ('0' + e.ordinal()));
+        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.SEGMENTS_PER_SIDE];
+        int i = 0;
+        for (int side = 0; side < plan.edges().length; side++) {
+            for (int seg = 0; seg < plan.edges()[side].length; seg++) {
+                edges.append((char) ('0' + plan.edges()[side][seg].ordinal()));
+                carve[i++] = plan.carveTo()[side][seg];
             }
         }
         tag.putString("edges", edges.toString());
+        tag.putIntArray("carveTo", carve);
     }
 
     @Override
@@ -82,8 +93,9 @@ public class CityTerrainPiece extends StructurePiece {
                 CityTerrain.Column column = CityTerrain.column(plan, x - originX, z - originZ);
                 switch (column.kind()) {
                     case PLATE -> flatten(level, pos, x, z, false);
-                    case RIM -> flatten(level, pos, x, z, true);
-                    case SLOPE -> slope(level, pos, x, z, column.low(), column.high());
+                    case WALL_BASE -> flatten(level, pos, x, z, true);
+                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, plan.plateY());
+                    case SLOPE -> slope(level, pos, x, z, column);
                     case NONE -> {
                     }
                 }
@@ -91,22 +103,22 @@ public class CityTerrainPiece extends StructurePiece {
         }
     }
 
-    /** Clears everything above the plate and fills everything below it, so the column ends exactly at the plate. */
-    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, boolean rim) {
+    /**
+     * Clears everything above the plate and fills everything below it, so the column ends exactly at the plate.
+     * Under the wall on a valley edge ({@code bare}), the fill is plain stone so the cliff face below the wall looks
+     * natural.
+     */
+    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, boolean bare) {
         int plate = plan.plateY();
-        int top = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 1;
-        for (int y = top; y > plate; y--) {
-            level.setBlock(pos.set(x, y, z), Blocks.AIR.defaultBlockState(), 2);
-        }
-        level.setBlock(pos.set(x, plate, z), rim ? variant.wallBrick() : variant.ground(), 2);
+        clearAbove(level, pos, x, z, plate);
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        level.setBlock(pos.set(x, plate, z), bare ? stone : variant.ground(), 2);
         for (int y = plate - 1; y > level.getMinBuildHeight(); y--) {
             BlockState existing = level.getBlockState(pos.set(x, y, z));
             boolean hole = existing.isAir() || !existing.getFluidState().isEmpty() || existing.canBeReplaced();
-            boolean underSurface = y >= plate - SUBSOIL_DEPTH;
-            if (rim && y >= plate - CityTerrain.RIM_DEPTH + 1) {
-                level.setBlock(pos, variant.wallBrick(), 2);
-            } else if (hole) {
-                level.setBlock(pos, underSurface ? variant.subsoil() : Blocks.STONE.defaultBlockState(), 2);
+            boolean underSurface = !bare && y >= plate - SUBSOIL_DEPTH;
+            if (hole) {
+                level.setBlock(pos, underSurface ? variant.subsoil() : stone, 2);
             } else if (underSurface && existing.is(Blocks.STONE)) {
                 level.setBlock(pos, variant.subsoil(), 2); // cut through rock: give the plate a proper soil layer
             } else if (!underSurface) {
@@ -115,11 +127,19 @@ public class CityTerrainPiece extends StructurePiece {
         }
     }
 
+    private static void clearAbove(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int floor) {
+        int top = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 1;
+        for (int y = top; y > floor; y--) {
+            level.setBlock(pos.set(x, y, z), Blocks.AIR.defaultBlockState(), 2);
+        }
+    }
+
     /**
-     * Eases a column outside the box toward the slope: fills it up to {@code low} with stone if the land is lower,
-     * or cuts it down to {@code high} if higher. The new top takes the column's original surface block.
+     * A column outside the box: carves land above the carve height down to it (never adding blocks), or, where the
+     * land falls away and this stretch is filled, fills up to the fill height with stone. The new top takes the
+     * column's original surface block.
      */
-    private void slope(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int low, int high) {
+    private void slope(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, CityTerrain.Column column) {
         int top = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 1;
         BlockState original = level.getBlockState(pos.set(x, top, z));
         int solid = top;
@@ -127,16 +147,16 @@ public class CityTerrainPiece extends StructurePiece {
             solid--;
         }
         BlockState surface = surfaceFrom(level.getBlockState(pos.set(x, solid, z)));
-        if (solid < low) {
-            for (int y = solid + 1; y < low; y++) {
+        if (column.fill() && solid < column.low()) {
+            for (int y = solid + 1; y < column.low(); y++) {
                 level.setBlock(pos.set(x, y, z), Blocks.STONE.defaultBlockState(), 2);
             }
-            level.setBlock(pos.set(x, low, z), surface, 2);
-        } else if (top > high && original.getFluidState().isEmpty()) {
-            for (int y = top; y > high; y--) {
+            level.setBlock(pos.set(x, column.low(), z), surface, 2);
+        } else if (top > column.high() && original.getFluidState().isEmpty()) {
+            for (int y = top; y > column.high(); y--) {
                 level.setBlock(pos.set(x, y, z), Blocks.AIR.defaultBlockState(), 2);
             }
-            level.setBlock(pos.set(x, high, z), surface, 2);
+            level.setBlock(pos.set(x, column.high(), z), surface, 2);
         }
     }
 

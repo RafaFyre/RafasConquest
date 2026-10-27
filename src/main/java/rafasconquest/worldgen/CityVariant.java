@@ -31,6 +31,7 @@ public enum CityVariant {
     private final TagKey<Biome> biomes;
     private final ResourceKey<StructureTemplatePool> townCenters;
     private final ResourceKey<StructureTemplatePool> houses;
+    private final ResourceKey<StructureTemplatePool> decor;
     private final ResourceKey<StructureTemplatePool> wall;
     private final ResourceKey<StructureTemplatePool> gate;
     private final BlockState road;
@@ -42,6 +43,7 @@ public enum CityVariant {
         this.biomes = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "city/" + name));
         this.townCenters = vanillaPool(name, "town_centers");
         this.houses = vanillaPool(name, "houses");
+        this.decor = vanillaPool(name, "decor");
         this.wall = modPool("city/wall/" + name);
         this.gate = modPool("city/gate/" + name);
         this.road = road;
@@ -58,12 +60,6 @@ public enum CityVariant {
     public BlockState subsoil() {
         return this == DESERT ? Blocks.SANDSTONE.defaultBlockState() : Blocks.DIRT.defaultBlockState();
     }
-
-    /** The wall's brick, as its processor list makes it; used to cap sheer edges over valleys. */
-    public BlockState wallBrick() {
-        return this == DESERT ? Blocks.CUT_SANDSTONE.defaultBlockState() : Blocks.STONE_BRICKS.defaultBlockState();
-    }
-
     public String id() {
         return name;
     }
@@ -74,6 +70,11 @@ public enum CityVariant {
 
     public ResourceKey<StructureTemplatePool> houses() {
         return houses;
+    }
+
+    /** minecraft:village/&lt;variant&gt;/decor: the street decorations, including this style's lamp posts. */
+    public ResourceKey<StructureTemplatePool> decor() {
+        return decor;
     }
 
     /** rafasconquest:city/wall/&lt;variant&gt;: the plain wall segment, with this style's materials. */

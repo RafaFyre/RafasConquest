@@ -62,13 +62,26 @@ like any city, and falls back to plains where no style matches, so every Empire 
   - The **box** is the city square plus 3 blocks past the wall. The **plate** is the median ground height over the box,
     never below sea level. Inside the box everything above the plate is cleared and everything below is filled (valleys,
     rivers and lakes included), with grass or sand on top and dirt or sandstone beneath.
-  - Each 32-block stretch of the box edge is eased into the land around it with a 1-up-2-out slope: filled with stone
-    (topped with the biome's own surface block) where the land is lower, cut back into a bowl where it is higher.
-  - A slope is only used if it meets the ground within 44 blocks, the furthest a cell's structure start can reach.
-    Otherwise that stretch faces a valley or cliff and gets no slope. Over a valley the plate ends in a sheer face whose
-    top 2 blocks are wall brick. A cliff is left natural.
+  - Outside the box, out to 44 blocks (the furthest a cell's structure start can reach), each 32-block stretch of the
+    edge is one of:
+    - **Carve** (land level or rising): land above a slope rising from the plate is removed. The slope is 1 up per 2
+      out, steepened where needed so it meets the land at the end of its reach, so the carve never ends in a wall. How
+      steep blends smoothly along the edge; corners follow the steeper side. The carve only removes blocks; dips on a
+      rising stretch are left natural rather than built up.
+    - **Fill** (land falling away within reach): a 1-up-2-out slope of stone, topped with the biome's own surface
+      block, eases the plate down into the lower land. Bumps above the slope are carved.
+    - **Valley** (land falling away beyond reach): no fill and no ledge. The wall stands on the edge, plain stone runs
+      under it down to the natural ground, and the cliff below is left as it is.
   - The plan is computed once per city from the original terrain (about 2 s, on a worldgen thread) and logged.
-    `/pve debug cityterrain` prints the plan of the nearest city: one letter per edge stretch, E eased, V valley, C cliff.
+    `/pve debug cityterrain` prints the plan of the nearest city: one letter per edge stretch (C carve, F fill,
+    V valley) and how far above the plate each stretch's carve reaches. `/pve debug column x z` prints the ground
+    height at a column.
+- **Lighting:** lamp posts from the style's vanilla village decor stand in every city block's alleys: where each alley
+  meets the road (lighting the streets about every 15 blocks) and where the alleys cross, about 1,100–1,300 per city.
+  A style's own lamp is used where it fits without touching a building, otherwise the 1-wide taiga lamp post.
+- **No hostile spawns:** the city structures' `spawn_overrides` give hostile mobs an empty spawn list inside every city
+  piece: the whole city and its slopes, from 16 blocks below the plate upward. Caves deeper under the city keep their
+  mobs.
   - Roads, houses, the town centre and the walls all sit on the plate; the walls are rigid rather than terrain-following.
 - **Cells:** the square is cut into 3 × 3 cells of 5 × 5 blocks. Each cell is its own structure start (`rafasconquest:city`
   in the middle, `rafasconquest:city_district` around it), because Minecraft only places pieces within about 128 blocks
