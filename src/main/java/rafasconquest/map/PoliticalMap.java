@@ -11,11 +11,11 @@ import java.util.UUID;
 
 /**
  * The political map, worked out from the base map and the factions: who holds each province (whoever holds its centre:
- * the City-state round it, else the Empire that would own a Farm there), each realm's colour, the two image layers,
- * and where each realm's name goes. Indexes follow {@code factions}. The game's map screen and the test previews both
- * draw from this.
+ * the City-state round it, else the strongest Empire covering it; a province's Farms belong to the same), each realm's
+ * colour, the two image layers, and where each realm's name goes. Indexes follow {@code factions}. The game's map
+ * screen and the test previews both draw from this.
  */
-public record PoliticalMap(int[] parchment, int[] territory, int[] realmColors, PoliticalStyle.LabelShape[] labels) {
+public record PoliticalMap(int[] provinceHolders, int[] parchment, int[] territory, int[] realmColors, PoliticalStyle.LabelShape[] labels) {
     public static PoliticalMap build(BaseMap base, List<FactionInfo> factions) {
         List<TerritoryMap.Claim> claims = factions.stream().map(FactionInfo::claim).toList();
         List<OwnershipResolver.Candidate> empires = TerritoryMap.empires(claims);
@@ -35,7 +35,7 @@ public record PoliticalMap(int[] parchment, int[] territory, int[] realmColors, 
             ids[i] = id.getMostSignificantBits() ^ id.getLeastSignificantBits();
         }
         int[] colors = PoliticalStyle.realmColors(bannerRgb, ids, PoliticalStyle.neighbours(holders, base.width(), base.height()));
-        return new PoliticalMap(PoliticalStyle.parchment(base), PoliticalStyle.territory(base, holders, colors), colors,
+        return new PoliticalMap(provinceHolder, PoliticalStyle.parchment(base), PoliticalStyle.territory(base, holders, colors), colors,
                 PoliticalStyle.labelShapes(base, holders, factions.size()));
     }
 }

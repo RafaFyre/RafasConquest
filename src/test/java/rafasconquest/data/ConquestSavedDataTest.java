@@ -85,6 +85,20 @@ class ConquestSavedDataTest {
     }
 
     @Test
+    void changingAFarmsOwnerMovesItsCount() {
+        ConquestSavedData data = sample();
+        UUID valdoria = new UUID(1, 2);
+        UUID korthmark = new UUID(3, 4);
+        Poi farm = data.poiInChunk(new ChunkPos(new BlockPos(2007, 66, 391)), PoiType.FARM);
+        data.setPoiOwner(farm, korthmark);
+        assertEquals(korthmark, farm.owner());
+        assertEquals(1, data.poiCount(valdoria));
+        assertEquals(1, data.poiCount(korthmark));
+        data.setPoiOwner(farm, null);
+        assertEquals(0, data.poiCount(korthmark));
+    }
+
+    @Test
     void saveWritesCurrentRealTime() {
         ConquestSavedData data = sample();
         data.setClock(() -> 123_456_789L);

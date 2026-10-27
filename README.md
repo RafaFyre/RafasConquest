@@ -100,7 +100,13 @@ Each layer adds its own rows to the legend.
 - the City-state, within 400 blocks of its city;
 - otherwise the Empire that would own a Farm there (`core/TerritoryMap`, using `OwnershipResolver`).
 
-Province ownership is map-only for now: Farms still go by the original rule.
+**Farms belong to their province's holder** (`PoiPrecomputer.farmOwner`), so the map and the economy always agree, and
+a City-state can hold Farms in its provinces:
+- **Before the map is ready** (the first ~20 s of a new world), and for Farms off the map's edge, the Farm's own
+  position stands in for its province's centre.
+- **Once the map is ready**, every Farm is re-judged by its province. On seed 12345, 14 of 317 Farms changed hands,
+  and none change after that.
+- `gradlew mapPreview` reports any Farm whose owner disagrees with the map (0 on seed 12345).
 
 **Colours:** a realm's colour starts from its banner's main colour, softened to a map tone and varied a little per
 faction. Where two neighbouring realms would look alike, one takes a lighter, darker or hue-shifted shade instead

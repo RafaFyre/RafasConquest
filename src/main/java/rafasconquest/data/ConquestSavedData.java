@@ -104,6 +104,20 @@ public class ConquestSavedData extends SavedData {
         }
     }
 
+    /** Gives a POI a new owner, keeping the per-owner counts right. */
+    public void setPoiOwner(Poi poi, @Nullable UUID owner) {
+        if (java.util.Objects.equals(poi.owner(), owner)) {
+            return;
+        }
+        if (poi.owner() != null) {
+            poiCountByOwner.merge(poi.owner(), -1, Integer::sum);
+        }
+        poi.setOwner(owner);
+        if (owner != null) {
+            poiCountByOwner.merge(owner, 1, Integer::sum);
+        }
+    }
+
     public int poiCount(UUID owner) {
         return poiCountByOwner.getOrDefault(owner, 0);
     }

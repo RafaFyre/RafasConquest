@@ -1,5 +1,6 @@
 package rafasconquest.map;
 
+import org.jetbrains.annotations.Nullable;
 import rafasconquest.core.ProvinceMap;
 
 import java.io.ByteArrayInputStream;
@@ -25,6 +26,18 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
 
     public boolean isWater(int index) {
         return provinces[index] == ProvinceMap.WATER;
+    }
+
+    /** The centre of the province at world (x, z), or null if that is off the map, at sea or in no province. */
+    @Nullable
+    public ProvinceMap.Centre provinceAt(int x, int z) {
+        int px = Math.floorDiv(x - minX, blocksPerPixel);
+        int pz = Math.floorDiv(z - minZ, blocksPerPixel);
+        if (px < 0 || pz < 0 || px >= width || pz >= height) {
+            return null;
+        }
+        int province = provinces[pz * width + px];
+        return province >= 0 ? centres.get(province) : null;
     }
 
     /** Compressed form, used both for the save file and for sending to clients. */

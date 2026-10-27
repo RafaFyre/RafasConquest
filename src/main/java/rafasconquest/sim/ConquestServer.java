@@ -56,7 +56,7 @@ public final class ConquestServer {
         this.data = data;
         this.recruits = new RecruitsFactions(overworld);
         this.precomputer = new PoiPrecomputer(overworld, data, recruits);
-        this.mapStore = new BaseMapStore(overworld, data.settings(), ConquestNetwork::sendBaseMap);
+        this.mapStore = new BaseMapStore(overworld, data.settings(), ConquestNetwork::sendBaseMap, precomputer::useProvinces);
     }
 
     public BaseMapStore mapStore() {

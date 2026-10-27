@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * The world's base map, drawn once and kept in {@code data/rafasconquest_basemap.bin} in the world folder (it depends
@@ -34,18 +35,26 @@ public class BaseMapStore {
     private final int visibleRadius;
     private final Path file;
     private final BiConsumer<ServerPlayer, byte[]> sender;
+    private final Consumer<BaseMap> onReady;
     private final List<UUID> waiting = new ArrayList<>();
     @Nullable
     private volatile byte[] encoded;
     @Nullable
-    private CompletableFuture<byte[]> drawing;
+    private CompletableFuture<Ready> drawing;
 
-    /** {@code sender} delivers the encoded map ({@link BaseMap#encode}) to a player. */
-    public BaseMapStore(ServerLevel level, WorldSettings settings, BiConsumer<ServerPlayer, byte[]> sender) {
+    private record Ready(BaseMap map, byte[] encoded) {
+    }
+
+    /**
+     * {@code sender} delivers the encoded map ({@link BaseMap#encode}) to a player; {@code onReady} gets the map once
+     * it is loaded or drawn, on the server thread.
+     */
+    public BaseMapStore(ServerLevel level, WorldSettings settings, BiConsumer<ServerPlayer, byte[]> sender, Consumer<BaseMap> onReady) {
         this.level = level;
         this.settings = settings;
         this.visibleRadius = KNOWN_WORLD_FACTOR * settings.warZoneOuterEdge();
         this.sender = sender;
+        this.onReady = onReady;
         this.file = level.getServer().getWorldPath(LevelResource.ROOT).resolve("data").resolve(FILE);
     }
 
@@ -56,13 +65,15 @@ public class BaseMapStore {
         }
         MinecraftServer server = level.getServer();
         drawing = CompletableFuture.supplyAsync(this::loadOrDraw, Util.backgroundExecutor());
-        drawing.whenComplete((bytes, error) -> server.execute(() -> {
+        drawing.whenComplete((ready, error) -> server.execute(() -> {
             if (error != null) {
                 RafasConquest.LOGGER.error("Could not draw the world map", error);
                 drawing = null;
                 return;
             }
+            byte[] bytes = ready.encoded();
             encoded = bytes;
+            onReady.accept(ready.map());
             for (UUID id : waiting) {
                 ServerPlayer player = server.getPlayerList().getPlayer(id);
                 if (player != null) {
@@ -86,12 +97,13 @@ public class BaseMapStore {
         start();
     }
 
-    private byte[] loadOrDraw() {
+    private Ready loadOrDraw() {
         try {
             if (Files.exists(file)) {
                 byte[] saved = Files.readAllBytes(file);
-                if (BaseMap.decode(saved).visibleRadius() == visibleRadius) {
-                    return saved;
+                BaseMap map = BaseMap.decode(saved);
+                if (map.visibleRadius() == visibleRadius) {
+                    return new Ready(map, saved);
                 }
             }
         } catch (IOException e) {
@@ -109,6 +121,6 @@ public class BaseMapStore {
         } catch (IOException e) {
             RafasConquest.LOGGER.warn("Could not save the world map: {}", e.getMessage());
         }
-        return bytes;
+        return new Ready(map, bytes);
     }
 }

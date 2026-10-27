@@ -35,7 +35,7 @@ public class Poi {
         return owner;
     }
 
-    /** Only battles change ownership; nothing calls this in Milestone 1. */
+    /** Use {@code ConquestSavedData.setPoiOwner}, which keeps the per-owner counts right. */
     public void setOwner(@Nullable UUID owner) {
         this.owner = owner;
     }

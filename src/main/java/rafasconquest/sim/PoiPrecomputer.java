@@ -14,12 +14,14 @@ import rafasconquest.core.CapitalLayout;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.FarmLayout;
 import rafasconquest.core.OriginRoller;
-import rafasconquest.core.OwnershipResolver;
+import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.SeedHash;
+import rafasconquest.core.TerritoryMap;
 import rafasconquest.core.WorldSettings;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionType;
+import rafasconquest.map.BaseMap;
 import rafasconquest.poi.Poi;
 import rafasconquest.poi.PoiType;
 import rafasconquest.worldgen.ConquestWorldgen;
@@ -28,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -51,6 +54,9 @@ public class PoiPrecomputer {
     /** Sites whose structure can't generate (biome check failed). Deterministic, so safe to cache. */
     private final Set<Long> rejectedCapitalSites = new HashSet<>();
     private final Set<Long> rejectedCitySites = new HashSet<>();
+    /** The world map's provinces, once drawn; Farms belong to whoever holds their province. */
+    @Nullable
+    private BaseMap provinces;
 
     public PoiPrecomputer(ServerLevel level, ConquestSavedData data, RecruitsBridge bridge) {
         this.level = level;
@@ -117,25 +123,71 @@ public class PoiPrecomputer {
                     continue;
                 }
                 findValid(farm, chunk).ifPresent(pos ->
-                        data.addPoi(new Poi(pos, PoiType.FARM, resolveOwner(pos.getX(), pos.getZ()), settings.farmDailyOutput(), false)));
+                        data.addPoi(new Poi(pos, PoiType.FARM, farmOwner(pos), settings.farmDailyOutput(), false)));
             }
         }
         data.markRegionPrecomputed(regionX, regionZ);
     }
 
-    /** Ownership is decided once, here, and never reassigned in Milestone 1. */
+    /**
+     * Turns on province ownership: every Farm on the map goes to whoever holds its province, and Farms found later
+     * follow the provinces too. Called once the world map is ready.
+     */
+    public void useProvinces(BaseMap map) {
+        provinces = map;
+        int changed = 0;
+        for (Poi poi : data.pois()) {
+            if (poi.type() == PoiType.FARM) {
+                UUID owner = farmOwner(poi.pos());
+                if (!Objects.equals(owner, poi.owner())) {
+                    data.setPoiOwner(poi, owner);
+                    changed++;
+                }
+            }
+        }
+        RafasConquest.LOGGER.info("Farms now belong to whoever holds their province ({} changed hands)", changed);
+    }
+
+    /**
+     * A Farm belongs to whoever holds its province: whoever holds the province's centre. Before the world map is
+     * ready, and off its edge, the Farm's own position stands in for the centre.
+     */
     @Nullable
-    private UUID resolveOwner(int x, int z) {
+    private UUID farmOwner(BlockPos pos) {
+        ProvinceMap.Centre centre = provinces == null ? null : provinces.provinceAt(pos.getX(), pos.getZ());
+        return centre != null ? holderAt(centre.x(), centre.z()) : holderAt(pos.getX(), pos.getZ());
+    }
+
+    /**
+     * Who holds (x, z), by the rule the world map draws: the City-state within {@link TerritoryMap#CITY_STATE_RADIUS}
+     * of its city, else the strongest Empire whose radius covers it (then the nearest Capital, then the seeded
+     * tie-break). Creates any faction in range on first sight. Null if no one holds it.
+     */
+    @Nullable
+    UUID holderAt(int x, int z) {
+        List<TerritoryMap.Claim> claims = new ArrayList<>();
+        int r = TerritoryMap.CITY_STATE_RADIUS;
+        for (CityLayout.Site site : CityLayout.sitesInBox(seed, settings, x - r, z - r, x + r, z + r)) {
+            Faction f = ensureCity(site);
+            if (f != null && f.type() == FactionType.CITY_STATE) {
+                claims.add(claim(f));
+            }
+        }
         int range = WorldSettings.CAPITAL_LOOKUP_RANGE;
-        List<OwnershipResolver.Candidate> candidates = new ArrayList<>();
         for (CapitalLayout.Site site : CapitalLayout.sitesInBox(seed, settings, x - range, z - range, x + range, z + range)) {
             Faction f = ensureCapital(site);
             if (f != null && f.type() == FactionType.EMPIRE) {
-                candidates.add(new OwnershipResolver.Candidate(f.id(), f.origin().getX(), f.origin().getZ(), f.radiusSteps(),
-                        f.strength(), SeedHash.hash(seed, SeedHash.SALT_TIE, f.origin().getX(), f.origin().getZ())));
+                claims.add(claim(f));
             }
         }
-        return OwnershipResolver.resolve(x, z, candidates).orElse(null);
+        return TerritoryMap.holder(x, z, claims, TerritoryMap.empires(claims)).orElse(null);
+    }
+
+    private TerritoryMap.Claim claim(Faction f) {
+        int ox = f.origin().getX();
+        int oz = f.origin().getZ();
+        return new TerritoryMap.Claim(f.id(), ox, oz, f.type() == FactionType.CITY_STATE, f.radiusSteps(), f.strength(),
+                SeedHash.hash(seed, SeedHash.SALT_TIE, ox, oz));
     }
 
     /**

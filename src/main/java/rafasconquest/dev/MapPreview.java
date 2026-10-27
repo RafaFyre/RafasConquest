@@ -120,6 +120,35 @@ public final class MapPreview {
         }
         g.dispose();
         ImageIO.write(image, "png", out.toFile());
+
+        // Every Farm on the map should belong to whoever holds its province.
+        int farms = 0;
+        int mismatched = 0;
+        java.util.Map<java.util.UUID, Integer> byFaction = new java.util.HashMap<>();
+        for (var poi : data.pois()) {
+            if (poi.type() != PoiType.FARM) {
+                continue;
+            }
+            var centre = base.provinceAt(poi.pos().getX(), poi.pos().getZ());
+            if (centre == null) {
+                continue;
+            }
+            farms++;
+            int holder = political.provinceHolders()[base.centres().indexOf(centre)];
+            java.util.UUID expected = holder < 0 ? null : factions.get(holder).id();
+            if (!java.util.Objects.equals(expected, poi.owner())) {
+                mismatched++;
+            }
+            if (poi.owner() != null) {
+                byFaction.merge(poi.owner(), 1, Integer::sum);
+            }
+        }
+        System.out.println("Farms on the map: " + farms + ", owned by someone other than their province's holder: " + mismatched);
+        for (FactionInfo f : factions) {
+            if (f.type() == FactionType.CITY_STATE && byFaction.containsKey(f.id())) {
+                System.out.println("  City-state " + f.name() + " holds " + byFaction.get(f.id()) + " farms");
+            }
+        }
         System.out.println("Wrote " + out.toAbsolutePath() + ": " + w + " x " + h + ", " + base.centres().size() + " provinces, "
                 + factions.size() + " factions");
     }
