@@ -1,6 +1,7 @@
 package rafasconquest.bridge;
 
 import com.talhanation.recruits.FactionEvents;
+import com.talhanation.recruits.config.RecruitsServerConfig;
 import com.talhanation.recruits.entities.AbstractRecruitEntity;
 import com.talhanation.recruits.entities.BowmanEntity;
 import com.talhanation.recruits.init.ModEntityTypes;
@@ -91,6 +92,7 @@ public class RecruitsFactions implements RecruitsBridge {
         }
         team.setDisplayName(Component.literal(faction.name()));
         team.setColor(color);
+        applyTeamRules(team);
         manager.addTeam(id, faction.name(), faction.id(), typeName(faction.type()),
                 FactionBannerNbt.item(overworld.registryAccess(), banner).serializeNBT(), (byte) banner.base(), color);
         return true;
@@ -112,6 +114,17 @@ public class RecruitsFactions implements RecruitsBridge {
                 return null;
             }
         }
+    }
+
+    /**
+     * The team rules Recruits gives its own factions: no friendly fire (unless the server's Recruits config turns it
+     * on), so members' arrows pass through each other. A new scoreboard team allows friendly fire, and Recruits only
+     * resets it for every team when the server starts, so a team made mid-game needs it set here.
+     */
+    private static void applyTeamRules(PlayerTeam team) {
+        boolean global = RecruitsServerConfig.GlobalTeamSetting.get();
+        team.setAllowFriendlyFire(global && RecruitsServerConfig.GlobalTeamFriendlyFireSetting.get());
+        team.setSeeFriendlyInvisibles(global && RecruitsServerConfig.GlobalTeamSeeFriendlyInvisibleSetting.get());
     }
 
     private static String typeName(FactionType type) {
@@ -141,6 +154,7 @@ public class RecruitsFactions implements RecruitsBridge {
         if (team == null || bowman == null) {
             return false;
         }
+        applyTeamRules(team); // also covers teams registered before these rules were set
         Vec3 post = Vec3.atBottomCenterOf(feet);
         bowman.moveTo(post.x, post.y, post.z, yaw, 0);
         bowman.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
