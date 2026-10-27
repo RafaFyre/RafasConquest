@@ -11,6 +11,9 @@ import com.talhanation.recruits.init.ModEntityTypes;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -40,6 +43,11 @@ public final class DistantArmyRenderer {
     private static final int GOLD = 0xF9D84A;
     private static final int POLE = 0x6B4A2B;
     private static final int HOOVES = 0x3B2A1C;
+    /**
+     * Figures face the camera like the side of a block, so they are shaded like one (as Distant Horizons shades its
+     * box figures' sides), on top of the light where they stand.
+     */
+    private static final float SIDE_SHADE = 0.8F;
     /**
      * The client is sent the soldiers within this many chunks less than its render distance (the server's entity
      * tracking range), and Recruits sends none further than 10 chunks. A formation nearer than that, less a margin,
@@ -91,7 +99,7 @@ public final class DistantArmyRenderer {
         float rightZ = (float) (-left.z() / length);
 
         BufferBuilder buffer = Tesselator.getInstance().getBuilder();
-        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         boolean farInDistantHorizons = DistantHorizonsLink.drawsFarSoldiers();
         FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
@@ -110,7 +118,8 @@ public final class DistantArmyRenderer {
                     continue; // drawn in Distant Horizons' terrain instead
                 }
                 double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
-                figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale);
+                figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale,
+                        lightAt(mc, sprite));
                 draw(figure, formation, sprite.leader());
                 drawn++;
             }
@@ -119,11 +128,25 @@ public final class DistantArmyRenderer {
             buffer.end().release();
             return;
         }
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.setShader(GameRenderer::getPositionColorLightmapShader);
         RenderSystem.enableDepthTest();
         RenderSystem.disableCull();
+        mc.gameRenderer.lightTexture().turnOnLightLayer();
         BufferUploader.drawWithShader(buffer.end());
+        mc.gameRenderer.lightTexture().turnOffLightLayer();
         RenderSystem.enableCull();
+    }
+
+    /**
+     * The light a figure stands in, as the game lights a mob there: the sky and block light at its head height. Out
+     * past the chunks the client has, it is open sky.
+     */
+    private static int lightAt(Minecraft mc, Sprite sprite) {
+        BlockPos head = BlockPos.containing(sprite.x(), sprite.y() + 1, sprite.z());
+        if (mc.level == null || !mc.level.hasChunkAt(head)) {
+            return LightTexture.FULL_SKY;
+        }
+        return LevelRenderer.getLightColor(mc.level, head);
     }
 
     /**
@@ -206,6 +229,7 @@ public final class DistantArmyRenderer {
         private float y;
         private float z;
         private float scale;
+        private int light;
 
         Figure(BufferBuilder buffer, Matrix4f matrix, float rightX, float rightZ) {
             this.buffer = buffer;
@@ -215,26 +239,27 @@ public final class DistantArmyRenderer {
         }
 
         /** The next figure stands at ({@code x}, {@code y}, {@code z}) from the camera, drawn {@code scale} times its size. */
-        void at(float x, float y, float z, float scale) {
+        void at(float x, float y, float z, float scale, int light) {
             this.x = x;
             this.y = y;
             this.z = z;
             this.scale = scale;
+            this.light = light;
         }
 
         /** A rectangle centred {@code right} blocks to the figure's right, from {@code bottom} up {@code height}. */
         void rect(float right, float bottom, float width, float height, int rgb) {
-            float r = (rgb >> 16 & 255) / 255F;
-            float g = (rgb >> 8 & 255) / 255F;
-            float b = (rgb & 255) / 255F;
+            float r = (rgb >> 16 & 255) / 255F * SIDE_SHADE;
+            float g = (rgb >> 8 & 255) / 255F * SIDE_SHADE;
+            float b = (rgb & 255) / 255F * SIDE_SHADE;
             float l = (right - width / 2) * scale;
             float h = (right + width / 2) * scale;
             float lo = y + bottom * scale;
             float hi = y + (bottom + height) * scale;
-            buffer.vertex(matrix, x + rightX * l, lo, z + rightZ * l).color(r, g, b, 1F).endVertex();
-            buffer.vertex(matrix, x + rightX * h, lo, z + rightZ * h).color(r, g, b, 1F).endVertex();
-            buffer.vertex(matrix, x + rightX * h, hi, z + rightZ * h).color(r, g, b, 1F).endVertex();
-            buffer.vertex(matrix, x + rightX * l, hi, z + rightZ * l).color(r, g, b, 1F).endVertex();
+            buffer.vertex(matrix, x + rightX * l, lo, z + rightZ * l).color(r, g, b, 1F).uv2(light).endVertex();
+            buffer.vertex(matrix, x + rightX * h, lo, z + rightZ * h).color(r, g, b, 1F).uv2(light).endVertex();
+            buffer.vertex(matrix, x + rightX * h, hi, z + rightZ * h).color(r, g, b, 1F).uv2(light).endVertex();
+            buffer.vertex(matrix, x + rightX * l, hi, z + rightZ * l).color(r, g, b, 1F).uv2(light).endVertex();
         }
     }
 }
