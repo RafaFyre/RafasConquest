@@ -102,6 +102,8 @@ public final class RecruitsBattle {
      * entity too.
      */
     public static final int MAX_LIVE_SOLDIERS = 600;
+    /** The cap in force (changeable for testing, e.g. how many real soldiers a faster server can carry). */
+    private static int liveCap = MAX_LIVE_SOLDIERS;
     /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */
     private static final int SPAWNS_PER_SECOND = 8;
     /** A charged soldier this close to its target is taken to be striking it (for calibration). */
@@ -272,6 +274,12 @@ public final class RecruitsBattle {
                 Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
         return line;
+    }
+
+    /** Sets how many soldiers may be real at once (riders counting two), for testing. */
+    public static String setLiveCap(int cap) {
+        liveCap = cap;
+        return "At most " + cap + " real battle soldiers at once";
     }
 
     /** Treats a spot like a player standing there (for testing the live area), or with null clears all such spots. */
@@ -450,7 +458,7 @@ public final class RecruitsBattle {
         int soldiers = 0;
         for (Candidate c : wanted) {
             int cost = c.block.alive() * (c.block.arm() == Arm.CAVALRY && c.block.started() > 1 ? 2 : 1);
-            if (soldiers + cost > MAX_LIVE_SOLDIERS) {
+            if (soldiers + cost > liveCap) {
                 break;
             }
             soldiers += cost;

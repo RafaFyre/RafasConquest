@@ -82,6 +82,13 @@ public final class PveCommands {
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY, null, null))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                .then(Commands.literal("livecap")
+                                        .then(Commands.argument("soldiers", IntegerArgumentType.integer(0, 10_000))
+                                                .executes(ctx -> {
+                                                    String line = RecruitsBattle.setLiveCap(IntegerArgumentType.getInteger(ctx, "soldiers"));
+                                                    ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+                                                    return 1;
+                                                })))
                                 .then(Commands.literal("watch")
                                         .then(Commands.literal("clear").executes(ctx -> watch(ctx, null)))
                                         .then(Commands.argument("x", IntegerArgumentType.integer())
