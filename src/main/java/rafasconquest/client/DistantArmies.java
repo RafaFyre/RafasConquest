@@ -58,6 +58,16 @@ public final class DistantArmies {
         return formations;
     }
 
+    /** How fast a formation is moving, in blocks a second: from where it was to where it is going. */
+    public static double speed(FormationSnapshot formation) {
+        FormationSnapshot start = from.get(formation.id());
+        FormationSnapshot target = to.get(formation.id());
+        if (start == null || target == null) {
+            return 0;
+        }
+        return Math.hypot(target.x() - start.x(), target.z() - start.z()) * 1000 / GLIDE_MILLIS;
+    }
+
     /** Whether this entity is one of the battle's soldiers, or the horse under one. */
     public static boolean isOurs(Entity entity) {
         if (soldiers.contains(entity.getId())) {

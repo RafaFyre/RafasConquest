@@ -62,6 +62,42 @@ class FieldBattleTest {
     }
 
     @Test
+    void cavalryChargesSpendsItsMomentumFallsBackAndChargesAgain() {
+        FieldBattle battle = battle(100, 100, 4);
+        java.util.EnumMap<FieldBattle.Call, Integer> calls = new java.util.EnumMap<>(FieldBattle.Call.class);
+        double peak = 0;
+        boolean sawRallying = false;
+        while (!battle.over()) {
+            battle.second();
+            battle.takeCalls().forEach(o -> calls.merge(o.call(), 1, Integer::sum));
+            for (FieldBlock b : battle.army(0).blocks()) {
+                peak = Math.max(peak, b.momentum());
+                sawRallying |= b.duty() == Duty.RALLYING;
+            }
+        }
+        assertTrue(peak > 0.9, "a run-up builds full momentum: " + peak);
+        assertTrue(sawRallying, "spent cavalry rides back to reform");
+        assertTrue(calls.getOrDefault(FieldBattle.Call.CAVALRY_RECALL, 0) > 0);
+        assertTrue(calls.getOrDefault(FieldBattle.Call.CAVALRY_CHARGE, 0) > calls.getOrDefault(FieldBattle.Call.CAVALRY_RECALL, 0) / 2,
+                "recalled cavalry charges again");
+        assertEquals(2, calls.get(FieldBattle.Call.ADVANCE), "each army advances once");
+    }
+
+    @Test
+    void infantryInTheWayOfChargingCavalryBracesAndTheWallHoldsBetter() {
+        FieldBattle battle = battle(100, 100, 5);
+        boolean braced = false;
+        int walls = 0;
+        for (int i = 0; i < 400 && !battle.over(); i++) {
+            battle.second();
+            walls += (int) battle.takeCalls().stream().filter(o -> o.call() == FieldBattle.Call.WALL).count();
+            braced |= battle.army(0).blocks().stream().anyMatch(FieldBlock::braced);
+        }
+        assertTrue(braced && walls > 0, "walls formed against the charges");
+        assertTrue(FieldRules.BRACED_TAKES < 1 && FieldRules.BRACED_DEALS > 1);
+    }
+
+    @Test
     void theSameSeedFightsTheSameBattle() {
         FieldBattle.Outcome first = battle(25, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
         FieldBattle.Outcome again = battle(25, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);

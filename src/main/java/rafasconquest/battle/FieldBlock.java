@@ -30,6 +30,8 @@ public final class FieldBlock {
         GENERAL,
         /** The standard-bearer, alone at the general's side; never fights. */
         BEARER,
+        /** Cavalry that spent its momentum, riding back to reform; doesn't fight on the way. */
+        RALLYING,
         /** Running from a lost battle; never fights. */
         FLEEING
     }
@@ -65,6 +67,21 @@ public final class FieldBlock {
     double pendingDamage;
     /** Soldiers alive, kept up to date as they fall. */
     int alive;
+    /** Cavalry momentum, 0 to 1 ({@link FieldRules#CHARGE_BONUS}), where it was a second ago, and whom it last
+     * struck in melee (null if nobody). */
+    double momentum;
+    @Nullable
+    Point lastPos;
+    @Nullable
+    FieldBlock contactFoe;
+    /** For real cavalry, whom its riders are striking, as the live battle reports it each second. */
+    @Nullable
+    FieldBlock liveContactFoe;
+    /** Spent cavalry reforms until this second before charging again. */
+    int reformUntil;
+    /** Braced against charging cavalry, facing it, and when it last saw cavalry coming. */
+    boolean braced;
+    int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
     /** Damage from blocks that are only numbers, waiting to be dealt to its real soldiers. */
@@ -102,6 +119,26 @@ public final class FieldBlock {
         double d = liveDamage;
         liveDamage = 0;
         return d;
+    }
+
+    /** Cavalry momentum, 0 to 1. */
+    public double momentum() {
+        return momentum;
+    }
+
+    /** In melee this second. */
+    public boolean inMelee() {
+        return contactSeconds > 0;
+    }
+
+    /** Braced against charging cavalry. */
+    public boolean braced() {
+        return braced;
+    }
+
+    /** The enemy block a real cavalry block's riders are striking this second, or null. */
+    public void setLiveContact(@Nullable FieldBlock foe) {
+        liveContactFoe = foe;
     }
 
     /** Where its front rank is ordered to stand. */

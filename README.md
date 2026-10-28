@@ -119,6 +119,23 @@ first. The old relation is restored when the battle ends.
   - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
     the enemy archers.
   - Cavalry that has charged, and the general, send any soldier with no target after the nearest enemy left.
+  - **Cycle charge:** a charge builds momentum over a 20-block run-up, and a rider hits up to 3 times as hard with full
+    momentum. Each second in contact loses some (0.3 against infantry, 0.6 against cavalry; all of it against a braced
+    wall from the front), and spent riders' horses slow to as little as half pace, so cavalry can't ride through a
+    line. Once below 0.15 after 2 s of contact the cavalry falls back 35 blocks (at most 20 s), reforms for 5 s and
+    charges again.
+  - **Walls:** an infantry block that charged enemy cavalry is heading for (within 30 blocks), or that cavalry comes
+    within 10 blocks of, turns to face it and closes up 5 wide at 1.3 spacing. A braced wall takes 40 % of cavalry's
+    damage and deals it 2.5 times as much; it stands down 5 s after the last threat. The wall is one-sided: struck
+    from behind or the flank it gets no bonus.
+  - **Horns:** every faction has one of Minecraft's eight goat horn calls. The general sounds it for each big order
+    (the advance, a cavalry charge or recall, a wall, the general charging, the final charge), heard 256 blocks
+    around, at most once every 5 s; a fallen general sounds none.
+- **The sound of the battle** (`client/BattleSounds`), from the formations the client is told about, so blocks that are
+  only numbers are heard too: hoofbeats from the 8 nearest moving cavalry blocks (none within 24 blocks, where the real
+  horses are heard), and the din of fighting (blows, sweeps, shields, cries) from the 12 nearest stretches of front of
+  up to 5 infantry blocks, about every 100 soldiers. Both are louder the more soldiers there are, and are made from
+  Minecraft's own sounds.
 - **Archers never march past their own front line**, so they don't walk out alone while the infantry waits.
 - **No open files:** a front file whose block has fallen, with no fit block left to send, is filled by any block still
   in the lines (worn or not), else the nearest resting block.
@@ -137,7 +154,7 @@ first. The old relation is restored when the battle ends.
   - Each fighting soldier does 0.12 damage a second (cavalry 0.36, archers in melee 0.088), dealt in hits of 4 to
     random soldiers, so each soldier's health is kept. Archers shoot 44 blocks, an arrow a second doing 0.19 on
     average, until their 64 arrows each run out.
-  - A cavalry charge does half as much again for its first 3 s; a shieldwall takes 60 % from the front, and 40 % of
+  - Cavalry momentum and braced walls work as in a live battle; a shieldwall takes 60 % from the front, and 40 % of
     arrows. The general fights like 4 soldiers.
   - **Calibration** (`battle/Calibration`): every live battle measures, each second, the health each block lost and
     who was striking it (by the numeric battle's own reach rules), how fast blocks walk and how much health soldiers

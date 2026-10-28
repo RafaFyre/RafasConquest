@@ -9,6 +9,13 @@ import com.talhanation.recruits.util.FormationUtils;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -110,7 +117,12 @@ public final class RecruitsBattle {
      * bigger one would hold the server up for seconds.
      */
     private static final int PREDICT_UP_TO_BLOCKS = 200;
-    /** A charged soldier this close to its target is taken to be striking it (for calibration). */
+    /** A general sounds the horn at most this often, this loud (a goat horn at 16 carries 256 blocks). */
+    private static final int HORN_SECONDS = 5;
+    private static final float HORN_VOLUME = 16;
+    /** The slowing put on a spent charge's horses. */
+    private static final UUID SPENT_HORSE = UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f");
+    /** A charged soldier this close to its target is taken to be striking it (for calibration, and for momentum). */
     private static final double STRIKING_DISTANCE = 4;
 
     @Nullable
@@ -129,6 +141,10 @@ public final class RecruitsBattle {
     private final DiplomacyStatus[] oldRelations = new DiplomacyStatus[2];
     /** Every soldier and horse of the battle, so their deaths drop nothing. */
     private final Set<UUID> ours = new HashSet<>();
+    /** Every real soldier's block, by entity id, for the damage rules ({@link #adjustDamage}). */
+    private final Map<Integer, Live> byEntity = new HashMap<>();
+    /** When each side's general last sounded the horn. */
+    private final int[] lastHorn = {-HORN_SECONDS, -HORN_SECONDS};
     /** Generals' entity ids → the banner on their backs, for players who start seeing them. */
     private final Map<Integer, ItemStack> backBanners = new HashMap<>();
     /** Chunks held loaded, as {@link ChunkPos#toLong}. */
@@ -163,7 +179,7 @@ public final class RecruitsBattle {
     private long snapshotNanos;
 
     /** What each side fights as: its faction, Recruits team and colours. */
-    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner) {
+    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn) {
     }
 
     /** A block that is real soldiers now: soldier i stands for the block's soldier i. */
@@ -174,6 +190,7 @@ public final class RecruitsBattle {
         @Nullable
         Point appliedLine;
         boolean appliedCharge;
+        boolean appliedBraced;
         @Nullable
         Duty appliedDuty;
         /** Damage from numbers not yet dealt, short of a whole hit. */
@@ -268,8 +285,8 @@ public final class RecruitsBattle {
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
         Side[] sides = {
-                new Side(first, teamA, uniforms[0], markColor(first), banner(level, first)),
-                new Side(second, teamB, uniforms[1], markColor(second), banner(level, second))};
+                new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first)),
+                new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second))};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
         FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong());
@@ -323,6 +340,11 @@ public final class RecruitsBattle {
     private static int rgb(DyeColor dye) {
         float[] c = dye.getTextureDiffuseColors();
         return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
+    }
+
+    /** The faction's horn: one of Minecraft's eight goat horn calls, always the same for the faction. */
+    private static int horn(Faction faction) {
+        return Math.floorMod(faction.id().hashCode(), SoundEvents.GOAT_HORN_SOUND_VARIANTS.size());
     }
 
     private static ItemStack banner(ServerLevel level, Faction faction) {
@@ -395,6 +417,7 @@ public final class RecruitsBattle {
             }
             soldier.setHealth(Math.min(health[i], soldier.getMaxHealth()));
             l.soldiers[i] = soldier;
+            byEntity.put(soldier.getId(), l);
         }
         block.setLive(true);
         live.put(block, l);
@@ -429,6 +452,7 @@ public final class RecruitsBattle {
                 mount.discard();
             }
             backBanners.remove(e.getId());
+            byEntity.remove(e.getId());
             if (!e.isRemoved()) {
                 e.discard();
                 removed++;
@@ -598,7 +622,8 @@ public final class RecruitsBattle {
             return;
         }
         if (block.duty() != l.appliedDuty) {
-            boolean passive = block.duty() == Duty.WITHDRAWING || block.duty() == Duty.BEARER || block.duty() == Duty.FLEEING;
+            boolean passive = block.duty() == Duty.WITHDRAWING || block.duty() == Duty.BEARER || block.duty() == Duty.FLEEING
+                    || block.duty() == Duty.RALLYING;
             for (AbstractRecruitEntity s : living) {
                 if (passive) {
                     s.setTarget(null);
@@ -629,16 +654,72 @@ public final class RecruitsBattle {
             }
             return;
         }
-        if (l.appliedLine == null || l.appliedLine.distanceTo(block.line()) > 1) {
+        if (l.appliedCharge) {
+            // Recalled (spent cavalry): back into formation, to charge again later.
+            l.appliedCharge = false;
+            l.appliedLine = null;
+        }
+        if (l.appliedLine == null || l.appliedLine.distanceTo(block.line()) > 1 || l.appliedBraced != block.braced()) {
             l.appliedLine = block.line();
+            l.appliedBraced = block.braced();
             FieldArmy army = field.army(block.side());
             if (living.size() == 1) {
                 hold(living.get(0), block.line());
+            } else if (block.braced()) {
+                // A wall: closed up, a few files wide and deep, facing the cavalry.
+                FormationUtils.lineFormation(new Vec3(block.facingX(), 0, block.facingZ()), new ArrayList<>(living),
+                        Vec3.atBottomCenterOf(ground(block.line())), FieldRules.WALL_FILES, FieldRules.WALL_SPACING, true);
             } else {
                 FormationUtils.lineFormation(new Vec3(army.facingX(), 0, army.facingZ()), new ArrayList<>(living),
                         Vec3.atBottomCenterOf(ground(block.line())), BattlePlan.FILE_WIDTH, BattlePlan.SPACING, true);
             }
         }
+    }
+
+    /**
+     * Spent cavalry in melee is slowed, its horses pressing on at half pace or less, so it can't ride straight through
+     * the enemy: from full speed with full momentum to half with none.
+     */
+    private void slowSpentHorses(Live l) {
+        FieldBlock block = l.block;
+        double factor = block.charged() && block.inMelee() ? 0.5 + 0.5 * block.momentum() : 1;
+        for (AbstractRecruitEntity rider : l.living()) {
+            if (rider.getVehicle() instanceof LivingEntity horse) {
+                AttributeInstance speed = horse.getAttribute(Attributes.MOVEMENT_SPEED);
+                if (speed == null) {
+                    continue;
+                }
+                speed.removeModifier(SPENT_HORSE);
+                if (factor < 1) {
+                    speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, "spent charge", factor - 1, AttributeModifier.Operation.MULTIPLY_TOTAL));
+                }
+            }
+        }
+    }
+
+    /**
+     * Whom a real cavalry block's riders are striking this second, for its momentum: the enemy block most of those
+     * within striking distance of their target are fighting, if enough of them are; else nobody.
+     */
+    private void reportCavalryContact(Live l) {
+        Map<FieldBlock, Integer> struck = new HashMap<>();
+        List<AbstractRecruitEntity> riders = l.living();
+        for (AbstractRecruitEntity rider : riders) {
+            LivingEntity target = rider.getTarget();
+            if (target == null || !target.isAlive() || rider.distanceTo(target) > STRIKING_DISTANCE) {
+                continue;
+            }
+            Live foe = byEntity.get(target.getId());
+            if (foe == null && !target.getPassengers().isEmpty()) {
+                foe = byEntity.get(target.getPassengers().get(0).getId());
+            }
+            if (foe != null && foe.block.side() != l.block.side()) {
+                struck.merge(foe.block, 1, Integer::sum);
+            }
+        }
+        FieldBlock foe = struck.entrySet().stream().max(Map.Entry.comparingByValue())
+                .filter(e -> e.getValue() >= Math.max(2, riders.size() / 5)).map(Map.Entry::getKey).orElse(null);
+        l.block.setLiveContact(foe);
     }
 
     @Nullable
@@ -787,14 +868,23 @@ public final class RecruitsBattle {
         if (!over) {
             measure();
         }
+        for (Live l : live.values()) {
+            if (l.block.arm() == Arm.CAVALRY) {
+                reportCavalryContact(l);
+            }
+        }
         long t = System.nanoTime();
         field.second();
         fieldNanos += System.nanoTime() - t;
+        for (FieldBattle.Order order : field.takeCalls()) {
+            soundHorn(order.side());
+        }
         for (Live l : new ArrayList<>(live.values())) {
             dealDamage(l);
             passOnOrders(l);
             if (l.block.arm() == Arm.CAVALRY) {
                 armourHorses(l);
+                slowSpentHorses(l);
             }
         }
         t = System.nanoTime();
@@ -839,6 +929,55 @@ public final class RecruitsBattle {
         if (lost) {
             dematerialise(l);
         }
+    }
+
+    /**
+     * The general sounds the horn for a big decision (the advance, a cavalry charge or recall, a wall, the general
+     * charging, the final charge): the faction's own goat horn, heard far across the field. At most one every
+     * {@link #HORN_SECONDS}; a fallen general sounds none.
+     */
+    private void soundHorn(int side) {
+        FieldBlock commander = field.army(side).commander();
+        if (commander == null || commander.alive() == 0 || field.seconds() - lastHorn[side] < HORN_SECONDS) {
+            return;
+        }
+        lastHorn[side] = field.seconds();
+        Live real = live.get(commander);
+        List<AbstractRecruitEntity> soldiers = real == null ? List.of() : real.living();
+        double x = soldiers.isEmpty() ? commander.pos().x() : soldiers.get(0).getX();
+        double z = soldiers.isEmpty() ? commander.pos().z() : soldiers.get(0).getZ();
+        double y = soldiers.isEmpty() ? groundY(commander, x, z) + 2 : soldiers.get(0).getEyeY();
+        Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(sides[side].horn);
+        level.playSound(null, x, y, z, horn.value(), SoundSource.RECORDS, HORN_VOLUME, 1);
+    }
+
+    /**
+     * A battle soldier is hurt by another: a charging rider hits harder with its block's momentum
+     * ({@link FieldRules#CHARGE_BONUS}), and a braced wall takes less from cavalry and gives it more back
+     * ({@link FieldRules#BRACED_TAKES}, {@link FieldRules#BRACED_DEALS}). A horse is hurt for its rider's block.
+     */
+    public static float adjustDamage(LivingEntity victim, @Nullable Entity attacker, float amount) {
+        RecruitsBattle battle = current;
+        if (battle == null || attacker == null) {
+            return amount;
+        }
+        Live by = battle.byEntity.get(attacker.getId());
+        Entity rider = victim.getPassengers().isEmpty() ? victim : victim.getPassengers().get(0);
+        Live of = battle.byEntity.get(rider.getId());
+        if (by == null || of == null || by.block.side() == of.block.side()) {
+            return amount;
+        }
+        boolean byCavalry = by.block.arm() == Arm.CAVALRY;
+        if (byCavalry && by.block.charged()) {
+            amount *= 1 + FieldRules.CHARGE_BONUS * by.block.momentum();
+        }
+        if (byCavalry && of.block.braced()) {
+            amount *= FieldRules.BRACED_TAKES;
+        }
+        if (by.block.braced() && of.block.arm() == Arm.CAVALRY) {
+            amount *= FieldRules.BRACED_DEALS;
+        }
+        return amount;
     }
 
     /** Tells everyone when a general charges, or the lines stall. */

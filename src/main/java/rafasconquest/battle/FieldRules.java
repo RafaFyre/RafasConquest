@@ -50,9 +50,38 @@ public final class FieldRules {
     /** Arrows each archer carries (Recruits bowmen in battle get a stack). */
     public static final int ARROWS_EACH = 64;
 
-    /** Cavalry that has just reached the enemy hits much harder for its first seconds. */
-    public static final double CHARGE_BONUS = 1.5;
-    public static final int CHARGE_SECONDS = 3;
+    /**
+     * Cavalry momentum, 0 to 1: gathered riding (full after {@link #RUN_UP} blocks), spent cutting into the enemy. A
+     * charge does 1 + {@link #CHARGE_BONUS} x momentum times as much. Each second in melee costs momentum, more against
+     * cavalry (both lock up rather than riding through each other); riding into braced infantry costs all of it.
+     * Cavalry that has spent it ({@link #SPENT_MOMENTUM}, {@link #SPENT_SECONDS} in melee) is recalled: it rides back
+     * {@link #RALLY_DISTANCE} blocks without fighting, reforms for {@link #REFORM_SECONDS}, and charges again.
+     */
+    public static final double CHARGE_BONUS = 2;
+    public static final double RUN_UP = 20;
+    public static final double MOMENTUM_LOSS_INFANTRY = 0.3;
+    public static final double MOMENTUM_LOSS_CAVALRY = 0.6;
+    public static final double SPENT_MOMENTUM = 0.15;
+    public static final int SPENT_SECONDS = 2;
+    public static final double RALLY_DISTANCE = 35;
+    public static final int RALLY_SECONDS = 20;
+    public static final int REFORM_SECONDS = 5;
+
+    /**
+     * Infantry bracing against charging cavalry: a block that sees enemy cavalry charging its way, within
+     * {@link #WALL_ALERT} blocks, stops, turns to face it and closes up into a wall {@link #WALL_FILES} wide (if it isn't
+     * already fighting infantry). Cavalry striking a braced wall from the front loses all momentum and does
+     * {@link #BRACED_TAKES} of its damage; the wall does {@link #BRACED_DEALS} times as much back. A wall stands down
+     * {@link #WALL_HOLD_SECONDS} after the last threat.
+     */
+    public static final double WALL_ALERT = 30;
+    /** How directly the cavalry must be heading at a block to threaten it: the cosine of the angle off. */
+    public static final double WALL_HEADING = 0.7;
+    public static final int WALL_HOLD_SECONDS = 5;
+    public static final int WALL_FILES = 5;
+    public static final double WALL_SPACING = 1.3;
+    public static final double BRACED_DEALS = 2.5;
+    public static final double BRACED_TAKES = 0.4;
     /**
      * How much more attacks on a block's flank or rear do: nothing more, as in Recruits, where a blow does the same
      * from any side (only a shield, held to the front, makes a difference).

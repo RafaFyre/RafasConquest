@@ -11,6 +11,7 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import rafasconquest.RafasConquest;
@@ -50,6 +51,7 @@ public final class ClientEvents {
         ClientMapCache.clear();
         BackBanners.clear();
         DistantArmies.clear();
+        BattleSounds.clear();
     }
 
     /**
@@ -64,6 +66,14 @@ public final class ClientEvents {
             DistantHorizonsLink.update();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
+        }
+    }
+
+    /** The sound of the battle as a whole: hoofbeats and the din of the front. */
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            BattleSounds.tick();
         }
     }
 

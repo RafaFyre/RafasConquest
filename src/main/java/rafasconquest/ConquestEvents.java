@@ -14,6 +14,7 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import rafasconquest.bridge.RecruitsBattle;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -94,6 +95,12 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
         RecruitsBattle.onDeath(event.getEntity());
+    }
+
+    /** Cavalry momentum and braced walls change how hard battle soldiers hit each other. */
+    @SubscribeEvent
+    public static void onLivingHurt(LivingHurtEvent event) {
+        event.setAmount(RecruitsBattle.adjustDamage(event.getEntity(), event.getSource().getEntity(), event.getAmount()));
     }
 
     @SubscribeEvent

@@ -23,6 +23,15 @@ public final class FieldBattle {
     public record Outcome(int winner, String result, int seconds) {
     }
 
+    /** A big decision a general makes, which the live battle sounds on the general's horn. */
+    public enum Call {
+        ADVANCE, CAVALRY_CHARGE, CAVALRY_RECALL, WALL, GENERAL_CHARGES, FINAL_CHARGE
+    }
+
+    /** A general's call: which side made it, and what. */
+    public record Order(int side, Call call) {
+    }
+
     private final FieldArmy[] armies;
     private final Random random;
     private final FieldRules.Rates rates;
@@ -30,6 +39,9 @@ public final class FieldBattle {
     /** When a soldier last fell (0 before anyone has). */
     private int lastFall;
     private boolean finalMelee;
+    /** The calls made this second, for the live battle to sound. */
+    private final List<Order> calls = new ArrayList<>();
+    private final boolean[] advanced = new boolean[2];
     @Nullable
     private Outcome outcome;
 
@@ -124,6 +136,13 @@ public final class FieldBattle {
         }
     }
 
+    /** The generals' calls made in the last second, oldest first; taking them clears them. */
+    public List<Order> takeCalls() {
+        List<Order> taken = List.copyOf(calls);
+        calls.clear();
+        return taken;
+    }
+
     /** Runs whole seconds until the battle ends or {@code maxSeconds} have passed; returns the outcome, if any. */
     @Nullable
     public Outcome run(int maxSeconds) {
@@ -149,8 +168,11 @@ public final class FieldBattle {
             move(army);
         }
         fight();
+        momentum();
         if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
             finalMelee = true;
+            calls.add(new Order(0, Call.FINAL_CHARGE));
+            calls.add(new Order(1, Call.FINAL_CHARGE));
             for (FieldArmy army : armies) {
                 for (FieldBlock block : army.blocks) {
                     if (block.alive > 0 && block.duty != Duty.BEARER) {
@@ -166,10 +188,32 @@ public final class FieldBattle {
 
     private void command(FieldArmy army, FieldArmy enemy) {
         boolean engaged = army.infantryEngaged();
+        if (!advanced[army.side] && seconds >= BattlePlan.FORMING_SECONDS) {
+            advanced[army.side] = true;
+            calls.add(new Order(army.side, Call.ADVANCE));
+        }
         relieve(army);
+        brace(army, enemy);
         for (FieldBlock block : army.blocks) {
-            if (block.alive == 0 || block.charged) {
+            if (block.alive == 0) {
                 continue;
+            }
+            if (block.charged) {
+                if (block.arm == Arm.CAVALRY && block.momentum < FieldRules.SPENT_MOMENTUM
+                        && block.contactSeconds >= FieldRules.SPENT_SECONDS && block.duty == Duty.SUPPORT) {
+                    recall(army, block);
+                }
+                continue;
+            }
+            if (block.braced) {
+                if (seconds - block.lastThreat > FieldRules.WALL_HOLD_SECONDS) {
+                    block.braced = false;
+                    block.facingX = army.facingX;
+                    block.facingZ = army.facingZ;
+                } else {
+                    block.line = block.pos;
+                    continue;
+                }
             }
             switch (block.duty) {
                 case FRONT -> holdFront(army, block, enemy, engaged);
@@ -189,6 +233,12 @@ public final class FieldBattle {
                         if (block.duty == Duty.LINE) {
                             army.join(block, block.file);
                         }
+                    }
+                }
+                case RALLYING -> {
+                    if (block.pos.distanceTo(block.line) <= BattlePlan.RELIEF_ARRIVED || seconds - block.dutySince >= FieldRules.RALLY_SECONDS) {
+                        block.duty = Duty.SUPPORT;
+                        block.reformUntil = seconds + FieldRules.REFORM_SECONDS;
                     }
                 }
                 case SUPPORT -> support(army, enemy, block, engaged);
@@ -294,14 +344,76 @@ public final class FieldBattle {
     }
 
     private void support(FieldArmy army, FieldArmy enemy, FieldBlock block, boolean engaged) {
+        if (seconds < block.reformUntil) {
+            return; // reforming after a charge
+        }
         switch (BattlePlan.order(block.arm, seconds, nearest(block, block.line, enemy), engaged)) {
             case MARCH -> {
                 if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line))) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }
-            case CHARGE -> block.charged = true;
+            case CHARGE -> {
+                block.charged = true;
+                calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+            }
             default -> {
+            }
+        }
+    }
+
+    /**
+     * Cavalry that has spent its momentum in melee rides back toward its own lines to reform, not fighting on the way,
+     * then charges again ({@link FieldRules#CHARGE_BONUS}).
+     */
+    private void recall(FieldArmy army, FieldBlock cavalry) {
+        cavalry.charged = false;
+        cavalry.duty = Duty.RALLYING;
+        cavalry.dutySince = seconds;
+        cavalry.contactSeconds = 0;
+        cavalry.facingX = army.facingX;
+        cavalry.facingZ = army.facingZ;
+        cavalry.line = cavalry.pos.plus(-army.facingX * FieldRules.RALLY_DISTANCE, -army.facingZ * FieldRules.RALLY_DISTANCE);
+        calls.add(new Order(army.side, Call.CAVALRY_RECALL));
+    }
+
+    /**
+     * Infantry in the path of charging enemy cavalry braces: stops, turns to face it and stands as a wall
+     * ({@link FieldRules#WALL_ALERT}). Blocks already fighting infantry can't turn, and stay as they are.
+     */
+    private void brace(FieldArmy army, FieldArmy enemy) {
+        boolean called = false;
+        for (FieldBlock cavalry : enemy.blocks) {
+            if (cavalry.arm != Arm.CAVALRY || !cavalry.charged || cavalry.alive == 0) {
+                continue;
+            }
+            for (FieldBlock block : army.blocks) {
+                boolean free = block.duty == Duty.LINE || block.duty == Duty.RESTING || block.duty == Duty.FRONT && !block.engaged;
+                if (block.alive == 0 || !block.arm.infantry() || block.charged || !(free || block.braced)) {
+                    continue;
+                }
+                double dx = block.pos.x() - cavalry.pos.x();
+                double dz = block.pos.z() - cavalry.pos.z();
+                double distance = Math.hypot(dx, dz);
+                if (distance > FieldRules.WALL_ALERT || distance < 1e-6) {
+                    continue;
+                }
+                // Heading at it, or so close it is coming whichever way it faces.
+                boolean headingAt = (dx * cavalry.facingX + dz * cavalry.facingZ) / distance >= FieldRules.WALL_HEADING;
+                if (!headingAt && distance > FieldRules.WALL_ALERT / 3) {
+                    continue;
+                }
+                if (!block.braced) {
+                    block.braced = true;
+                    block.facingX = -dx / distance;
+                    block.facingZ = -dz / distance;
+                    block.line = block.pos;
+                    if (!called) {
+                        called = true;
+                        calls.add(new Order(army.side, Call.WALL));
+                    }
+                }
+                block.lastThreat = seconds;
             }
         }
     }
@@ -309,6 +421,7 @@ public final class FieldBattle {
     private void general(FieldArmy army, FieldArmy enemy, FieldBlock block, boolean engaged) {
         if (engaged) {
             block.charged = true;
+            calls.add(new Order(army.side, Call.GENERAL_CHARGES));
             return;
         }
         block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
@@ -424,7 +537,9 @@ public final class FieldBattle {
         for (int side = 0; side < 2; side++) {
             FieldArmy enemy = armies[1 - side];
             for (FieldBlock block : armies[side].blocks) {
-                if (block.alive == 0 || block.duty == Duty.WITHDRAWING || block.duty == Duty.BEARER || block.duty == Duty.FLEEING) {
+                if (block.alive == 0 || block.duty == Duty.WITHDRAWING || block.duty == Duty.BEARER || block.duty == Duty.FLEEING
+                        || block.duty == Duty.RALLYING) {
+                    block.contactFoe = null;
                     continue;
                 }
                 double reach = block.charged ? FieldRules.CLOSE_REACH : FieldRules.HOLDING_REACH;
@@ -435,20 +550,28 @@ public final class FieldBattle {
                 double distance = block.distanceTo(foe);
                 if (distance <= reach) {
                     block.contactSeconds++;
+                    block.contactFoe = foe;
                     if (block.live && foe.live) {
                         continue; // real soldiers on both sides: Recruits fights it out
                     }
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
                     double damage = fighters * rates.meleeDps(block.arm)
                             * rates.meleeFactor(sideOf(foe, block), foe.arm);
-                    if (block.arm == Arm.CAVALRY && block.charged && block.contactSeconds <= FieldRules.CHARGE_SECONDS) {
-                        damage *= rates.chargeBonus();
+                    if (block.arm == Arm.CAVALRY && block.charged) {
+                        damage *= 1 + rates.chargeBonus() * block.momentum;
+                    }
+                    if (foe.braced && block.arm == Arm.CAVALRY && sideOf(foe, block) == FieldRules.Side.FRONT) {
+                        damage *= FieldRules.BRACED_TAKES;
+                    }
+                    if (block.braced && foe.arm == Arm.CAVALRY) {
+                        damage *= FieldRules.BRACED_DEALS;
                     }
                     targets.add(foe);
                     damages.add(damage);
                     continue;
                 }
                 block.contactSeconds = 0;
+                block.contactFoe = null;
                 if (block.arm == Arm.ARCHERS && block.arrows > 0) {
                     shoot(block, enemy, targets, damages);
                 }
@@ -460,6 +583,41 @@ public final class FieldBattle {
                 target.liveDamage += damages.get(i); // dealt to the real soldiers by the live battle
             } else if (target.takeDamage(damages.get(i), random) > 0) {
                 lastFall = seconds;
+            }
+        }
+    }
+
+    /**
+     * Cavalry momentum, after the fighting: gathered by riding (not while rallying), spent by each second in melee,
+     * more against cavalry, and all of it against a braced wall struck from the front. Real cavalry's melee is as its
+     * riders report it ({@link FieldBlock#setLiveContact}); a real block also turns the way it is riding.
+     */
+    private void momentum() {
+        for (FieldArmy army : armies) {
+            for (FieldBlock block : army.blocks) {
+                if (block.arm != Arm.CAVALRY || block.alive == 0) {
+                    continue;
+                }
+                double moved = block.lastPos == null ? 0 : block.pos.distanceTo(block.lastPos);
+                if (block.live && moved > 0.5) {
+                    block.facingX = (block.pos.x() - block.lastPos.x()) / moved;
+                    block.facingZ = (block.pos.z() - block.lastPos.z()) / moved;
+                }
+                FieldBlock foe = block.live ? block.liveContactFoe : block.contactFoe;
+                if (block.live) {
+                    block.contactSeconds = foe == null ? 0 : block.contactSeconds + 1;
+                }
+                if (foe != null) {
+                    if (foe.braced && sideOf(foe, block) == FieldRules.Side.FRONT) {
+                        block.momentum = 0;
+                    } else {
+                        double loss = foe.arm == Arm.CAVALRY ? FieldRules.MOMENTUM_LOSS_CAVALRY : FieldRules.MOMENTUM_LOSS_INFANTRY;
+                        block.momentum = Math.max(0, block.momentum - loss);
+                    }
+                } else if (block.duty != Duty.RALLYING) {
+                    block.momentum = Math.min(1, block.momentum + moved / FieldRules.RUN_UP);
+                }
+                block.lastPos = block.pos;
             }
         }
     }
@@ -512,6 +670,7 @@ public final class FieldBattle {
         for (FieldBlock block : loser.blocks) {
             block.duty = Duty.FLEEING;
             block.charged = false;
+            block.braced = false;
             block.engaged = false;
             block.line = block.pos.plus(-loser.facingX * 60, -loser.facingZ * 60);
         }
