@@ -223,6 +223,11 @@ public final class FieldBattle {
                 && (general.charged || general.approaching) && general.pos.distanceTo(block.pos) <= FieldRules.RESOLVE_REACH;
     }
 
+    /** Whether a block is a general who leads the charge (Unrelenting Charge), or that general's guard. */
+    public static boolean leadsTheCharge(FieldBlock block) {
+        return block.inWedge && (block.homeDuty == Duty.GENERAL || block.homeDuty == Duty.GUARD);
+    }
+
     /** Runs whole seconds until the battle ends or {@code maxSeconds} have passed; returns the outcome, if any. */
     @Nullable
     public Outcome run(int maxSeconds) {
@@ -1339,11 +1344,13 @@ public final class FieldBattle {
                     block.contactSeconds = foe == null ? 0 : block.contactSeconds + 1;
                 }
                 if (foe != null) {
+                    // A general leading the charge, and their guard, spend it at half the rate.
+                    double rate = leadsTheCharge(block) ? FieldRules.LEADER_MOMENTUM_LOSS : 1;
                     if (foe.braced && sideOf(foe, block) == FieldRules.Side.FRONT) {
-                        block.momentum = 0;
+                        block.momentum -= block.momentum * rate;
                     } else {
                         double loss = foe.arm == Arm.CAVALRY ? FieldRules.MOMENTUM_LOSS_CAVALRY : FieldRules.MOMENTUM_LOSS_INFANTRY;
-                        block.momentum = Math.max(0, block.momentum - loss);
+                        block.momentum = Math.max(0, block.momentum - loss * rate);
                     }
                 } else if (block.duty != Duty.RALLYING) {
                     block.momentum = Math.min(block.maxMomentum, block.momentum + moved / FieldRules.RUN_UP);

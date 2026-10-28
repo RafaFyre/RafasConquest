@@ -168,7 +168,9 @@ first. The old relation is restored when the battle ends.
     - *Unrelenting Charge*: the general, their guard and all the cavalry wait in a wedge far behind the lines, the
       general at its tip. The wedge's first half, which the general leads, charges once the lines are fighting. When
       it is spent and riding back, the second half goes in, then the first again, and so on. While the general
-      leads, their own soldiers within 15 blocks take 70 % of the harm done to them.
+      leads, their own soldiers within 15 blocks take 70 % of the harm done to them. The general and their guard
+      spend momentum at half the rate of other cavalry (half of it, not all, against a wall's front), so they cut
+      deeper before falling back.
     - *Precision Strikes*: cavalry strikes the most exposed enemy block, even before the lines meet: one 6 blocks or
       more ahead of its own line, fighting with a flank open (an end of the line, or a fallen neighbour), or worn to
       half its soldiers.

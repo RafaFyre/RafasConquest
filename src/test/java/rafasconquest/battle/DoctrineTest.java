@@ -131,6 +131,38 @@ class DoctrineTest {
     }
 
     @Test
+    void aGeneralLeadingTheChargeAndTheirGuardSpendMomentumAtHalfTheRate() {
+        double leaderLoss = 0;
+        double riderLoss = 0;
+        for (long seed = 1; seed <= 4; seed++) {
+            FieldBattle battle = battle(25, CHARGE_BAIT, List.of(), seed);
+            FieldArmy army = battle.army(0);
+            assertTrue(FieldBattle.leadsTheCharge(army.commander()) && FieldBattle.leadsTheCharge(army.guard()));
+            List<FieldBlock> cavalry = army.blocks().stream().filter(b -> b.arm() == Arm.CAVALRY).toList();
+            while (!battle.over() && battle.seconds() < BattlePlan.TIME_LIMIT_SECONDS) {
+                double[] before = cavalry.stream().mapToDouble(FieldBlock::momentum).toArray();
+                battle.second();
+                for (int i = 0; i < cavalry.size(); i++) {
+                    FieldBlock c = cavalry.get(i);
+                    FieldBlock foe = c.contactFoe();
+                    if (foe == null || foe.braced() || !foe.arm().infantry() || c.alive() == 0 || before[i] < 0.5) {
+                        continue; // only full losses to infantry not braced
+                    }
+                    double lost = before[i] - c.momentum();
+                    if (FieldBattle.leadsTheCharge(c)) {
+                        leaderLoss = Math.max(leaderLoss, lost);
+                    } else {
+                        riderLoss = Math.max(riderLoss, lost);
+                    }
+                }
+            }
+        }
+        assertEquals(FieldRules.MOMENTUM_LOSS_INFANTRY, riderLoss, 1e-9);
+        assertEquals(FieldRules.MOMENTUM_LOSS_INFANTRY * FieldRules.LEADER_MOMENTUM_LOSS, leaderLoss, 1e-9);
+        assertFalse(FieldBattle.leadsTheCharge(battle(25, List.of(), List.of(), 1).army(0).guard()), "only in a charge the general leads");
+    }
+
+    @Test
     void theBaitDrawsTheEnemyInAndThePincerSprings() {
         int springs = 0;
         int baits = 0;
