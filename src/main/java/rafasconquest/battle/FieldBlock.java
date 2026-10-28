@@ -109,6 +109,15 @@ public final class FieldBlock {
     int half;
     double wedgeRight;
     double wedgeBack;
+    /** Which wing of its army it fights in ({@link FieldArmy#LEFT}, CENTRE, RIGHT). */
+    int wing = FieldArmy.CENTRE;
+    /** Cavalry outside the wedge: how far to the army's right its wing's backline post is, whether it has charged yet, and
+     * which way it is riding along the backline. */
+    double homeRight;
+    boolean rode;
+    int patrolLeg = 1;
+    /** How far it moved last second. */
+    double moved;
     /** Pincer: the lured enemy block it was sent to strike, and from where: -1 its left, 1 its right, 0 behind. */
     @Nullable
     FieldBlock strikeAt;
@@ -162,6 +171,21 @@ public final class FieldBlock {
     /** Braced against charging cavalry. */
     public boolean braced() {
         return braced;
+    }
+
+    /** In its army's wedge (Great Spear, Unrelenting Charge). */
+    public boolean inWedge() {
+        return inWedge;
+    }
+
+    /** Cavalry that has charged at least once (and so keeps riding its backline). */
+    public boolean hasCharged() {
+        return rode;
+    }
+
+    /** Which wing of its army it fights in. */
+    public int wing() {
+        return wing;
     }
 
     /** How many soldiers wide its ranks are. */

@@ -113,6 +113,17 @@ public final class FieldRules {
     public static final double LURE_REACH = 20;
     /** A pincer gives up after this long. */
     public static final int PINCER_SECONDS = 40;
+    /** Wing cavalry looks for exposed enemies this far around it. */
+    public static final double WING_REACH = 80;
+    /** Cavalry riding its backline goes this far each way of its post. */
+    public static final double PATROL_REACH = 12;
+    /**
+     * Infantry against stopped cavalry: enemy cavalry that moved less than {@link #STOPPED} last second is set on by
+     * up to {@link #HUNTERS_PER_RIDERS} idle infantry blocks within {@link #HUNT_REACH}, which let it go once it rides on.
+     */
+    public static final double STOPPED = 1;
+    public static final double HUNT_REACH = 25;
+    public static final int HUNTERS_PER_RIDERS = 2;
     /**
      * How much more attacks on a block's flank or rear do: nothing more, as in Recruits, where a blow does the same
      * from any side (only a shield, held to the front, makes a difference).

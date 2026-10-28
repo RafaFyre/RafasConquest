@@ -47,6 +47,8 @@ public final class BattlePlan {
     public static final double CAVALRY_BACK = 4;
     /** Each army deploys this far from the battlefield's centre, so the fronts start twice this apart. */
     public static final double DEPLOY_DISTANCE = 30;
+    /** An army of more than this many soldiers fights in a left wing, centre and right wing. */
+    public static final int WINGS_OVER = 300;
 
     /** Seconds the armies stand in their deployed lines before anyone moves. */
     public static final int FORMING_SECONDS = 5;

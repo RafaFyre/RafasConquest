@@ -128,15 +128,25 @@ first. The old relation is restored when the battle ends.
     general's back. Cavalry charging the general sends them to shelter behind the nearest of their own infantry.
   - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
   - Archers march until an enemy is within 30 blocks, then halt and shoot.
-  - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
-    the enemy archers.
+  - **Wings:** an army of more than 300 soldiers fights as a left wing, a centre and a right wing: the left and right
+    thirds of its front files and the middle. Each wing's cavalry acts on that wing's fighting, and each wing has its
+    own bait and pincer, so several actions go on at once across the field. A smaller army's front is all centre;
+    its cavalry still stands on two wings. The chat says which wing did what.
+  - Cavalry waits on the wings until its own wing's front is fighting, or an enemy comes within 20 blocks, then rides
+    for the enemy archers.
   - Cavalry that has charged sends any soldier with no target after the nearest enemy left. Charging cavalry that
     runs into an enemy block on the way to its target is caught fighting it, and can't ride through.
   - **Cycle charge:** a charge builds momentum over a 20-block run-up, and a rider hits up to 3 times as hard with full
     momentum. Each second in contact loses some (0.3 against infantry, 0.6 against cavalry; all of it against a braced
     wall from the front), and spent riders' horses slow to as little as half pace, so cavalry can't ride through a
-    line. Once below 0.15 after 2 s of contact the cavalry falls back 35 blocks (at most 20 s), reforms for 5 s and
-    charges again.
+    line. Once below 0.15 after 2 s of contact the cavalry rides back to its wing's backline (behind the last infantry
+    line; at most 20 s) and charges again once 5 s have passed. Cavalry that has charged never stands still: it
+    rides back and forth along its wing's backline, 12 blocks each way, keeping its momentum up until it goes in
+    again. (A wedge rides 35 blocks straight back instead, and waits in its wedge.)
+  - **Infantry against stopped cavalry:** enemy cavalry that moved less than a block in the last second (caught in a
+    melee, or waiting) is set on by up to two idle infantry blocks within 25 blocks (front blocks not fighting, or
+    blocks waiting in the files), which close in on its flanks. They let it go once it rides on at 3 blocks a second
+    or more, or leads them more than 50 blocks off.
   - **Walls:** an infantry block that charged enemy cavalry is heading for (within 30 blocks), or that cavalry comes
     within 10 blocks of, turns to face it and closes up 5 wide at 1.3 spacing. A braced wall takes 40 % of cavalry's
     damage and deals it 2.5 times as much; it stands down 5 s after the last threat. The wall is one-sided: struck
@@ -165,8 +175,10 @@ first. The old relation is restored when the battle ends.
       its target's line, then turns in, so it strikes the flank, where no wall stands. A wall gives its bonus only
       against cavalry striking its front, and a block fighting to its front can't turn to brace.
   - **Charge and Decapitate**
-    - *Unrelenting Charge*: the general, their guard and all the cavalry wait in a wedge far behind the lines, the
-      general at its tip. The wedge's first half, which the general leads, charges once the lines are fighting. When
+    - *Unrelenting Charge*: the general, their guard and half the cavalry wait in a wedge far behind the middle of
+      the lines, the general at its tip; the other half of the cavalry is split between the two wings' backlines,
+      where it fights for its wing. The wedge's first half, which the general leads, charges once the lines are
+      fighting. When
       it is spent and riding back, the second half goes in, then the first again, and so on. While the general
       leads, their own soldiers within 15 blocks take 70 % of the harm done to them. The general and their guard
       spend momentum at half the rate of other cavalry (half of it, not all, against a wall's front), so they cut
@@ -177,12 +189,14 @@ first. The old relation is restored when the battle ends.
     - *Decapitate*: once the enemy general stands exposed (none of their army but the standard within 15 blocks),
       the unrelenting charge rides at them.
   - **Bait and Pincer**
-    - *Bait*: the middle front file (if there are at least 3) runs ahead of the line, up to 12 blocks in front. Once
-      fighting, it falls back a step a second, still fighting, to 10 blocks behind the line. The rest of the line
-      holds its ground meanwhile, fighting only what comes within reach.
-    - *Pincer*: an enemy block drawn on by the bait to within 20 blocks of it, and 6 or more ahead of its own line,
-      is struck with what is to hand: the wedge or any cavalry ready charges it, else three idle infantry blocks
-      surround it (both flanks and the rear), else one strikes its flank. The pincer gives up after 40 s.
+    - *Bait*: small baits, one in each wing with at least 3 front files: that wing's middle front block runs ahead
+      of the wing's line, up to 12 blocks in front (the files behind it stay). Once fighting, it falls back a step a
+      second, still fighting, to 10 blocks behind the line. The rest of the wing holds its ground meanwhile, fighting
+      only what comes within reach.
+    - *Pincer*: in each wing, an enemy block drawn on by its bait to within 20 blocks of it, and 6 or more ahead of
+      its own line, is struck with what that wing has to hand: in the centre the wedge, on a wing that wing's
+      cavalry, charges it if ready; else three of the wing's idle infantry blocks surround it (both flanks and the
+      rear), else one strikes its flank. A pincer gives up after 40 s.
 - **The sound of the battle** (`client/BattleSounds`), from the formations the client is told about, so blocks that are
   only numbers are heard too: a cavalry charge from the 8 nearest cavalry blocks riding at a gallop (each sound rides
   along with its block and fades out when it slows), and the din of a medieval battle from the 12 nearest stretches of
@@ -225,7 +239,7 @@ first. The old relation is restored when the battle ends.
 
   `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
   2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes a fifth of
-  a second to work out; 10,000 against 10,000 about 2 seconds. Battles over 2000 a side aren't also fought through as
+  a second to work out; 10,000 against 10,000 about 7 ms per battle-second (a 20-minute battle in about 9 s). Battles over 2000 a side aren't also fought through as
   numbers at the start for comparing (it would hold the server up).
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in

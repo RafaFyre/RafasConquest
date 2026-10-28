@@ -35,13 +35,25 @@ public final class FieldArmy {
     int wedgeHalf = -1;
     int nextHalf;
     int wedgeSince;
-    /** Bait: the front file that runs ahead as bait (-1 none). */
-    int baitFile = -1;
-    boolean baitSprung;
-    /** Pincer: the lured enemy block being struck, and since when. */
-    @Nullable
-    FieldBlock pincerTarget;
-    int pincerSince;
+    /**
+     * Wings: an army over {@link BattlePlan#WINGS_OVER} soldiers fights as a left wing, centre and right wing
+     * ({@link #LEFT}, {@link #CENTRE}, {@link #RIGHT}), each with its own share of the front, its own cavalry, bait and
+     * pincer, so several actions go on at once across the field. A smaller army's front is all centre, its cavalry
+     * still on two wings.
+     */
+    public static final int LEFT = 0;
+    public static final int CENTRE = 1;
+    public static final int RIGHT = 2;
+    boolean winged;
+    /** How far to the army's right the middle of each wing stands, and how far behind the front its backline is. */
+    final double[] wingRight = new double[3];
+    double rearBack;
+    /** Bait: the front file in each wing that runs ahead as bait (-1 none), and whether it has drawn the enemy in. */
+    final int[] baitFile = {-1, -1, -1};
+    final boolean[] baitSprung = new boolean[3];
+    /** Pincer: the lured enemy block each wing is striking, and since when. */
+    final FieldBlock[] pincerTarget = new FieldBlock[3];
+    final int[] pincerSince = new int[3];
     int reliefs;
     int started;
     int queueTicket;
@@ -123,6 +135,37 @@ public final class FieldArmy {
             }
         }
         return false;
+    }
+
+    /** Whether a wing's front is fighting (the whole front's, for a wing with no front of its own). */
+    boolean wingEngaged(int wing) {
+        boolean any = false;
+        for (FieldBlock f : front) {
+            if (f.wing == wing) {
+                any = true;
+                if (f.engaged && f.alive > 0) {
+                    return true;
+                }
+            }
+        }
+        return !any && infantryEngaged();
+    }
+
+    /** Whether the army fights in wings; a block's wing is {@link FieldBlock#wing()}. */
+    public boolean winged() {
+        return winged;
+    }
+
+    /** "on the left wing" and so on, for telling what a wing did; nothing for an army without wings. */
+    String where(int wing) {
+        if (!winged) {
+            return "";
+        }
+        return switch (wing) {
+            case LEFT -> " on the left wing";
+            case RIGHT -> " on the right wing";
+            default -> " in the centre";
+        };
     }
 
     /** The middle of the front line: the average of its blocks' lines. */

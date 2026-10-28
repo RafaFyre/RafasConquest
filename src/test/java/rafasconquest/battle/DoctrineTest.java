@@ -168,11 +168,75 @@ class DoctrineTest {
         int baits = 0;
         for (long seed = 1; seed <= 4; seed++) {
             List<String> events = fight(battle(25, CHARGE_BAIT, List.of(), seed));
-            baits += events.stream().anyMatch(e -> e.startsWith("0:has the bait fall back")) ? 1 : 0;
+            baits += events.stream().anyMatch(e -> e.startsWith("0:has a bait fall back")) ? 1 : 0;
             springs += events.stream().anyMatch(e -> e.startsWith("0:springs the pincer")) ? 1 : 0;
         }
         assertEquals(4, baits);
         assertTrue(springs >= 3, "the pincer sprang in " + springs + " of 4");
+    }
+
+    @Test
+    void anArmyOverThreeHundredFightsInWingsEachWithItsOwnBait() {
+        FieldBattle small = battle(15, CHARGE_BAIT, List.of(), 1);
+        assertFalse(small.army(0).winged());
+        FieldBattle big = battle(100, CHARGE_BAIT, List.of(), 1);
+        FieldArmy army = big.army(0);
+        assertTrue(army.winged());
+        Set<Integer> wings = new HashSet<>();
+        army.blocks().stream().filter(b -> b.duty() == Duty.FRONT).forEach(b -> wings.add(b.wing()));
+        assertEquals(Set.of(FieldArmy.LEFT, FieldArmy.CENTRE, FieldArmy.RIGHT), wings);
+        List<String> events = fight(big);
+        for (String wing : List.of("on the left wing", "in the centre", "on the right wing")) {
+            assertTrue(events.stream().anyMatch(e -> e.startsWith("0:has a bait fall back " + wing)), wing + ": " + events);
+        }
+    }
+
+    @Test
+    void anUnrelentingChargeTakesHalfTheCavalryAndTheRestWaitsOnTheWingsBacklines() {
+        FieldBattle battle = battle(100, CHARGE_BAIT, List.of(), 1);
+        FieldArmy army = battle.army(0);
+        List<FieldBlock> cavalry = army.blocks().stream()
+                .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
+        List<FieldBlock> onWings = cavalry.stream().filter(b -> !b.inWedge()).toList();
+        long left = onWings.stream().filter(b -> b.wing() == FieldArmy.LEFT && b.pos().z() < -20).count();
+        long right = onWings.stream().filter(b -> b.wing() == FieldArmy.RIGHT && b.pos().z() > 20).count();
+        assertEquals(cavalry.size() / 2, onWings.size());
+        assertEquals(onWings.size(), left + right, "out on the wings");
+        assertTrue(Math.abs(left - right) <= 1, left + " left, " + right + " right");
+    }
+
+    @Test
+    void cavalryThatHasChargedKeepsRidingAlongItsBackline() {
+        FieldBattle battle = new FieldBattle(100, 100, new Point(0, 0), 1, 0, 2);
+        List<FieldBlock> cavalry = battle.army(0).blocks().stream()
+                .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
+        int riding = 0;
+        int waiting = 0;
+        while (!battle.over() && battle.seconds() < 400) {
+            battle.second();
+            for (FieldBlock c : cavalry) {
+                if (c.alive() > 0 && c.duty() == Duty.SUPPORT && c.hasCharged() && !c.charged() && !c.approaching()) {
+                    double moved = c.pos().distanceTo(c.line());
+                    if (moved > 1) {
+                        riding++;
+                    } else {
+                        waiting++;
+                    }
+                }
+            }
+        }
+        assertTrue(riding > 0, "cavalry riding its backline");
+        assertTrue(riding > waiting * 3, riding + " seconds riding to " + waiting + " standing");
+    }
+
+    @Test
+    void infantrySetsOnStoppedCavalry() {
+        boolean hunted = false;
+        for (long seed = 1; seed <= 3 && !hunted; seed++) {
+            List<String> events = fight(new FieldBattle(25, 25, new Point(0, 0), 1, 0, seed));
+            hunted = events.stream().anyMatch(e -> e.contains("sends infantry at stopped enemy cavalry"));
+        }
+        assertTrue(hunted);
     }
 
     @Test
