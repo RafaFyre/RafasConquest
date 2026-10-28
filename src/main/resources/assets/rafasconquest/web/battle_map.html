@@ -213,7 +213,6 @@ function draw() {
   }
 
   // the blocks
-  const fontPx = Math.max(8, Math.min(12, view.scale * 2.2));
   for (const b of state.blocks) {
     if (b.alive <= 0) continue;
     const off = moving && selected.has(b.id) ? [moving.dx, moving.dy] : [0, 0];
@@ -240,12 +239,7 @@ function draw() {
       for (let i = 1; i < 4; i++) ctx.lineTo(cs[i][0], cs[i][1]);
       ctx.closePath(); ctx.stroke();
     }
-    if (view.scale > 1.2) {
-      const c = toScreen((() => { const k = centreOf(b); return [k[0] + off[0], k[1] + off[1]]; })());
-      ctx.fillStyle = '#fff'; ctx.font = `600 ${fontPx}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const label = b.started > 1 ? `${blockKind(b)} ${b.alive}` : blockKind(b);
-      ctx.fillText(label, c[0], c[1]);
-    }
+    label(b, cs, base, outline);
   }
 
   if (drag && drag.kind === 'box') {
@@ -254,6 +248,50 @@ function draw() {
     ctx.fillRect(x, y, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
     ctx.strokeRect(x, y, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
   }
+}
+
+/**
+ * A block's label, inside its box: turned along the block's front (kept upright), as large as fits, falling back to
+ * shorter labels ("INF 18", then "18", then "INF") and to none when even those won't fit. A lone soldier (general,
+ * standard) is too small for any label, so it gets a little tag of its own, sized to the text.
+ */
+function label(b, cs, base, outline) {
+  const cx = (cs[0][0] + cs[2][0]) / 2, cy = (cs[0][1] + cs[2][1]) / 2;
+  let ang = Math.atan2(cs[0][1] - cs[1][1], cs[0][0] - cs[1][0]);
+  if (ang > Math.PI / 2) ang -= Math.PI;
+  if (ang < -Math.PI / 2) ang += Math.PI;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ang);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (b.started <= 1) {
+    const size = Math.max(9, Math.min(12, view.scale * 2));
+    ctx.font = `700 ${size}px system-ui`;
+    const text = blockKind(b);
+    const w = ctx.measureText(text).width + 6, h = size + 4;
+    ctx.fillStyle = shade(base, 0.8);
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.strokeStyle = outline || shade(base, 1.6); ctx.lineWidth = outline ? 2 : 1;
+    ctx.strokeRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, 0, 0.5);
+    ctx.restore();
+    return;
+  }
+  const boxW = Math.hypot(cs[0][0] - cs[1][0], cs[0][1] - cs[1][1]) - 4;
+  const boxH = Math.hypot(cs[1][0] - cs[2][0], cs[1][1] - cs[2][1]) - 2;
+  for (const text of [`${blockKind(b)} ${b.alive}`, `${b.alive}`, blockKind(b)]) {
+    ctx.font = '600 10px system-ui';
+    const at10 = ctx.measureText(text).width;
+    const size = Math.min(13, boxH * 0.85, 10 * boxW / at10);
+    if (size >= 6) {
+      ctx.font = `600 ${size}px system-ui`;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(text, 0, 0.5);
+      break;
+    }
+  }
+  ctx.restore();
 }
 
 function arrow(a, b, color) {
