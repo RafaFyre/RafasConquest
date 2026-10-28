@@ -136,6 +136,12 @@ public final class FieldBlock {
         return braced;
     }
 
+    /** The enemy block it fought this second, or null. */
+    @Nullable
+    public FieldBlock contactFoe() {
+        return contactFoe;
+    }
+
     /** The enemy block a real cavalry block's riders are striking this second, or null. */
     public void setLiveContact(@Nullable FieldBlock foe) {
         liveContactFoe = foe;

@@ -119,6 +119,8 @@ public final class RecruitsBattle {
     private static final int PREDICT_UP_TO_BLOCKS = 200;
     /** A general sounds the horn at most this often, this loud (a goat horn at 16 carries 256 blocks). */
     private static final int HORN_SECONDS = 5;
+    /** A front-row soldier goes after enemies this close to its place, and returns to it when there are none. */
+    private static final double FRONT_ROW_REACH = 6;
     private static final float HORN_VOLUME = 16;
     /** The slowing put on a spent charge's horses. */
     private static final UUID SPENT_HORSE = UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f");
@@ -193,6 +195,8 @@ public final class RecruitsBattle {
         boolean appliedBraced;
         @Nullable
         Duty appliedDuty;
+        /** In melee with a real enemy block, only its front row fighting ({@link #frontRowFights}). */
+        boolean frontRow;
         /** Damage from numbers not yet dealt, short of a whole hit. */
         double damageCarry;
 
@@ -622,8 +626,7 @@ public final class RecruitsBattle {
             return;
         }
         if (block.duty() != l.appliedDuty) {
-            boolean passive = block.duty() == Duty.WITHDRAWING || block.duty() == Duty.BEARER || block.duty() == Duty.FLEEING
-                    || block.duty() == Duty.RALLYING;
+            boolean passive = passive(block.duty());
             for (AbstractRecruitEntity s : living) {
                 if (passive) {
                     s.setTarget(null);
@@ -674,6 +677,71 @@ public final class RecruitsBattle {
                         Vec3.atBottomCenterOf(ground(block.line())), BattlePlan.FILE_WIDTH, BattlePlan.SPACING, true);
             }
         }
+    }
+
+    /** Soldiers on these duties hold back from fighting. */
+    private static boolean passive(Duty duty) {
+        return duty == Duty.WITHDRAWING || duty == Duty.BEARER || duty == Duty.FLEEING || duty == Duty.RALLYING;
+    }
+
+    /**
+     * Where two real blocks meet in melee, only each block's front row fights, to spare the server: the rank nearest
+     * the enemy ({@link BattlePlan#FILE_WIDTH} soldiers, or a wall's {@link FieldRules#WALL_FILES}). Each goes after
+     * the nearest enemy soldier within {@link #FRONT_ROW_REACH} of its place, breaking formation to reach them, and
+     * comes back to its place once there is none. The ranks behind hold their places, passive, until the front row
+     * thins and they become it. The numbers leave such a fight to Recruits.
+     */
+    private void frontRowFights(Live l) {
+        FieldBlock block = l.block;
+        List<AbstractRecruitEntity> living = l.living();
+        FieldBlock foe = block.contactFoe();
+        Live enemy = foe == null ? null : live.get(foe);
+        boolean fighting = enemy != null && block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty());
+        if (!fighting) {
+            if (l.frontRow) {
+                l.frontRow = false;
+                for (AbstractRecruitEntity s : living) {
+                    s.holdFormation = true;
+                    s.setAggroState(passive(block.duty()) ? 3 : 0);
+                }
+            }
+            return;
+        }
+        l.frontRow = true;
+        double dx = foe.pos().x() - block.pos().x();
+        double dz = foe.pos().z() - block.pos().z();
+        List<AbstractRecruitEntity> ranked = new ArrayList<>(living);
+        ranked.sort(Comparator.comparingDouble(s -> {
+            Vec3 place = placeOf(s);
+            return -(place.x * dx + place.z * dz);
+        }));
+        int front = Math.min(block.braced() ? FieldRules.WALL_FILES : BattlePlan.FILE_WIDTH, ranked.size());
+        List<AbstractRecruitEntity> foes = enemy.living();
+        double reachSqr = FRONT_ROW_REACH * FRONT_ROW_REACH;
+        for (int i = 0; i < ranked.size(); i++) {
+            AbstractRecruitEntity s = ranked.get(i);
+            if (i >= front) {
+                s.setTarget(null);
+                s.setAggroState(3);
+                s.holdFormation = true;
+                continue;
+            }
+            s.setAggroState(0);
+            Vec3 place = placeOf(s);
+            LivingEntity target = s.getTarget();
+            if (target == null || !target.isAlive() || target.distanceToSqr(place) > reachSqr) {
+                target = foes.stream().filter(f -> f.distanceToSqr(place) <= reachSqr)
+                        .min(Comparator.comparingDouble(f -> f.distanceToSqr(s))).orElse(null);
+                s.setTarget(target);
+            }
+            s.holdFormation = target == null;
+        }
+    }
+
+    /** Where a soldier is ordered to stand, or where it is if it has no place. */
+    private static Vec3 placeOf(AbstractRecruitEntity soldier) {
+        Vec3 place = soldier.getHoldPos();
+        return place != null ? place : soldier.position();
     }
 
     /**
@@ -882,6 +950,7 @@ public final class RecruitsBattle {
         for (Live l : new ArrayList<>(live.values())) {
             dealDamage(l);
             passOnOrders(l);
+            frontRowFights(l);
             if (l.block.arm() == Arm.CAVALRY) {
                 armourHorses(l);
                 slowSpentHorses(l);
@@ -998,13 +1067,15 @@ public final class RecruitsBattle {
 
     private void report() {
         int liveSoldiers = 0;
+        int frontRows = 0;
         for (Live l : live.values()) {
             liveSoldiers += l.living().size();
+            frontRows += l.frontRow ? 1 : 0;
         }
         broadcast(String.format(Locale.ROOT,
-                "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %d real soldiers in %d blocks | %s, of which battle %.1f ms/tick (numbers %.1f, switching %.1f, snapshots %.1f)",
+                "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %d real soldiers in %d blocks, %d fighting front to front | %s, of which battle %.1f ms/tick (numbers %.1f, switching %.1f, snapshots %.1f)",
                 field.seconds(), sides[0].faction.name(), field.army(0).alive(), field.army(0).reliefs(), sides[1].faction.name(),
-                field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), window.describe(),
+                field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), frontRows, window.describe(),
                 perTick(ownNanos), perTick(fieldNanos), perTick(switchNanos), perTick(snapshotNanos)));
         window.clear();
         ownNanos = 0;

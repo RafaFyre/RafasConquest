@@ -258,8 +258,24 @@ public final class FieldBattle {
         double nearest = nearest(block, block.line, enemy);
         switch (BattlePlan.order(block.arm, seconds, nearest, engaged)) {
             case MARCH -> {
+                // Straight ahead, keeping the line, while the nearest enemy is ahead; once the enemy is beside or
+                // behind it (its own foe gone, the lines passed through each other), toward that enemy instead.
                 block.engaged = false;
-                block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
+                double stepX = army.facingX;
+                double stepZ = army.facingZ;
+                FieldBlock foe = nearestBlock(block, enemy, null);
+                if (foe != null) {
+                    double dx = foe.pos.x() - block.line.x();
+                    double dz = foe.pos.z() - block.line.z();
+                    double ahead = dx * army.facingX + dz * army.facingZ;
+                    double aside = Math.abs(dx * army.facingZ - dz * army.facingX);
+                    double length = Math.hypot(dx, dz);
+                    if (ahead < aside && length > 1e-6) {
+                        stepX = dx / length;
+                        stepZ = dz / length;
+                    }
+                }
+                block.line = block.line.plus(stepX * BattlePlan.MARCH_STEP, stepZ * BattlePlan.MARCH_STEP);
             }
             case ENGAGE -> {
                 // Presses on, in its ranks, until the lines meet.

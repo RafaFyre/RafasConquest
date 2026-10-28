@@ -105,7 +105,15 @@ first. The old relation is restored when the battle ends.
 - **Line fighting:** front blocks march in line until an enemy is within 10 blocks, then engage: they keep pressing on,
   still in their ranks, until their front rank is 2 blocks from the enemy's, so the lines actually meet. Recruits
   soldiers holding a place take on whoever comes within reach and return to it, so the line holds instead of
-  dissolving into a melee. A block whose enemy in front is gone marches on.
+  dissolving into a melee. A block whose enemy in front is gone marches on: straight ahead while the nearest enemy is
+  ahead of it, else toward that enemy, so a line that has broken through turns on what is left instead of walking
+  off the field.
+- **Front rows fight:** where two blocks of real soldiers meet, only the front row of each fights (to spare the
+  server): the 10 soldiers nearest the enemy (5 in a wall) each go after the nearest enemy within 6 blocks of their
+  place, breaking ranks to reach them, and return to it when there is none. The ranks behind hold their places,
+  passive, until the front row thins and they become it. The numbers leave these fights to Recruits; the reports
+  count the blocks fighting front to front. For the battle the two factions are enemies in Recruits' diplomacy; when
+  it ends or is cleared, their old relations come back.
 - **Relief:** a front block down to half its soldiers is relieved by the first fit block (at least 60 % strong)
   waiting in its file, or the nearest fit block from another file. When the relief arrives (or after 20 s) it takes
   over, and the worn block withdraws behind the last block of its file, passive on the way. It stays there, fighting
