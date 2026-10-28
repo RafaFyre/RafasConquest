@@ -227,6 +227,29 @@ first. The old relation is restored when the battle ends.
 - **Reports:** every 10 s the chat and server log get the soldiers left on each side, the blocks relieved so far, the
   server tick time, and how much of it the battle's own orders take. The end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse
   the battle spawned. Only one battle runs at a time.
+- **Preparing, then starting:** `/pve debug battle ...` sets the armies up and spawns them, but nobody moves or
+  fights until the battle is started, with the battle map's Start battle button or `/pve debug battle start`.
+- **The battle map** (`dev/BattleMap`, page `assets/rafasconquest/web/battle_map.html`): a developer's web page at
+  http://localhost:8099/ (this machine only), linked from the chat when a debug battle is set up. It shows every
+  block of the battle as it stands, a few times a second: the top army green along the top half, the bottom army red
+  along the bottom, each block its real width and depth, turned the way it faces (its front edge bright), labelled
+  with its kind (INF, SHD, ARC, CAV, GEN, GRD, STD) and soldiers left, darker as it loses them. Dotted lines run to
+  where each block is ordered to stand; red arrows to whom charging cavalry is going for, orange to whom a block was
+  sent to strike (envelopment, pincer, stopped cavalry). Blocks fighting are outlined red, braced walls blue.
+  - Click a block for its details (its name, kind, duty, wing, soldiers, where it is and is ordered to, what it is
+    doing and going for); Shift+click adds to the selection, dragging on empty ground box-selects, Escape clears.
+    Right- or middle-drag pans, the wheel zooms, Fit view fits the battle.
+  - **Placing blocks:** before the battle starts, drag the selected blocks to place them. A placed block keeps its
+    place when the battle begins (`FieldBattle.place`): a front block marches from there, a block waiting in a file
+    keeps its place behind its file's front block, the wedge, general, guard and standard theirs relative to the
+    front and the general, other cavalry waits there and patrols the backline behind it.
+  - **Groups:** select blocks of one army, name them and save; groups are listed (hover to highlight, click to
+    select, × to delete) and saved with formations, so they can be referred to when working out tactics.
+  - **Formations:** save where each of an army's blocks stands, with its groups, under a name; load one into
+    either army before the battle starts. They are JSON files in `config/rafasconquest/formations/`: each block by
+    name (its kind and number, e.g. `CAVALRY#3`, so it fits any army of the same make-up) with its arm, duty, wing,
+    file, width and place, `right` and `back` of where its army's front centre deployed, in the army's own frame.
+  - The page also lists both armies (faction, general, plan, soldiers) and the battle's chat log.
 - **Battles as numbers** (`battle/FieldBattle`, the first step toward battles too big for live soldiers): the same
   battle fought block by block, one second at a time, with no entities. The generals give the same orders as in a
   live battle (`BattlePlan`); blocks walk to where they are ordered (3 blocks a second on foot, 6 mounted) and fight

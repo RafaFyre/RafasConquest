@@ -24,6 +24,8 @@ public final class FieldArmy {
     @Nullable
     FieldBlock guard;
     final WarPlan plan;
+    /** Where its front centre stood when it deployed, which hand-placed blocks are saved relative to. */
+    Point origin;
     /** The wedge's blocks, tip first (Great Spear, Unrelenting Charge); empty if it has none. */
     final List<FieldBlock> wedge = new ArrayList<>();
     /** Where the wedge's tip waits, relative to the front centre: {right, back}. */
@@ -92,6 +94,10 @@ public final class FieldArmy {
     @Nullable
     public FieldBlock guard() {
         return guard;
+    }
+
+    public Point origin() {
+        return origin;
     }
 
     public WarPlan plan() {

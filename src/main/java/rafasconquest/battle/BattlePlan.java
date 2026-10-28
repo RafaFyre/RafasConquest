@@ -263,6 +263,13 @@ public final class BattlePlan {
         return front.plus(rightX * right - facingX * back, rightZ * right - facingZ * back);
     }
 
+    /** Where a point lies in the frame of {@link #place}: {right, back} of {@code origin} for an army facing (fx, fz). */
+    public static Point offset(Point origin, double facingX, double facingZ, Point at) {
+        double dx = at.x() - origin.x();
+        double dz = at.z() - origin.z();
+        return new Point(dx * -facingZ + dz * facingX, -(dx * facingX + dz * facingZ));
+    }
+
     /** The two armies' front centres: each {@link #DEPLOY_DISTANCE} from the centre along the line of battle. */
     public static Point[] fronts(Point centre, double axisX, double axisZ) {
         return new Point[]{

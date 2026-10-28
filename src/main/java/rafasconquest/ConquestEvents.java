@@ -17,6 +17,7 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import rafasconquest.bridge.RecruitsBattle;
+import rafasconquest.dev.BattleMap;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import rafasconquest.command.PveCommands;
@@ -83,12 +84,14 @@ public final class ConquestEvents {
             RecruitsBattle.onServerTickStart();
         } else {
             RecruitsBattle.onServerTickEnd();
+            BattleMap.tick();
         }
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         RecruitsBattle.stop();
+        BattleMap.close();
     }
 
     /** A battle's dead drop nothing: no loot to clutter the field, and no armour for others to swap into. */

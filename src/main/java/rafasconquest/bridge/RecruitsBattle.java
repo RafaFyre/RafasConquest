@@ -170,6 +170,12 @@ public final class RecruitsBattle {
     private boolean meleeAnnounced;
     private int ticks;
     private boolean over;
+    /** Whether the fighting has begun; until then the armies deploy and their blocks may be placed by hand. */
+    private boolean started;
+    /** The latest lines told to everyone, for the battle map. */
+    private final List<String> lines = new ArrayList<>();
+    /** Each side's named groups of blocks, by block id, chosen on the battle map. */
+    private final List<Map<String, List<Integer>>> groups = List.of(new LinkedHashMap<>(), new LinkedHashMap<>());
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
     private long tickStart;
@@ -961,6 +967,10 @@ public final class RecruitsBattle {
      * between real and numbers as players move.
      */
     private void second() {
+        if (!started) {
+            prepare();
+            return;
+        }
         for (Live l : new ArrayList<>(live.values())) {
             readBack(l);
         }
@@ -1004,6 +1014,74 @@ public final class RecruitsBattle {
                 end();
             }
         }
+    }
+
+    /**
+     * Before the fighting: blocks near players become real and stand where they are placed, and nothing else
+     * happens (no orders, no fighting) until the battle is started.
+     */
+    private void prepare() {
+        for (Live l : new ArrayList<>(live.values())) {
+            readBack(l);
+            passOnOrders(l);
+        }
+        switchLive();
+    }
+
+    /** Starts the fighting of the battle being prepared. */
+    public static String startFighting() {
+        RecruitsBattle battle = current;
+        if (battle == null) {
+            return "No battle to start";
+        }
+        if (battle.started) {
+            return "The battle has already begun";
+        }
+        battle.started = true;
+        battle.broadcast("[battle] The battle begins");
+        return "The battle begins";
+    }
+
+    // ---- for the battle map (dev/BattleMap) ----
+
+    @Nullable
+    public static RecruitsBattle current() {
+        return current;
+    }
+
+    public FieldBattle field() {
+        return field;
+    }
+
+    public boolean started() {
+        return started;
+    }
+
+    public boolean isOver() {
+        return over;
+    }
+
+    public String factionName(int side) {
+        return sides[side].faction.name();
+    }
+
+    /** The side's uniform colour, as RGB. */
+    public int uniform(int side) {
+        return sides[side].uniform;
+    }
+
+    public GameCharacter general(int side) {
+        return sides[side].general;
+    }
+
+    /** The latest lines told to everyone, oldest first. */
+    public List<String> recentLines() {
+        return List.copyOf(lines);
+    }
+
+    /** A side's named groups of blocks, by block id. */
+    public Map<String, List<Integer>> groups(int side) {
+        return groups.get(side);
     }
 
     /** A real block's soldiers report to the numbers: where the block stands and each soldier's health. */
@@ -1495,6 +1573,10 @@ public final class RecruitsBattle {
 
     /** To every player; the server log gets it too. */
     private void broadcast(String line) {
+        lines.add(line);
+        if (lines.size() > 60) {
+            lines.remove(0);
+        }
         level.getServer().getPlayerList().broadcastSystemMessage(Component.literal(line), false);
     }
 }

@@ -86,6 +86,7 @@ public final class FieldBattle {
 
     private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
+        army.origin = front;
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
@@ -227,6 +228,47 @@ public final class FieldBattle {
             }
         }
         return false;
+    }
+
+    /** Whether the battle has begun: its first second has run. Before then blocks may be placed by hand. */
+    public boolean begun() {
+        return seconds > 0;
+    }
+
+    /**
+     * Before the battle begins, places a block by hand: its front rank's centre at {@code at}. It keeps that place in
+     * the army once the battle begins, relative to what it stands by: a front block marches from there; a block
+     * waiting in a file keeps its place relative to the file's front block; the wedge, the general, their guard and
+     * the standard keep theirs relative to the front, the general and the general again; other cavalry waits there
+     * and patrols the backline behind it. Throws once the battle has begun.
+     */
+    public void place(FieldBlock block, Point at) {
+        if (begun()) {
+            throw new IllegalStateException("the battle has begun");
+        }
+        FieldArmy army = armies[block.side];
+        block.line = at;
+        if (!block.live) {
+            block.pos = at;
+        }
+        switch (block.duty) {
+            case LINE -> block.placed = BattlePlan.offset(army.front[block.file].line, army.facingX, army.facingZ, at);
+            case GENERAL -> block.placed = BattlePlan.offset(holdingCentre(army), army.facingX, army.facingZ, at);
+            case GUARD -> block.placed = army.commander == null ? null
+                    : BattlePlan.offset(army.commander.line, army.facingX, army.facingZ, at);
+            case BEARER -> block.placed = army.commander == null ? null
+                    : BattlePlan.offset(army.commander.line, army.facingX, army.facingZ, at);
+            default -> {
+            }
+        }
+        if (block.inWedge) {
+            Point offset = BattlePlan.offset(army.frontCentre(), army.facingX, army.facingZ, at);
+            block.wedgeRight = offset.x();
+            block.wedgeBack = offset.z() - army.wedgeHomeBack;
+        }
+        if (block.arm == Arm.CAVALRY && block.duty == Duty.SUPPORT) {
+            block.homeRight = BattlePlan.offset(army.frontCentre(), army.facingX, army.facingZ, at).x();
+        }
     }
 
     public FieldArmy army(int side) {
@@ -406,7 +448,9 @@ public final class FieldBattle {
                 case FRONT -> holdFront(army, block, enemy, engaged);
                 case LINE -> {
                     int place = army.queue(block.file).indexOf(block) + 1;
-                    block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, 0,
+                    block.line = block.placed != null
+                            ? BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, block.placed.x(), block.placed.z())
+                            : BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, 0,
                             BattlePlan.fileBack(place, army.greatShield()));
                 }
                 case RELIEVING -> {
@@ -437,7 +481,8 @@ public final class FieldBattle {
                 case GUARD -> guard(army, enemy, block);
                 case BEARER -> {
                     if (army.commander != null && army.commander.alive > 0) {
-                        block.line = BattlePlan.place(army.commander.pos, army.facingX, army.facingZ, BattlePlan.BEARER_RIGHT, 0);
+                        Point at = block.placed != null ? block.placed : new Point(BattlePlan.BEARER_RIGHT, 0);
+                        block.line = BattlePlan.place(army.commander.pos, army.facingX, army.facingZ, at.x(), at.z());
                     }
                 }
                 default -> {
@@ -593,6 +638,7 @@ public final class FieldBattle {
         army.reliefs++;
         relief.duty = Duty.FRONT;
         relief.wing = relieved.wing;
+        relief.placed = null;
         relief.engaged = false;
         relief.dutySince = seconds;
         relieved.relief = null;
@@ -830,7 +876,8 @@ public final class FieldBattle {
             return;
         }
         // Behind the middle of the line, but never where the enemy has pushed in: further back until clear of them.
-        Point spot = BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
+        Point at = general.placed != null ? general.placed : new Point(0, BattlePlan.GENERAL_BACK);
+        Point spot = BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, at.x(), at.z());
         for (int i = 0; i < 8 && nearestEnemy(enemy, spot) < FieldRules.GENERAL_SAFE; i++) {
             spot = spot.plus(-army.facingX * 10, -army.facingZ * 10);
         }
@@ -905,7 +952,8 @@ public final class FieldBattle {
         if (general == null || general.alive == 0) {
             return;
         }
-        guard.line = BattlePlan.place(general.line, army.facingX, army.facingZ, 0, BattlePlan.GUARD_BACK);
+        Point at = guard.placed != null ? guard.placed : new Point(0, BattlePlan.GUARD_BACK);
+        guard.line = BattlePlan.place(general.line, army.facingX, army.facingZ, at.x(), at.z());
         // Whoever comes near the general; cavalry riding at the general is met further out.
         FieldBlock threat = null;
         double best = Double.MAX_VALUE;

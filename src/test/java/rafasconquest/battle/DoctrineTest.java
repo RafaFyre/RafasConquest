@@ -17,6 +17,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DoctrineTest {
@@ -268,6 +269,33 @@ class DoctrineTest {
         assertTrue(events.stream().anyMatch(e -> e.startsWith("0:wheels the left wing onto")), events.toString());
         assertTrue(events.stream().anyMatch(e -> e.startsWith("0:wheels the right wing onto")), events.toString());
         assertEquals(0, battle.outcome().winner());
+    }
+
+    @Test
+    void blocksPlacedByHandBeforeTheBattleKeepTheirPlaces() {
+        FieldBattle battle = new FieldBattle(60, 60, new Point(0, 0), 1, 0, 1);
+        FieldArmy army = battle.army(0);
+        FieldBlock waiting = army.blocks().stream().filter(b -> b.duty() == Duty.LINE).findFirst().orElseThrow();
+        FieldBlock front = army.blocks().stream().filter(b -> b.duty() == Duty.FRONT && b.file() == waiting.file()).findFirst().orElseThrow();
+        FieldBlock general = army.commander();
+        // Ten blocks further back and five to the side of where it stood; the general far out on the left.
+        Point waitingAt = waiting.line().plus(-10, 5);
+        battle.place(waiting, waitingAt);
+        Point generalAt = general.line().plus(-15, -30);
+        battle.place(general, generalAt);
+        Point offset = BattlePlan.offset(front.line(), army.facingX(), army.facingZ(), waitingAt);
+        battle.run(3);
+        assertTrue(battle.begun());
+        if (waiting.duty() == Duty.LINE) {
+            Point expected = BattlePlan.place(front.line(), army.facingX(), army.facingZ(), offset.x(), offset.z());
+            assertEquals(0, expected.distanceTo(waiting.line()), 1e-6, "keeps its place behind its file's front block");
+        }
+        assertTrue(general.line().distanceTo(generalAt) < 5, "the general keeps their place: " + general.line());
+        assertThrows(IllegalStateException.class, () -> battle.place(waiting, new Point(0, 0)));
+        Point p = new Point(3, 4);
+        Point back = BattlePlan.offset(p, 0.6, 0.8, BattlePlan.place(p, 0.6, 0.8, 7, -2));
+        assertEquals(7, back.x(), 1e-9);
+        assertEquals(-2, back.z(), 1e-9);
     }
 
     @Test

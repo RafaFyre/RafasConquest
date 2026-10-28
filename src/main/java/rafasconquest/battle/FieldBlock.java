@@ -118,6 +118,9 @@ public final class FieldBlock {
     int patrolLeg = 1;
     /** How far it moved last second. */
     double moved;
+    /** Placed by hand before the battle: where it keeps its place, {right, back} of what it stands by, or null. */
+    @Nullable
+    Point placed;
     /** Pincer: the lured enemy block it was sent to strike, and from where: -1 its left, 1 its right, 0 behind. */
     @Nullable
     FieldBlock strikeAt;
@@ -202,6 +205,12 @@ public final class FieldBlock {
     /** Riding in formation toward a charge, not yet broken up to fight. */
     public boolean approaching() {
         return approaching;
+    }
+
+    /** The enemy block it was sent to strike (a pincer, envelopment, stopped cavalry), or null. */
+    @Nullable
+    public FieldBlock strikeAt() {
+        return strikeAt;
     }
 
     /** The enemy block it fought this second, or null. */

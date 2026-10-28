@@ -8,7 +8,10 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import rafasconquest.character.GameCharacter;
+import rafasconquest.dev.BattleMap;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.FieldArmy;
 import rafasconquest.battle.FieldBattle;
@@ -82,6 +85,11 @@ public final class PveCommands {
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                .then(Commands.literal("start").executes(ctx -> {
+                                    String line = RecruitsBattle.startFighting();
+                                    ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+                                    return 1;
+                                }))
                                 .then(Commands.literal("livecap")
                                         .then(Commands.argument("soldiers", IntegerArgumentType.integer(0, 10_000))
                                                 .executes(ctx -> {
@@ -163,7 +171,11 @@ public final class PveCommands {
         BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
         try {
             String line = RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX);
-            ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+            String url = BattleMap.open(server.overworld().getServer());
+            ctx.getSource().sendSuccess(() -> Component.literal(line + ". The armies are deploying: place them on the battle map, then start. ")
+                    .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA).withUnderlined(true)
+                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
+                    .append(Component.literal(" or /pve debug battle start")), true);
         } catch (IllegalStateException e) {
             throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
         }

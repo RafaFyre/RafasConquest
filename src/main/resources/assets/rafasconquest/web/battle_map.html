@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battle Map</title>
+<style>
+  :root {
+    --bg: #0b0c0e; --panel: #15171b; --line: #2a2e35; --text: #e6e8eb; --muted: #8b929c;
+    --accent: #4aa3ff; --warn: #ffb547; --bad: #ff6b6b; --good: #5fd38d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: 44px 1fr; height: 100vh; }
+  header { grid-column: 1 / 3; display: flex; align-items: center; gap: 12px; padding: 0 12px;
+    border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; }
+  #phase { padding: 2px 8px; border-radius: 10px; background: #222; font-weight: 600; }
+  #phase.preparing { background: #3a2f12; color: var(--warn); }
+  #phase.fighting { background: #3a1616; color: var(--bad); }
+  #phase.over { background: #13301f; color: var(--good); }
+  #status { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button { background: #23272e; color: var(--text); border: 1px solid #39404a; border-radius: 6px; padding: 5px 10px;
+    font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: #1d4f86; border-color: #2e6fb8; font-weight: 600; }
+  #mapWrap { position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #hint { position: absolute; left: 10px; bottom: 8px; color: var(--muted); font-size: 12px; pointer-events: none; }
+  aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 10px; }
+  section { margin-bottom: 14px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+  .army { border-left: 4px solid; padding: 4px 8px; margin-bottom: 6px; background: #1b1e23; border-radius: 4px; }
+  .army b { font-size: 14px; }
+  .small { color: var(--muted); font-size: 12px; }
+  input, select { background: #0f1114; color: var(--text); border: 1px solid #39404a; border-radius: 6px; padding: 4px 6px;
+    font: inherit; width: 100%; }
+  .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .row > * { flex: 1; }
+  .row > button { flex: 0 0 auto; }
+  .group { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; cursor: pointer; }
+  .group:hover { background: #222831; }
+  .group .n { flex: 1; }
+  .group .x { color: var(--muted); padding: 0 4px; }
+  .group .x:hover { color: var(--bad); }
+  #selection { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #cdd2d8; }
+  #log { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #b9c0c8; max-height: 260px; overflow-y: auto; }
+  #log div { padding: 1px 0; border-bottom: 1px solid #1d2026; }
+  #toast { position: absolute; right: 12px; top: 10px; background: #1f2630; border: 1px solid #39404a; border-radius: 6px;
+    padding: 6px 10px; display: none; max-width: 60%; }
+  #toast.err { border-color: var(--bad); color: var(--bad); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Battle Map</h1>
+    <span id="phase">no battle</span>
+    <span id="status">Start a battle with /pve debug battle</span>
+    <button id="fit">Fit view</button>
+    <button id="start" class="primary" disabled>Start battle</button>
+  </header>
+  <div id="mapWrap">
+    <canvas id="map"></canvas>
+    <div id="toast"></div>
+    <div id="hint">Click a block to select, Shift+click to add, drag on empty ground to box-select. Before the battle, drag selected blocks to place them. Right-drag or middle-drag to pan, wheel to zoom.</div>
+  </div>
+  <aside>
+    <section><h2>Armies</h2><div id="armies"></div></section>
+    <section>
+      <h2>Selection</h2>
+      <div id="selection" class="small">Nothing selected</div>
+    </section>
+    <section>
+      <h2>Groups</h2>
+      <div class="row"><input id="groupName" placeholder="Group name, e.g. left hammer"><button id="saveGroup">Save selection</button></div>
+      <div id="groups" class="small"></div>
+    </section>
+    <section>
+      <h2>Formations</h2>
+      <div class="row">
+        <select id="formSide"></select>
+      </div>
+      <div class="row"><input id="formName" placeholder="Formation name"><button id="saveForm">Save</button></div>
+      <div class="row"><select id="formList"></select><button id="loadForm">Load</button></div>
+      <div class="small">A formation saves where each of the army's blocks stands, and its groups. Load one before the battle starts.</div>
+    </section>
+    <section><h2>Battle log</h2><div id="log"></div></section>
+  </aside>
+</div>
+<script>
+'use strict';
+const SPACING = 1.75;
+const SIDE_COLORS = { 0: '#2e9a57', 1: '#c23b30' };  // the top army green, the bottom red
+const KIND = { SWORDSMEN: 'INF', SHIELDWALL: 'SHD', ARCHERS: 'ARC', CAVALRY: 'CAV' };
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+let state = { phase: 'none' };
+let view = null;              // { scale, ox, oy }: screen = (fx * scale + ox, fy * scale + oy)
+const selected = new Set();
+let drag = null;              // { kind: 'pan'|'box'|'move', ... }
+let hoverGroup = null;
+let formationNames = [];
+
+// ---- the battle's frame: army 0 along the top, facing down; army 1 along the bottom, facing up ----
+function frame(x, z) {
+  const dx = x - state.cx, dz = z - state.cz;
+  const u = dx * -state.az + dz * state.ax;   // army 0's right
+  const v = dx * state.ax + dz * state.az;    // toward army 1
+  return [-u, v];
+}
+function world(fx, fy) {
+  const u = -fx, v = fy;
+  return [state.cx + u * -state.az + v * state.ax, state.cz + u * state.ax + v * state.az];
+}
+function toScreen(p) { return [p[0] * view.scale + view.ox, p[1] * view.scale + view.oy]; }
+function toFrame(sx, sy) { return [(sx - view.ox) / view.scale, (sy - view.oy) / view.scale]; }
+function dirFrame(fx, fz) { const a = frame(state.cx + fx, state.cz + fz); return a; }
+
+function blockKind(b) {
+  if (b.duty === 'GENERAL') return 'GEN';
+  if (b.duty === 'GUARD') return 'GRD';
+  if (b.duty === 'BEARER') return 'STD';
+  return KIND[b.arm] || b.arm;
+}
+
+// A block's four corners in the frame: its front rank's centre is (x, z); it is files wide and ranks deep behind.
+function corners(b, dx = 0, dy = 0) {
+  const c = frame(b.x, b.z);
+  c[0] += dx; c[1] += dy;
+  const f = dirFrame(b.fx, b.fz);
+  const r = [-f[1], f[0]];  // the block's right in the frame (mirrored frame flips handedness)
+  const lone = b.started <= 1;
+  const w = lone ? 1.2 : (b.files - 1) * SPACING + 1.2;
+  const ranks = Math.ceil(b.started / b.files);
+  const d = lone ? 1.2 : (ranks - 1) * SPACING + 1.2;
+  const hw = w / 2;
+  const front = [c[0] + f[0] * 0.6, c[1] + f[1] * 0.6];
+  const back = [front[0] - f[0] * d, front[1] - f[1] * d];
+  return [
+    [front[0] + r[0] * hw, front[1] + r[1] * hw], [front[0] - r[0] * hw, front[1] - r[1] * hw],
+    [back[0] - r[0] * hw, back[1] - r[1] * hw], [back[0] + r[0] * hw, back[1] + r[1] * hw]];
+}
+
+function centreOf(b) {
+  const cs = corners(b);
+  return [(cs[0][0] + cs[2][0]) / 2, (cs[0][1] + cs[2][1]) / 2];
+}
+
+function fit() {
+  if (!state.blocks || !state.blocks.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const b of state.blocks) {
+    if (b.alive <= 0) continue;
+    const p = frame(b.x, b.z);
+    minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+    minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+  }
+  const pad = 20;
+  minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (W === 0 || H === 0 || !isFinite(minX)) return;
+  const scale = Math.min(W / (maxX - minX), H / (maxY - minY));
+  view = { scale, ox: W / 2 - (minX + maxX) / 2 * scale, oy: H / 2 - (minY + maxY) / 2 * scale };
+}
+
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.round((n >> 16 & 255) * f)), g = Math.min(255, Math.round((n >> 8 & 255) * f)),
+    b = Math.min(255, Math.round((n & 255) * f));
+  return `rgb(${r},${g},${b})`;
+}
+
+function draw() {
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (canvas.width !== W * devicePixelRatio || canvas.height !== H * devicePixelRatio) {
+    canvas.width = W * devicePixelRatio; canvas.height = H * devicePixelRatio;
+  }
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  ctx.fillStyle = '#0b0c0e';
+  ctx.fillRect(0, 0, W, H);
+  if (!state.blocks) return;
+  if (!view || !(view.scale > 0) || !isFinite(view.scale)) fit();
+  if (!view || !(view.scale > 0)) return;
+
+  // the halfway line between the armies
+  ctx.strokeStyle = '#1f232a'; ctx.lineWidth = 1; ctx.setLineDash([6, 6]);
+  const mid = toScreen([0, 0]);
+  ctx.beginPath(); ctx.moveTo(0, mid[1]); ctx.lineTo(W, mid[1]); ctx.stroke(); ctx.setLineDash([]);
+
+  const colors = SIDE_COLORS;
+  const byId = {};
+  for (const b of state.blocks) byId[b.id] = b;
+  const groupIds = new Set(hoverGroup ? hoverGroup.ids : []);
+  const moving = drag && drag.kind === 'move' ? drag : null;
+
+  // orders: where each block is told to stand, and whom it is going for
+  for (const b of state.blocks) {
+    if (b.alive <= 0) continue;
+    const p = toScreen(frame(b.x, b.z));
+    const l = toScreen(frame(b.lx, b.lz));
+    if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 6 && !moving) {
+      ctx.strokeStyle = 'rgba(160,170,185,.35)'; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(l[0], l[1]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    const target = b.strike >= 0 ? byId[b.strike] : (b.charged || b.approaching) && b.prey >= 0 ? byId[b.prey] : null;
+    if (target && target.alive > 0) {
+      const t = toScreen(frame(target.x, target.z));
+      arrow(p, t, b.strike >= 0 ? 'rgba(255,181,71,.8)' : 'rgba(255,107,107,.8)');
+    }
+  }
+
+  // the blocks
+  const fontPx = Math.max(8, Math.min(12, view.scale * 2.2));
+  for (const b of state.blocks) {
+    if (b.alive <= 0) continue;
+    const off = moving && selected.has(b.id) ? [moving.dx, moving.dy] : [0, 0];
+    const cs = corners(b, off[0], off[1]).map(toScreen);
+    const base = colors[b.side] || '#888';
+    const health = b.alive / b.started;
+    ctx.beginPath();
+    ctx.moveTo(cs[0][0], cs[0][1]);
+    for (let i = 1; i < 4; i++) ctx.lineTo(cs[i][0], cs[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = shade(base, 0.45 + 0.55 * health);
+    ctx.fill();
+    // the front rank, brighter, so its facing shows
+    ctx.strokeStyle = shade(base, 1.6); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cs[0][0], cs[0][1]); ctx.lineTo(cs[1][0], cs[1][1]); ctx.stroke();
+    let outline = null;
+    if (selected.has(b.id)) outline = '#ffffff';
+    else if (groupIds.has(b.id)) outline = '#ffd84a';
+    else if (b.braced) outline = '#9fd0ff';
+    else if (b.fighting) outline = 'rgba(255,107,107,.9)';
+    if (outline) {
+      ctx.strokeStyle = outline; ctx.lineWidth = selected.has(b.id) ? 2 : 1.5;
+      ctx.beginPath(); ctx.moveTo(cs[0][0], cs[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(cs[i][0], cs[i][1]);
+      ctx.closePath(); ctx.stroke();
+    }
+    if (view.scale > 1.2) {
+      const c = toScreen((() => { const k = centreOf(b); return [k[0] + off[0], k[1] + off[1]]; })());
+      ctx.fillStyle = '#fff'; ctx.font = `600 ${fontPx}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const label = b.started > 1 ? `${blockKind(b)} ${b.alive}` : blockKind(b);
+      ctx.fillText(label, c[0], c[1]);
+    }
+  }
+
+  if (drag && drag.kind === 'box') {
+    ctx.strokeStyle = '#4aa3ff'; ctx.fillStyle = 'rgba(74,163,255,.12)'; ctx.lineWidth = 1;
+    const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1);
+    ctx.fillRect(x, y, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
+    ctx.strokeRect(x, y, Math.abs(drag.x1 - drag.x0), Math.abs(drag.y1 - drag.y0));
+  }
+}
+
+function arrow(a, b, color) {
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  ctx.beginPath(); ctx.moveTo(b[0], b[1]);
+  ctx.lineTo(b[0] - 7 * Math.cos(ang - .4), b[1] - 7 * Math.sin(ang - .4));
+  ctx.lineTo(b[0] - 7 * Math.cos(ang + .4), b[1] - 7 * Math.sin(ang + .4));
+  ctx.closePath(); ctx.fill();
+}
+
+// ---- picking ----
+function inside(pt, poly) {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+function blockAt(sx, sy) {
+  if (!state.blocks) return null;
+  for (let i = state.blocks.length - 1; i >= 0; i--) {
+    const b = state.blocks[i];
+    if (b.alive <= 0) continue;
+    const cs = corners(b).map(toScreen);
+    // small blocks get a little slack, so lone generals are easy to pick
+    const c = toScreen(centreOf(b));
+    if (inside([sx, sy], cs) || Math.hypot(sx - c[0], sy - c[1]) < 6) return b;
+  }
+  return null;
+}
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e => {
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (e.button === 1 || e.button === 2) {
+    drag = { kind: 'pan', sx, sy, ox: view.ox, oy: view.oy };
+    return;
+  }
+  const b = blockAt(sx, sy);
+  if (b) {
+    if (e.shiftKey) {
+      selected.has(b.id) ? selected.delete(b.id) : selected.add(b.id);
+    } else if (!selected.has(b.id)) {
+      selected.clear(); selected.add(b.id);
+    }
+    if (state.phase === 'preparing' && selected.has(b.id)) {
+      drag = { kind: 'move', sx, sy, dx: 0, dy: 0, moved: false };
+    }
+  } else {
+    if (!e.shiftKey) selected.clear();
+    drag = { kind: 'box', x0: sx, y0: sy, x1: sx, y1: sy };
+  }
+  showSelection(); draw();
+});
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  if (drag.kind === 'pan') {
+    view.ox = drag.ox + sx - drag.sx; view.oy = drag.oy + sy - drag.sy;
+  } else if (drag.kind === 'box') {
+    drag.x1 = sx; drag.y1 = sy;
+  } else if (drag.kind === 'move') {
+    drag.dx = (sx - drag.sx) / view.scale; drag.dy = (sy - drag.sy) / view.scale;
+    drag.moved = drag.moved || Math.hypot(sx - drag.sx, sy - drag.sy) > 3;
+  }
+  draw();
+});
+window.addEventListener('mouseup', () => {
+  if (!drag) return;
+  if (drag.kind === 'box') {
+    const x0 = Math.min(drag.x0, drag.x1), x1 = Math.max(drag.x0, drag.x1);
+    const y0 = Math.min(drag.y0, drag.y1), y1 = Math.max(drag.y0, drag.y1);
+    if (x1 - x0 > 3 || y1 - y0 > 3) {
+      for (const b of state.blocks) {
+        if (b.alive <= 0) continue;
+        const c = toScreen(centreOf(b));
+        if (c[0] >= x0 && c[0] <= x1 && c[1] >= y0 && c[1] <= y1) selected.add(b.id);
+      }
+    }
+  } else if (drag.kind === 'move' && drag.moved) {
+    const moves = [];
+    for (const b of state.blocks) {
+      if (!selected.has(b.id)) continue;
+      const p = frame(b.x, b.z);
+      const w = world(p[0] + drag.dx, p[1] + drag.dy);
+      moves.push({ id: b.id, x: w[0], z: w[1] });
+      // show it there at once; the next state confirms it
+      b.x = w[0]; b.z = w[1]; b.lx = w[0]; b.lz = w[1];
+    }
+    act({ type: 'move', moves }, true);
+  }
+  drag = null;
+  showSelection(); draw();
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!view) return;
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const f = Math.exp(-e.deltaY * 0.0015);
+  view.ox = sx - (sx - view.ox) * f; view.oy = sy - (sy - view.oy) * f; view.scale *= f;
+  draw();
+}, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { selected.clear(); showSelection(); draw(); }
+});
+window.addEventListener('resize', draw);
+
+// ---- panels ----
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function showSelection() {
+  const el = document.getElementById('selection');
+  if (!state.blocks || selected.size === 0) { el.textContent = 'Nothing selected'; return; }
+  const chosen = state.blocks.filter(b => selected.has(b.id));
+  if (chosen.length === 1) {
+    const b = chosen[0];
+    const byId = {}; for (const x of state.blocks) byId[x.id] = x;
+    const prey = b.prey >= 0 && byId[b.prey] ? byId[b.prey].key : '-';
+    const strike = b.strike >= 0 && byId[b.strike] ? byId[b.strike].key : '-';
+    el.textContent =
+      `${b.key}  (id ${b.id}, ${state.armies[b.side].faction})\n` +
+      `${b.arm}, ${b.duty}, ${b.wing} wing\n` +
+      `soldiers ${b.alive}/${b.started}, ${b.files} wide\n` +
+      `at ${b.x.toFixed(1)}, ${b.z.toFixed(1)}\n` +
+      `ordered to ${b.lx.toFixed(1)}, ${b.lz.toFixed(1)}\n` +
+      `${b.live ? 'real soldiers' : 'numbers only'}${b.inWedge ? ', in the wedge' : ''}\n` +
+      `fighting ${b.fighting}  charged ${b.charged}  riding in ${b.approaching}  braced ${b.braced}\n` +
+      `going for ${prey}   striking ${strike}`;
+  } else {
+    const counts = {};
+    for (const b of chosen) counts[blockKind(b)] = (counts[blockKind(b)] || 0) + 1;
+    el.textContent = `${chosen.length} blocks: ` + Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ');
+  }
+}
+
+function render() {
+  const phase = document.getElementById('phase');
+  phase.className = state.phase;
+  phase.textContent = { none: 'no battle', preparing: 'preparing', fighting: 'fighting', over: 'over' }[state.phase] || state.phase;
+  document.getElementById('start').disabled = state.phase !== 'preparing';
+  const status = document.getElementById('status');
+  if (state.phase === 'none') status.textContent = 'Start a battle with /pve debug battle';
+  else if (state.phase === 'preparing') status.textContent = 'Place the blocks, save formations and groups, then start the battle';
+  else if (state.phase === 'over') status.textContent = `Over after ${state.seconds}s: ${state.result || ''}`;
+  else status.textContent = `${state.seconds}s`;
+
+  const armies = document.getElementById('armies');
+  const sideSel = document.getElementById('formSide');
+  if (!state.armies) { armies.innerHTML = '<div class="small">No battle</div>'; return; }
+  armies.innerHTML = state.armies.map(a =>
+    `<div class="army" style="border-color:${SIDE_COLORS[a.side]}"><b>${esc(a.faction)}</b> <span title="uniform" style="display:inline-block;width:10px;height:10px;background:${a.color};border:1px solid #555"></span> ${a.side === 0 ? '(top)' : '(bottom)'}<br>` +
+    `<span class="small">General ${esc(a.general)}<br>${esc(a.plan)}<br>${a.alive} / ${a.started} soldiers${a.winged ? ', in wings' : ''}</span></div>`).join('');
+  if (sideSel.options.length !== 2) {
+    sideSel.innerHTML = state.armies.map(a => `<option value="${a.side}">${esc(a.faction)} ${a.side === 0 ? '(top)' : '(bottom)'}</option>`).join('');
+  }
+
+  const groups = document.getElementById('groups');
+  const rows = [];
+  for (const a of state.armies) {
+    for (const [name, ids] of Object.entries(a.groups || {})) {
+      rows.push(`<div class="group" data-side="${a.side}" data-name="${esc(name)}"><span style="color:${SIDE_COLORS[a.side]}">&#9632;</span>` +
+        `<span class="n">${esc(name)}</span><span class="small">${ids.length}</span><span class="x" title="Delete">&times;</span></div>`);
+    }
+  }
+  groups.innerHTML = rows.length ? rows.join('') : 'No groups yet: select blocks of one army and save them.';
+  for (const el of groups.querySelectorAll('.group')) {
+    const side = +el.dataset.side, name = el.dataset.name;
+    const ids = state.armies[side].groups[name];
+    el.addEventListener('mouseenter', () => { hoverGroup = { ids }; draw(); });
+    el.addEventListener('mouseleave', () => { hoverGroup = null; draw(); });
+    el.addEventListener('click', ev => {
+      if (ev.target.classList.contains('x')) { act({ type: 'deleteGroup', side, name }); return; }
+      selected.clear(); ids.forEach(id => selected.add(id)); showSelection(); draw();
+    });
+  }
+
+  const log = document.getElementById('log');
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.innerHTML = (state.log || []).map(l => `<div>${esc(l)}</div>`).join('');
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+function toast(message, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = message; t.className = ok ? '' : 'err'; t.style.display = 'block';
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+
+async function act(request, quiet) {
+  try {
+    const res = await fetch('/api/action', { method: 'POST', body: JSON.stringify(request) });
+    const reply = await res.json();
+    if (!quiet || !reply.ok) toast(reply.message, reply.ok);
+    if (request.type === 'saveFormation') loadFormationNames();
+    return reply;
+  } catch (e) {
+    toast('The server is not answering', false);
+  }
+}
+
+async function loadFormationNames() {
+  try {
+    formationNames = await (await fetch('/api/formations')).json();
+  } catch (e) { formationNames = []; }
+  document.getElementById('formList').innerHTML = formationNames.length
+    ? formationNames.map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">No saved formations</option>';
+}
+
+document.getElementById('fit').addEventListener('click', () => { fit(); draw(); });
+document.getElementById('start').addEventListener('click', () => act({ type: 'start' }));
+document.getElementById('saveGroup').addEventListener('click', () => {
+  const name = document.getElementById('groupName').value.trim();
+  const chosen = (state.blocks || []).filter(b => selected.has(b.id));
+  if (!chosen.length) { toast('Select some blocks first', false); return; }
+  const sides = new Set(chosen.map(b => b.side));
+  if (sides.size > 1) { toast('A group is blocks of one army', false); return; }
+  act({ type: 'saveGroup', side: chosen[0].side, name, ids: chosen.map(b => b.id) });
+});
+document.getElementById('saveForm').addEventListener('click', () =>
+  act({ type: 'saveFormation', side: +document.getElementById('formSide').value, name: document.getElementById('formName').value }));
+document.getElementById('loadForm').addEventListener('click', () => {
+  const name = document.getElementById('formList').value;
+  if (!name) { toast('No formation to load', false); return; }
+  act({ type: 'loadFormation', side: +document.getElementById('formSide').value, name });
+});
+
+let fitted = false;
+async function poll() {
+  try {
+    const next = await (await fetch('/api/state')).json();
+    const wasNone = !state.blocks;
+    if (!(drag && drag.kind === 'move')) state = next;
+    if (state.blocks && (wasNone || !fitted)) { fit(); fitted = true; }
+    if (!state.blocks) fitted = false;
+    render(); showSelection(); draw();
+  } catch (e) { /* the server may be restarting */ }
+  setTimeout(poll, 250);
+}
+loadFormationNames();
+poll();
+</script>
+</body>
+</html>
