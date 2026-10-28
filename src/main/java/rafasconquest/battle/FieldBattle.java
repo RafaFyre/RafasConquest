@@ -90,10 +90,11 @@ public final class FieldBattle {
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, spear || unrelenting);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
-        army.winged = blocks * BattlePlan.SOLDIERS_PER_FORMATION > BattlePlan.WINGS_OVER && files >= 3;
+        army.winged = BattlePlan.winged(blocks, files);
+        double reserves = Double.MAX_VALUE;
         int id = side * 10_000;
         double lastLine = 0;
         double frontHalf = 0;
@@ -108,6 +109,7 @@ public final class FieldBattle {
             block.file = slot.file();
             block.files = slot.files();
             block.homeRight = slot.right();
+            block.wing = slot.wing();
             army.blocks.add(block);
             if (duty == Duty.FRONT) {
                 army.front[slot.file()] = block;
@@ -115,7 +117,6 @@ public final class FieldBattle {
                 army.join(block, slot.file());
             }
             if (slot.arm().infantry()) {
-                block.wing = wingOf(slot.file(), files, army.winged);
                 lastLine = Math.max(lastLine, slot.back());
                 if (duty == Duty.FRONT) {
                     frontHalf = Math.max(frontHalf, Math.abs(slot.right()) + BattlePlan.pitch(slot.files()) / 2);
@@ -123,13 +124,12 @@ public final class FieldBattle {
                     wingFiles[block.wing]++;
                 }
             } else if (slot.arm() == Arm.CAVALRY) {
-                block.wing = slot.right() > 0 ? FieldArmy.RIGHT : FieldArmy.LEFT;
                 cavalry.add(block);
-            } else {
-                block.wing = wingOf(slot.file() % Math.max(1, files), files, army.winged);
+                reserves = Math.min(reserves, slot.back());
             }
         }
-        army.rearBack = lastLine + BattlePlan.LINE_GAP;
+        // The rear reserves, where the cavalry waits and later rides its backline.
+        army.rearBack = reserves == Double.MAX_VALUE ? lastLine + BattlePlan.LINE_GAP : reserves;
         for (int wing = 0; wing < 3; wing++) {
             army.wingRight[wing] = wingFiles[wing] > 0 ? wingSum[wing] / wingFiles[wing]
                     : wing == FieldArmy.CENTRE ? 0 : (wing == FieldArmy.RIGHT ? 1 : -1) * (frontHalf + BattlePlan.CAVALRY_GAP);
@@ -146,29 +146,19 @@ public final class FieldBattle {
         army.blocks.add(army.guard);
         army.blocks.add(army.bearer);
 
-        // The wedge: the general leads it (Unrelenting Charge) from right behind their guard, which rides at its tip,
-        // then half the cavalry, the other half split between the two wings' backlines; a Great Spear alone takes all
-        // the cavalry.
+        // The wedge, which forms only once the front line is established (formWedge): the general leads it
+        // (Unrelenting Charge) from right behind their guard, which rides at its tip, with half the cavalry, those
+        // waiting nearest the middle; the rest stays in its wings' reserves. A Great Spear alone takes all the cavalry.
+        // Until it forms, each of its blocks waits where it deployed.
         if (spear || unrelenting) {
             if (unrelenting) {
                 army.wedge.add(army.guard);
                 army.wedge.add(army.commander);
-                int inWedge = (cavalry.size() + 1) / 2;
-                army.wedge.addAll(cavalry.subList(0, inWedge));
-                int[] onWing = new int[3];
-                for (int i = inWedge; i < cavalry.size(); i++) {
-                    FieldBlock c = cavalry.get(i);
-                    c.wing = (i - inWedge) % 2 == 0 ? FieldArmy.RIGHT : FieldArmy.LEFT;
-                    double sign = c.wing == FieldArmy.RIGHT ? 1 : -1;
-                    double out = Math.max(Math.abs(army.wingRight[c.wing]), frontHalf / 2) + onWing[c.wing]++ * BattlePlan.BLOCK_PITCH;
-                    c.homeRight = sign * out;
-                    c.line = BattlePlan.place(front, facingX, facingZ, c.homeRight, army.rearBack);
-                    c.pos = c.line;
-                }
+                army.wedge.addAll(halfTheCavalry(cavalry));
             } else {
                 army.wedge.addAll(cavalry);
             }
-            army.wedgeHomeBack = Math.max(BattlePlan.SPEAR_BACK, lastLine + BattlePlan.LINE_GAP);
+            army.wedgeHomeBack = Math.max(BattlePlan.SPEAR_BACK, army.rearBack);
             int firstHalf = (army.wedge.size() + 1) / 2;
             for (int i = 0; i < army.wedge.size(); i++) {
                 FieldBlock member = army.wedge.get(i);
@@ -184,10 +174,7 @@ public final class FieldBattle {
                     // Straight behind the guard, between it and the next row.
                     member.wedgeRight = 0;
                     member.wedgeBack = BattlePlan.WEDGE_ROW / 2;
-                    at = new double[]{0, member.wedgeBack};
                 }
-                member.line = BattlePlan.place(front, facingX, facingZ, at[0], army.wedgeHomeBack + at[1]);
-                member.pos = member.line;
                 if (spear) {
                     member.maxMomentum = FieldRules.GREAT_SPEAR_MOMENTUM;
                 }
@@ -211,13 +198,30 @@ public final class FieldBattle {
         return army;
     }
 
-    /** Which wing a front file stands in: the left and right thirds of the front, the rest the centre. */
-    private static int wingOf(int file, int files, boolean winged) {
-        if (!winged) {
-            return FieldArmy.CENTRE;
+    /**
+     * The half of the cavalry an Unrelenting Charge takes into its wedge: the centre's first, then the left's and
+     * right's in turn, those nearest the middle first, so the two wings keep alike reserves.
+     */
+    private static List<FieldBlock> halfTheCavalry(List<FieldBlock> cavalry) {
+        List<List<FieldBlock>> byWing = List.of(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+        for (FieldBlock c : cavalry) {
+            byWing.get(c.wing).add(c);
         }
-        int third = files / 3;
-        return file < third ? FieldArmy.LEFT : file >= files - third ? FieldArmy.RIGHT : FieldArmy.CENTRE;
+        byWing.forEach(w -> w.sort(Comparator.comparingDouble(c -> Math.abs(c.homeRight))));
+        List<FieldBlock> half = new ArrayList<>();
+        int want = (cavalry.size() + 1) / 2;
+        List<FieldBlock> centre = byWing.get(FieldArmy.CENTRE);
+        while (half.size() < want && !centre.isEmpty()) {
+            half.add(centre.remove(0));
+        }
+        boolean left = true;
+        while (half.size() < want) {
+            List<FieldBlock> from = byWing.get(left ? FieldArmy.LEFT : FieldArmy.RIGHT);
+            List<FieldBlock> other = byWing.get(left ? FieldArmy.RIGHT : FieldArmy.LEFT);
+            half.add(!from.isEmpty() ? from.remove(0) : other.remove(0));
+            left = !left;
+        }
+        return half;
     }
 
     /** Whether a front file is one of its army's baits. */
@@ -260,11 +264,6 @@ public final class FieldBattle {
                     : BattlePlan.offset(army.commander.line, army.facingX, army.facingZ, at);
             default -> {
             }
-        }
-        if (block.inWedge) {
-            Point offset = BattlePlan.offset(army.frontCentre(), army.facingX, army.facingZ, at);
-            block.wedgeRight = offset.x();
-            block.wedgeBack = offset.z() - army.wedgeHomeBack;
         }
         if (block.arm == Arm.CAVALRY && block.duty == Duty.SUPPORT) {
             block.homeRight = BattlePlan.offset(army.frontCentre(), army.facingX, army.facingZ, at).x();
@@ -401,6 +400,7 @@ public final class FieldBattle {
         huntStoppedCavalry(army, enemy);
         shieldGeneral(army, enemy);
         envelop(army, enemy);
+        formWedge(army, enemy);
         wedge(army, enemy, engaged);
         for (FieldBlock block : army.blocks) {
             if (block.alive == 0) {
@@ -660,8 +660,11 @@ public final class FieldBattle {
             if (seconds < block.reformUntil) {
                 return; // reforming after a charge
             }
-            // Waits in the wedge for its general's word; rides out alone only at an enemy upon it.
-            block.line = wedgeHome(army, block);
+            // Waits in reserve until the wedge forms, then in the wedge for its general's word; rides out alone only
+            // at an enemy upon it.
+            if (army.wedgeFormed) {
+                block.line = wedgeHome(army, block);
+            }
             if (seconds >= BattlePlan.FORMING_SECONDS && nearest(block, block.pos, enemy) <= BattlePlan.CAVALRY_THREAT) {
                 charge(army, block, null);
             }
@@ -691,7 +694,7 @@ public final class FieldBattle {
         }
         switch (order) {
             case MARCH -> {
-                if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line))) {
+                if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line), army.greatShield())) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }
@@ -871,7 +874,7 @@ public final class FieldBattle {
                 return;
             }
         }
-        if (general.inWedge) {
+        if (general.inWedge && army.wedgeFormed) {
             general.line = wedgeHome(army, general);
             return;
         }
@@ -944,7 +947,7 @@ public final class FieldBattle {
         if (seconds < guard.reformUntil) {
             return;
         }
-        if (guard.inWedge) {
+        if (guard.inWedge && army.wedgeFormed) {
             guard.line = wedgeHome(army, guard);
             return;
         }
@@ -976,6 +979,26 @@ public final class FieldBattle {
     }
 
     // ---- the wedge (Great Spear, Unrelenting Charge) ----
+
+    /**
+     * The wedge forms once the battle's front line is established: both armies' front infantry have met, and have
+     * been fighting {@link FieldRules#FRONTLINE_SECONDS}. Its blocks then leave their reserves for their places in it.
+     */
+    private void formWedge(FieldArmy army, FieldArmy enemy) {
+        if (army.wedge.isEmpty() || army.wedgeFormed) {
+            return;
+        }
+        if (army.frontlineSince < 0) {
+            if (army.infantryEngaged() && enemy.infantryEngaged()) {
+                army.frontlineSince = seconds;
+            }
+            return;
+        }
+        if (seconds - army.frontlineSince >= FieldRules.FRONTLINE_SECONDS) {
+            army.wedgeFormed = true;
+            events.add(new Event(army.side, "forms the wedge behind the established front line"));
+        }
+    }
 
     /** Where a wedge member waits: its place behind the wedge's tip, far behind the front centre. */
     private static Point wedgeHome(FieldArmy army, FieldBlock member) {
@@ -1051,7 +1074,7 @@ public final class FieldBattle {
      * riding back from a charge, and the other half no longer in.
      */
     private boolean wedgeReady(FieldArmy army) {
-        if (army.wedge.isEmpty() || army.wedgeTarget != null || finalMelee || seconds < BattlePlan.FORMING_SECONDS) {
+        if (army.wedge.isEmpty() || !army.wedgeFormed || army.wedgeTarget != null || finalMelee || seconds < BattlePlan.FORMING_SECONDS) {
             return false;
         }
         boolean unrelenting = army.plan.has(Strategy.UNRELENTING_CHARGE);

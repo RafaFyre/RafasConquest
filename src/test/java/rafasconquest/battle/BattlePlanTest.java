@@ -58,6 +58,61 @@ class BattlePlanTest {
     }
 
     @Test
+    void everyWingStandsInfantryInFrontArchersBehindCavalryInTheRear() {
+        for (boolean shield : new boolean[]{false, true}) {
+            for (int blocks : new int[]{15, 50, 100, 500}) {
+                List<Slot> slots = BattlePlan.deployment(blocks, shield);
+                for (int wing = 0; wing < 3; wing++) {
+                    int w = wing;
+                    List<Slot> mine = slots.stream().filter(s -> s.wing() == w).toList();
+                    double front = mine.stream().filter(s -> s.arm().infantry() && s.line() == 0).mapToDouble(Slot::back).max().orElse(0);
+                    double archers = mine.stream().filter(s -> s.arm() == Arm.ARCHERS).mapToDouble(Slot::back).min().orElse(Double.MAX_VALUE);
+                    double lastInfantry = slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElseThrow();
+                    double lastArchers = slots.stream().filter(s -> s.arm() == Arm.ARCHERS).mapToDouble(Slot::back).max().orElse(0);
+                    double cavalry = mine.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).min().orElse(Double.MAX_VALUE);
+                    String what = blocks + " blocks, shield " + shield + ", wing " + wing;
+                    assertTrue(archers > front, what + ": archers behind the front");
+                    assertTrue(cavalry > Math.max(lastInfantry, lastArchers), what + ": cavalry in the rear");
+                }
+                if (blocks * BattlePlan.SOLDIERS_PER_FORMATION > BattlePlan.WINGS_OVER) {
+                    for (int wing = 0; wing < 3; wing++) {
+                        int w = wing;
+                        assertTrue(slots.stream().anyMatch(s -> s.wing() == w && s.arm() == Arm.CAVALRY), "cavalry in every wing's reserves");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void noTwoBlocksOverlapWhenAnArmyDeploys() {
+        for (boolean shield : new boolean[]{false, true}) {
+            for (int blocks : new int[]{5, 15, 30, 50, 100, 300, 500}) {
+                {
+                    List<Slot> slots = BattlePlan.deployment(blocks, shield);
+                    for (int i = 0; i < slots.size(); i++) {
+                        for (int j = i + 1; j < slots.size(); j++) {
+                            assertFalse(overlap(slots.get(i), slots.get(j)), String.format(
+                                    "%d blocks, shield %s: %s overlaps %s", blocks, shield, slots.get(i), slots.get(j)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Whether two blocks' footprints overlap: each as wide as its ranks, as deep as its ranks go back from its slot. */
+    private static boolean overlap(Slot a, Slot b) {
+        double aw = (a.files() - 1) * BattlePlan.SPACING / 2;
+        double bw = (b.files() - 1) * BattlePlan.SPACING / 2;
+        double ad = (Math.ceil((double) BattlePlan.SOLDIERS_PER_FORMATION / a.files()) - 1) * BattlePlan.SPACING;
+        double bd = (Math.ceil((double) BattlePlan.SOLDIERS_PER_FORMATION / b.files()) - 1) * BattlePlan.SPACING;
+        boolean across = Math.abs(a.right() - b.right()) < aw + bw + 0.5;
+        boolean deep = a.back() < b.back() + bd + 0.5 && b.back() < a.back() + ad + 0.5;
+        return across && deep;
+    }
+
+    @Test
     void anArmyOverAThousandStandsThreeBlocksDeep() {
         for (int blocks : new int[]{51, 100, 150}) {
             List<Slot> infantry = BattlePlan.deployment(blocks).stream().filter(s -> s.arm().infantry()).toList();
@@ -78,7 +133,8 @@ class BattlePlanTest {
         assertTrue(front > BattlePlan.MAX_FRONT && front <= BattlePlan.MAX_WIDE_FRONT, "front " + front);
         assertTrue(lines <= BattlePlan.LINES_DEEP + 2, "stands " + lines + " lines deep");
         double deepestRider = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).max().orElseThrow();
-        assertTrue(deepestRider <= BattlePlan.CAVALRY_BACK + BattlePlan.CAVALRY_ROWS * BattlePlan.CAVALRY_ROW, "a wing " + deepestRider + " deep");
+        double lastLine = slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElseThrow();
+        assertTrue(deepestRider <= lastLine + BattlePlan.LINE_GAP + 5 * BattlePlan.CAVALRY_ROW, "the reserves " + deepestRider + " deep");
     }
 
     @Test
@@ -95,16 +151,6 @@ class BattlePlanTest {
                 }
             }
         }
-    }
-
-    @Test
-    void cavalryStandsOnBothWingsBeyondTheLine() {
-        List<Slot> slots = BattlePlan.deployment(100);
-        double lineEnd = slots.stream().filter(s -> s.line() == 0).mapToDouble(s -> Math.abs(s.right())).max().orElseThrow();
-        List<Slot> cavalry = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).toList();
-        assertTrue(cavalry.stream().allMatch(s -> Math.abs(s.right()) > lineEnd + BattlePlan.BLOCK_PITCH / 2));
-        assertEquals(10, cavalry.stream().filter(s -> s.right() > 0).count());
-        assertEquals(10, cavalry.stream().filter(s -> s.right() < 0).count());
     }
 
     @Test

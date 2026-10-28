@@ -83,7 +83,7 @@ class DoctrineTest {
 
     @Test
     void aGreatShieldStandsFifteenRanksDeepBehindShields() {
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(100, true, false);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(100, true);
         List<BattlePlan.Slot> infantry = slots.stream().filter(s -> s.arm().infantry()).toList();
         assertTrue(infantry.stream().allMatch(s -> s.arm() == Arm.SHIELDWALL && s.files() == BattlePlan.SHIELD_FILES));
         int files = (int) infantry.stream().filter(s -> s.line() == 0).count();
@@ -127,9 +127,16 @@ class DoctrineTest {
         FieldBlock general = army.commander();
         FieldBlock guard = army.guard();
         assertTrue(general.inWedge() && guard.inWedge());
-        assertTrue(guard.pos().x() > general.pos().x(), "the guard rides at the wedge's tip, ahead of the general");
-        assertEquals(guard.pos().z(), general.pos().z(), 1e-9, "the general straight behind it");
         List<String> events = fight(battle);
+        // The wedge forms only once the front line is established, and only then charges.
+        int formed = events.indexOf("0:forms the wedge behind the established front line");
+        int charged = -1;
+        for (int i = 0; i < events.size() && charged < 0; i++) {
+            if (events.get(i).startsWith("0:leads the first half")) {
+                charged = i;
+            }
+        }
+        assertTrue(formed >= 0 && charged > formed, events.toString());
         int first = events.indexOf("0:leads the first half of the wedge at the enemy line");
         assertTrue(first >= 0 || events.stream().anyMatch(e -> e.startsWith("0:leads the first half")), events.toString());
         assertTrue(events.stream().anyMatch(e -> e.startsWith("0:sends the second half")), events.toString());
@@ -224,16 +231,16 @@ class DoctrineTest {
     }
 
     @Test
-    void anUnrelentingChargeTakesHalfTheCavalryAndTheRestWaitsOnTheWingsBacklines() {
+    void anUnrelentingChargeTakesHalfTheCavalryAndTheRestWaitsInTheWingsReserves() {
         FieldBattle battle = battle(100, CHARGE_BAIT, List.of(), 1);
         FieldArmy army = battle.army(0);
         List<FieldBlock> cavalry = army.blocks().stream()
                 .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
         List<FieldBlock> onWings = cavalry.stream().filter(b -> !b.inWedge()).toList();
-        long left = onWings.stream().filter(b -> b.wing() == FieldArmy.LEFT && b.pos().z() < -20).count();
-        long right = onWings.stream().filter(b -> b.wing() == FieldArmy.RIGHT && b.pos().z() > 20).count();
+        long left = onWings.stream().filter(b -> b.wing() == FieldArmy.LEFT).count();
+        long right = onWings.stream().filter(b -> b.wing() == FieldArmy.RIGHT).count();
         assertEquals(cavalry.size() / 2, onWings.size());
-        assertEquals(onWings.size(), left + right, "out on the wings");
+        assertEquals(onWings.size(), left + right, "in the left and right wings' reserves");
         assertTrue(Math.abs(left - right) <= 1, left + " left, " + right + " right");
     }
 

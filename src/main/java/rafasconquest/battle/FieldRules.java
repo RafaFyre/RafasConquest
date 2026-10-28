@@ -84,6 +84,8 @@ public final class FieldRules {
     public static final double BRACED_TAKES = 0.4;
     /** Great Spear cavalry gathers up to twice the usual momentum (over twice the run-up). */
     public static final double GREAT_SPEAR_MOMENTUM = 2;
+    /** A wedge forms once both armies' front lines have been fighting this long: the front line is established. */
+    public static final int FRONTLINE_SECONDS = 5;
     /** A general leading the charge (Unrelenting Charge), and their guard, lose momentum at this share of the rate. */
     public static final double LEADER_MOMENTUM_LOSS = 0.5;
     /**

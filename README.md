@@ -60,8 +60,10 @@ first. The old relation is restored when the battle ends.
 - **Lines:** the infantry stands in a front line at most 10 blocks wide, with relief lines 16 blocks apart behind it
   (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. A bigger
   army widens its front instead, to stand at most 6 lines deep, up to a front of 40 blocks (750 wide; 10,000 soldiers
-  stand 40 wide and 6 to 8 deep). Archers stand in rows just behind the front line, and the cavalry on both wings, in
-  columns of blocks (more columns for a big wing, at most 5 deep).
+  stand 40 wide and 6 to 8 deep). Every wing (see Wings below) stands alike: its infantry in front, its archers in
+  rows just behind its front line (in a Great Shield, clear behind the shield stack), and its cavalry in reserve in
+  the rear, behind the last infantry line, in rows as wide as the wing; a small army's cavalry all in the centre's
+  rear. Wedges form only later, once the front line is established. No two blocks overlap when an army deploys.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
@@ -132,10 +134,14 @@ first. The old relation is restored when the battle ends.
   - Archers march until an enemy is within 30 blocks, then halt and shoot.
   - **Wings:** an army of more than 300 soldiers fights as a left wing, a centre and a right wing: the left and right
     thirds of its front files and the middle. Each wing's cavalry acts on that wing's fighting, and each wing has its
-    own bait and pincer, so several actions go on at once across the field. A smaller army's front is all centre;
-    its cavalry still stands on two wings. The chat says which wing did what.
-  - Cavalry waits on the wings until its own wing's front is fighting, or an enemy comes within 20 blocks, then rides
-    for the enemy archers.
+    own bait and pincer, so several actions go on at once across the field. A smaller army is all centre. The chat
+    says which wing did what.
+  - Cavalry waits in its wing's rear reserves until its own wing's front is fighting, or an enemy comes within 20
+    blocks, then rides for the enemy archers.
+  - **Wedges form once the front line is established:** a wedge (Great Spear, Unrelenting Charge) doesn't stand at the
+    start; its blocks wait in the reserves (the general and guard in their usual places) until both armies' front
+    infantry have met and fought for 5 s. Then they ride to their places in the wedge, far behind the middle of the
+    front, and only then does the wedge charge.
   - Cavalry that has charged sends any soldier with no target after the nearest enemy left. Charging cavalry that
     runs into an enemy block on the way to its target is caught fighting it, and can't ride through.
   - **Cycle charge:** a charge builds momentum over a 20-block run-up, and a rider hits up to 3 times as hard with full
@@ -172,8 +178,8 @@ first. The old relation is restored when the battle ends.
   their faction's doctrines, chosen at random. They fight with every formation and strategy of both. The start of a
   battle names each general and their plan, and the chat says when a strategy acts.
   - **Spear and Shield**
-    - *Great Spear* (formation): all the cavalry waits in one wedge of blocks at least 45 blocks behind the front,
-      behind the last infantry line. It charges as one, in formation, once its lines are fighting, and breaks up on
+    - *Great Spear* (formation): once the front line is established, all the cavalry forms one wedge of blocks at
+      least 45 blocks behind the front, behind the reserves. It charges as one, in formation, and breaks up on
       striking. Its riders gather up to twice the momentum (5 times the damage at full), over a 40-block run-up.
     - *Great Shield* (formation): every infantry block bears shields and re-forms 4 wide and 5 deep. Each front file
       is 3 blocks closed up one behind the other, 15 ranks; relief comes from the block right behind. The front is
@@ -187,10 +193,11 @@ first. The old relation is restored when the battle ends.
       its target's line, then turns in, so it strikes the flank, where no wall stands. A wall gives its bonus only
       against cavalry striking its front, and a block fighting to its front can't turn to brace.
   - **Charge and Decapitate**
-    - *Unrelenting Charge*: the general, their guard and half the cavalry wait in a wedge far behind the middle of
-      the lines, the guard at its tip and the general straight behind it; the other half of the cavalry is split
-      between the two wings' backlines, where it fights for its wing. The wedge's first half, which the general
-      leads with their guard, charges once the lines are fighting. The general never rides on without the guard
+    - *Unrelenting Charge*: once the front line is established, the general, their guard and half the cavalry (the
+      centre's reserves first, then the left's and right's in turn) form a wedge far behind the middle of the lines,
+      the guard at its tip and the general straight behind it; the rest of the cavalry stays in the left and right
+      wings' reserves, fighting for its wing. The wedge's first half, which the general leads with their guard, then
+      charges. The general never rides on without the guard
       ahead: if the guard turns off to meet a threat, or falls, the general drops out of the charge, and in the
       fight the general keeps right behind the guard and falls back when it does. When the first half is spent and
       riding back, the second half goes in, then the first again, and so on. While the general

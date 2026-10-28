@@ -37,6 +37,9 @@ public final class FieldArmy {
     int wedgeHalf = -1;
     int nextHalf;
     int wedgeSince;
+    /** Whether the wedge has formed (once the front line is established), and since when the front lines have met. */
+    boolean wedgeFormed;
+    int frontlineSince = -1;
     /**
      * Wings: an army over {@link BattlePlan#WINGS_OVER} soldiers fights as a left wing, centre and right wing
      * ({@link #LEFT}, {@link #CENTRE}, {@link #RIGHT}), each with its own share of the front, its own cavalry, bait and
