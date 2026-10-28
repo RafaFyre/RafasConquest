@@ -43,7 +43,6 @@ public final class PveCommands {
     private static final int MAX_POI_LINES = 150;
     /** Soldiers on each side of a debug battle when no number is given. */
     private static final int DEFAULT_ARMY = 100;
-    private static final List<String> GENERALS = List.of("warrior", "tactician");
     private static final SimpleCommandExceptionType NOT_RUNNING = new SimpleCommandExceptionType(Component.literal("RafasConquest is not running in this world"));
     private static final SimpleCommandExceptionType NO_FACTION = new SimpleCommandExceptionType(Component.literal("No faction with that name"));
 
@@ -80,7 +79,7 @@ public final class PveCommands {
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 100_000))
                                         .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))
                         .then(Commands.literal("battle")
-                                .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY, null, null))
+                                .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
                                 .then(Commands.literal("livecap")
                                         .then(Commands.argument("soldiers", IntegerArgumentType.integer(0, 10_000))
@@ -111,7 +110,7 @@ public final class PveCommands {
                                         .then(Commands.argument("second", StringArgumentType.string())
                                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
                                                 .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"), DEFAULT_ARMY,
-                                                        StringArgumentType.getString(ctx, "second"), DEFAULT_ARMY, null, null)))
+                                                        StringArgumentType.getString(ctx, "second"), DEFAULT_ARMY)))
                                         .then(Commands.argument("firstSoldiers", IntegerArgumentType.integer(BattlePlan.MIN_SOLDIERS, BattlePlan.MAX_SOLDIERS))
                                                 .then(Commands.argument("second", StringArgumentType.string())
                                                         .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
@@ -119,17 +118,7 @@ public final class PveCommands {
                                                                 .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"),
                                                                         IntegerArgumentType.getInteger(ctx, "firstSoldiers"),
                                                                         StringArgumentType.getString(ctx, "second"),
-                                                                        IntegerArgumentType.getInteger(ctx, "secondSoldiers"), null, null))
-                                                                .then(Commands.argument("firstGeneral", StringArgumentType.word())
-                                                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(GENERALS, builder))
-                                                                        .then(Commands.argument("secondGeneral", StringArgumentType.word())
-                                                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(GENERALS, builder))
-                                                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"),
-                                                                                        IntegerArgumentType.getInteger(ctx, "firstSoldiers"),
-                                                                                        StringArgumentType.getString(ctx, "second"),
-                                                                                        IntegerArgumentType.getInteger(ctx, "secondSoldiers"),
-                                                                                        general(StringArgumentType.getString(ctx, "firstGeneral")),
-                                                                                        general(StringArgumentType.getString(ctx, "secondGeneral")))))))))))));
+                                                                        IntegerArgumentType.getInteger(ctx, "secondSoldiers"))))))))));
     }
 
     private static ConquestServer server() throws CommandSyntaxException {
@@ -151,12 +140,11 @@ public final class PveCommands {
 
     /**
      * Deploys two armies a short way in front of the caller, marching at each other across their view: {@code
-     * firstSoldiers} and {@code secondSoldiers} strong (100 each unless given), in blocks of 20, each general a warrior or
-     * a tactician as given (else by chance). Without names, the two factions nearest the caller fight.
+     * firstSoldiers} and {@code secondSoldiers} strong (100 each unless given), in blocks of 20. Without names, the two
+     * factions nearest the caller fight.
      */
     private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
-                              int secondSoldiers, @Nullable BattlePlan.General firstGeneral, @Nullable BattlePlan.General secondGeneral)
-            throws CommandSyntaxException {
+                              int secondSoldiers) throws CommandSyntaxException {
         ConquestServer server = server();
         Vec3 here = ctx.getSource().getPosition();
         List<Faction> nearest = server.data().factions().stream()
@@ -173,7 +161,7 @@ public final class PveCommands {
         double lookZ = Math.cos(Math.toRadians(yaw));
         BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
         try {
-            String line = RecruitsBattle.start(server.overworld(), a, firstSoldiers, firstGeneral, b, secondSoldiers, secondGeneral, centre, -lookZ, lookX);
+            String line = RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX);
             ctx.getSource().sendSuccess(() -> Component.literal(line), true);
         } catch (IllegalStateException e) {
             throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
@@ -194,10 +182,8 @@ public final class PveCommands {
             throw NO_FACTION.create();
         }
         RandomSource random = server.overworld().random;
-        BattlePlan.General generalA = random.nextBoolean() ? BattlePlan.General.WARRIOR : BattlePlan.General.TACTICIAN;
-        BattlePlan.General generalB = random.nextBoolean() ? BattlePlan.General.WARRIOR : BattlePlan.General.TACTICIAN;
         long start = System.nanoTime();
-        FieldBattle battle = new FieldBattle(generalA, BattlePlan.blocks(firstSoldiers), generalB, BattlePlan.blocks(secondSoldiers),
+        FieldBattle battle = new FieldBattle(BattlePlan.blocks(firstSoldiers), BattlePlan.blocks(secondSoldiers),
                 new BattlePlan.Point(0, 0), 1, 0, random.nextLong());
         FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         long millis = (System.nanoTime() - start) / 1_000_000;
@@ -207,23 +193,12 @@ public final class PveCommands {
                 : (outcome.winner() == 0 ? a.name() : b.name()) + " wins";
         int seconds = outcome == null ? battle.seconds() : outcome.seconds();
         String line = String.format(Locale.ROOT,
-                "Simulated %s (%s) %d v %s (%s) %d: %s after %d:%02d. Left %d and %d; blocks relieved %d and %d; generals %s and %s. Worked out in %d ms.",
-                a.name(), generalA.label(), armyA.started(), b.name(), generalB.label(), armyB.started(), result, seconds / 60, seconds % 60,
+                "Simulated %s %d v %s %d: %s after %d:%02d. Left %d and %d; blocks relieved %d and %d; generals %s and %s. Worked out in %d ms.",
+                a.name(), armyA.started(), b.name(), armyB.started(), result, seconds / 60, seconds % 60,
                 armyA.alive(), armyB.alive(), armyA.reliefs(), armyB.reliefs(), armyA.generalAlive() ? "alive" : "fallen",
                 armyB.generalAlive() ? "alive" : "fallen", millis);
         ctx.getSource().sendSuccess(() -> Component.literal(line), true);
         return 1;
-    }
-
-    /** A general named in a command: "warrior" or "tactician"; anything else leaves it to chance. */
-    @Nullable
-    private static BattlePlan.General general(String name) {
-        for (BattlePlan.General g : BattlePlan.General.values()) {
-            if (g.label().equalsIgnoreCase(name)) {
-                return g;
-            }
-        }
-        return null;
     }
 
     /** Treats a spot like a player standing there, so blocks near it become real soldiers (for testing without one). */

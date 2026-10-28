@@ -102,30 +102,23 @@ first. The old relation is restored when the battle ends.
   - **Standard-bearer:** a dyed cap and the faction banner carried in hand. They stay at the general's side and don't fight.
 - **Battle soldiers can't pick up items, and drop nothing when they die**, so nobody swaps the uniform for loot and
   the field stays clear.
-- **Line fighting:** front blocks march in line until an enemy is within 10 blocks, then stand and fight in line.
-  Recruits soldiers holding a place take on whoever comes within reach and return to it, so the line holds instead of
-  dissolving into a melee. A block whose enemy in front is gone presses on.
+- **Line fighting:** front blocks march in line until an enemy is within 10 blocks, then engage: they keep pressing on,
+  still in their ranks, until their front rank is 2 blocks from the enemy's, so the lines actually meet. Recruits
+  soldiers holding a place take on whoever comes within reach and return to it, so the line holds instead of
+  dissolving into a melee. A block whose enemy in front is gone marches on.
 - **Relief:** a front block down to half its soldiers is relieved by the first fit block (at least 60 % strong)
   waiting in its file, or the nearest fit block from another file. When the relief arrives (or after 20 s) it takes
   over, and the worn block withdraws behind the last block of its file, passive on the way. It stays there, fighting
   only if the enemy reaches it. This rotation keeps fresh soldiers at the front and makes a big battle last; with no
   fit block left, a front block fights on.
-- **The general** is rolled 50/50 for each army, and gives every block an order every second
-  (`battle/BattlePlan.order`).
-  - **Warrior:** a Recruits soldier at the top level (20 by Recruits' default config, about 80 health) with an iron
-    sword. They stand just behind the front line and charge in once it is fighting. Simple orders:
-    - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
-    - Archers march until an enemy is within 30 blocks, then halt and shoot.
-    - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
-      the enemy archers.
-  - **Tactician:** stays behind all the lines, out of the fight, and commands better:
-    - **Patience:** the infantry holds for 20 s while the archers advance and shoot, unless an enemy comes within
-      25 blocks first.
-    - **Cavalry flanking:** once the lines lock, each cavalry block rides wide past its end of the enemy line, then
-      round behind it, and charges from the rear. A ride that takes more than 40 s charges anyway.
-    - **A reserve:** a fifth of the infantry waits behind the last line. It is committed, joining the files with the
-      fewest blocks waiting, when a front block needs relief and no fit block is left, or the army is down to 60 %.
-  - Cavalry that has charged, and a warrior general, send any soldier with no target after the nearest enemy left.
+- **The general** gives every block an order every second (`battle/BattlePlan.order`). They are a Recruits soldier at
+  the top level (20 by Recruits' default config, about 80 health) with an iron sword, who stands just behind the front
+  line and charges in once it is fighting.
+  - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
+  - Archers march until an enemy is within 30 blocks, then halt and shoot.
+  - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
+    the enemy archers.
+  - Cavalry that has charged, and the general, send any soldier with no target after the nearest enemy left.
 - **Archers never march past their own front line**, so they don't walk out alone while the infantry waits.
 - **No open files:** a front file whose block has fallen, with no fit block left to send, is filled by any block still
   in the lines (worn or not), else the nearest resting block.
@@ -133,8 +126,7 @@ first. The old relation is restored when the battle ends.
   has fallen for 30 s once fighting has begun, the lines have stalled and everyone left charges. After 30 minutes the
   battle is called a draw.
 - **Reports:** every 10 s the chat and server log get the soldiers left on each side, the blocks relieved so far, the
-  server tick time, and how much of it the battle's own orders take. The start and end name each general's type, and
-  the end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse
+  server tick time, and how much of it the battle's own orders take. The end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse
   the battle spawned. Only one battle runs at a time.
 - **Battles as numbers** (`battle/FieldBattle`, the first step toward battles too big for live soldiers): the same
   battle fought block by block, one second at a time, with no entities. The generals give the same orders as in a
@@ -146,7 +138,7 @@ first. The old relation is restored when the battle ends.
     random soldiers, so each soldier's health is kept. Archers shoot 44 blocks, an arrow a second doing 0.19 on
     average, until their 64 arrows each run out.
   - A cavalry charge does half as much again for its first 3 s; a shieldwall takes 60 % from the front, and 40 % of
-    arrows. A warrior general fights like 4 soldiers.
+    arrows. The general fights like 4 soldiers.
   - **Calibration** (`battle/Calibration`): every live battle measures, each second, the health each block lost and
     who was striking it (by the numeric battle's own reach rules), how fast blocks walk and how much health soldiers
     start with, and fits a damage rate per kind of soldier. At its end it reports the fit (for the battle and all
@@ -157,11 +149,8 @@ first. The old relation is restored when the battle ends.
     or rear bonus any more. Walking speeds aren't measured well yet.
   - **How well it matches:** a battle's length and its winner are in the right range, but not reliably. At 300 a side
     live battles lasted 340 to 770 s against about 310 s as numbers; at 100 a side about 190 s against about 355 s.
-    As numbers a warrior general beats a tactician almost every time, while live the warrior won 3 of 5 at 300 a side
-    and the tactician won all 3 at 100. Live battles also vary much more.
-
-  `/pve debug battle <first> <soldiers> <second> <soldiers> [warrior|tactician] [warrior|tactician]` picks each
-  army's general, for calibration.
+    Live battles also vary much more. (Those were measured with two kinds of general and lines that stopped short of
+    each other; the rules have changed since.)
 
   `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
   2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes a fifth of

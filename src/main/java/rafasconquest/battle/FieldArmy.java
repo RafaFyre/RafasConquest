@@ -1,7 +1,6 @@
 package rafasconquest.battle;
 
 import org.jetbrains.annotations.Nullable;
-import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.FieldBlock.Duty;
 
@@ -12,37 +11,27 @@ import java.util.List;
 /** One side of a {@link FieldBattle}: its blocks, its general and how its lines stand. */
 public final class FieldArmy {
     final int side;
-    final General general;
     final double facingX;
     final double facingZ;
     final List<FieldBlock> blocks = new ArrayList<>();
     /** The block holding each file of the front line (it may have fallen; a relief then takes its place). */
     FieldBlock[] front = new FieldBlock[0];
-    /** Half the width of the front line, for the enemy's cavalry to ride round. */
-    double halfWidth;
-    double generalBack;
     @Nullable
     FieldBlock commander;
     @Nullable
     FieldBlock bearer;
-    boolean reserveCommitted;
     int reliefs;
     int started;
     int queueTicket;
 
-    FieldArmy(int side, General general, double facingX, double facingZ) {
+    FieldArmy(int side, double facingX, double facingZ) {
         this.side = side;
-        this.general = general;
         this.facingX = facingX;
         this.facingZ = facingZ;
     }
 
     public int side() {
         return side;
-    }
-
-    public General general() {
-        return general;
     }
 
     public double facingX() {
@@ -69,10 +58,6 @@ public final class FieldArmy {
 
     public int started() {
         return started;
-    }
-
-    public boolean reserveCommitted() {
-        return reserveCommitted;
     }
 
     public int reliefs() {

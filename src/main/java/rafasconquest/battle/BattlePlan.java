@@ -8,7 +8,7 @@ import java.util.List;
  * so it can be tested without a server. Positions are in the army's own frame: {@code right} along its battle line
  * (positive to the army's right), {@code back} behind its front (positive away from the enemy).
  * <p>
- * An army fights in lines: a front line of infantry blocks, relief lines behind it, and (for a tactician) a reserve.
+ * An army fights in lines: a front line of infantry blocks and relief lines behind it.
  * A front block that has lost half its soldiers is relieved by a fresh block from behind and withdraws to the rear;
  * that rotation is what makes a big battle last.
  */
@@ -35,10 +35,6 @@ public final class BattlePlan {
     public static final int MAX_WIDE_FRONT = 40;
     /** From one line to the next behind it. */
     public static final double LINE_GAP = 16;
-    /** A tactician keeps about this share of the infantry in reserve. */
-    public static final double RESERVE_SHARE = 0.2;
-    /** The reserve stands this far behind the last line. */
-    public static final double RESERVE_GAP = 10;
     /** Archers stand in rows this far behind the front line, and this far apart. */
     public static final double ARCHER_BACK = 6;
     public static final double ARCHER_ROW = 4;
@@ -56,16 +52,14 @@ public final class BattlePlan {
     public static final int FORMING_SECONDS = 5;
     /** How far a marching formation's line moves each second. */
     public static final double MARCH_STEP = 2;
-    /** Infantry halts and fights once an enemy is this close to its line. */
+    /** Infantry engages once an enemy is this close to its line... */
     public static final double INFANTRY_ENGAGE = 10;
+    /** ...and presses on, keeping its ranks, until its front rank is this close to the enemy's, so the lines meet. */
+    public static final double FRONT_CONTACT = 2;
     /** Archers halt this far from the nearest enemy and shoot (Recruits soldiers look for targets within 40). */
     public static final double ARCHER_RANGE = 30;
     /** Cavalry charges once an enemy comes this close, whatever else it was doing. */
     public static final double CAVALRY_THREAT = 20;
-    /** A tactician's infantry waits this long after forming while the archers shoot... */
-    public static final int PATIENCE_SECONDS = 20;
-    /** ...unless an enemy comes this close first. */
-    public static final double PATIENCE_RANGE = 25;
     /** A front block down to this share of its soldiers is relieved. */
     public static final double RELIEF_SHARE = 0.5;
     /** Only a block with at least this share of its soldiers goes forward to relieve another. */
@@ -73,10 +67,6 @@ public final class BattlePlan {
     /** A relieving block takes over once it is this close to the spot, or after {@link #RELIEF_SECONDS}. */
     public static final double RELIEF_ARRIVED = 6;
     public static final int RELIEF_SECONDS = 20;
-    /** A tactician commits the reserve once the army is down to this share of its soldiers. */
-    public static final double RESERVE_TRIGGER = 0.6;
-    /** A flanking formation moves on to its next waypoint once its line is this close to the current one. */
-    public static final double WAYPOINT_REACHED = 6;
     /** An army whose soldiers fall to this share of its starting strength routs. */
     public static final double ROUT_SHARE = 0.2;
     /** The battle is called a draw after this long. */
@@ -95,24 +85,12 @@ public final class BattlePlan {
         }
     }
 
-    /** The two kinds of general, rolled 50/50 for each army. */
-    public enum General {
-        /** A max-level soldier who charges in with the infantry. Commands by the simple rules. */
-        WARRIOR,
-        /** Stays back and commands better: patience, cavalry flanking, a reserve. */
-        TACTICIAN;
-
-        public String label() {
-            return this == WARRIOR ? "warrior" : "tactician";
-        }
-    }
-
     /**
      * Where a block stands when the army deploys, in the army's frame (the centre of its front rank). Infantry stands
-     * in {@code line} 0 (the front), 1, 2... behind it, at {@code file} along the line; a reserve block waits behind
-     * the last line until the general commits it. Archers and cavalry have line -1.
+     * in {@code line} 0 (the front), 1, 2... behind it, at {@code file} along the line. Archers and cavalry have line
+     * -1.
      */
-    public record Slot(Arm arm, double right, double back, int line, int file, boolean reserve) {
+    public record Slot(Arm arm, double right, double back, int line, int file) {
     }
 
     /** How many blocks of 20 an army of {@code soldiers} is: the nearest whole number, within the limits. */
@@ -123,11 +101,11 @@ public final class BattlePlan {
 
     /**
      * How an army of {@code blocks} blocks deploys: a fifth archers, a fifth cavalry (rounded), the rest infantry.
-     * A tactician keeps a fifth of the infantry in reserve. The rest stands in lines at most {@link #MAX_FRONT}
-     * blocks wide (a big army wider, see {@link #MAX_FRONT}), at least two lines once there are more than 4 blocks, shieldwalls every third file. Archers stand
-     * in rows behind the front line; cavalry on both wings (the right wing first).
+     * The infantry stands in lines at most {@link #MAX_FRONT} blocks wide (a big army wider, see
+     * {@link #MAX_FRONT}), at least two lines once there are more than 4 blocks, shieldwalls every third file.
+     * Archers stand in rows behind the front line; cavalry on both wings (the right wing first).
      */
-    public static List<Slot> deployment(General general, int blocks) {
+    public static List<Slot> deployment(int blocks) {
         int archers = Math.round(blocks / 5f);
         int cavalry = Math.round(blocks / 5f);
         int infantry = blocks - archers - cavalry;
@@ -139,8 +117,7 @@ public final class BattlePlan {
             }
             infantry++;
         }
-        int reserve = general == General.TACTICIAN && infantry >= 3 ? Math.max(1, Math.round(infantry * (float) RESERVE_SHARE)) : 0;
-        int inLines = infantry - reserve;
+        int inLines = infantry;
         int width = inLines <= 4 ? inLines : Math.min(MAX_WIDE_FRONT,
                 Math.max(Math.min(MAX_FRONT, (inLines + 1) / 2), (inLines + LINES_DEEP - 1) / LINES_DEEP));
         int lines = (inLines + width - 1) / width;
@@ -150,17 +127,13 @@ public final class BattlePlan {
             int inThisLine = Math.min(width, inLines - line * width);
             for (int file = 0; file < inThisLine; file++) {
                 Arm arm = file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
-                slots.add(new Slot(arm, across(file, inThisLine), line * LINE_GAP, line, file, false));
+                slots.add(new Slot(arm, across(file, inThisLine), line * LINE_GAP, line, file));
             }
-        }
-        double reserveBack = (lines - 1) * LINE_GAP + LINE_GAP / 2 + RESERVE_GAP;
-        for (int i = 0; i < reserve; i++) {
-            slots.add(new Slot(Arm.SWORDSMEN, across(i, reserve), reserveBack, lines, i, true));
         }
         for (int i = 0; i < archers; i++) {
             int row = i / width;
             int inRow = Math.min(width, archers - row * width);
-            slots.add(new Slot(Arm.ARCHERS, across(i % width, inRow), ARCHER_BACK + row * ARCHER_ROW, -1, i, false));
+            slots.add(new Slot(Arm.ARCHERS, across(i % width, inRow), ARCHER_BACK + row * ARCHER_ROW, -1, i));
         }
         double wingStart = width * BLOCK_PITCH / 2 + CAVALRY_GAP;
         int perWing = (cavalry + 1) / 2;
@@ -169,7 +142,7 @@ public final class BattlePlan {
             int side = i % 2 == 0 ? 1 : -1; // right wing first
             int inWing = i / 2;
             double out = wingStart + (inWing % columns) * BLOCK_PITCH;
-            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / columns) * CAVALRY_ROW, -1, i, false));
+            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / columns) * CAVALRY_ROW, -1, i));
         }
         return slots;
     }
@@ -179,16 +152,8 @@ public final class BattlePlan {
         return (i - (n - 1) / 2.0) * BLOCK_PITCH;
     }
 
-    /**
-     * How far behind the front centre the general stands: a warrior just behind the line, a tactician behind
-     * everything.
-     */
-    public static double generalBack(General general, List<Slot> slots) {
-        if (general == General.WARRIOR) {
-            return 6;
-        }
-        return slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElse(0) + 8;
-    }
+    /** How far behind the front centre the general stands: just behind the line, ready to go in with it. */
+    public static final double GENERAL_BACK = 6;
 
     /** The standard-bearer stands this far to the general's right. */
     public static final double BEARER_RIGHT = 2;
@@ -231,10 +196,11 @@ public final class BattlePlan {
         HOLD,
         /** Move the formation's line one {@link #MARCH_STEP} toward the enemy, keeping formation. */
         MARCH,
-        /** Stand in line and fight: its soldiers take on enemies within their reach, then return to their places. */
+        /**
+         * Fight in line: press on to {@link #FRONT_CONTACT} from the enemy's front, keeping ranks, and fight there; its
+         * soldiers take on enemies within reach and return to their places.
+         */
         ENGAGE,
-        /** Ride around the enemy's flank to strike from behind ({@link #flankRoute}). */
-        FLANK,
         /** Break formation and fight. */
         CHARGE
     }
@@ -244,28 +210,18 @@ public final class BattlePlan {
      * {@code nearestEnemy} is the distance from the formation's line to the nearest enemy soldier;
      * {@code infantryEngaged} is whether any of its own army's front line is fighting.
      */
-    public static Order order(General general, Arm arm, int secondsElapsed, double nearestEnemy, boolean infantryEngaged) {
+    public static Order order(Arm arm, int secondsElapsed, double nearestEnemy, boolean infantryEngaged) {
         if (secondsElapsed < FORMING_SECONDS) {
             return Order.HOLD;
         }
-        boolean tactician = general == General.TACTICIAN;
         return switch (arm) {
-            case SWORDSMEN, SHIELDWALL -> {
-                if (nearestEnemy <= INFANTRY_ENGAGE) {
-                    yield Order.ENGAGE;
-                }
-                boolean waiting = tactician && secondsElapsed < FORMING_SECONDS + PATIENCE_SECONDS && nearestEnemy > PATIENCE_RANGE;
-                yield waiting ? Order.HOLD : Order.MARCH;
-            }
+            case SWORDSMEN, SHIELDWALL -> nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
             case ARCHERS -> nearestEnemy <= ARCHER_RANGE ? Order.HOLD : Order.MARCH;
             case CAVALRY -> {
                 if (nearestEnemy <= CAVALRY_THREAT) {
                     yield Order.CHARGE;
                 }
-                if (!infantryEngaged) {
-                    yield Order.HOLD;
-                }
-                yield tactician ? Order.FLANK : Order.CHARGE;
+                yield infantryEngaged ? Order.CHARGE : Order.HOLD;
             }
         };
     }
@@ -291,25 +247,6 @@ public final class BattlePlan {
     /** Whether a block with {@code alive} of its {@code started} soldiers is fit to go forward and relieve another. */
     public static boolean fitToRelieve(int alive, int started) {
         return alive >= started * FIT_SHARE;
-    }
-
-    /**
-     * Whether a tactician commits the reserve: once the army is down to {@link #RESERVE_TRIGGER} of its soldiers, or
-     * a front block needs relief and no fit block is left in the lines to send.
-     */
-    public static boolean commitReserve(int alive, int started, boolean reliefNeeded, boolean reliefLeft) {
-        return alive <= started * RESERVE_TRIGGER || reliefNeeded && !reliefLeft;
-    }
-
-    /**
-     * The flanking ride for cavalry on its army's {@code side} (1 right, -1 left): first wide past the end of the
-     * enemy line ({@code enemyHalfWidth} either side of {@code enemyCentre}), then round behind it.
-     * ({@code facingX}, {@code facingZ}) is the flanking army's facing, toward the enemy.
-     */
-    public static List<Point> flankRoute(Point enemyCentre, double facingX, double facingZ, int side, double enemyHalfWidth) {
-        return List.of(
-                place(enemyCentre, facingX, facingZ, side * (enemyHalfWidth + 25), 0),
-                place(enemyCentre, facingX, facingZ, side * (enemyHalfWidth * 0.5 + 10), -25));
     }
 
     /** Whether an army with {@code alive} of its {@code started} soldiers left routs. */

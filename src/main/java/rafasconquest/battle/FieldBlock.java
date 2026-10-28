@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.Point;
 
-import java.util.List;
 
 /**
  * One block of a {@link FieldBattle}: 20 soldiers led by a captain (or a lone general or standard-bearer), as
@@ -25,8 +24,6 @@ public final class FieldBlock {
         WITHDRAWING,
         /** Back behind the lines, too worn to go forward again; fights only if the enemy reaches it. */
         RESTING,
-        /** A tactician's reserve, waiting to be committed. */
-        RESERVE,
         /** Archers and cavalry, which take their own orders. */
         SUPPORT,
         /** The army's general, alone. */
@@ -40,13 +37,10 @@ public final class FieldBlock {
     final int id;
     final int side;
     final Arm arm;
-    /** Where it stands across the army when not in a line (reserve, archers, cavalry). */
-    final double slotRight;
-    final double slotBack;
     final float[] health;
     /** The captain's place among its soldiers, or -1 (a lone general or standard-bearer). */
     final int captain;
-    /** A warrior general: fights like several soldiers. */
+    /** The general: a champion who fights like several soldiers. */
     final boolean champion;
     Point pos;
     Point line;
@@ -63,10 +57,6 @@ public final class FieldBlock {
     boolean engaged;
     /** Broken formation to chase and fight (cavalry that charged, a warrior general who went in). */
     boolean charged;
-    @Nullable
-    List<Point> route;
-    int routeIndex;
-    int routeStarted;
     /** Arrows left, all its archers together. */
     int arrows;
     /** Seconds in a row it has been fighting hand to hand (a cavalry charge tells only at first). */
@@ -81,7 +71,7 @@ public final class FieldBlock {
     double liveDamage;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
-               double slotRight, double slotBack, Point line, double facingX, double facingZ, Duty duty) {
+               Point line, double facingX, double facingZ, Duty duty) {
         this.id = id;
         this.side = side;
         this.arm = arm;
@@ -90,8 +80,6 @@ public final class FieldBlock {
         this.alive = soldiers;
         this.captain = captain;
         this.champion = champion;
-        this.slotRight = slotRight;
-        this.slotBack = slotBack;
         this.line = line;
         this.pos = line;
         this.facingX = facingX;
@@ -130,7 +118,7 @@ public final class FieldBlock {
         return captain;
     }
 
-    /** A warrior general. */
+    /** The general, a champion. */
     public boolean champion() {
         return champion;
     }

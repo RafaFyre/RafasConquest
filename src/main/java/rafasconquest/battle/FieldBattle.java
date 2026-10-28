@@ -2,7 +2,6 @@ package rafasconquest.battle;
 
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.BattlePlan.Arm;
-import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.FieldBlock.Duty;
 
@@ -13,8 +12,8 @@ import java.util.Random;
 
 /**
  * A battle fought as numbers, block by block, one second at a time: no entities, so it costs next to nothing however
- * big the armies are. The generals command exactly as in a live battle (lines, relief, the reserve, archers, cavalry
- * flanking; {@link BattlePlan}); blocks walk to where they are ordered and fight whoever is within reach
+ * big the armies are. The generals command exactly as in a live battle (lines, relief, archers, cavalry;
+ * {@link BattlePlan}); blocks walk to where they are ordered and fight whoever is within reach
  * ({@link FieldRules}). Each soldier's health is kept, so a block can later become real soldiers and back.
  * <p>
  * Deterministic for a given seed. Not thread safe.
@@ -38,34 +37,32 @@ public final class FieldBattle {
      * Deploys two armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit vector
      * from the first army's side toward the second's), {@code blocks} blocks of 20 each.
      */
-    public FieldBattle(General firstGeneral, int firstBlocks, General secondGeneral, int secondBlocks,
-                       Point centre, double axisX, double axisZ, long seed) {
-        this(firstGeneral, firstBlocks, secondGeneral, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES);
+    public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed) {
+        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES);
     }
 
     /** The same, fought with other rates (for calibration). */
-    public FieldBattle(General firstGeneral, int firstBlocks, General secondGeneral, int secondBlocks,
-                       Point centre, double axisX, double axisZ, long seed, FieldRules.Rates rates) {
+    public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
+                       FieldRules.Rates rates) {
         this.rates = rates;
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         armies = new FieldArmy[]{
-                deploy(0, firstGeneral, firstBlocks, fronts[0], axisX, axisZ),
-                deploy(1, secondGeneral, secondBlocks, fronts[1], -axisX, -axisZ)};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ)};
     }
 
-    private static FieldArmy deploy(int side, General general, int blocks, Point front, double facingX, double facingZ) {
-        FieldArmy army = new FieldArmy(side, general, facingX, facingZ);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(general, blocks);
+    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ) {
+        FieldArmy army = new FieldArmy(side, facingX, facingZ);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
-        army.halfWidth = files * BattlePlan.BLOCK_PITCH / 2;
         int id = side * 10_000;
         for (BattlePlan.Slot slot : slots) {
             Point line = BattlePlan.place(front, facingX, facingZ, slot.right(), slot.back());
-            Duty duty = !slot.arm().infantry() ? Duty.SUPPORT : slot.reserve() ? Duty.RESERVE : slot.line() == 0 ? Duty.FRONT : Duty.LINE;
+            Duty duty = !slot.arm().infantry() ? Duty.SUPPORT : slot.line() == 0 ? Duty.FRONT : Duty.LINE;
             FieldBlock block = new FieldBlock(id++, side, slot.arm(), BattlePlan.SOLDIERS_PER_FORMATION, FieldRules.SOLDIER_HEALTH,
-                    BattlePlan.LEADER_INDEX, false, slot.right(), slot.back(), line, facingX, facingZ, duty);
+                    BattlePlan.LEADER_INDEX, false, line, facingX, facingZ, duty);
             block.file = slot.file();
             army.blocks.add(block);
             if (duty == Duty.FRONT) {
@@ -74,13 +71,11 @@ public final class FieldBattle {
                 army.join(block, slot.file());
             }
         }
-        army.generalBack = BattlePlan.generalBack(general, slots);
-        boolean warrior = general == General.WARRIOR;
-        Point generalSpot = BattlePlan.place(front, facingX, facingZ, 0, army.generalBack);
-        army.commander = new FieldBlock(id++, side, Arm.SWORDSMEN, 1, warrior ? FieldRules.WARRIOR_HEALTH : FieldRules.SOLDIER_HEALTH,
-                -1, warrior, 0, army.generalBack, generalSpot, facingX, facingZ, Duty.GENERAL);
-        army.bearer = new FieldBlock(id, side, Arm.SWORDSMEN, 1, FieldRules.SOLDIER_HEALTH, -1, false, BattlePlan.BEARER_RIGHT,
-                army.generalBack, BattlePlan.place(front, facingX, facingZ, BattlePlan.BEARER_RIGHT, army.generalBack), facingX, facingZ, Duty.BEARER);
+        Point generalSpot = BattlePlan.place(front, facingX, facingZ, 0, BattlePlan.GENERAL_BACK);
+        army.commander = new FieldBlock(id++, side, Arm.SWORDSMEN, 1, FieldRules.WARRIOR_HEALTH,
+                -1, true, generalSpot, facingX, facingZ, Duty.GENERAL);
+        army.bearer = new FieldBlock(id, side, Arm.SWORDSMEN, 1, FieldRules.SOLDIER_HEALTH, -1, false,
+                BattlePlan.place(front, facingX, facingZ, BattlePlan.BEARER_RIGHT, BattlePlan.GENERAL_BACK), facingX, facingZ, Duty.BEARER);
         army.blocks.add(army.commander);
         army.blocks.add(army.bearer);
         army.started = army.blocks.stream().mapToInt(FieldBlock::started).sum();
@@ -196,7 +191,6 @@ public final class FieldBattle {
                         }
                     }
                 }
-                case RESERVE -> block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, block.slotRight, block.slotBack);
                 case SUPPORT -> support(army, enemy, block, engaged);
                 case GENERAL -> general(army, enemy, block, engaged);
                 case BEARER -> {
@@ -212,22 +206,25 @@ public final class FieldBattle {
 
     private void holdFront(FieldArmy army, FieldBlock block, FieldArmy enemy, boolean engaged) {
         double nearest = nearest(block, block.line, enemy);
-        switch (BattlePlan.order(army.general, block.arm, seconds, nearest, engaged)) {
+        switch (BattlePlan.order(block.arm, seconds, nearest, engaged)) {
             case MARCH -> {
                 block.engaged = false;
                 block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
             }
-            case ENGAGE -> block.engaged = true;
+            case ENGAGE -> {
+                // Presses on, in its ranks, until the lines meet.
+                block.engaged = true;
+                double step = Math.min(BattlePlan.MARCH_STEP, nearest - BattlePlan.FRONT_CONTACT);
+                if (step > 0) {
+                    block.line = block.line.plus(army.facingX * step, army.facingZ * step);
+                }
+            }
             default -> {
             }
         }
     }
 
     private void relieve(FieldArmy army) {
-        boolean tactician = army.general == General.TACTICIAN;
-        if (tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.alive(), army.started, false, true)) {
-            commitReserve(army);
-        }
         for (int file = 0; file < army.front.length; file++) {
             FieldBlock held = army.front[file];
             if (held.relief != null && held.relief.alive > 0 && held.relief.duty == Duty.RELIEVING) {
@@ -238,10 +235,6 @@ public final class FieldBattle {
                 continue;
             }
             FieldBlock relief = pickRelief(army, file, held.line);
-            if (relief == null && tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.alive(), army.started, true, false)) {
-                commitReserve(army);
-                relief = pickRelief(army, file, held.line);
-            }
             if (relief == null && held.alive == 0) {
                 relief = lastStand(army, held.line);
             }
@@ -300,38 +293,12 @@ public final class FieldBattle {
         relieved.line = relieved.rear;
     }
 
-    private static void commitReserve(FieldArmy army) {
-        army.reserveCommitted = true;
-        for (FieldBlock f : army.blocks) {
-            if (f.duty == Duty.RESERVE && f.alive > 0) {
-                int shortest = 0;
-                for (int file = 1; file < army.front.length; file++) {
-                    if (army.queue(file).size() < army.queue(shortest).size()) {
-                        shortest = file;
-                    }
-                }
-                army.join(f, shortest);
-            }
-        }
-    }
-
     private void support(FieldArmy army, FieldArmy enemy, FieldBlock block, boolean engaged) {
-        if (block.route != null) {
-            ride(block, enemy);
-            return;
-        }
-        switch (BattlePlan.order(army.general, block.arm, seconds, nearest(block, block.line, enemy), engaged)) {
+        switch (BattlePlan.order(block.arm, seconds, nearest(block, block.line, enemy), engaged)) {
             case MARCH -> {
                 if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line))) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
-            }
-            case FLANK -> {
-                int side = block.slotRight >= 0 ? 1 : -1;
-                block.route = BattlePlan.flankRoute(centreOf(enemy), army.facingX, army.facingZ, side, enemy.halfWidth);
-                block.routeIndex = 0;
-                block.routeStarted = seconds;
-                ride(block, enemy);
             }
             case CHARGE -> block.charged = true;
             default -> {
@@ -339,44 +306,18 @@ public final class FieldBattle {
         }
     }
 
-    private void ride(FieldBlock block, FieldArmy enemy) {
-        if (block.pos.distanceTo(block.route.get(block.routeIndex)) <= BattlePlan.WAYPOINT_REACHED) {
-            block.routeIndex++;
-        }
-        if (block.routeIndex >= block.route.size() || seconds - block.routeStarted >= 40) {
-            block.route = null;
-            block.charged = true;
-            return;
-        }
-        block.line = block.route.get(block.routeIndex);
-    }
-
     private void general(FieldArmy army, FieldArmy enemy, FieldBlock block, boolean engaged) {
-        if (army.general == General.WARRIOR && engaged) {
+        if (engaged) {
             block.charged = true;
             return;
         }
-        block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, army.generalBack);
+        block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
     }
 
     /** How far behind its army's front line a point is (negative: ahead of it). */
     private static double behindFront(FieldArmy army, Point at) {
         Point front = army.frontCentre();
         return (front.x() - at.x()) * army.facingX + (front.z() - at.z()) * army.facingZ;
-    }
-
-    private static Point centreOf(FieldArmy army) {
-        double x = 0;
-        double z = 0;
-        int n = 0;
-        for (FieldBlock b : army.blocks) {
-            if (b.alive > 0) {
-                x += b.pos.x() * b.alive;
-                z += b.pos.z() * b.alive;
-                n += b.alive;
-            }
-        }
-        return n == 0 ? new Point(0, 0) : new Point(x / n, z / n);
     }
 
     /**

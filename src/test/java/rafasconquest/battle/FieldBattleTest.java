@@ -2,7 +2,6 @@ package rafasconquest.battle;
 
 import org.junit.jupiter.api.Test;
 import rafasconquest.battle.BattlePlan.Arm;
-import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.FieldBlock.Duty;
 import rafasconquest.battle.FieldRules.Side;
@@ -15,30 +14,28 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldBattleTest {
-    private static FieldBattle battle(General a, int aBlocks, General b, int bBlocks, long seed) {
-        return new FieldBattle(a, aBlocks, b, bBlocks, new Point(0, 0), 1, 0, seed);
+    private static FieldBattle battle(int aBlocks, int bBlocks, long seed) {
+        return new FieldBattle(aBlocks, bBlocks, new Point(0, 0), 1, 0, seed);
     }
 
     @Test
     void aTwoThousandStrongBattleRunsToTheEndInWellUnderASecondOfWork() {
-        for (General a : General.values()) {
-            for (General b : General.values()) {
-                FieldBattle battle = battle(a, 100, b, 100, 7);
+        for (long seed = 7; seed < 10; seed++) {
+            FieldBattle battle = battle(100, 100, seed);
                 long start = System.nanoTime();
                 FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
                 double seconds = (System.nanoTime() - start) / 1e9;
-                assertNotNull(outcome, a + " v " + b + " never ended");
-                assertTrue(outcome.winner() >= 0, a + " v " + b + ": " + outcome.result());
-                assertTrue(seconds < 3, a + " v " + b + " took " + seconds + " s to simulate");
-                assertTrue(outcome.seconds() >= 240, a + " v " + b + " was over in " + outcome.seconds() + " s; big battles should last");
+                assertNotNull(outcome, "never ended");
+                assertTrue(outcome.winner() >= 0, outcome.result());
+                assertTrue(seconds < 3, "took " + seconds + " s to simulate");
+                assertTrue(outcome.seconds() >= 240, "was over in " + outcome.seconds() + " s; big battles should last");
                 assertTrue(battle.army(0).reliefs() + battle.army(1).reliefs() >= 20, "the lines rotate");
-            }
         }
     }
 
     @Test
     void aTenThousandStrongBattleIsStillQuickToFight() {
-        FieldBattle battle = battle(General.TACTICIAN, 500, General.WARRIOR, 500, 7);
+        FieldBattle battle = battle(500, 500, 7);
         long start = System.nanoTime();
         FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         double seconds = (System.nanoTime() - start) / 1e9;
@@ -48,15 +45,32 @@ class FieldBattleTest {
     }
 
     @Test
+    void engagedFrontLinesCloseInUntilTheyMeet() {
+        FieldBattle battle = battle(25, 25, 8);
+        double closest = Double.MAX_VALUE;
+        for (int i = 0; i < 60 && !battle.over(); i++) {
+            battle.second();
+            for (FieldBlock a : battle.army(0).front) {
+                for (FieldBlock b : battle.army(1).front) {
+                    if (a.alive() > 0 && b.alive() > 0) {
+                        closest = Math.min(closest, a.distanceTo(b));
+                    }
+                }
+            }
+        }
+        assertTrue(closest <= BattlePlan.FRONT_CONTACT + BattlePlan.MARCH_STEP, "the fronts came within " + closest);
+    }
+
+    @Test
     void theSameSeedFightsTheSameBattle() {
-        FieldBattle.Outcome first = battle(General.TACTICIAN, 25, General.WARRIOR, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
-        FieldBattle.Outcome again = battle(General.TACTICIAN, 25, General.WARRIOR, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
+        FieldBattle.Outcome first = battle(25, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
+        FieldBattle.Outcome again = battle(25, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
         assertEquals(first, again);
     }
 
     @Test
     void aMuchBiggerArmyWinsQuicklyAndCheaply() {
-        FieldBattle battle = battle(General.WARRIOR, 100, General.WARRIOR, 25, 3);
+        FieldBattle battle = battle(100, 25, 3);
         FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         assertEquals(0, outcome.winner());
         assertTrue(battle.army(0).alive() > battle.army(0).started() * 0.9);
@@ -64,7 +78,7 @@ class FieldBattleTest {
 
     @Test
     void nobodyFightsBeforeTheLinesMeet() {
-        FieldBattle battle = battle(General.WARRIOR, 25, General.WARRIOR, 25, 5);
+        FieldBattle battle = battle(25, 25, 5);
         for (int i = 0; i < BattlePlan.FORMING_SECONDS; i++) {
             battle.second();
         }
@@ -74,7 +88,7 @@ class FieldBattleTest {
 
     @Test
     void woundsAreKeptSoldierBySoldier() {
-        FieldBattle battle = battle(General.TACTICIAN, 25, General.TACTICIAN, 25, 9);
+        FieldBattle battle = battle(25, 25, 9);
         battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         boolean wounded = false;
         for (FieldBlock block : battle.army(0).blocks()) {
@@ -93,7 +107,7 @@ class FieldBattleTest {
 
     @Test
     void archersNeverEndUpAheadOfTheirFrontLine() {
-        FieldBattle battle = battle(General.TACTICIAN, 25, General.TACTICIAN, 25, 2);
+        FieldBattle battle = battle(25, 25, 2);
         for (int i = 0; i < 40; i++) {
             battle.second();
             FieldArmy army = battle.army(0);
@@ -109,7 +123,7 @@ class FieldBattleTest {
 
     @Test
     void wornBlocksWithdrawAndFreshOnesTakeTheirPlace() {
-        FieldBattle battle = battle(General.WARRIOR, 100, General.WARRIOR, 100, 4);
+        FieldBattle battle = battle(100, 100, 4);
         boolean sawWithdrawal = false;
         for (int i = 0; i < 300 && !battle.over(); i++) {
             battle.second();
@@ -121,7 +135,7 @@ class FieldBattleTest {
 
     @Test
     void realSoldiersWalkThemselvesAndTakeDamageFromNumbersAsDamageToDeal() {
-        FieldBattle battle = battle(General.WARRIOR, 5, General.WARRIOR, 5, 6);
+        FieldBattle battle = battle(5, 5, 6);
         FieldBlock real = battle.army(0).front[0];
         real.setLive(true);
         float[] full = real.health();
@@ -139,7 +153,7 @@ class FieldBattleTest {
 
     @Test
     void realSoldiersOnBothSidesFightItOutThemselves() {
-        FieldBattle battle = battle(General.WARRIOR, 1, General.WARRIOR, 1, 6);
+        FieldBattle battle = battle(1, 1, 6);
         FieldBlock a = battle.army(0).front[0];
         FieldBlock b = battle.army(1).front[0];
         for (int side = 0; side < 2; side++) {
@@ -157,7 +171,7 @@ class FieldBattleTest {
 
     @Test
     void soldiersFallingOnTheirOwnCountTowardAStall() {
-        FieldBattle battle = battle(General.WARRIOR, 5, General.WARRIOR, 5, 6);
+        FieldBattle battle = battle(5, 5, 6);
         FieldBlock real = battle.army(0).front[0];
         real.setLive(true);
         battle.second();
@@ -189,7 +203,7 @@ class FieldBattleTest {
     @Test
     void damageFallsInWholeHitsOnLivingSoldiers() {
         FieldBlock block = new FieldBlock(1, 0, Arm.SWORDSMEN, 20, FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false,
-                0, 0, new Point(0, 0), 1, 0, Duty.FRONT);
+                new Point(0, 0), 1, 0, Duty.FRONT);
         Random random = new Random(1);
         assertEquals(0, block.takeDamage(FieldRules.HIT / 2, random), "less than a hit is carried over");
         assertEquals(20, block.alive());

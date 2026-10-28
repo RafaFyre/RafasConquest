@@ -33,7 +33,6 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattlePlan.Arm;
-import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.Calibration;
 import rafasconquest.battle.FieldArmy;
@@ -148,7 +147,6 @@ public final class RecruitsBattle {
     private final Map<FieldBlock, Point> lastCentre = new HashMap<>();
     /** How the same battle came out fought only as numbers, for setting beside this one. */
     private final String prediction;
-    private final boolean[] reserveAnnounced = new boolean[2];
     private final boolean[] chargeAnnounced = new boolean[2];
     private boolean meleeAnnounced;
     private int ticks;
@@ -253,14 +251,13 @@ public final class RecruitsBattle {
 
     /**
      * Sets up both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
-     * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army's general is a
-     * warrior or a tactician, 50/50, unless given. Each army is {@code firstSoldiers} or {@code secondSoldiers}
-     * strong, in whole blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Nobody is
+     * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army is
+     * {@code firstSoldiers} or {@code secondSoldiers} strong, in whole blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Nobody is
      * spawned yet: blocks near players become real soldiers over the next seconds. Returns a line for the caller, or
      * throws if Recruits isn't ready.
      */
-    public static String start(ServerLevel level, Faction first, int firstSoldiers, @Nullable General firstGeneral, Faction second,
-                               int secondSoldiers, @Nullable General secondGeneral, Point centre, double axisX, double axisZ) {
+    public static String start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                               Point centre, double axisX, double axisZ) {
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
@@ -273,12 +270,10 @@ public final class RecruitsBattle {
         Side[] sides = {
                 new Side(first, teamA, uniforms[0], markColor(first), banner(level, first)),
                 new Side(second, teamB, uniforms[1], markColor(second), banner(level, second))};
-        General generalA = firstGeneral != null ? firstGeneral : rollGeneral(level);
-        General generalB = secondGeneral != null ? secondGeneral : rollGeneral(level);
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
-        FieldBattle field = new FieldBattle(generalA, blocksA, generalB, blocksB, centre, axisX, axisZ, level.random.nextLong());
-        String prediction = predict(generalA, blocksA, generalB, blocksB, sides, centre, axisX, axisZ);
+        FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong());
+        String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
@@ -313,11 +308,7 @@ public final class RecruitsBattle {
     }
 
     private String describe(int side) {
-        return sides[side].faction.name() + " (" + field.army(side).general().label() + ")";
-    }
-
-    private static General rollGeneral(ServerLevel level) {
-        return level.random.nextBoolean() ? General.WARRIOR : General.TACTICIAN;
+        return sides[side].faction.name();
     }
 
     /** The faction's main colour (its banner's base dye) as RGB, the way vanilla dyes leather with it. */
@@ -576,7 +567,7 @@ public final class RecruitsBattle {
         return stack;
     }
 
-    /** A warrior general: Recruits' top level with every level's bonuses, with an iron sword. */
+    /** A general: Recruits' top level with every level's bonuses, with an iron sword. */
     private static void makeChampion(AbstractRecruitEntity soldier) {
         int max = RecruitsServerConfig.RecruitsMaxXpLevel.get();
         // Recruits grants a level's bonuses on reaching the next one, reading the level it is leaving.
@@ -850,18 +841,14 @@ public final class RecruitsBattle {
         }
     }
 
-    /** Tells everyone when a general commits the reserve, a warrior general charges, or the lines stall. */
+    /** Tells everyone when a general charges, or the lines stall. */
     private void announce() {
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
-            if (!reserveAnnounced[side] && army.reserveCommitted()) {
-                reserveAnnounced[side] = true;
-                broadcast(sides[side].faction.name() + "'s general commits the reserve");
-            }
             FieldBlock commander = army.commander();
-            if (!chargeAnnounced[side] && commander != null && commander.charged() && army.general() == General.WARRIOR) {
+            if (!chargeAnnounced[side] && commander != null && commander.charged()) {
                 chargeAnnounced[side] = true;
-                broadcast(sides[side].faction.name() + "'s warrior general charges");
+                broadcast(sides[side].faction.name() + "'s general charges");
             }
         }
         if (!meleeAnnounced && field.finalMelee()) {
@@ -1061,10 +1048,10 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Fights the same battle only as numbers a few times (each army's general and size as here, different luck), so
-     * its end can be set beside this one's.
+     * Fights the same battle only as numbers a few times (each army's size as here, different luck), so its end can
+     * be set beside this one's.
      */
-    private static String predict(General a, int aBlocks, General b, int bBlocks, Side[] sides, Point centre, double axisX, double axisZ) {
+    private static String predict(int aBlocks, int bBlocks, Side[] sides, Point centre, double axisX, double axisZ) {
         if (aBlocks + bBlocks > PREDICT_UP_TO_BLOCKS) {
             return "not worked out (too big to fight through at the start)";
         }
@@ -1074,7 +1061,7 @@ public final class RecruitsBattle {
         long leftA = 0;
         long leftB = 0;
         for (int i = 0; i < runs; i++) {
-            FieldBattle battle = new FieldBattle(a, aBlocks, b, bBlocks, centre, axisX, axisZ, i);
+            FieldBattle battle = new FieldBattle(aBlocks, bBlocks, centre, axisX, axisZ, i);
             FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
             wins[outcome == null || outcome.winner() < 0 ? 2 : outcome.winner()]++;
             seconds += battle.seconds();
