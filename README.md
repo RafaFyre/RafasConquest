@@ -126,6 +126,8 @@ first. The old relation is restored when the battle ends.
   - **The guard:** 20 riders in full iron, their horses in iron too, ride just behind the general. They ride out at
     any enemy within 15 blocks of the general, and at cavalry charging the general from 40, and reform at the
     general's back. Cavalry charging the general sends them to shelter behind the nearest of their own infantry.
+    The guard shields the general wherever it is: anything charging or riding at the general within 40 blocks is
+    met by the guard first, even if the guard is in the middle of a charge itself.
   - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
   - Archers march until an enemy is within 30 blocks, then halt and shoot.
   - **Wings:** an army of more than 300 soldiers fights as a left wing, a centre and a right wing: the left and right
@@ -176,10 +178,12 @@ first. The old relation is restored when the battle ends.
       against cavalry striking its front, and a block fighting to its front can't turn to brace.
   - **Charge and Decapitate**
     - *Unrelenting Charge*: the general, their guard and half the cavalry wait in a wedge far behind the middle of
-      the lines, the general at its tip; the other half of the cavalry is split between the two wings' backlines,
-      where it fights for its wing. The wedge's first half, which the general leads, charges once the lines are
-      fighting. When
-      it is spent and riding back, the second half goes in, then the first again, and so on. While the general
+      the lines, the guard at its tip and the general straight behind it; the other half of the cavalry is split
+      between the two wings' backlines, where it fights for its wing. The wedge's first half, which the general
+      leads with their guard, charges once the lines are fighting. The general never rides on without the guard
+      ahead: if the guard turns off to meet a threat, or falls, the general drops out of the charge, and in the
+      fight the general keeps right behind the guard and falls back when it does. When the first half is spent and
+      riding back, the second half goes in, then the first again, and so on. While the general
       leads, their own soldiers within 15 blocks take 70 % of the harm done to them. The general and their guard
       spend momentum at half the rate of other cavalry (half of it, not all, against a wall's front), so they cut
       deeper before falling back.

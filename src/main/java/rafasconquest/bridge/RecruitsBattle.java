@@ -663,6 +663,10 @@ public final class RecruitsBattle {
                 return;
             }
         }
+        if (block.charged() && block.duty() == Duty.GENERAL) {
+            hold(living.get(0), block.line()); // in the fight, right behind the guard; never off alone
+            return;
+        }
         if (block.charged() && block.duty() != Duty.FLEEING) {
             if (!l.appliedCharge) {
                 l.appliedCharge = true;

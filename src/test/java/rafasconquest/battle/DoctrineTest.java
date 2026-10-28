@@ -123,7 +123,11 @@ class DoctrineTest {
     void theHalvesOfAnUnrelentingChargeTakeTurnsAndTheGeneralLeadsTheFirst() {
         FieldBattle battle = battle(25, CHARGE_BAIT, List.of(), 4);
         FieldArmy army = battle.army(0);
-        assertTrue(army.commander().pos().x() < -30 - BattlePlan.SPEAR_BACK + 1, "the general waits at the wedge's tip");
+        FieldBlock general = army.commander();
+        FieldBlock guard = army.guard();
+        assertTrue(general.inWedge() && guard.inWedge());
+        assertTrue(guard.pos().x() > general.pos().x(), "the guard rides at the wedge's tip, ahead of the general");
+        assertEquals(guard.pos().z(), general.pos().z(), 1e-9, "the general straight behind it");
         List<String> events = fight(battle);
         int first = events.indexOf("0:leads the first half of the wedge at the enemy line");
         assertTrue(first >= 0 || events.stream().anyMatch(e -> e.startsWith("0:leads the first half")), events.toString());
@@ -160,6 +164,29 @@ class DoctrineTest {
         assertEquals(FieldRules.MOMENTUM_LOSS_INFANTRY, riderLoss, 1e-9);
         assertEquals(FieldRules.MOMENTUM_LOSS_INFANTRY * FieldRules.LEADER_MOMENTUM_LOSS, leaderLoss, 1e-9);
         assertFalse(FieldBattle.leadsTheCharge(battle(25, List.of(), List.of(), 1).army(0).guard()), "only in a charge the general leads");
+    }
+
+    @Test
+    void theGuardMeetsWhateverComesForTheGeneralAndTheGeneralNeverRidesOnAlone() {
+        int metThreats = 0;
+        int alone = 0;
+        for (long seed = 1; seed <= 4; seed++) {
+            // Spear and Shield sends its wedge at the general; the other general leads an unrelenting charge.
+            FieldBattle battle = battle(100, CHARGE_BAIT, SPEAR_BAIT, seed);
+            FieldBlock general = battle.army(0).commander();
+            FieldBlock guard = battle.army(0).guard();
+            while (!battle.over() && battle.seconds() < BattlePlan.TIME_LIMIT_SECONDS) {
+                battle.second();
+                metThreats += (int) battle.takeEvents().stream()
+                        .filter(e -> e.side() == 0 && e.text().startsWith("has their guard ride out")).count();
+                battle.takeCalls();
+                if (general.alive() > 0 && general.approaching() && !(guard.approaching() && guard.alive() > 0)) {
+                    alone++;
+                }
+            }
+        }
+        assertTrue(metThreats > 0, "the guard rode out at a threat to the general");
+        assertEquals(0, alone, "the general rode on in the charge without the guard ahead");
     }
 
     @Test

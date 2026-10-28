@@ -145,12 +145,13 @@ public final class FieldBattle {
         army.blocks.add(army.guard);
         army.blocks.add(army.bearer);
 
-        // The wedge: the general leads it (Unrelenting Charge), their guard behind, then half the cavalry, the other half
-        // split between the two wings' backlines; a Great Spear alone takes all the cavalry.
+        // The wedge: the general leads it (Unrelenting Charge) from right behind their guard, which rides at its tip,
+        // then half the cavalry, the other half split between the two wings' backlines; a Great Spear alone takes all
+        // the cavalry.
         if (spear || unrelenting) {
             if (unrelenting) {
-                army.wedge.add(army.commander);
                 army.wedge.add(army.guard);
+                army.wedge.add(army.commander);
                 int inWedge = (cavalry.size() + 1) / 2;
                 army.wedge.addAll(cavalry.subList(0, inWedge));
                 int[] onWing = new int[3];
@@ -175,6 +176,15 @@ public final class FieldBattle {
                 member.wedgeRight = at[0];
                 member.wedgeBack = at[1];
                 member.half = unrelenting && i >= firstHalf ? 1 : 0;
+                if (member == army.commander || member == army.guard) {
+                    member.half = 0; // the general and their guard always ride together, in the first half
+                }
+                if (member == army.commander) {
+                    // Straight behind the guard, between it and the next row.
+                    member.wedgeRight = 0;
+                    member.wedgeBack = BattlePlan.WEDGE_ROW / 2;
+                    at = new double[]{0, member.wedgeBack};
+                }
                 member.line = BattlePlan.place(front, facingX, facingZ, at[0], army.wedgeHomeBack + at[1]);
                 member.pos = member.line;
                 if (spear) {
@@ -347,6 +357,7 @@ public final class FieldBattle {
         brace(army, enemy);
         pincer(army, enemy);
         huntStoppedCavalry(army, enemy);
+        shieldGeneral(army, enemy);
         wedge(army, enemy, engaged);
         for (FieldBlock block : army.blocks) {
             if (block.alive == 0) {
@@ -359,6 +370,16 @@ public final class FieldBattle {
             if (block.approaching) {
                 if (!block.inWedge) {
                     ride(block);
+                }
+                continue;
+            }
+            if (block.charged && block == army.commander) {
+                // In the fight the general stays right behind their guard, and falls back to reform when it does.
+                FieldBlock guard = army.guard;
+                if (guard == null || guard.alive == 0 || !guard.charged) {
+                    recall(army, block);
+                } else {
+                    block.line = BattlePlan.place(guard.pos, guard.facingX, guard.facingZ, 0, BattlePlan.GUARD_BACK);
                 }
                 continue;
             }
@@ -805,6 +826,35 @@ public final class FieldBattle {
     }
 
     /** The general's guard: behind the general (or in the wedge), riding out at any enemy that comes near them. */
+    /**
+     * The guard shields the general: whatever comes for the general (enemy charging or riding at them) within
+     * {@link FieldRules#GUARD_INTERCEPT} is met by the guard first, wherever it is, even mid-charge in the wedge.
+     */
+    private void shieldGeneral(FieldArmy army, FieldArmy enemy) {
+        FieldBlock general = army.commander;
+        FieldBlock guard = army.guard;
+        if (general == null || guard == null || general.alive == 0 || guard.alive == 0 || guard.duty == Duty.RALLYING
+                || guard.duty == Duty.FLEEING) {
+            return;
+        }
+        FieldBlock threat = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.prey == general && (e.charged || e.approaching) && e.pos.distanceTo(general.pos) <= FieldRules.GUARD_INTERCEPT
+                    && (threat == null || e.pos.distanceTo(general.pos) < threat.pos.distanceTo(general.pos))) {
+                threat = e;
+            }
+        }
+        if (threat == null || guard.prey == threat && guard.charged) {
+            return;
+        }
+        guard.approaching = false;
+        guard.waypoint = null;
+        guard.prey = threat;
+        guard.charged = true;
+        calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+        events.add(new Event(army.side, "has their guard ride out to meet the enemy coming for them"));
+    }
+
     private void guard(FieldArmy army, FieldArmy enemy, FieldBlock guard) {
         if (seconds < guard.reformUntil) {
             return;
@@ -994,6 +1044,18 @@ public final class FieldBattle {
             }
             army.wedgeTarget = null;
             return;
+        }
+        FieldBlock general = army.commander;
+        if (general != null && riders.contains(general) && (army.guard == null || !riders.contains(army.guard))) {
+            // The guard has ridden off to meet a threat, or fallen: the general doesn't ride on in front alone.
+            general.approaching = false;
+            general.waypoint = null;
+            general.prey = null;
+            riders.remove(general);
+            if (riders.isEmpty()) {
+                army.wedgeTarget = null;
+                return;
+            }
         }
         FieldBlock tip = riders.get(0);
         Point waypoint = tip.waypoint;
@@ -1420,7 +1482,7 @@ public final class FieldBattle {
                 continue; // real soldiers walk themselves
             }
             Point target = block.line;
-            if (block.charged && block.duty != Duty.FLEEING) {
+            if (block.charged && block.duty != Duty.FLEEING && block != army.commander) {
                 FieldBlock prey = hunted(block.prey) ? block.prey
                         : nearestBlock(block, enemy, block.arm == Arm.CAVALRY ? Arm.ARCHERS : null);
                 if (prey == null) {
