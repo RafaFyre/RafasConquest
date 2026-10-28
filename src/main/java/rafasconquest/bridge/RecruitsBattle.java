@@ -101,7 +101,7 @@ public final class RecruitsBattle {
      * At most this many real soldiers at once, nearest the players first. A rider counts as two: the horse is an
      * entity too.
      */
-    public static final int MAX_LIVE_SOLDIERS = 600;
+    public static final int MAX_LIVE_SOLDIERS = 400;
     /** The cap in force (changeable for testing, e.g. how many real soldiers a faster server can carry). */
     private static int liveCap = MAX_LIVE_SOLDIERS;
     /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */

@@ -63,7 +63,7 @@ first. The old relation is restored when the battle ends.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
-  soldier's health. At most 600 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
+  soldier's health. At most 400 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
   blocks become real each second. Players see real soldiers only within about 67 blocks, so they never see a block
   switch.
   - While a block is real, its soldiers walk and fight as Recruits soldiers; each second they report where they stand
@@ -76,6 +76,14 @@ first. The old relation is restored when the battle ends.
   - Measured on the dev server, 2000 against 2000: about 3 ms a tick with nobody near (all numbers), 16 to 50 ms with
     about 600 real soldiers near a watch point, 20 TPS throughout; a cavalry wing near the watch point cost more
     (68 ms), so riders now count double.
+  - `/pve debug battle livecap <soldiers>` changes the cap until the server restarts. With a player connected (client
+    and server on one 8-core machine), about 1200 real soldiers ran at 10 to 15 TPS, and even about 450 at 13 to 16
+    TPS once fighting began, so the cap is 400.
+  - **TickWeave** (an experimental mod that ticks entities on several threads; optional, not a dependency) was tried on
+    a regular Forge server (it can't run in the dev setup: its mixins don't survive the dev remapping). With nobody
+    connected and 1500 real soldiers it held 20 TPS at 33 to 47 ms a tick, against 56 to 98 ms without it; with a
+    player connected and about 1200 real soldiers, 46 to 51 ms against 68 to 96 ms. It helps, but doesn't make large
+    real crowds smooth with a player on the same machine.
 - **Uniforms:** everyone wears full leather dyed the faction's main colour (its banner's base colour), and cavalry
   horses wear dyed leather horse armour. If both factions share a colour, the second side wears a darker shade, or a
   lighter one if the colour is already very dark. The head shows rank:
