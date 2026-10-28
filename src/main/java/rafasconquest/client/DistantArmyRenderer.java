@@ -34,7 +34,9 @@ import java.util.List;
  * The real soldiers hand over to figures at {@link #handover}: where the game stops drawing them, or sooner where
  * Distant Horizons starts fading the world into its own terrain (it would fade them too). Past that, the real soldiers
  * and their horses are hidden ({@link #hides}). A soldier the client still has is drawn exactly where it stands, so
- * nothing jumps at the handover; the rest stand in their formation's ranks. Beyond what the camera can see, figures
+ * nothing jumps at the handover. A soldier the client hasn't been sent (the server sends only those near enough), or
+ * one of a block that is only numbers, gets a figure in its formation's ranks however near it is, since nothing else
+ * would show it. Beyond what the camera can see, figures
  * are pulled in ({@link DistantDepth}) so they look the same on screen. With Distant Horizons drawing, soldiers
  * beyond the game's own terrain are left to {@link DistantHorizonsArmies}.
  */
@@ -48,14 +50,6 @@ public final class DistantArmyRenderer {
      * box figures' sides), on top of the light where they stand.
      */
     private static final float SIDE_SHADE = 0.8F;
-    /**
-     * The client is sent the soldiers within this many chunks less than its render distance (the server's entity
-     * tracking range), and Recruits sends none further than 10 chunks. A formation nearer than that, less a margin,
-     * should be all there, so a soldier missing from it has fallen.
-     */
-    private static final int TRACKED_CHUNKS_SHORT = 1;
-    private static final int TRACKED_CHUNKS_MAX = 10;
-    private static final double TRACKED_MARGIN = 24;
 
     /** This frame's handover distance, worked out before anything is drawn. Render thread only. */
     private static double handover = Double.MAX_VALUE;
@@ -88,7 +82,6 @@ public final class DistantArmyRenderer {
         Minecraft mc = Minecraft.getInstance();
         int renderChunks = mc.options.getEffectiveRenderDistance();
         double renderBlocks = renderChunks * 16.0;
-        double tracked = Math.min(renderChunks - TRACKED_CHUNKS_SHORT, TRACKED_CHUNKS_MAX) * 16.0 - TRACKED_MARGIN;
         Vec3 eye = camera.getPosition();
         Vector3f left = camera.getLeftVector();
         double length = Math.hypot(left.x(), left.z());
@@ -105,14 +98,13 @@ public final class DistantArmyRenderer {
         FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
         int drawn = 0;
         for (FormationSnapshot formation : formations) {
-            boolean missingHaveFallen = Math.hypot(formation.x() - eye.x, formation.z() - eye.z) < tracked;
-            for (Sprite sprite : formation.place(positions, missingHaveFallen)) {
+            for (Sprite sprite : formation.place(positions)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
                 double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance <= handover) {
-                    continue; // close enough to see the soldier itself
+                if (sprite.real() && distance <= handover) {
+                    continue; // the client has this soldier, close enough to draw it itself
                 }
                 if (farInDistantHorizons && !onGameTerrain(dx, dz, renderBlocks)) {
                     continue; // drawn in Distant Horizons' terrain instead

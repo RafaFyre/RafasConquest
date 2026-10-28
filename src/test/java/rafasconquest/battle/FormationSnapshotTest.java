@@ -90,9 +90,9 @@ class FormationSnapshotTest {
     @Test
     void soldiersTheClientHasStandWhereTheyReallyAre() {
         FormationSnapshot s = twoRanksFacingEast(false);
-        List<Sprite> sprites = s.place(id -> new double[]{id, 70, -id}, false);
+        List<Sprite> sprites = s.place(id -> new double[]{id, 70, -id});
         assertEquals(20, sprites.size());
-        assertEquals(new Sprite(100, 70, -100, false), sprites.get(0));
+        assertEquals(new Sprite(100, 70, -100, false, true), sprites.get(0));
         assertEquals(1, sprites.stream().filter(Sprite::leader).count());
         assertTrue(sprites.get(BattlePlan.LEADER_INDEX).leader(), "the leader is known by its entity id");
     }
@@ -101,7 +101,7 @@ class FormationSnapshotTest {
     void soldiersTheClientLacksTakeTheirPlaceInTheRanks() {
         FormationSnapshot s = twoRanksFacingEast(false);
         List<Sprite> ranks = s.layout();
-        List<Sprite> sprites = s.place(id -> id < 110 ? new double[]{0, 0, 0} : null, false);
+        List<Sprite> sprites = s.place(id -> id < 110 ? new double[]{0, 0, 0} : null);
         assertEquals(20, sprites.size());
         assertEquals(ranks.get(15), sprites.get(15));
     }
@@ -111,14 +111,14 @@ class FormationSnapshotTest {
         FormationSnapshot s = twoRanksFacingEast(false);
         FormationSnapshot numbers = new FormationSnapshot(s.id(), s.kind(), s.rgb(), s.mark(), s.alive(), s.x(), s.y(), s.z(),
                 s.facingX(), s.facingZ(), s.halfWidth(), s.halfDepth(), false, true, new int[0], -1);
-        assertEquals(numbers.layout(), numbers.place(id -> null, false));
-        assertEquals(numbers.layout(), numbers.place(id -> null, true), "no ids to be missing, so nobody has fallen");
+        assertEquals(numbers.layout(), numbers.place(id -> null));
     }
 
     @Test
-    void closeByAMissingSoldierHasFallen() {
-        List<Sprite> sprites = twoRanksFacingEast(false).place(id -> id % 2 == 0 ? new double[]{0, 0, 0} : null, true);
-        assertEquals(10, sprites.size());
+    void onlySoldiersTheClientHasAreReal() {
+        List<Sprite> sprites = twoRanksFacingEast(false).place(id -> id % 2 == 0 ? new double[]{0, 0, 0} : null);
+        assertEquals(20, sprites.size(), "a soldier the client lacks still gets a figure");
+        assertEquals(10, sprites.stream().filter(Sprite::real).count());
     }
 
     @Test

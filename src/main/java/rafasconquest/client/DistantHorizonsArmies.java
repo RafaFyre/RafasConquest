@@ -182,7 +182,7 @@ final class DistantHorizonsArmies {
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         FormationSnapshot.Positions positions = DistantArmies.positions(mc.getFrameTime());
         for (FormationSnapshot formation : DistantArmies.now()) {
-            for (Sprite sprite : formation.place(positions, false)) {
+            for (Sprite sprite : formation.place(positions)) {
                 if (DistantArmyRenderer.onGameTerrain(sprite.x() - eye.x, sprite.z() - eye.z, renderBlocks)) {
                     continue;
                 }

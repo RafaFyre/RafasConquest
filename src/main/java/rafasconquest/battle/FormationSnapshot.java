@@ -38,8 +38,11 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         }
     }
 
-    /** One soldier to draw, its feet at ({@code x}, {@code y}, {@code z}). */
-    public record Sprite(double x, double y, double z, boolean leader) {
+    /**
+     * One soldier to draw, its feet at ({@code x}, {@code y}, {@code z}); {@code real} if it stands where a real
+     * soldier the client has is standing (the client may draw that soldier itself), rather than in the ranks.
+     */
+    public record Sprite(double x, double y, double z, boolean leader, boolean real) {
     }
 
     /**
@@ -115,7 +118,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
                 right += jitter(i, 0) * cellRight;
                 back += jitter(i, 1) * cellBack;
             }
-            sprites.add(new Sprite(x + rightX * right - facingX * back, y, z + rightZ * right - facingZ * back, i == leaderAt));
+            sprites.add(new Sprite(x + rightX * right - facingX * back, y, z + rightZ * right - facingZ * back, i == leaderAt, false));
         }
         return sprites;
     }
@@ -129,11 +132,10 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
 
     /**
      * Where to draw each of its soldiers, preferring where they really are: a soldier the client has stands at its
-     * own position, so it doesn't jump when the game stops drawing it. The rest take their place in the ranks
-     * ({@link #layout}), unless {@code missingHaveFallen}: when the client should have every soldier this close, a
-     * missing one died since the snapshot.
+     * own position, so it doesn't jump when the game stops drawing it. The rest (the client hasn't been sent them, or
+     * the block is only numbers) take their place in the ranks ({@link #layout}).
      */
-    public List<Sprite> place(Positions positions, boolean missingHaveFallen) {
+    public List<Sprite> place(Positions positions) {
         List<Sprite> ranks = null;
         List<Sprite> sprites = new ArrayList<>(alive);
         // A block that is only numbers has no soldiers' ids at all: every soldier takes its place in the ranks.
@@ -147,8 +149,8 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
             }
             double[] feet = positions.of(soldierIds[i]);
             if (feet != null) {
-                sprites.add(new Sprite(feet[0], feet[1], feet[2], soldierIds[i] == leaderId));
-            } else if (!missingHaveFallen) {
+                sprites.add(new Sprite(feet[0], feet[1], feet[2], soldierIds[i] == leaderId, true));
+            } else {
                 if (ranks == null) {
                     ranks = layout();
                 }
