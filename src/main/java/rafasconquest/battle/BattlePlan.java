@@ -54,6 +54,8 @@ public final class BattlePlan {
     public static final double DEPLOY_DISTANCE = 30;
     /** An army of more than this many soldiers fights in a left wing, centre and right wing. */
     public static final int WINGS_OVER = 300;
+    /** The wings of such an army stand this far apart, side by side. */
+    public static final double WING_GAP = 20;
 
     /** Seconds the armies stand in their deployed lines before anyone moves. */
     public static final int FORMING_SECONDS = 5;
@@ -203,62 +205,91 @@ public final class BattlePlan {
         double pitch = pitch(files);
 
         boolean winged = winged(blocks, width);
-        List<Slot> slots = new ArrayList<>(blocks);
-        double[] wingSum = new double[3];
+        int[] order = winged ? new int[]{CENTRE, LEFT, RIGHT} : new int[]{CENTRE};
+        // Each wing's share: its front files (the thirds of the front), and archers and cavalry dealt out in turn.
         int[] wingFiles = new int[3];
+        for (int file = 0; file < width; file++) {
+            wingFiles[wingOf(file, width, winged)]++;
+        }
+        int[] wingArchers = new int[3];
+        int[] wingCavalry = new int[3];
+        for (int i = 0; i < archers; i++) {
+            wingArchers[order[i % order.length]]++;
+        }
+        for (int i = 0; i < cavalry; i++) {
+            wingCavalry[order[i % order.length]]++;
+        }
+        // How wide each wing stands (its infantry, or its archers' or cavalry's rows, at most three deep, if wider),
+        // and so where its middle is: the wings side by side, WING_GAP apart.
+        int[] archersPerRow = new int[3];
+        int[] cavalryPerRow = new int[3];
+        double[] wingWidth = new double[3];
+        for (int wing = 0; wing < 3; wing++) {
+            double infantryWidth = wingFiles[wing] * pitch;
+            archersPerRow[wing] = perRow(wingArchers[wing], infantryWidth);
+            cavalryPerRow[wing] = perRow(wingCavalry[wing], infantryWidth);
+            wingWidth[wing] = Math.max(infantryWidth, Math.max(archersPerRow[wing], cavalryPerRow[wing]) * BLOCK_PITCH);
+        }
+        double[] middle = new double[3];
+        if (winged) {
+            double total = wingWidth[LEFT] + wingWidth[CENTRE] + wingWidth[RIGHT] + 2 * WING_GAP;
+            middle[LEFT] = -total / 2 + wingWidth[LEFT] / 2;
+            middle[CENTRE] = -total / 2 + wingWidth[LEFT] + WING_GAP + wingWidth[CENTRE] / 2;
+            middle[RIGHT] = total / 2 - wingWidth[RIGHT] / 2;
+        }
+
+        // Infantry: each file at its place in its wing; the blocks behind stand in the same file.
+        List<Slot> slots = new ArrayList<>(blocks);
+        double[] fileRight = new double[width];
+        int[] firstFile = new int[3];
+        for (int file = width - 1; file >= 0; file--) {
+            firstFile[wingOf(file, width, winged)] = file;
+        }
+        for (int file = 0; file < width; file++) {
+            int wing = wingOf(file, width, winged);
+            fileRight[file] = middle[wing] + across(file - firstFile[wing], wingFiles[wing], pitch);
+        }
         for (int line = 0; line < lines; line++) {
             int inThisLine = Math.min(width, inLines - line * width);
             for (int file = 0; file < inThisLine; file++) {
                 Arm arm = greatShield || file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
-                int wing = wingOf(file, width, winged);
-                double right = across(file, inThisLine, pitch);
-                slots.add(new Slot(arm, right, fileBack(line, greatShield), line, file, files, wing));
-                if (line == 0) {
-                    wingSum[wing] += right;
-                    wingFiles[wing]++;
-                }
+                slots.add(new Slot(arm, fileRight[file], fileBack(line, greatShield), line, file, files, wingOf(file, width, winged)));
             }
         }
-        double frontHalf = width * pitch / 2;
-        // Archers: rows behind the front line, each as wide as the front, in the wing they stand behind.
-        int perRow = Math.max(1, Math.min(archers, (int) (2 * frontHalf / BLOCK_PITCH)));
+        // Archers: rows behind each wing's front line.
         double archersBack = archerBack(greatShield);
-        double rows = 0;
-        for (int i = 0; i < archers; i++) {
-            int row = i / perRow;
-            int inRow = Math.min(perRow, archers - row * perRow);
-            double right = across(i % perRow, inRow, BLOCK_PITCH);
-            slots.add(new Slot(Arm.ARCHERS, right, archersBack + row * ARCHER_ROW, -1, i, FILE_WIDTH, wingAt(right, frontHalf, winged)));
-            rows = row + 1;
+        int archerRows = 0;
+        int index = 0;
+        for (int wing : order) {
+            for (int k = 0; k < wingArchers[wing]; k++) {
+                int row = k / archersPerRow[wing];
+                int inRow = Math.min(archersPerRow[wing], wingArchers[wing] - row * archersPerRow[wing]);
+                slots.add(new Slot(Arm.ARCHERS, middle[wing] + across(k % archersPerRow[wing], inRow, BLOCK_PITCH),
+                        archersBack + row * ARCHER_ROW, -1, index++, FILE_WIDTH, wing));
+                archerRows = Math.max(archerRows, row + 1);
+            }
         }
-        // Cavalry: in reserve in the rear of each wing (all in the centre for a small army), behind the last infantry
-        // line and the archers, in rows as wide as its wing.
-        double rear = Math.max(fileBack(lines - 1, greatShield), archersBack + Math.max(0, rows - 1) * ARCHER_ROW) + LINE_GAP;
-        int[] wingCavalry = new int[3];
-        for (int i = 0; i < cavalry; i++) {
-            wingCavalry[winged ? new int[]{CENTRE, LEFT, RIGHT}[i % 3] : CENTRE]++;
-        }
-        int[] placed = new int[3];
-        for (int i = 0; i < cavalry; i++) {
-            int wing = winged ? new int[]{CENTRE, LEFT, RIGHT}[i % 3] : CENTRE;
-            double wingWidth = winged ? wingFiles[wing] * pitch : 2 * frontHalf;
-            int columns = Math.max(1, Math.min(wingCavalry[wing], (int) (wingWidth / BLOCK_PITCH)));
-            int k = placed[wing]++;
-            int row = k / columns;
-            int inRow = Math.min(columns, wingCavalry[wing] - row * columns);
-            double middle = wingFiles[wing] > 0 ? wingSum[wing] / wingFiles[wing] : 0;
-            slots.add(new Slot(Arm.CAVALRY, middle + across(k % columns, inRow, BLOCK_PITCH), rear + row * CAVALRY_ROW, -1, i,
-                    FILE_WIDTH, wing));
+        // Cavalry: in reserve in the rear of each wing, behind the last infantry line and the archers.
+        double rear = Math.max(fileBack(lines - 1, greatShield), archersBack + Math.max(0, archerRows - 1) * ARCHER_ROW) + LINE_GAP;
+        index = 0;
+        for (int wing : order) {
+            for (int k = 0; k < wingCavalry[wing]; k++) {
+                int row = k / cavalryPerRow[wing];
+                int inRow = Math.min(cavalryPerRow[wing], wingCavalry[wing] - row * cavalryPerRow[wing]);
+                slots.add(new Slot(Arm.CAVALRY, middle[wing] + across(k % cavalryPerRow[wing], inRow, BLOCK_PITCH),
+                        rear + row * CAVALRY_ROW, -1, index++, FILE_WIDTH, wing));
+            }
         }
         return slots;
     }
 
-    /** Which wing a point {@code right} of the army's middle stands in: the thirds of a front {@code 2 frontHalf} wide. */
-    private static int wingAt(double right, double frontHalf, boolean winged) {
-        if (!winged) {
-            return CENTRE;
+    /** How many blocks of a wing's archers or cavalry stand side by side: as many as its front is wide, at most 3 rows. */
+    private static int perRow(int count, double frontWidth) {
+        if (count == 0) {
+            return 1;
         }
-        return right < -frontHalf / 3 ? LEFT : right > frontHalf / 3 ? RIGHT : CENTRE;
+        int fits = Math.max(1, (int) (frontWidth / BLOCK_PITCH));
+        return Math.min(count, Math.max(fits, (count + 2) / 3));
     }
 
     /**

@@ -85,6 +85,25 @@ class BattlePlanTest {
     }
 
     @Test
+    void theWingsStandApartWithAGapBetweenThem() {
+        for (boolean shield : new boolean[]{false, true}) {
+            for (int blocks : new int[]{20, 61, 100, 500}) {
+                List<Slot> slots = BattlePlan.deployment(blocks, shield);
+                double[] lo = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
+                double[] hi = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
+                for (Slot s : slots) {
+                    double half = (s.files() - 1) * BattlePlan.SPACING / 2;
+                    lo[s.wing()] = Math.min(lo[s.wing()], s.right() - half);
+                    hi[s.wing()] = Math.max(hi[s.wing()], s.right() + half);
+                }
+                String what = blocks + " blocks, shield " + shield;
+                assertTrue(lo[BattlePlan.CENTRE] - hi[BattlePlan.LEFT] >= BattlePlan.WING_GAP, what + ": left to centre " + (lo[1] - hi[0]));
+                assertTrue(lo[BattlePlan.RIGHT] - hi[BattlePlan.CENTRE] >= BattlePlan.WING_GAP, what + ": centre to right " + (lo[2] - hi[1]));
+            }
+        }
+    }
+
+    @Test
     void noTwoBlocksOverlapWhenAnArmyDeploys() {
         for (boolean shield : new boolean[]{false, true}) {
             for (int blocks : new int[]{5, 15, 30, 50, 100, 300, 500}) {
