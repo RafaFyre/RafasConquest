@@ -82,6 +82,12 @@ public final class PveCommands {
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY, null, null))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                .then(Commands.literal("watch")
+                                        .then(Commands.literal("clear").executes(ctx -> watch(ctx, null)))
+                                        .then(Commands.argument("x", IntegerArgumentType.integer())
+                                                .then(Commands.argument("z", IntegerArgumentType.integer())
+                                                        .executes(ctx -> watch(ctx, new BattlePlan.Point(IntegerArgumentType.getInteger(ctx, "x"),
+                                                                IntegerArgumentType.getInteger(ctx, "z")))))))
                                 .then(Commands.literal("simulate")
                                         .then(Commands.argument("first", StringArgumentType.string())
                                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
@@ -211,6 +217,13 @@ public final class PveCommands {
             }
         }
         return null;
+    }
+
+    /** Treats a spot like a player standing there, so blocks near it become real soldiers (for testing without one). */
+    private static int watch(CommandContext<CommandSourceStack> ctx, @Nullable BattlePlan.Point spot) {
+        String line = RecruitsBattle.watch(spot);
+        ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+        return 1;
     }
 
     private static int battleClear(CommandContext<CommandSourceStack> ctx) {

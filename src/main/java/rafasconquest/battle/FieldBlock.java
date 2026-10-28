@@ -75,6 +75,10 @@ public final class FieldBlock {
     double pendingDamage;
     /** Soldiers alive, kept up to date as they fall. */
     int alive;
+    /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
+    boolean live;
+    /** Damage from blocks that are only numbers, waiting to be dealt to its real soldiers. */
+    double liveDamage;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
                double slotRight, double slotBack, Point line, double facingX, double facingZ, Duty duty) {
@@ -94,6 +98,45 @@ public final class FieldBlock {
         this.facingZ = facingZ;
         this.duty = duty;
         this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : 0;
+    }
+
+    public boolean live() {
+        return live;
+    }
+
+    public void setLive(boolean live) {
+        this.live = live;
+        liveDamage = 0;
+    }
+
+    /** Takes the damage waiting for its real soldiers, which the caller now deals. */
+    public double drainLiveDamage() {
+        double d = liveDamage;
+        liveDamage = 0;
+        return d;
+    }
+
+    /** Where its front rank is ordered to stand. */
+    public Point line() {
+        return line;
+    }
+
+    public boolean charged() {
+        return charged;
+    }
+
+    /** The captain's place among its soldiers, or -1. */
+    public int captain() {
+        return captain;
+    }
+
+    /** A warrior general. */
+    public boolean champion() {
+        return champion;
+    }
+
+    public int file() {
+        return file;
     }
 
     public int id() {

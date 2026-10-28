@@ -47,8 +47,8 @@ debug battle in `RecruitsBattle`. `/pve debug recruits` lists what Recruits hold
 
 ## Battles (prototype)
 
-`/pve debug battle [first [firstSoldiers] second [secondSoldiers]]` deploys two armies of Recruits soldiers 45 blocks
-in front of you, marching at each other across your view: for example `/pve debug battle Osford 2000 Valoia 500`.
+`/pve debug battle [first [firstSoldiers] second [secondSoldiers]]` deploys two armies 45 blocks in front of you,
+marching at each other across your view: for example `/pve debug battle Osford 2000 Valoia 500`.
 Each side is 20 to 2000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
 the two factions nearest you fight; quote names that contain spaces. The player is a bystander: the two factions are
 made enemies in Recruits' diplomacy for the battle, so soldiers attack each other and leave you alone unless you strike
@@ -59,8 +59,23 @@ first. The old relation is restored when the battle ends.
   shieldwall every third file (`battle/BattlePlan.deployment`).
 - **Lines:** the infantry stands in a front line at most 10 blocks wide, with relief lines 16 blocks apart behind it
   (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. Archers
-  stand in rows just behind the front line, and the cavalry on both wings, in columns of blocks. The ground is loaded
-  before anyone is spawned.
+  stand in rows just behind the front line, and the cavalry on both wings, in columns of blocks.
+- **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
+  (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
+  where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
+  soldier's health. At most 600 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
+  blocks become real each second. Players see real soldiers only within about 67 blocks, so they never see a block
+  switch.
+  - While a block is real, its soldiers walk and fight as Recruits soldiers; each second they report where they stand
+    and their health, the numbers give the block its orders, and those are passed on (stand in line here, charge,
+    withdraw without fighting).
+  - Real soldiers fighting real soldiers fight it out themselves. Where real soldiers fight a block that is only
+    numbers, the numbers work the fight out, and the damage is dealt to the real soldiers in hits of 4.
+  - `/pve debug battle watch <x> <z>` treats a spot like a player standing there (and `watch clear` stops), to test
+    the live area without one.
+  - Measured on the dev server, 2000 against 2000: about 3 ms a tick with nobody near (all numbers), 16 to 50 ms with
+    about 600 real soldiers near a watch point, 20 TPS throughout; a cavalry wing near the watch point cost more
+    (68 ms), so riders now count double.
 - **Uniforms:** everyone wears full leather dyed the faction's main colour (its banner's base colour), and cavalry
   horses wear dyed leather horse armour. If both factions share a colour, the second side wears a darker shade, or a
   lighter one if the colour is already very dark. The head shows rank:
@@ -152,10 +167,10 @@ first. The old relation is restored when the battle ends.
   sees only 4 render distances; figures further away are pulled in along the line of sight and shrunk to match, so
   they look the same on screen (`battle/DistantDepth`). Without Distant Horizons there is no terrain beyond the render
   distance, so figures out there stand over empty sky.
-- **The battle keeps its own ground loaded:** the chunks around every living soldier stay loaded and running, the way
-  `/forceload` does, while the battle lasts (not saved with the world). So a player can fly far off to watch, and the
-  battle carries on instead of unloading, which would freeze its soldiers and count them as fallen. A server with no
-  players at all still stops running entities after 15 s, as vanilla does.
+- **Real soldiers keep their ground loaded:** the chunks around every real soldier stay loaded and running, the way
+  `/forceload` does, while they stand there (not saved with the world), and a block's ground is loaded before its
+  soldiers are spawned. Blocks that are only numbers need no ground; they are drawn at the ground's height from the
+  world where it is loaded, else from the world generator (as Distant Horizons draws it), without loading anything.
 - **With Distant Horizons** (optional, recommended): soldiers beyond the render distance are drawn inside its terrain
   instead, as little figures of coloured boxes (uniform, face and cap, the leaders' and general's flags, the general's
   gold helmet, cavalry on armoured horses), so its far hills hide them and they stand on its ground. They are rebuilt

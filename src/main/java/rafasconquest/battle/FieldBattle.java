@@ -100,8 +100,33 @@ public final class FieldBattle {
         return outcome;
     }
 
+    /** Whether the lines stalled and everyone left was sent in to a final melee. */
+    public boolean finalMelee() {
+        return finalMelee;
+    }
+
     public boolean over() {
         return outcome != null;
+    }
+
+    /**
+     * A live block's soldiers report in: where its front stands and each soldier's health (0 for the fallen), read
+     * from the real soldiers. Falls count toward whether the battle has stalled.
+     */
+    public void sync(FieldBlock block, Point pos, float[] health) {
+        int before = block.alive;
+        block.pos = pos;
+        int alive = 0;
+        for (int i = 0; i < block.health.length; i++) {
+            block.health[i] = Math.max(0, health[i]);
+            if (block.health[i] > 0) {
+                alive++;
+            }
+        }
+        block.alive = alive;
+        if (alive < before && seconds > 0) {
+            lastFall = seconds;
+        }
     }
 
     /** Runs whole seconds until the battle ends or {@code maxSeconds} have passed; returns the outcome, if any. */
@@ -401,8 +426,8 @@ public final class FieldBattle {
     private void move(FieldArmy army) {
         FieldArmy enemy = armies[1 - army.side];
         for (FieldBlock block : army.blocks) {
-            if (block.alive == 0) {
-                continue;
+            if (block.alive == 0 || block.live) {
+                continue; // real soldiers walk themselves
             }
             Point target = block.line;
             if (block.charged && block.duty != Duty.FLEEING) {
@@ -454,6 +479,9 @@ public final class FieldBattle {
                 double distance = block.distanceTo(foe);
                 if (distance <= reach) {
                     block.contactSeconds++;
+                    if (block.live && foe.live) {
+                        continue; // real soldiers on both sides: Recruits fights it out
+                    }
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
                     double damage = fighters * rates.meleeDps(block.arm)
                             * rates.meleeFactor(sideOf(foe, block), foe.arm);
@@ -471,7 +499,10 @@ public final class FieldBattle {
             }
         }
         for (int i = 0; i < targets.size(); i++) {
-            if (targets.get(i).takeDamage(damages.get(i), random) > 0) {
+            FieldBlock target = targets.get(i);
+            if (target.live) {
+                target.liveDamage += damages.get(i); // dealt to the real soldiers by the live battle
+            } else if (target.takeDamage(damages.get(i), random) > 0) {
                 lastFall = seconds;
             }
         }

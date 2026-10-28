@@ -45,12 +45,34 @@ public final class FieldArmy {
         return general;
     }
 
+    public double facingX() {
+        return facingX;
+    }
+
+    public double facingZ() {
+        return facingZ;
+    }
+
+    @Nullable
+    public FieldBlock commander() {
+        return commander;
+    }
+
+    @Nullable
+    public FieldBlock bearer() {
+        return bearer;
+    }
+
     public List<FieldBlock> blocks() {
         return List.copyOf(blocks);
     }
 
     public int started() {
         return started;
+    }
+
+    public boolean reserveCommitted() {
+        return reserveCommitted;
     }
 
     public int reliefs() {

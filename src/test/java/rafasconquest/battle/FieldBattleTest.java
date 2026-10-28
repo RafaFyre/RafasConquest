@@ -109,6 +109,54 @@ class FieldBattleTest {
     }
 
     @Test
+    void realSoldiersWalkThemselvesAndTakeDamageFromNumbersAsDamageToDeal() {
+        FieldBattle battle = battle(General.WARRIOR, 5, General.WARRIOR, 5, 6);
+        FieldBlock real = battle.army(0).front[0];
+        real.setLive(true);
+        float[] full = real.health();
+        double dealt = 0;
+        for (int i = 0; i < 120 && !battle.over(); i++) {
+            Point walked = real.line(); // its soldiers walked to where it was ordered
+            battle.sync(real, walked, full);
+            battle.second();
+            assertEquals(walked, real.pos(), "the numbers don't move real soldiers");
+            dealt += real.drainLiveDamage();
+        }
+        assertEquals(20, real.alive(), "its health is what its soldiers report, not the numbers' losses");
+        assertTrue(dealt > 0, "blows from blocks that are only numbers wait to be dealt to the real soldiers");
+    }
+
+    @Test
+    void realSoldiersOnBothSidesFightItOutThemselves() {
+        FieldBattle battle = battle(General.WARRIOR, 1, General.WARRIOR, 1, 6);
+        FieldBlock a = battle.army(0).front[0];
+        FieldBlock b = battle.army(1).front[0];
+        for (int side = 0; side < 2; side++) {
+            battle.army(side).blocks().forEach(block -> block.setLive(true));
+        }
+        Point meet = new Point(0, 0);
+        for (int i = 0; i < 30; i++) {
+            battle.sync(a, meet, a.health());
+            battle.sync(b, meet.plus(1, 0), b.health());
+            battle.second();
+            assertEquals(0, a.drainLiveDamage());
+            assertEquals(0, b.drainLiveDamage());
+        }
+    }
+
+    @Test
+    void soldiersFallingOnTheirOwnCountTowardAStall() {
+        FieldBattle battle = battle(General.WARRIOR, 5, General.WARRIOR, 5, 6);
+        FieldBlock real = battle.army(0).front[0];
+        real.setLive(true);
+        battle.second();
+        float[] wounded = real.health();
+        wounded[0] = 0;
+        battle.sync(real, real.pos(), wounded);
+        assertEquals(19, real.alive());
+    }
+
+    @Test
     void blockFrontsAreSegmentsAndTheirDistanceIsTheGapBetweenThem() {
         assertEquals(5, FieldRules.segmentDistance(0, 0, 10, 0, 0, 5, 10, 5), 1e-9, "side by side");
         assertEquals(0, FieldRules.segmentDistance(0, 0, 10, 0, 5, -5, 5, 5), 1e-9, "crossing");

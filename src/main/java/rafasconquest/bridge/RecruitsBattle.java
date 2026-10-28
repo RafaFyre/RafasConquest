@@ -11,10 +11,9 @@ import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -26,6 +25,7 @@ import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
@@ -36,7 +36,10 @@ import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.General;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.Calibration;
+import rafasconquest.battle.FieldArmy;
 import rafasconquest.battle.FieldBattle;
+import rafasconquest.battle.FieldBlock;
+import rafasconquest.battle.FieldBlock.Duty;
 import rafasconquest.battle.FieldRules;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.faction.Faction;
@@ -48,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,245 +60,122 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A live battle between two factions' armies of Recruits soldiers, for the prototype. Each army deploys as
- * {@link BattlePlan#deployment}: 5 formations of 20 in full leather dyed the faction's colour, each led by a soldier
- * wearing the faction banner, plus a general (gold helmet, banner on the back) and a standard-bearer at the general's
- * side. The general is a warrior or a tactician, and gives each formation an order every second
- * ({@link BattlePlan#order}). The two factions are made enemies in Recruits' diplomacy for the battle (so their
- * soldiers attack each other and nobody else; a bystander is left alone unless they strike first) and their old
- * relation is restored afterwards. Also times every server tick while it runs. One battle at a time; server thread
- * only.
+ * A battle between two factions' armies, for the prototype: fought as numbers ({@link FieldBattle}) everywhere, and
+ * by real Recruits soldiers wherever a player is near enough to see it.
+ * <p>
+ * The numeric battle is the whole battle: every block of 20 (and each general and standard-bearer) is always one of
+ * its blocks, and its generals give every order ({@link BattlePlan}). A block within {@link #LIVE_WITHIN} blocks of a
+ * player becomes real soldiers, standing where the block stands, each with the health they have left; beyond
+ * {@link #NUMBERS_BEYOND} it goes back to numbers, keeping each soldier's health. While a block is real, its soldiers
+ * walk and fight as Recruits soldiers do: each second they report where they are and how they are, the numeric battle
+ * gives the block its orders, and those are passed on to them (stand in line here, charge, withdraw). Where real
+ * soldiers fight a block that is only numbers, the numeric battle works the fight out and its damage is dealt to the
+ * real soldiers. At most {@link #MAX_LIVE_SOLDIERS} soldiers are real at once, the nearest first.
+ * <p>
+ * Soldiers wear full leather dyed the faction's colour; each block's captain wears the faction banner; the general a
+ * gold helmet and a banner on the back, with a standard-bearer at the side. The two factions are made enemies in
+ * Recruits' diplomacy for the battle (so their soldiers attack each other and nobody else; a bystander is left alone
+ * unless they strike first) and their old relation is restored afterwards. Also times every server tick while it
+ * runs, and measures what real soldiers fighting real soldiers do, to calibrate the numbers. One battle at a time;
+ * server thread only.
  */
 public final class RecruitsBattle {
     private static final int REPORT_SECONDS = 10;
-    /** A flanking ride that hasn't got round in this long charges anyway. */
-    private static final int FLANK_SECONDS = 40;
     /**
-     * Keeps the battle's chunks loaded with its soldiers running, as a forceloaded chunk is, but only while it lasts
-     * (not saved with the world).
+     * Keeps the ground under real soldiers loaded and running, as a forceloaded chunk is, but only while they stand
+     * there (not saved with the world).
      */
     private static final TicketType<ChunkPos> BATTLE_TICKET = TicketType.create(RafasConquest.MOD_ID + "_battle", Comparator.comparingLong(ChunkPos::toLong));
     /** A soldier's chunk and those this many chunks around it stay loaded: more than a soldier walks in a second. */
     private static final int HELD_RADIUS = 1;
     /** How often clients hear where the formations stand. */
     private static final int SNAPSHOT_TICKS = 20;
-    /** Snapshot ids each army has: up to 6 formations, then the general and the standard-bearer. */
-    private static final int IDS_PER_ARMY = 8;
+    /**
+     * A block becomes real soldiers within this many blocks of a player, and goes back to numbers beyond the second
+     * distance; the gap keeps a block from flickering between the two. Players see real soldiers only within about
+     * 67 blocks, so a block is always real before anyone can see it.
+     */
+    public static final double LIVE_WITHIN = 96;
+    public static final double NUMBERS_BEYOND = 128;
+    /**
+     * At most this many real soldiers at once, nearest the players first. A rider counts as two: the horse is an
+     * entity too.
+     */
+    public static final int MAX_LIVE_SOLDIERS = 600;
+    /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */
+    private static final int SPAWNS_PER_SECOND = 8;
+    /** A charged soldier this close to its target is taken to be striking it (for calibration). */
+    private static final double STRIKING_DISTANCE = 4;
 
     @Nullable
     private static RecruitsBattle current;
+    private static final Calibration SESSION_CALIBRATION = new Calibration();
 
     private final ServerLevel level;
-    private final Army[] armies;
+    private final FieldBattle field;
+    private final Side[] sides;
+    /** The blocks that are real soldiers now, and their soldiers. */
+    private final Map<FieldBlock, Live> live = new LinkedHashMap<>();
+    /** Blocks that have been real at some time (their soldiers' starting health is measured once). */
+    private final Set<FieldBlock> everLive = new HashSet<>();
+    /** Spots treated like a player standing there, for testing the live area without one. */
+    private final List<Point> watchPoints = new ArrayList<>();
     private final DiplomacyStatus[] oldRelations = new DiplomacyStatus[2];
-    private final List<AbstractRecruitEntity> spawned = new ArrayList<>();
     /** Every soldier and horse of the battle, so their deaths drop nothing. */
     private final Set<UUID> ours = new HashSet<>();
     /** Generals' entity ids → the banner on their backs, for players who start seeing them. */
     private final Map<Integer, ItemStack> backBanners = new HashMap<>();
+    /** Chunks held loaded, as {@link ChunkPos#toLong}. */
+    private final Set<Long> heldChunks = new HashSet<>();
+    /** Ground heights where nothing is loaded, from the world generator, by 4-block cell. */
+    private final Map<Long, Integer> groundCache = new HashMap<>();
+    private final Calibration calibration = new Calibration();
+    private final Map<FieldBlock, Double> lastHealth = new HashMap<>();
+    private final Map<FieldBlock, Point> lastCentre = new HashMap<>();
+    /** How the same battle came out fought only as numbers, for setting beside this one. */
+    private final String prediction;
+    private final boolean[] reserveAnnounced = new boolean[2];
+    private final boolean[] chargeAnnounced = new boolean[2];
+    private boolean meleeAnnounced;
     private int ticks;
     private boolean over;
-    /** When a soldier last fell (0 before anyone has), and whether the battle has come to a final melee. */
-    private int lastFall;
-    private boolean finalMelee;
-    /** What this battle measured, and everything measured since the server started. */
-    private final Calibration calibration = new Calibration();
-    private static final Calibration SESSION_CALIBRATION = new Calibration();
-    private final Map<Formation, Double> lastHealth = new HashMap<>();
-    private final Map<Formation, Point> lastCentre = new HashMap<>();
-    /** How the same battle came out fought as numbers, for setting beside this one. */
-    @Nullable
-    private String prediction;
-    private final int[] lastAlive = new int[2];
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
     private long tickStart;
     private int snapshotTicks;
-    /** Time spent on the battle's own work (orders, snapshots, chunks) since the last report, in nanoseconds. */
+    /** Time spent on the battle's own work since the last report, in nanoseconds. */
     private long ownNanos;
-    /** Chunks the battle keeps loaded and running, as {@link ChunkPos#toLong}. */
-    private final Set<Long> heldChunks = new HashSet<>();
 
-    private RecruitsBattle(ServerLevel level, Army[] armies) {
-        this.level = level;
-        this.armies = armies;
+    /** What each side fights as: its faction, Recruits team and colours. */
+    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner) {
     }
 
-    private static final class Army {
-        final Faction faction;
-        final PlayerTeam team;
-        final double facingX;
-        final double facingZ;
-        final General general;
-        final int uniform;
-        /** The banner's first pattern colour, flown on distant leaders' flags. */
-        final int mark;
-        final ItemStack banner;
-        final List<Formation> formations = new ArrayList<>();
-        /** The block holding each file of the front line (it may have fallen; a relief then takes its place). */
-        Formation[] front = new Formation[0];
-        /** Half the width of the front line, for the enemy's cavalry to ride round. */
-        double halfWidth;
-        double generalBack;
+    /** A block that is real soldiers now: soldier i stands for the block's soldier i. */
+    private static final class Live {
+        final FieldBlock block;
+        final AbstractRecruitEntity[] soldiers;
+        /** The orders last passed on, so they are only passed on when they change. */
         @Nullable
-        AbstractRecruitEntity commander;
+        Point appliedLine;
+        boolean appliedCharge;
         @Nullable
-        AbstractRecruitEntity bearer;
-        boolean commanderCharged;
-        boolean reserveCommitted;
-        /** Front blocks relieved so far, for the reports. */
-        int reliefs;
-        int started;
-        /** Its living soldiers, worked out once a second. */
-        List<AbstractRecruitEntity> living = List.of();
-        /** Hands out each block's place in its file's queue, in the order they joined it. */
-        int queueTicket;
+        Duty appliedDuty;
+        /** Damage from numbers not yet dealt, short of a whole hit. */
+        double damageCarry;
 
-        Army(Faction faction, PlayerTeam team, double facingX, double facingZ, General general, int uniform, int mark, ItemStack banner) {
-            this.faction = faction;
-            this.team = team;
-            this.facingX = facingX;
-            this.facingZ = facingZ;
-            this.general = general;
-            this.uniform = uniform;
-            this.mark = mark;
-            this.banner = banner;
+        Live(FieldBlock block) {
+            this.block = block;
+            this.soldiers = new AbstractRecruitEntity[block.started()];
         }
 
-        /** Works out every block's living soldiers, and the army's, for this second. */
-        void count() {
-            List<AbstractRecruitEntity> all = new ArrayList<>();
-            for (Formation f : formations) {
-                f.count();
-                all.addAll(f.living);
-            }
-            for (AbstractRecruitEntity e : new AbstractRecruitEntity[]{commander, bearer}) {
-                if (e != null && e.isAlive()) {
-                    all.add(e);
+        List<AbstractRecruitEntity> living() {
+            List<AbstractRecruitEntity> living = new ArrayList<>(soldiers.length);
+            for (AbstractRecruitEntity s : soldiers) {
+                if (s != null && s.isAlive()) {
+                    living.add(s);
                 }
             }
-            living = all;
-        }
-
-        boolean infantryEngaged() {
-            for (Formation f : front) {
-                if (f.engaged && !f.living.isEmpty()) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /** The middle of the front line: the average of its blocks' lines. */
-        Point frontCentre() {
-            double x = 0;
-            double z = 0;
-            for (Formation f : front) {
-                x += f.line.x();
-                z += f.line.z();
-            }
-            return front.length == 0 ? formations.get(0).line : new Point(x / front.length, z / front.length);
-        }
-
-        /** The blocks waiting behind the front in {@code file}, nearest the front first. */
-        List<Formation> queue(int file) {
-            return formations.stream().filter(f -> f.duty == Duty.LINE && f.file == file)
-                    .sorted(Comparator.comparingInt(f -> f.queueTicket)).toList();
-        }
-
-        /** Puts a block at the back of a file's queue. */
-        void join(Formation f, int file) {
-            f.duty = Duty.LINE;
-            f.file = file;
-            f.queueTicket = queueTicket++;
-        }
-
-        String describe() {
-            return faction.name() + " (" + general.label() + ")";
-        }
-    }
-
-    /** What an infantry block is doing in the army's lines. */
-    private enum Duty {
-        /** Holding its file of the front line, marching or fighting. */
-        FRONT,
-        /** Waiting in its file's queue behind the front, to relieve it. */
-        LINE,
-        /** Marching up to take over its file of the front. */
-        RELIEVING,
-        /** Relieved: going back behind the lines, not fighting on the way. */
-        WITHDRAWING,
-        /** Back behind the lines, too worn to go forward again; fights only if the enemy reaches it. */
-        RESTING,
-        /** A tactician's reserve, waiting to be committed. */
-        RESERVE,
-        /** Archers and cavalry, which take their own orders. */
-        SUPPORT
-    }
-
-    /** A block of 20 soldiers, led by its captain. */
-    private static final class Formation {
-        final Arm arm;
-        /** Where it stands across the army when not in a line (reserve, archers, cavalry). */
-        final double slotRight;
-        final double slotBack;
-        final List<AbstractRecruitEntity> soldiers = new ArrayList<>();
-        @Nullable
-        AbstractRecruitEntity leader;
-        /** The centre of its front rank, where its line is ordered to stand. */
-        Point line;
-        Duty duty;
-        /** The file of the front line it holds, waits behind or relieves. */
-        int file;
-        int queueTicket;
-        /** When it took up its current duty, and where it withdraws to. */
-        int dutySince;
-        @Nullable
-        Point rear;
-        /** The block on its way to relieve it, if any. */
-        @Nullable
-        Formation relief;
-        /** In the front line and fighting. */
-        boolean engaged;
-        /** Broken formation to fight freely (cavalry). */
-        boolean charged;
-        /** A flanking ride's waypoints, once it has set off, and when it did. */
-        @Nullable
-        List<Point> route;
-        int routeIndex;
-        int routeStarted;
-        /** Its living soldiers, worked out once a second. */
-        List<AbstractRecruitEntity> living = List.of();
-
-        Formation(BattlePlan.Slot slot, Point line) {
-            this.arm = slot.arm();
-            this.slotRight = slot.right();
-            this.slotBack = slot.back();
-            this.line = line;
-            this.file = slot.file();
-            if (!slot.arm().infantry()) {
-                duty = Duty.SUPPORT;
-            } else if (slot.reserve()) {
-                duty = Duty.RESERVE;
-            } else {
-                duty = slot.line() == 0 ? Duty.FRONT : Duty.LINE;
-            }
-        }
-
-        void count() {
-            living = soldiers.stream().filter(LivingEntity::isAlive).toList();
-        }
-
-        List<AbstractRecruitEntity> alive() {
             return living;
-        }
-
-        Point centre() {
-            if (living.isEmpty()) {
-                return line;
-            }
-            return new Point(living.stream().mapToDouble(Entity::getX).average().orElse(line.x()),
-                    living.stream().mapToDouble(Entity::getZ).average().orElse(line.z()));
         }
     }
 
@@ -328,6 +209,13 @@ public final class RecruitsBattle {
         }
     }
 
+    private RecruitsBattle(ServerLevel level, FieldBattle field, Side[] sides, String prediction) {
+        this.level = level;
+        this.field = field;
+        this.sides = sides;
+        this.prediction = prediction;
+    }
+
     public static boolean running() {
         return current != null && !current.over;
     }
@@ -346,10 +234,11 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Deploys both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
+     * Sets up both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
      * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army's general is a
-     * warrior or a tactician, 50/50, unless given. Each army is {@code firstSoldiers} or {@code secondSoldiers} strong, in whole
-     * blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Returns a line for the caller, or
+     * warrior or a tactician, 50/50, unless given. Each army is {@code firstSoldiers} or {@code secondSoldiers}
+     * strong, in whole blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Nobody is
+     * spawned yet: blocks near players become real soldiers over the next seconds. Returns a line for the caller, or
      * throws if Recruits isn't ready.
      */
     public static String start(ServerLevel level, Faction first, int firstSoldiers, @Nullable General firstGeneral, Faction second,
@@ -363,26 +252,44 @@ public final class RecruitsBattle {
             throw new IllegalStateException("Recruits isn't ready");
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
-        Army a = new Army(first, teamA, axisX, axisZ, firstGeneral != null ? firstGeneral : rollGeneral(level), uniforms[0], markColor(first), banner(level, first));
-        Army b = new Army(second, teamB, -axisX, -axisZ, secondGeneral != null ? secondGeneral : rollGeneral(level), uniforms[1], markColor(second), banner(level, second));
-        RecruitsBattle battle = new RecruitsBattle(level, new Army[]{a, b});
+        Side[] sides = {
+                new Side(first, teamA, uniforms[0], markColor(first), banner(level, first)),
+                new Side(second, teamB, uniforms[1], markColor(second), banner(level, second))};
+        General generalA = firstGeneral != null ? firstGeneral : rollGeneral(level);
+        General generalB = secondGeneral != null ? secondGeneral : rollGeneral(level);
+        int blocksA = BattlePlan.blocks(firstSoldiers);
+        int blocksB = BattlePlan.blocks(secondSoldiers);
+        FieldBattle field = new FieldBattle(generalA, blocksA, generalB, blocksB, centre, axisX, axisZ, level.random.nextLong());
+        String prediction = predict(generalA, blocksA, generalB, blocksB, sides, centre, axisX, axisZ);
+        RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
         diplomacy.setRelation(teamB.getName(), teamA.getName(), DiplomacyStatus.ENEMY, level, false);
-
-        current = battle; // before spawning, so the first players to see a general hear about its banner
-        Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
-        long spawnStart = System.nanoTime();
-        battle.deploy(a, fronts[0], BattlePlan.blocks(firstSoldiers));
-        battle.deploy(b, fronts[1], BattlePlan.blocks(secondSoldiers));
-        battle.prediction = predict(a, BattlePlan.blocks(firstSoldiers), b, BattlePlan.blocks(secondSoldiers), centre, axisX, axisZ);
-        long spawnMillis = (System.nanoTime() - spawnStart) / 1_000_000;
-        battle.holdChunks();
-        String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d (deployed in %d ms)",
-                a.describe(), a.started, b.describe(), b.started, Math.round(centre.x()), Math.round(centre.z()), spawnMillis);
+        current = battle;
+        String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d",
+                battle.describe(0), field.army(0).started(), battle.describe(1), field.army(1).started(),
+                Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
         return line;
+    }
+
+    /** Treats a spot like a player standing there (for testing the live area), or with null clears all such spots. */
+    public static String watch(@Nullable Point spot) {
+        RecruitsBattle battle = current;
+        if (battle == null) {
+            return "No battle to watch";
+        }
+        if (spot == null) {
+            battle.watchPoints.clear();
+            return "Stopped watching";
+        }
+        battle.watchPoints.add(spot);
+        return String.format(Locale.ROOT, "Watching from %d, %d", Math.round(spot.x()), Math.round(spot.z()));
+    }
+
+    private String describe(int side) {
+        return sides[side].faction.name() + " (" + field.army(side).general().label() + ")";
     }
 
     private static General rollGeneral(ServerLevel level) {
@@ -407,7 +314,7 @@ public final class RecruitsBattle {
         return FactionBannerNbt.item(level.registryAccess(), FactionBanner.of(faction.id()));
     }
 
-    /** Ends any battle: removes every soldier (and horse) it spawned, alive or not, and restores the old relations. */
+    /** Ends any battle: removes every real soldier (and horse), and restores the old relations. */
     public static String stop() {
         RecruitsBattle battle = current;
         if (battle == null) {
@@ -418,18 +325,10 @@ public final class RecruitsBattle {
         }
         current = null;
         int removed = 0;
-        for (AbstractRecruitEntity e : battle.spawned) {
-            // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
-            UUID mountId = e.getMountUUID();
-            Entity mount = mountId == null ? null : battle.level.getEntity(mountId);
-            if (mount != null) {
-                mount.discard();
-            }
-            if (!e.isRemoved()) {
-                e.discard();
-                removed++;
-            }
+        for (Live l : battle.live.values()) {
+            removed += battle.discard(l);
         }
+        battle.live.clear();
         battle.clearSnapshots();
         battle.releaseChunks();
         battle.restoreRelations();
@@ -439,72 +338,139 @@ public final class RecruitsBattle {
     private void restoreRelations() {
         RecruitsDiplomacyManager diplomacy = FactionEvents.recruitsDiplomacyManager;
         if (diplomacy != null && oldRelations[0] != null) {
-            String a = armies[0].team.getName();
-            String b = armies[1].team.getName();
+            String a = sides[0].team.getName();
+            String b = sides[1].team.getName();
             diplomacy.setRelation(a, b, oldRelations[0], level, false);
             diplomacy.setRelation(b, a, oldRelations[1], level, false);
             oldRelations[0] = null;
         }
     }
 
-    // ---- deployment ----
+    // ---- real soldiers: becoming and leaving ----
 
-    private void deploy(Army army, Point front, int blocks) {
-        float yaw = (float) Math.toDegrees(Math.atan2(-army.facingX, army.facingZ));
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(army.general, blocks);
-        loadGround(army, front, slots);
-        int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
-        army.front = new Formation[files];
-        army.halfWidth = files * BattlePlan.BLOCK_PITCH / 2;
-        for (BattlePlan.Slot slot : slots) {
-            Point line = BattlePlan.place(front, army.facingX, army.facingZ, slot.right(), slot.back());
-            Formation formation = new Formation(slot, line);
-            for (int i = 0; i < BattlePlan.SOLDIERS_PER_FORMATION; i++) {
-                // Stand them roughly where their place in the line will be, so the first order is a short shuffle.
-                int rank = i / BattlePlan.FILE_WIDTH;
-                double right = slot.right() + (i % BattlePlan.FILE_WIDTH - (BattlePlan.FILE_WIDTH - 1) / 2.0) * BattlePlan.SPACING;
-                Point p = BattlePlan.place(front, army.facingX, army.facingZ, right, slot.back() + rank * BattlePlan.SPACING * 1.75);
-                Role role = i == BattlePlan.LEADER_INDEX ? Role.LEADER : Role.SOLDIER;
-                AbstractRecruitEntity soldier = spawn(type(slot.arm()), army, role, p, yaw);
-                if (soldier != null) {
-                    formation.soldiers.add(soldier);
-                    if (role == Role.LEADER) {
-                        formation.leader = soldier;
-                    }
+    /** A block becomes real soldiers: its survivors stand in its ranks, each with the health they have left. */
+    private void materialise(FieldBlock block) {
+        FieldArmy army = field.army(block.side());
+        Side side = sides[block.side()];
+        loadGround(block.pos());
+        Live l = new Live(block);
+        float[] health = block.health();
+        boolean first = everLive.add(block);
+        float yaw = (float) Math.toDegrees(Math.atan2(-army.facingX(), army.facingZ()));
+        EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.GENERAL || block.duty() == Duty.BEARER
+                ? ModEntityTypes.RECRUIT.get() : type(block.arm());
+        for (int i = 0; i < health.length; i++) {
+            if (health[i] <= 0) {
+                continue;
+            }
+            Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
+                    : i == block.captain() ? Role.LEADER : Role.SOLDIER;
+            int rank = i / BattlePlan.FILE_WIDTH;
+            double right = health.length == 1 ? 0 : (i % BattlePlan.FILE_WIDTH - (BattlePlan.FILE_WIDTH - 1) / 2.0) * BattlePlan.SPACING;
+            Point p = BattlePlan.place(block.pos(), army.facingX(), army.facingZ(), right, rank * BattlePlan.SPACING * 1.75);
+            AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
+            if (soldier == null) {
+                continue;
+            }
+            if (block.champion()) {
+                makeChampion(soldier);
+            }
+            if (first && (role == Role.SOLDIER || role == Role.LEADER)) {
+                calibration.addSoldier(soldier.getHealth());
+            }
+            soldier.setHealth(Math.min(health[i], soldier.getMaxHealth()));
+            l.soldiers[i] = soldier;
+        }
+        block.setLive(true);
+        live.put(block, l);
+        if (block.duty() == Duty.BEARER) {
+            for (AbstractRecruitEntity s : l.living()) {
+                s.setAggroState(3); // passive: carries the flag, doesn't fight
+            }
+        }
+        passOnOrders(l);
+    }
+
+    /** A block goes back to numbers, each soldier's health kept (already read this second), and its soldiers leave. */
+    private void dematerialise(Live l) {
+        discard(l);
+        l.block.setLive(false);
+        live.remove(l.block);
+        lastHealth.remove(l.block);
+        lastCentre.remove(l.block);
+    }
+
+    /** Removes a block's soldiers and their horses; returns how many soldiers were still standing. */
+    private int discard(Live l) {
+        int removed = 0;
+        for (AbstractRecruitEntity e : l.soldiers) {
+            if (e == null) {
+                continue;
+            }
+            // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
+            UUID mountId = e.getMountUUID();
+            Entity mount = mountId == null ? null : level.getEntity(mountId);
+            if (mount != null) {
+                mount.discard();
+            }
+            backBanners.remove(e.getId());
+            if (!e.isRemoved()) {
+                e.discard();
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /** Where each block should be: real near players (the nearest first, within the budget), else numbers. */
+    private void switchLive() {
+        List<Point> watchers = new ArrayList<>(watchPoints);
+        for (ServerPlayer player : level.players()) {
+            watchers.add(new Point(player.getX(), player.getZ()));
+        }
+        record Candidate(FieldBlock block, double distance) {
+        }
+        List<Candidate> wanted = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock block : field.army(side).blocks()) {
+                if (block.alive() == 0) {
+                    continue;
+                }
+                double distance = Double.MAX_VALUE;
+                for (Point w : watchers) {
+                    distance = Math.min(distance, w.distanceTo(block.pos()));
+                }
+                if (distance <= LIVE_WITHIN || block.live() && distance <= NUMBERS_BEYOND) {
+                    wanted.add(new Candidate(block, distance));
                 }
             }
-            army.started += formation.soldiers.size();
-            army.formations.add(formation);
-            if (formation.duty == Duty.FRONT) {
-                army.front[slot.file()] = formation;
-            } else if (formation.duty == Duty.LINE) {
-                army.join(formation, slot.file());
-            }
-            standInLine(army, formation);
         }
-
-        double back = BattlePlan.generalBack(army.general, slots);
-        army.generalBack = back;
-        army.commander = spawn(ModEntityTypes.RECRUIT.get(), army, Role.GENERAL,
-                BattlePlan.place(front, army.facingX, army.facingZ, 0, back), yaw);
-        army.bearer = spawn(ModEntityTypes.RECRUIT.get(), army, Role.BEARER,
-                BattlePlan.place(front, army.facingX, army.facingZ, BattlePlan.BEARER_RIGHT, back), yaw);
-        if (army.commander != null) {
-            army.started++;
-            hold(army.commander, BattlePlan.place(front, army.facingX, army.facingZ, 0, back));
-            if (army.general == General.WARRIOR) {
-                makeChampion(army.commander);
+        wanted.sort(Comparator.comparingDouble(Candidate::distance));
+        Set<FieldBlock> keep = new HashSet<>();
+        int soldiers = 0;
+        for (Candidate c : wanted) {
+            int cost = c.block.alive() * (c.block.arm() == Arm.CAVALRY && c.block.started() > 1 ? 2 : 1);
+            if (soldiers + cost > MAX_LIVE_SOLDIERS) {
+                break;
+            }
+            soldiers += cost;
+            keep.add(c.block);
+        }
+        for (Live l : new ArrayList<>(live.values())) {
+            if (!keep.contains(l.block) || l.block.alive() == 0) {
+                dematerialise(l);
             }
         }
-        if (army.bearer != null) {
-            army.started++;
-            army.bearer.setAggroState(3); // passive: carries the flag, doesn't fight
-            if (army.commander != null) {
-                army.bearer.setProtectUUID(Optional.of(army.commander.getUUID()));
-                army.bearer.setFollowState(5); // stays by the general
+        int spawned = 0;
+        for (Candidate c : wanted) {
+            if (keep.contains(c.block) && !c.block.live() && spawned < SPAWNS_PER_SECOND) {
+                materialise(c.block);
+                spawned++;
             }
         }
     }
+
+    // ---- the soldiers ----
 
     private static EntityType<? extends AbstractRecruitEntity> type(Arm arm) {
         return switch (arm) {
@@ -516,7 +482,7 @@ public final class RecruitsBattle {
     }
 
     @Nullable
-    private AbstractRecruitEntity spawn(EntityType<? extends AbstractRecruitEntity> type, Army army, Role role, Point p, float yaw) {
+    private AbstractRecruitEntity spawn(EntityType<? extends AbstractRecruitEntity> type, Side side, Role role, Point p, float yaw) {
         AbstractRecruitEntity soldier = type.create(level);
         if (soldier == null) {
             return null;
@@ -527,41 +493,37 @@ public final class RecruitsBattle {
         if (soldier instanceof BowmanEntity) {
             soldier.getInventory().addItem(new ItemStack(Items.ARROW, 64));
         }
-        dress(soldier, army, role);
+        dress(soldier, side, role);
         soldier.setPersistenceRequired();
         soldier.setCanPickUpLoot(false); // keeps the uniform: no swapping it for armour off the dead
         soldier.setHunger(100);
         soldier.setMoral(100);
         soldier.setAggroState(0); // neutral: fights monsters and enemies of its faction, and whoever attacks it
         ours.add(soldier.getUUID());
-        if (role == Role.SOLDIER || role == Role.LEADER) {
-            calibration.addSoldier(soldier.getHealth());
-        }
         if (role == Role.GENERAL) {
-            backBanners.put(soldier.getId(), army.banner.copy());
+            backBanners.put(soldier.getId(), side.banner.copy());
         }
         level.addFreshEntity(soldier);
-        FactionEvents.addRecruitToTeam(soldier, army.team, level);
-        spawned.add(soldier);
+        FactionEvents.addRecruitToTeam(soldier, side.team, level);
         return soldier;
     }
 
     /**
      * Full leather dyed the army's colour. The head shows rank: a leather cap for the ranks and the standard-bearer,
-     * the faction banner for a formation's leader, a gold helmet for the general. The standard-bearer carries the
+     * the faction banner for a block's captain, a gold helmet for the general. The standard-bearer carries the
      * banner; the general's own is drawn on the back by the client.
      */
-    private void dress(AbstractRecruitEntity soldier, Army army, Role role) {
-        equip(soldier, EquipmentSlot.CHEST, dyed(Items.LEATHER_CHESTPLATE, army.uniform));
-        equip(soldier, EquipmentSlot.LEGS, dyed(Items.LEATHER_LEGGINGS, army.uniform));
-        equip(soldier, EquipmentSlot.FEET, dyed(Items.LEATHER_BOOTS, army.uniform));
+    private static void dress(AbstractRecruitEntity soldier, Side side, Role role) {
+        equip(soldier, EquipmentSlot.CHEST, dyed(Items.LEATHER_CHESTPLATE, side.uniform));
+        equip(soldier, EquipmentSlot.LEGS, dyed(Items.LEATHER_LEGGINGS, side.uniform));
+        equip(soldier, EquipmentSlot.FEET, dyed(Items.LEATHER_BOOTS, side.uniform));
         equip(soldier, EquipmentSlot.HEAD, switch (role) {
-            case SOLDIER, BEARER -> dyed(Items.LEATHER_HELMET, army.uniform);
-            case LEADER -> army.banner.copy();
+            case SOLDIER, BEARER -> dyed(Items.LEATHER_HELMET, side.uniform);
+            case LEADER -> side.banner.copy();
             case GENERAL -> new ItemStack(Items.GOLDEN_HELMET);
         });
         if (role == Role.BEARER) {
-            equip(soldier, EquipmentSlot.MAINHAND, army.banner.copy());
+            equip(soldier, EquipmentSlot.MAINHAND, side.banner.copy());
             equip(soldier, EquipmentSlot.OFFHAND, ItemStack.EMPTY);
         }
     }
@@ -590,7 +552,7 @@ public final class RecruitsBattle {
         return stack;
     }
 
-    /** A warrior general: Recruits' top level with every level's bonuses, at full health, with an iron sword. */
+    /** A warrior general: Recruits' top level with every level's bonuses, with an iron sword. */
     private static void makeChampion(AbstractRecruitEntity soldier) {
         int max = RecruitsServerConfig.RecruitsMaxXpLevel.get();
         // Recruits grants a level's bonuses on reaching the next one, reading the level it is leaving.
@@ -599,46 +561,101 @@ public final class RecruitsBattle {
             soldier.addLevelBuffs();
         }
         soldier.setXpLevel(max);
-        soldier.setHealth(soldier.getMaxHealth());
         equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
     }
 
     private BlockPos ground(Point p) {
-        int x = (int) Math.floor(p.x());
-        int z = (int) Math.floor(p.z());
+        int x = Mth.floor(p.x());
+        int z = Mth.floor(p.z());
         return new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
     }
 
-    // ---- orders ----
+    // ---- orders, passed on to real soldiers ----
 
-    /** Orders the formation to stand in its line (Recruits' own line formation, held). */
-    private void standInLine(Army army, Formation formation) {
-        List<AbstractRecruitEntity> alive = new ArrayList<>(formation.alive());
-        if (alive.isEmpty()) {
+    /**
+     * Passes a real block's orders on to its soldiers when they change: where to stand in line, whether to break
+     * formation and fight, whether to hold back from fighting (withdrawing, carrying the standard, fleeing).
+     */
+    private void passOnOrders(Live l) {
+        FieldBlock block = l.block;
+        List<AbstractRecruitEntity> living = l.living();
+        if (living.isEmpty()) {
             return;
         }
-        FormationUtils.lineFormation(new Vec3(army.facingX, 0, army.facingZ), alive, Vec3.atBottomCenterOf(ground(formation.line)),
-                BattlePlan.FILE_WIDTH, BattlePlan.SPACING, true);
+        if (block.duty() != l.appliedDuty) {
+            boolean passive = block.duty() == Duty.WITHDRAWING || block.duty() == Duty.BEARER || block.duty() == Duty.FLEEING;
+            for (AbstractRecruitEntity s : living) {
+                if (passive) {
+                    s.setTarget(null);
+                }
+                s.setAggroState(passive ? 3 : 0);
+            }
+            l.appliedDuty = block.duty();
+        }
+        if (block.duty() == Duty.BEARER) {
+            Live general = generalOf(block.side());
+            if (general != null && !general.living().isEmpty()) {
+                for (AbstractRecruitEntity s : living) {
+                    s.setProtectUUID(Optional.of(general.living().get(0).getUUID()));
+                    s.setFollowState(5); // stays by the general
+                }
+                return;
+            }
+        }
+        if (block.charged() && block.duty() != Duty.FLEEING) {
+            if (!l.appliedCharge) {
+                l.appliedCharge = true;
+                List<AbstractRecruitEntity> prey = enemiesOf(block.side(), block.arm() == Arm.CAVALRY);
+                living.forEach(s -> release(s, prey));
+            }
+            List<AbstractRecruitEntity> foes = enemiesOf(block.side(), false);
+            for (AbstractRecruitEntity s : living) {
+                hunt(s, foes, block);
+            }
+            return;
+        }
+        if (l.appliedLine == null || l.appliedLine.distanceTo(block.line()) > 1) {
+            l.appliedLine = block.line();
+            FieldArmy army = field.army(block.side());
+            if (living.size() == 1) {
+                hold(living.get(0), block.line());
+            } else {
+                FormationUtils.lineFormation(new Vec3(army.facingX(), 0, army.facingZ()), new ArrayList<>(living),
+                        Vec3.atBottomCenterOf(ground(block.line())), BattlePlan.FILE_WIDTH, BattlePlan.SPACING, true);
+            }
+        }
+    }
+
+    @Nullable
+    private Live generalOf(int side) {
+        FieldBlock commander = field.army(side).commander();
+        return commander == null ? null : live.get(commander);
+    }
+
+    /** The real soldiers fighting against {@code side}, its archers only if {@code archersFirst} and any are real. */
+    private List<AbstractRecruitEntity> enemiesOf(int side, boolean archersFirst) {
+        List<AbstractRecruitEntity> all = new ArrayList<>();
+        List<AbstractRecruitEntity> archers = new ArrayList<>();
+        for (Live l : live.values()) {
+            if (l.block.side() != side && l.block.duty() != Duty.BEARER) {
+                List<AbstractRecruitEntity> living = l.living();
+                all.addAll(living);
+                if (l.block.arm() == Arm.ARCHERS && l.block.duty() == Duty.SUPPORT) {
+                    archers.addAll(living);
+                }
+            }
+        }
+        return archersFirst && !archers.isEmpty() ? archers : all;
     }
 
     /** Orders one soldier to stand at a spot (keeping it if it is already ordered close to there). */
     private void hold(AbstractRecruitEntity soldier, Point spot) {
-        Vec3 current = soldier.getHoldPos();
-        if (current != null && Math.hypot(current.x - spot.x(), current.z - spot.z()) < 2) {
+        Vec3 at = soldier.getHoldPos();
+        if (at != null && Math.hypot(at.x - spot.x(), at.z - spot.z()) < 2) {
             return;
         }
         soldier.setHoldPos(Vec3.atBottomCenterOf(ground(spot)));
         soldier.setFollowState(3);
-    }
-
-    /** Releases the formation to fight freely; cavalry rides for the enemy's archers first, if any are left. */
-    private void charge(Formation formation, Army enemy) {
-        formation.charged = true;
-        List<AbstractRecruitEntity> archers = enemy.formations.stream()
-                .filter(f -> f.arm == Arm.ARCHERS).flatMap(f -> f.living.stream()).toList();
-        for (AbstractRecruitEntity soldier : formation.alive()) {
-            release(soldier, formation.arm == Arm.CAVALRY && !archers.isEmpty() ? archers : enemy.living);
-        }
     }
 
     private static void release(AbstractRecruitEntity soldier, List<AbstractRecruitEntity> prey) {
@@ -648,20 +665,68 @@ public final class RecruitsBattle {
         nearestTo(soldier, prey).ifPresent(soldier::setTarget);
     }
 
-    /** Soldiers who lose sight of their foe stand idle; send them after the nearest enemy left. */
-    private static void hunt(AbstractRecruitEntity soldier, List<AbstractRecruitEntity> foes) {
+    /**
+     * A charged soldier with no foe goes after the nearest real enemy; with none near, it walks toward its block's
+     * prey as the numbers have it, which may still be only numbers.
+     */
+    private void hunt(AbstractRecruitEntity soldier, List<AbstractRecruitEntity> foes, FieldBlock block) {
         LivingEntity target = soldier.getTarget();
-        if (target == null || !target.isAlive()) {
-            // Recruits drops a target it can't see, so also walk toward it until it comes into view.
-            nearestTo(soldier, foes).ifPresent(foe -> {
-                soldier.setTarget(foe);
-                soldier.getNavigation().moveTo(foe, 1.0);
-            });
+        if (target != null && target.isAlive()) {
+            return;
         }
+        Optional<AbstractRecruitEntity> foe = nearestTo(soldier, foes);
+        if (foe.isPresent() && foe.get().distanceTo(soldier) < 40) {
+            soldier.setTarget(foe.get());
+            soldier.getNavigation().moveTo(foe.get(), 1.0);
+        } else {
+            FieldBlock prey = nearestEnemyBlock(block);
+            if (prey != null) {
+                soldier.getNavigation().moveTo(prey.pos().x(), soldier.getY(), prey.pos().z(), 1.0);
+            }
+        }
+    }
+
+    @Nullable
+    private FieldBlock nearestEnemyBlock(FieldBlock block) {
+        FieldBlock best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (FieldBlock e : field.army(1 - block.side()).blocks()) {
+            if (e.alive() > 0 && e.pos().distanceTo(block.pos()) < bestDistance) {
+                bestDistance = e.pos().distanceTo(block.pos());
+                best = e;
+            }
+        }
+        return best;
     }
 
     private static Optional<AbstractRecruitEntity> nearestTo(Entity soldier, List<AbstractRecruitEntity> candidates) {
         return candidates.stream().min(Comparator.comparingDouble(c -> c.distanceToSqr(soldier)));
+    }
+
+    /** Deals the numbers' damage to a real block: whole hits to random living soldiers, past their armour. */
+    private void dealDamage(Live l) {
+        l.damageCarry += l.block.drainLiveDamage();
+        List<AbstractRecruitEntity> living = l.living();
+        while (l.damageCarry >= FieldRules.HIT && !living.isEmpty()) {
+            l.damageCarry -= FieldRules.HIT;
+            AbstractRecruitEntity s = living.get(level.random.nextInt(living.size()));
+            s.hurt(level.damageSources().magic(), FieldRules.HIT);
+            if (!s.isAlive()) {
+                living.remove(s);
+            }
+        }
+        if (living.isEmpty()) {
+            l.damageCarry = 0;
+        }
+    }
+
+    /** Recruits gives cavalry their horse on their first tick; dress each horse in the army's colour once. */
+    private void armourHorses(Live l) {
+        for (AbstractRecruitEntity rider : l.living()) {
+            if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
+                horse.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, sides[l.block.side()].uniform)); // 401: the horse's armour slot
+            }
+        }
     }
 
     // ---- ticking ----
@@ -678,13 +743,9 @@ public final class RecruitsBattle {
             return;
         }
         long ownStart = System.nanoTime();
-        if (!battle.over) {
-            battle.ticks++;
-            if (battle.ticks % 20 == 0) {
-                battle.second();
-            }
+        if (++battle.ticks % 20 == 0) {
+            battle.second();
         }
-        // Survivors still stand (or run) after the battle is decided, so keep showing them until it is cleared.
         if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
             battle.holdChunks();
             ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
@@ -697,472 +758,226 @@ public final class RecruitsBattle {
         }
     }
 
+    /**
+     * One second: real soldiers report in, the numeric battle runs its second (orders, blocks that are only numbers
+     * move, fights with them are worked out), the orders and damage are passed on to real soldiers, and blocks switch
+     * between real and numbers as players move.
+     */
     private void second() {
-        int seconds = ticks / 20;
-        for (Army army : armies) {
-            army.count();
+        for (Live l : new ArrayList<>(live.values())) {
+            readBack(l);
         }
+        if (!over) {
+            measure();
+        }
+        field.second();
+        for (Live l : new ArrayList<>(live.values())) {
+            dealDamage(l);
+            passOnOrders(l);
+            if (l.block.arm() == Arm.CAVALRY) {
+                armourHorses(l);
+            }
+        }
+        switchLive();
+        if (!over) {
+            announce();
+            if (field.seconds() % REPORT_SECONDS == 0) {
+                report();
+            }
+            if (field.over()) {
+                end();
+            }
+        }
+    }
+
+    /** A real block's soldiers report to the numbers: where the block stands and each soldier's health. */
+    private void readBack(Live l) {
+        float[] health = new float[l.soldiers.length];
+        float[] known = l.block.health();
+        double x = 0;
+        double z = 0;
+        int n = 0;
+        boolean lost = false;
+        for (int i = 0; i < l.soldiers.length; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            if (s == null || s.isRemoved() && s.isAlive()) {
+                // Never spawned, or gone without dying (unloaded): keep what the numbers last knew.
+                health[i] = known[i];
+                lost |= s != null;
+                continue;
+            }
+            if (s.isAlive()) {
+                health[i] = s.getHealth();
+                Entity feet = s.getVehicle() != null ? s.getVehicle() : s;
+                x += feet.getX();
+                z += feet.getZ();
+                n++;
+            }
+        }
+        field.sync(l.block, n == 0 ? l.block.pos() : new Point(x / n, z / n), health);
+        if (lost) {
+            dematerialise(l);
+        }
+    }
+
+    /** Tells everyone when a general commits the reserve, a warrior general charges, or the lines stall. */
+    private void announce() {
         for (int side = 0; side < 2; side++) {
-            if (lastAlive[side] != 0 && armies[side].living.size() < lastAlive[side]) {
-                lastFall = seconds;
+            FieldArmy army = field.army(side);
+            if (!reserveAnnounced[side] && army.reserveCommitted()) {
+                reserveAnnounced[side] = true;
+                broadcast(sides[side].faction.name() + "'s general commits the reserve");
             }
-            lastAlive[side] = armies[side].living.size();
-        }
-        measure();
-        if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
-            finalMelee = true;
-            broadcast("[battle " + seconds + "s] the lines have stalled: everyone left charges");
-            for (int side = 0; side < 2; side++) {
-                for (Formation f : armies[side].formations) {
-                    if (!f.living.isEmpty()) {
-                        charge(f, armies[1 - side]);
-                    }
-                }
+            FieldBlock commander = army.commander();
+            if (!chargeAnnounced[side] && commander != null && commander.charged() && army.general() == General.WARRIOR) {
+                chargeAnnounced[side] = true;
+                broadcast(sides[side].faction.name() + "'s warrior general charges");
             }
         }
-        for (int side = 0; side < 2; side++) {
-            command(armies[side], armies[1 - side], seconds);
-        }
-        if (seconds % REPORT_SECONDS == 0) {
-            broadcast(String.format(Locale.ROOT, "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %s, of which battle orders %.1f ms/tick",
-                    seconds, armies[0].faction.name(), armies[0].living.size(), armies[0].reliefs, armies[1].faction.name(),
-                    armies[1].living.size(), armies[1].reliefs, window.describe(), window.count == 0 ? 0 : ownNanos / 1e6 / window.count));
-            window.clear();
-            ownNanos = 0;
-        }
-        checkEnd(seconds);
-    }
-
-    /** One second of an army's general giving orders. */
-    private void command(Army army, Army enemy, int seconds) {
-        List<AbstractRecruitEntity> foes = enemy.living;
-        boolean engaged = army.infantryEngaged();
-        relieve(army, seconds);
-        for (Formation formation : army.formations) {
-            if (formation.arm == Arm.CAVALRY) {
-                armourHorses(army, formation);
-            }
-            if (formation.living.isEmpty()) {
-                continue;
-            }
-            if (formation.charged) {
-                formation.living.forEach(s -> hunt(s, foes));
-                continue;
-            }
-            switch (formation.duty) {
-                case FRONT -> holdFront(army, formation, foes, seconds, engaged);
-                case LINE -> keepPlaceInFile(army, formation);
-                case RELIEVING -> {
-                    if (formation.centre().distanceTo(formation.line) <= BattlePlan.RELIEF_ARRIVED
-                            || seconds - formation.dutySince >= BattlePlan.RELIEF_SECONDS) {
-                        takeOver(army, formation, seconds);
-                    }
-                }
-                case WITHDRAWING -> {
-                    if (formation.rear == null || formation.centre().distanceTo(formation.rear) <= BattlePlan.RELIEF_ARRIVED
-                            || seconds - formation.dutySince >= BattlePlan.RELIEF_SECONDS) {
-                        rest(army, formation);
-                    }
-                }
-                case RESTING -> {
-                    // Stands behind the lines; its soldiers fight whoever comes within reach.
-                }
-                case RESERVE -> moveTo(army, formation,
-                        BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, formation.slotRight, formation.slotBack));
-                case SUPPORT -> support(army, enemy, formation, foes, seconds, engaged);
-            }
-        }
-        commandGroup(army, enemy, foes, engaged);
-    }
-
-    /**
-     * A block holding its file of the front: marches with the line until the enemy is close, then stands and fights
-     * in line (its soldiers take on whoever comes within reach and return to their places), pressing on when the
-     * enemy in front of it is gone.
-     */
-    private void holdFront(Army army, Formation formation, List<AbstractRecruitEntity> foes, int seconds, boolean engaged) {
-        double nearest = nearest(formation.line, foes);
-        switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
-            case MARCH -> {
-                formation.engaged = false;
-                formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
-                standInLine(army, formation);
-            }
-            case ENGAGE -> formation.engaged = true;
-            default -> {
-            }
+        if (!meleeAnnounced && field.finalMelee()) {
+            meleeAnnounced = true;
+            broadcast("[battle " + field.seconds() + "s] the lines have stalled: everyone left charges");
         }
     }
 
-    /**
-     * Sends a fresh block up to each file of the front whose block is down to half strength (or gone): from that
-     * file's queue if it has a fit block, else the nearest fit block from any file. A tactician commits the reserve
-     * when the lines run out of fit blocks, or the army is badly worn.
-     */
-    private void relieve(Army army, int seconds) {
-        boolean tactician = army.general == General.TACTICIAN;
-        if (tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.living.size(), army.started, false, true)) {
-            commitReserve(army);
+    private void report() {
+        int liveSoldiers = 0;
+        for (Live l : live.values()) {
+            liveSoldiers += l.living().size();
         }
-        for (int file = 0; file < army.front.length; file++) {
-            Formation held = army.front[file];
-            if (held.relief != null && !held.relief.living.isEmpty() && held.relief.duty == Duty.RELIEVING) {
-                continue; // already on its way
-            }
-            held.relief = null;
-            if (!BattlePlan.needsRelief(held.living.size(), held.soldiers.size())) {
-                continue;
-            }
-            Formation relief = pickRelief(army, file, held.line);
-            if (relief == null && tactician && !army.reserveCommitted && BattlePlan.commitReserve(army.living.size(), army.started, true, false)) {
-                commitReserve(army);
-                relief = pickRelief(army, file, held.line);
-            }
-            if (relief == null && held.living.isEmpty()) {
-                relief = lastStand(army, held.line);
-            }
-            if (relief == null) {
-                continue; // nobody left to send: the block fights on
-            }
-            relief.duty = Duty.RELIEVING;
-            relief.file = file;
-            relief.dutySince = seconds;
-            relief.line = held.line;
-            standInLine(army, relief);
-            held.relief = relief;
-        }
+        broadcast(String.format(Locale.ROOT,
+                "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %d real soldiers in %d blocks | %s, of which battle %.1f ms/tick",
+                field.seconds(), sides[0].faction.name(), field.army(0).alive(), field.army(0).reliefs(), sides[1].faction.name(),
+                field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), window.describe(),
+                window.count == 0 ? 0 : ownNanos / 1e6 / window.count));
+        window.clear();
+        ownNanos = 0;
     }
 
-    @Nullable
-    private static Formation pickRelief(Army army, int file, Point spot) {
-        for (Formation f : army.queue(file)) {
-            if (BattlePlan.fitToRelieve(f.living.size(), f.soldiers.size())) {
-                return f;
-            }
-        }
-        return army.formations.stream()
-                .filter(f -> f.duty == Duty.LINE && BattlePlan.fitToRelieve(f.living.size(), f.soldiers.size()))
-                .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
-    }
-
-    /**
-     * A front file whose block has fallen, with no fit block left to send: any block still in the lines goes, worn or
-     * not, else the nearest resting block, so the line doesn't stay open.
-     */
-    @Nullable
-    private static Formation lastStand(Army army, Point spot) {
-        return army.formations.stream()
-                .filter(f -> !f.living.isEmpty() && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
-                .min(Comparator.comparingInt((Formation f) -> f.duty == Duty.LINE ? 0 : 1)
-                        .thenComparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
-    }
-
-    /** A relief has reached the front: it takes over the file, and the block it relieves withdraws. */
-    private void takeOver(Army army, Formation relief, int seconds) {
-        Formation relieved = army.front[relief.file];
-        army.reliefs++;
-        army.front[relief.file] = relief;
-        relief.duty = Duty.FRONT;
-        relief.engaged = false;
-        relief.dutySince = seconds;
-        relieved.relief = null;
-        relieved.engaged = false;
-        if (relieved.living.isEmpty()) {
-            relieved.duty = Duty.RESTING;
-            return;
-        }
-        // Back through the file's queue to behind its last block, not fighting on the way.
-        relieved.duty = Duty.WITHDRAWING;
-        relieved.dutySince = seconds;
-        int behind = army.queue(relieved.file).size() + 1;
-        relieved.rear = BattlePlan.place(relief.line, army.facingX, army.facingZ, 0, behind * BattlePlan.LINE_GAP + BattlePlan.LINE_GAP);
-        relieved.line = relieved.rear;
-        for (AbstractRecruitEntity soldier : relieved.living) {
-            soldier.setTarget(null);
-            soldier.setAggroState(3); // passive
-        }
-        standInLine(army, relieved);
-    }
-
-    /** A withdrawn block is back behind the lines: it rejoins its file's queue if still fit, else stands at the rear. */
-    private void rest(Army army, Formation formation) {
-        for (AbstractRecruitEntity soldier : formation.living) {
-            soldier.setAggroState(0);
-        }
-        if (BattlePlan.fitToRelieve(formation.living.size(), formation.soldiers.size())) {
-            army.join(formation, formation.file);
-        } else {
-            formation.duty = Duty.RESTING;
-        }
-    }
-
-    /** A block waiting in its file's queue keeps its place: a line gap behind the one in front of it. */
-    private void keepPlaceInFile(Army army, Formation formation) {
-        int place = army.queue(formation.file).indexOf(formation) + 1;
-        Point spot = BattlePlan.place(army.front[formation.file].line, army.facingX, army.facingZ, 0, place * BattlePlan.LINE_GAP);
-        moveTo(army, formation, spot);
-    }
-
-    /** The reserve joins the lines: each block at the back of the file with the fewest blocks waiting. */
-    private void commitReserve(Army army) {
-        army.reserveCommitted = true;
-        for (Formation f : army.formations) {
-            if (f.duty == Duty.RESERVE && !f.living.isEmpty()) {
-                int shortest = 0;
-                for (int file = 1; file < army.front.length; file++) {
-                    if (army.queue(file).size() < army.queue(shortest).size()) {
-                        shortest = file;
-                    }
-                }
-                army.join(f, shortest);
-            }
-        }
-        broadcast(army.faction.name() + "'s general commits the reserve");
-    }
-
-    /** Archers and cavalry: their own orders. */
-    private void support(Army army, Army enemy, Formation formation, List<AbstractRecruitEntity> foes, int seconds, boolean engaged) {
-        if (formation.route != null) {
-            ride(army, enemy, formation, seconds);
-            return;
-        }
-        double nearest = nearest(formation.line, foes);
-        switch (BattlePlan.order(army.general, formation.arm, seconds, nearest, engaged)) {
-            case MARCH -> {
-                if (formation.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, formation.line))) {
-                    formation.line = formation.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
-                    standInLine(army, formation);
-                }
-            }
-            case FLANK -> {
-                int side = formation.slotRight >= 0 ? 1 : -1;
-                formation.route = BattlePlan.flankRoute(centreOf(foes), army.facingX, army.facingZ, side, enemy.halfWidth);
-                formation.routeIndex = 0;
-                formation.routeStarted = seconds;
-                ride(army, enemy, formation, seconds);
-            }
-            case CHARGE -> charge(formation, enemy);
-            default -> {
-            }
-        }
-    }
-
-    /** How far behind its army's front line a point is (negative: ahead of it). */
-    private static double behindFront(Army army, Point at) {
-        Point front = army.frontCentre();
-        return (front.x() - at.x()) * army.facingX + (front.z() - at.z()) * army.facingZ;
-    }
-
-    /** Moves a block's line to a spot, unless it is already ordered close to there. */
-    private void moveTo(Army army, Formation formation, Point spot) {
-        if (spot.distanceTo(formation.line) > 2) {
-            formation.line = spot;
-            standInLine(army, formation);
-        }
-    }
-
-    private static double nearest(Point from, List<AbstractRecruitEntity> foes) {
-        double best = Double.MAX_VALUE;
-        for (AbstractRecruitEntity foe : foes) {
-            double dx = foe.getX() - from.x();
-            double dz = foe.getZ() - from.z();
-            best = Math.min(best, dx * dx + dz * dz);
-        }
-        return Math.sqrt(best);
-    }
-
-    /** Moves a flanking formation along its route, charging from behind when it gets round (or takes too long). */
-    private void ride(Army army, Army enemy, Formation formation, int seconds) {
-        List<Point> route = formation.route;
-        Point waypoint = route.get(formation.routeIndex);
-        if (formation.centre().distanceTo(waypoint) <= BattlePlan.WAYPOINT_REACHED) {
-            formation.routeIndex++;
-        }
-        if (formation.routeIndex >= route.size() || seconds - formation.routeStarted >= FLANK_SECONDS) {
-            charge(formation, enemy);
-            return;
-        }
-        Point next = route.get(formation.routeIndex);
-        if (!next.equals(formation.line)) {
-            formation.line = next;
-            standInLine(army, formation);
-        }
-    }
-
-    /**
-     * The general and the standard-bearer: a warrior stands just behind the line and charges in with the infantry;
-     * a tactician stays well back behind the front centre. The standard-bearer keeps to the general's side.
-     */
-    private void commandGroup(Army army, Army enemy, List<AbstractRecruitEntity> foes, boolean engaged) {
-        AbstractRecruitEntity general = army.commander;
-        if (general == null || !general.isAlive()) {
-            return;
-        }
-        if (army.commanderCharged) {
-            hunt(general, foes);
-            return;
-        }
-        if (army.general == General.WARRIOR && engaged) {
-            army.commanderCharged = true;
-            release(general, enemy.living);
-            broadcast(army.faction.name() + "'s warrior general charges");
-            return;
-        }
-        hold(general, BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, army.generalBack));
-    }
-
-    /** Recruits gives cavalry their horse on their first tick; dress each horse in the army's colour once. */
-    private void armourHorses(Army army, Formation formation) {
-        for (AbstractRecruitEntity rider : formation.alive()) {
-            if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
-                horse.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, army.uniform)); // 401: the horse's armour slot
-            }
-        }
-    }
-
-    private static Point centreOf(List<AbstractRecruitEntity> soldiers) {
-        return new Point(soldiers.stream().mapToDouble(Entity::getX).average().orElse(0),
-                soldiers.stream().mapToDouble(Entity::getZ).average().orElse(0));
-    }
-
-    private void checkEnd(int seconds) {
-        int aliveA = armies[0].living.size();
-        int aliveB = armies[1].living.size();
-        boolean routA = BattlePlan.routs(aliveA, armies[0].started);
-        boolean routB = BattlePlan.routs(aliveB, armies[1].started);
-        String result;
-        if (routA && routB) {
-            result = "both armies broke";
-        } else if (routA || routB) {
-            Army winner = routA ? armies[1] : armies[0];
-            Army loser = routA ? armies[0] : armies[1];
-            result = winner.describe() + " wins; " + loser.describe() + " routs";
-            flee(loser, winner);
-        } else if (seconds >= BattlePlan.TIME_LIMIT_SECONDS) {
-            result = "draw (time limit)";
-        } else {
-            return;
-        }
+    private void end() {
         over = true;
-        reportCalibration();
-        for (Army army : armies) {
-            army.living.forEach(s -> s.setTarget(null));
+        FieldBattle.Outcome outcome = field.outcome();
+        for (Live l : live.values()) {
+            l.living().forEach(s -> s.setTarget(null));
         }
         restoreRelations();
+        String result = outcome.winner() < 0 ? outcome.result()
+                : describe(outcome.winner()) + " wins; " + describe(1 - outcome.winner()) + " routs";
         broadcast(String.format(Locale.ROOT, "[battle over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
-                seconds, result, armies[0].faction.name(), aliveA, armies[0].started, armies[1].faction.name(), aliveB,
-                armies[1].started, whole.describe()));
-        for (Army army : armies) {
-            boolean generalAlive = army.commander != null && army.commander.isAlive();
-            boolean bannerAlive = army.bearer != null && army.bearer.isAlive();
-            broadcast(String.format(Locale.ROOT, "  %s: general %s, standard %s", army.describe(),
-                    generalAlive ? "survived" : "fell", bannerAlive ? "still flies" : "fell"));
+                outcome.seconds(), result, sides[0].faction.name(), field.army(0).alive(), field.army(0).started(),
+                sides[1].faction.name(), field.army(1).alive(), field.army(1).started(), whole.describe()));
+        for (int side = 0; side < 2; side++) {
+            FieldArmy army = field.army(side);
+            broadcast(String.format(Locale.ROOT, "  %s: general %s, standard %s", describe(side),
+                    army.generalAlive() ? "survived" : "fell", army.standardAlive() ? "still flies" : "fell"));
         }
+        reportCalibration();
         broadcast("Use /pve debug battle clear to remove the survivors");
     }
 
-    /** The routed army stops fighting and runs back the way it came. */
-    private void flee(Army loser, Army winner) {
-        for (AbstractRecruitEntity soldier : loser.living) {
-            soldier.setAggroState(3); // passive
-            BlockPos away = ground(new Point(soldier.getX() - loser.facingX * 60, soldier.getZ() - loser.facingZ * 60));
-            soldier.setMovePos(away);
-            soldier.setFollowState(0);
-            soldier.setShouldMovePos(true);
-        }
-        winner.living.forEach(s -> s.setFollowState(2)); // winners hold where they stand
-    }
-
-    // ---- measuring, to calibrate battles fought as numbers ----
-
-    /** A charged soldier this close to its target is taken to be striking it. */
-    private static final double STRIKING_DISTANCE = 4;
+    // ---- measuring real soldiers fighting real soldiers, to calibrate the numbers ----
 
     /**
-     * One second's measurements for {@link Calibration}: the health each block lost and who was striking it, decided
-     * by the numeric battle's own rules (a formed block strikes the nearest enemy block within its reach, archers
-     * shoot the nearest within range; a charged soldier strikes the target it is next to), and how fast blocks walk.
+     * One second's measurements for {@link Calibration}, among real blocks only: the health each lost and who was
+     * striking it, decided by the numeric battle's own rules (a formed block strikes the nearest enemy block within
+     * its reach, archers shoot the nearest within range; a charged soldier strikes the target it is next to), and
+     * how fast blocks walk.
      */
     private void measure() {
-        Map<Integer, Formation> blockOf = new HashMap<>();
-        for (Army army : armies) {
-            for (Formation f : army.formations) {
-                for (AbstractRecruitEntity s : f.living) {
-                    blockOf.put(s.getId(), f);
-                }
+        Map<Integer, Live> blockOf = new HashMap<>();
+        Map<Live, List<AbstractRecruitEntity>> living = new HashMap<>();
+        for (Live l : live.values()) {
+            List<AbstractRecruitEntity> soldiers = l.living();
+            living.put(l, soldiers);
+            for (AbstractRecruitEntity s : soldiers) {
+                blockOf.put(s.getId(), l);
             }
         }
-        Map<Formation, double[]> strikers = new HashMap<>();
-        for (int side = 0; side < 2; side++) {
-            Army army = armies[side];
-            Army enemy = armies[1 - side];
-            for (Formation f : army.formations) {
-                if (f.living.isEmpty() || f.duty == Duty.WITHDRAWING) {
-                    continue;
-                }
-                if (f.charged) {
-                    Calibration.Striker kind = melee(f.arm);
-                    for (AbstractRecruitEntity s : f.living) {
-                        LivingEntity target = s.getTarget();
-                        Formation struck = target == null || !target.isAlive() ? null : blockOf.get(target.getId());
-                        if (struck != null && struck != f && s.distanceTo(target) <= STRIKING_DISTANCE) {
-                            Point at = new Point(s.getX(), s.getZ());
-                            strike(strikers, struck, kind, FieldRules.meleeFactor(sideOf(enemy, struck, at), struck.arm));
-                        }
-                    }
-                    continue;
-                }
-                Point centre = f.centre();
-                Formation foe = null;
-                double best = Double.MAX_VALUE;
-                for (Formation e : enemy.formations) {
-                    if (!e.living.isEmpty()) {
-                        double d = frontDistance(army, centre, enemy, e.centre(), e.living.size());
-                        if (d < best) {
-                            best = d;
-                            foe = e;
-                        }
+        Map<Live, double[]> strikers = new HashMap<>();
+        for (Live l : live.values()) {
+            List<AbstractRecruitEntity> soldiers = living.get(l);
+            Duty duty = l.block.duty();
+            if (soldiers.isEmpty() || duty == Duty.WITHDRAWING || duty == Duty.BEARER || duty == Duty.FLEEING) {
+                continue;
+            }
+            FieldArmy enemy = field.army(1 - l.block.side());
+            if (l.block.charged()) {
+                Calibration.Striker kind = melee(l.block.arm());
+                for (AbstractRecruitEntity s : soldiers) {
+                    LivingEntity target = s.getTarget();
+                    Live struck = target == null || !target.isAlive() ? null : blockOf.get(target.getId());
+                    if (struck != null && struck.block.side() != l.block.side() && s.distanceTo(target) <= STRIKING_DISTANCE) {
+                        strike(strikers, struck, kind, FieldRules.meleeFactor(sideOf(enemy, struck, new Point(s.getX(), s.getZ())), struck.block.arm()));
                     }
                 }
-                if (foe == null) {
-                    continue;
-                }
-                if (best <= FieldRules.HOLDING_REACH) {
-                    strike(strikers, foe, melee(f.arm), f.living.size() * FieldRules.meleeFactor(sideOf(enemy, foe, centre), foe.arm));
-                } else if (f.arm == Arm.ARCHERS && arrows(f) > 0) {
-                    Formation shot = null;
-                    double nearest = FieldRules.ARCHER_RANGE;
-                    for (Formation e : enemy.formations) {
-                        if (!e.living.isEmpty() && e.centre().distanceTo(centre) <= nearest) {
-                            nearest = e.centre().distanceTo(centre);
-                            shot = e;
-                        }
-                    }
-                    if (shot != null) {
-                        strike(strikers, shot, Calibration.Striker.ARROWS,
-                                f.living.size() * FieldRules.arrowFactor(sideOf(enemy, shot, centre), shot.arm));
+                continue;
+            }
+            Point centre = centre(soldiers);
+            FieldArmy army = field.army(l.block.side());
+            Live foe = null;
+            double best = Double.MAX_VALUE;
+            for (Live e : live.values()) {
+                List<AbstractRecruitEntity> enemySoldiers = living.get(e);
+                if (e.block.side() != l.block.side() && !enemySoldiers.isEmpty()) {
+                    double d = frontDistance(army, centre, enemy, centre(enemySoldiers), e.block.started());
+                    if (d < best) {
+                        best = d;
+                        foe = e;
                     }
                 }
             }
-        }
-        for (Army army : armies) {
-            for (Formation f : army.formations) {
-                double health = 0;
-                for (AbstractRecruitEntity s : f.living) {
-                    health += s.getHealth();
+            if (foe == null) {
+                continue;
+            }
+            if (best <= FieldRules.HOLDING_REACH) {
+                strike(strikers, foe, melee(l.block.arm()),
+                        soldiers.size() * FieldRules.meleeFactor(sideOf(enemy, foe, centre), foe.block.arm()));
+            } else if (l.block.arm() == Arm.ARCHERS && arrows(soldiers) > 0) {
+                Live shot = null;
+                double nearest = FieldRules.ARCHER_RANGE;
+                for (Live e : live.values()) {
+                    List<AbstractRecruitEntity> enemySoldiers = living.get(e);
+                    if (e.block.side() != l.block.side() && !enemySoldiers.isEmpty() && centre(enemySoldiers).distanceTo(centre) <= nearest) {
+                        nearest = centre(enemySoldiers).distanceTo(centre);
+                        shot = e;
+                    }
                 }
-                Double before = lastHealth.put(f, health);
-                double[] struck = strikers.get(f);
-                if (before != null && (struck != null || before > health)) {
-                    calibration.addDamage(Math.max(0, before - health), struck == null ? new double[Calibration.Striker.values().length] : struck);
-                }
-                Point centre = f.centre();
-                Point was = lastCentre.put(f, centre);
-                if (was != null && !f.charged && !f.living.isEmpty() && centre.distanceTo(f.line) >= 8) {
-                    calibration.addSpeed(f.arm == Arm.CAVALRY, centre.distanceTo(was));
+                if (shot != null) {
+                    strike(strikers, shot, Calibration.Striker.ARROWS,
+                            soldiers.size() * FieldRules.arrowFactor(sideOf(enemy, shot, centre), shot.block.arm()));
                 }
             }
         }
+        for (Live l : live.values()) {
+            List<AbstractRecruitEntity> soldiers = living.get(l);
+            double health = 0;
+            for (AbstractRecruitEntity s : soldiers) {
+                health += s.getHealth();
+            }
+            Double before = lastHealth.put(l.block, health);
+            double[] struck = strikers.get(l);
+            if (before != null && (struck != null || before > health)) {
+                calibration.addDamage(Math.max(0, before - health), struck == null ? new double[Calibration.Striker.values().length] : struck);
+            }
+            if (soldiers.isEmpty()) {
+                continue;
+            }
+            Point centre = centre(soldiers);
+            Point was = lastCentre.put(l.block, centre);
+            if (was != null && !l.block.charged() && centre.distanceTo(l.block.line()) >= 8) {
+                calibration.addSpeed(l.block.arm() == Arm.CAVALRY, centre.distanceTo(was));
+            }
+        }
+    }
+
+    private static Point centre(List<AbstractRecruitEntity> soldiers) {
+        double x = 0;
+        double z = 0;
+        for (AbstractRecruitEntity s : soldiers) {
+            x += s.getX();
+            z += s.getZ();
+        }
+        return soldiers.isEmpty() ? new Point(0, 0) : new Point(x / soldiers.size(), z / soldiers.size());
     }
 
     private static Calibration.Striker melee(Arm arm) {
@@ -1173,30 +988,30 @@ public final class RecruitsBattle {
         };
     }
 
-    private static void strike(Map<Formation, double[]> strikers, Formation struck, Calibration.Striker kind, double weight) {
+    private static void strike(Map<Live, double[]> strikers, Live struck, Calibration.Striker kind, double weight) {
         strikers.computeIfAbsent(struck, k -> new double[Calibration.Striker.values().length])[kind.ordinal()] += weight;
     }
 
     /** Where a blow from {@code from} falls on a block of the army {@code defenders}, which faces the army's way. */
-    private static FieldRules.Side sideOf(Army defenders, Formation struck, Point from) {
-        Point at = struck.centre();
-        return FieldRules.side(defenders.facingX, defenders.facingZ, from.x() - at.x(), from.z() - at.z());
+    private static FieldRules.Side sideOf(FieldArmy defenders, Live struck, Point from) {
+        Point at = centre(struck.living());
+        return FieldRules.side(defenders.facingX(), defenders.facingZ(), from.x() - at.x(), from.z() - at.z());
     }
 
     /** How far apart two blocks' front ranks are, each standing square to its army's facing. */
-    private static double frontDistance(Army army, Point at, Army enemy, Point enemyAt, int enemySoldiers) {
+    private static double frontDistance(FieldArmy army, Point at, FieldArmy enemy, Point enemyAt, int enemySoldiers) {
         double hw = FieldRules.BLOCK_HALF_WIDTH;
         double ehw = enemySoldiers > 1 ? FieldRules.BLOCK_HALF_WIDTH : FieldRules.LONE_HALF_WIDTH;
         return FieldRules.segmentDistance(
-                at.x() - army.facingZ * hw, at.z() + army.facingX * hw, at.x() + army.facingZ * hw, at.z() - army.facingX * hw,
-                enemyAt.x() - enemy.facingZ * ehw, enemyAt.z() + enemy.facingX * ehw,
-                enemyAt.x() + enemy.facingZ * ehw, enemyAt.z() - enemy.facingX * ehw);
+                at.x() - army.facingZ() * hw, at.z() + army.facingX() * hw, at.x() + army.facingZ() * hw, at.z() - army.facingX() * hw,
+                enemyAt.x() - enemy.facingZ() * ehw, enemyAt.z() + enemy.facingX() * ehw,
+                enemyAt.x() + enemy.facingZ() * ehw, enemyAt.z() - enemy.facingX() * ehw);
     }
 
-    /** Arrows its archers carry, all together. */
-    private static int arrows(Formation f) {
+    /** Arrows the soldiers carry, all together. */
+    private static int arrows(List<AbstractRecruitEntity> soldiers) {
         int n = 0;
-        for (AbstractRecruitEntity s : f.living) {
+        for (AbstractRecruitEntity s : soldiers) {
             for (int i = 0; i < s.getInventory().getContainerSize(); i++) {
                 ItemStack stack = s.getInventory().getItem(i);
                 if (stack.is(Items.ARROW)) {
@@ -1208,17 +1023,17 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Fights the same battle as numbers a few times (each army's general and size as here, different luck), so its
-     * end can be set beside the live one's.
+     * Fights the same battle only as numbers a few times (each army's general and size as here, different luck), so
+     * its end can be set beside this one's.
      */
-    private static String predict(Army a, int aBlocks, Army b, int bBlocks, Point centre, double axisX, double axisZ) {
+    private static String predict(General a, int aBlocks, General b, int bBlocks, Side[] sides, Point centre, double axisX, double axisZ) {
         int runs = Math.max(2, Math.min(20, 400 / (aBlocks + bBlocks)));
         int[] wins = new int[3];
         long seconds = 0;
         long leftA = 0;
         long leftB = 0;
         for (int i = 0; i < runs; i++) {
-            FieldBattle battle = new FieldBattle(a.general, aBlocks, b.general, bBlocks, centre, axisX, axisZ, i);
+            FieldBattle battle = new FieldBattle(a, aBlocks, b, bBlocks, centre, axisX, axisZ, i);
             FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
             wins[outcome == null || outcome.winner() < 0 ? 2 : outcome.winner()]++;
             seconds += battle.seconds();
@@ -1226,7 +1041,7 @@ public final class RecruitsBattle {
             leftB += battle.army(1).alive();
         }
         return String.format(Locale.ROOT, "%s wins %d of %d, %s %d, draws %d; about %d s; %d and %d left",
-                a.faction.name(), wins[0], runs, b.faction.name(), wins[1], wins[2], seconds / runs, leftA / runs, leftB / runs);
+                sides[0].faction.name(), wins[0], runs, sides[1].faction.name(), wins[1], wins[2], seconds / runs, leftA / runs, leftB / runs);
     }
 
     /** Reports what this battle measured, and everything measured since the server started. */
@@ -1234,38 +1049,29 @@ public final class RecruitsBattle {
         SESSION_CALIBRATION.addAll(calibration);
         broadcast("[calibration] this battle: " + calibration.fit().describe());
         broadcast("[calibration] all battles so far: " + SESSION_CALIBRATION.fit().describe());
-        if (prediction != null) {
-            broadcast("[calibration] as numbers: " + prediction);
-        }
+        broadcast("[calibration] only as numbers: " + prediction);
     }
 
-    // ---- keeping the field loaded ----
+    // ---- keeping the ground loaded ----
 
     /**
-     * Keeps the chunks around every living soldier loaded and running, wherever the players are, and lets go of the
-     * rest. Without this, a player who flies off to watch from afar unloads the battle: its soldiers stop, and count
-     * as fallen.
+     * Keeps the chunks around every real soldier loaded and running, wherever the players are, and lets go of the
+     * rest. Blocks that are only numbers need no ground.
      */
     private void holdChunks() {
         Set<Long> wanted = new HashSet<>();
-        for (AbstractRecruitEntity soldier : spawned) {
-            if (!soldier.isAlive()) {
-                continue;
-            }
-            ChunkPos at = soldier.chunkPosition();
-            for (int dx = -HELD_RADIUS; dx <= HELD_RADIUS; dx++) {
-                for (int dz = -HELD_RADIUS; dz <= HELD_RADIUS; dz++) {
-                    wanted.add(ChunkPos.asLong(at.x + dx, at.z + dz));
+        for (Live l : live.values()) {
+            for (AbstractRecruitEntity soldier : l.living()) {
+                ChunkPos at = soldier.chunkPosition();
+                for (int dx = -HELD_RADIUS; dx <= HELD_RADIUS; dx++) {
+                    for (int dz = -HELD_RADIUS; dz <= HELD_RADIUS; dz++) {
+                        wanted.add(ChunkPos.asLong(at.x + dx, at.z + dz));
+                    }
                 }
             }
         }
         for (long chunk : wanted) {
-            if (heldChunks.add(chunk)) {
-                ChunkPos pos = new ChunkPos(chunk);
-                // Distance 2 makes the chunk itself entity-ticking, as /forceload does; forcing ticks (a Forge addition)
-                // lets its soldiers run with no player within simulation distance.
-                level.getChunkSource().addRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
-            }
+            hold(chunk);
         }
         heldChunks.removeIf(chunk -> {
             if (wanted.contains(chunk)) {
@@ -1277,30 +1083,24 @@ public final class RecruitsBattle {
         });
     }
 
-    /**
-     * Loads, and holds, the ground an army is about to deploy on, before anyone is spawned: a big army stands far
-     * beyond what the players around keep loaded, and soldiers put down in unloaded ground would be lost.
-     */
-    private void loadGround(Army army, Point front, List<BattlePlan.Slot> slots) {
-        double margin = BattlePlan.BLOCK_PITCH;
-        Set<Long> chunks = new HashSet<>();
-        for (BattlePlan.Slot slot : slots) {
-            for (double dr = -margin; dr <= margin; dr += 8) {
-                for (double db = -8; db <= 16; db += 8) {
-                    Point p = BattlePlan.place(front, army.facingX, army.facingZ, slot.right() + dr, slot.back() + db);
-                    chunks.add(ChunkPos.asLong(Mth.floor(p.x()) >> 4, Mth.floor(p.z()) >> 4));
-                }
-            }
+    private void hold(long chunk) {
+        if (heldChunks.add(chunk)) {
+            ChunkPos pos = new ChunkPos(chunk);
+            // Distance 2 makes the chunk itself entity-ticking, as /forceload does; forcing ticks (a Forge addition)
+            // lets its soldiers run with no player within simulation distance.
+            level.getChunkSource().addRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
         }
-        double back = BattlePlan.generalBack(army.general, slots);
-        Point general = BattlePlan.place(front, army.facingX, army.facingZ, 0, back);
-        chunks.add(ChunkPos.asLong(Mth.floor(general.x()) >> 4, Mth.floor(general.z()) >> 4));
-        for (long chunk : chunks) {
-            if (heldChunks.add(chunk)) {
-                ChunkPos pos = new ChunkPos(chunk);
-                level.getChunkSource().addRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
+    }
+
+    /** Loads, and holds, the ground a block is about to stand on, before its soldiers are spawned. */
+    private void loadGround(Point at) {
+        int cx = Mth.floor(at.x()) >> 4;
+        int cz = Mth.floor(at.z()) >> 4;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                hold(ChunkPos.asLong(cx + dx, cz + dz));
+                level.getChunk(cx + dx, cz + dz); // loads it now, not when the ticket is processed
             }
-            level.getChunk(ChunkPos.getX(chunk), ChunkPos.getZ(chunk)); // loads it now, not when the ticket is processed
         }
     }
 
@@ -1312,46 +1112,63 @@ public final class RecruitsBattle {
         heldChunks.clear();
     }
 
-    // ---- distant view ----
+    /**
+     * The ground's height at a spot, for drawing blocks that are only numbers: from the world where it is loaded,
+     * else from the world generator (as Distant Horizons draws it), without loading anything.
+     */
+    private int groundY(double x, double z) {
+        int bx = Mth.floor(x);
+        int bz = Mth.floor(z);
+        if (level.hasChunk(bx >> 4, bz >> 4)) {
+            return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx, bz);
+        }
+        return groundCache.computeIfAbsent(ChunkPos.asLong(bx >> 2, bz >> 2), k -> level.getChunkSource().getGenerator()
+                .getBaseHeight(bx, bz, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState()));
+    }
+
+    // ---- the distant view ----
 
     /**
-     * Every formation still standing, for clients to draw beyond the range at which they see soldiers. Ids are the
-     * side times {@link #IDS_PER_ARMY} plus the formation's place, with the general and the standard-bearer last.
+     * Every block still standing, for clients to draw beyond the range at which they see soldiers: real blocks from
+     * where their soldiers stand (with their entity ids), the others from the numbers.
      */
     private List<FormationSnapshot> snapshots() {
         List<FormationSnapshot> all = new ArrayList<>();
-        for (Army army : armies) {
-            army.count(); // also after the battle is decided, when orders (and counting) stop
-        }
         for (int side = 0; side < 2; side++) {
-            Army army = armies[side];
-            int base = side * IDS_PER_ARMY;
-            for (int i = 0; i < army.formations.size(); i++) {
-                Formation f = army.formations.get(i);
-                snapshot(base + i, FormationSnapshot.Kind.of(f.arm), army, f.alive(), f.charged || f.engaged, f.leader).ifPresent(all::add);
+            FieldArmy army = field.army(side);
+            Side s = sides[side];
+            for (FieldBlock block : army.blocks()) {
+                if (block.alive() == 0) {
+                    continue;
+                }
+                FormationSnapshot.Kind kind = block.duty() == Duty.GENERAL ? FormationSnapshot.Kind.GENERAL
+                        : block.duty() == Duty.BEARER ? FormationSnapshot.Kind.BEARER : FormationSnapshot.Kind.of(block.arm());
+                Live l = live.get(block);
+                List<AbstractRecruitEntity> living = l == null ? List.of() : l.living();
+                if (!living.isEmpty()) {
+                    all.add(liveSnapshot(block, kind, s, army, l, living));
+                    continue;
+                }
+                boolean lone = block.started() == 1;
+                Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
+                all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
+                        groundY(middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
+                        lone ? 0 : FieldRules.BLOCK_HALF_WIDTH, lone ? 0 : BattlePlan.SPACING, block.fighting(),
+                        block.captainAlive(), new int[0], -1));
             }
-            soloSnapshot(base + IDS_PER_ARMY - 2, FormationSnapshot.Kind.GENERAL, army, army.commander, army.commanderCharged).ifPresent(all::add);
-            soloSnapshot(base + IDS_PER_ARMY - 1, FormationSnapshot.Kind.BEARER, army, army.bearer, false).ifPresent(all::add);
         }
         return all;
     }
 
-    private static Optional<FormationSnapshot> soloSnapshot(int id, FormationSnapshot.Kind kind, Army army,
-                                                            @Nullable AbstractRecruitEntity soldier, boolean fighting) {
-        return soldier == null || !soldier.isAlive() ? Optional.empty() : snapshot(id, kind, army, List.of(soldier), fighting, null);
-    }
-
-    private static Optional<FormationSnapshot> snapshot(int id, FormationSnapshot.Kind kind, Army army,
-                                                        List<AbstractRecruitEntity> soldiers, boolean fighting,
-                                                        @Nullable AbstractRecruitEntity leader) {
-        if (soldiers.isEmpty()) {
-            return Optional.empty();
-        }
+    private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, FieldArmy army, Live l,
+                                                  List<AbstractRecruitEntity> soldiers) {
         int n = soldiers.size();
         double[] xs = new double[n];
         double[] ys = new double[n];
         double[] zs = new double[n];
         int[] ids = new int[n];
+        int leaderId = -1;
+        int captain = block.captain();
         for (int i = 0; i < n; i++) {
             AbstractRecruitEntity s = soldiers.get(i);
             // A rider stands on the ground where their horse does, not up in the saddle.
@@ -1361,9 +1178,12 @@ public final class RecruitsBattle {
             zs[i] = feet.getZ();
             ids[i] = s.getId();
         }
-        boolean leads = leader != null && leader.isAlive();
-        return Optional.of(FormationSnapshot.of(id, kind, army.uniform, army.mark, xs, ys, zs, army.facingX, army.facingZ, fighting,
-                leads, ids, leads ? leader.getId() : -1));
+        if (captain >= 0 && block.captainAlive()) {
+            AbstractRecruitEntity c = l.soldiers[captain];
+            leaderId = c != null && c.isAlive() ? c.getId() : -1;
+        }
+        return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, army.facingX(), army.facingZ(),
+                block.fighting(), leaderId >= 0, ids, leaderId);
     }
 
     /** Tells everyone in the level that the battle's formations are gone. */
