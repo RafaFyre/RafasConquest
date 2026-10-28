@@ -1,30 +1,35 @@
 package rafasconquest.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
+import rafasconquest.RafasConquest;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.battle.FormationSnapshot.Kind;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The sound of a battle as a whole, from the formations the client is told about (so it carries from blocks that are
- * only numbers too): hoofbeats from cavalry on the move, and the din of fighting along the front. Both are made of
- * Minecraft's own sounds played over and over, each at a block's or a stretch of front's middle:
+ * only numbers too): the thunder of charging cavalry, and the din of fighting along the front. Both are recordings,
+ * cut into 10 s clips that fade in and out; each source starts a new clip, picked at random, before the last ends, so
+ * it never falls silent and no two sound alike:
  * <ul>
- *   <li>hoofbeats: the horse gallop step, quick and slightly varied, from each moving cavalry block, louder the more
- *   riders and the faster they go; only the {@link #HOOF_SOURCES} nearest play, and none close enough to hear the real
- *   horses;</li>
- *   <li>the din: sword blows, sweeps, shields and soldiers being hurt, at random, from each stretch of up to
- *   {@link #DIN_GROUP} fighting infantry blocks (about 100 soldiers), louder the more are fighting; only the
- *   {@link #DIN_SOURCES} nearest play.</li>
+ *   <li>the charge: a cavalry charge, from each cavalry block riding at a gallop, louder the more riders and the
+ *   faster they go; only the {@link #HOOF_SOURCES} nearest play. A clip follows its block as it rides, and fades out
+ *   when the block slows or falls;</li>
+ *   <li>the din: a medieval battle (crowd and swords), from the middle of each stretch of up to {@link #DIN_GROUP}
+ *   fighting infantry blocks (about 100 soldiers), louder the more are fighting; only the {@link #DIN_SOURCES} nearest
+ *   play.</li>
  * </ul>
  * Client thread only.
  */
@@ -34,22 +39,65 @@ public final class BattleSounds {
     /** Fighting infantry blocks heard as one stretch of front, and how far apart they may be. */
     private static final int DIN_GROUP = 5;
     private static final double DIN_GROUP_REACH = 60;
-    /** Cavalry is heard galloping above this pace, and not within this distance (the real horses are heard there). */
-    private static final double TROTTING = 2;
-    private static final double REAL_HORSES_HEARD = 24;
+    /** Cavalry is heard charging above this pace, in blocks a second (a charge rides at 7). */
+    private static final double GALLOP = 4;
     /** A sound at volume v carries 16 v blocks. */
     private static final float MAX_VOLUME = 8;
-    private static final SoundEvent[] DIN = {
-            SoundEvents.PLAYER_ATTACK_STRONG, SoundEvents.PLAYER_ATTACK_SWEEP, SoundEvents.PLAYER_ATTACK_KNOCKBACK,
-            SoundEvents.PLAYER_ATTACK_CRIT, SoundEvents.SHIELD_BLOCK, SoundEvents.PLAYER_HURT, SoundEvents.VILLAGER_HURT};
+    /** The clips (assets/rafasconquest/sounds.json); played on the client only, so never registered. */
+    private static final SoundEvent CHARGE = SoundEvent.createVariableRangeEvent(new ResourceLocation(RafasConquest.MOD_ID, "battle.charge"));
+    private static final SoundEvent DIN = SoundEvent.createVariableRangeEvent(new ResourceLocation(RafasConquest.MOD_ID, "battle.din"));
+    /** A clip lasts 10 s, fading for the last second: the next starts 8 to 9 s after the last. */
+    private static final int CLIP_EVERY = 160;
+    private static final int CLIP_JITTER = 20;
+    /** The size of the cells stretches of front are known by. */
+    private static final int DIN_CELL = 32;
 
     private static final RandomSource RANDOM = RandomSource.create();
     private static List<Source> hooves = List.of();
     private static List<Source> din = List.of();
     private static int ticks;
+    /** When each cavalry block, by its id, and each stretch of front, by its cell, starts its next clip. */
+    private static final Map<Long, Integer> nextCharge = new HashMap<>();
+    private static final Map<Long, Integer> nextDin = new HashMap<>();
 
-    /** Where a sound comes from, and how loud. */
-    private record Source(double x, double y, double z, double spread, float volume) {
+    /** Where a sound comes from, and how loud; the key tells one source's clips from another's. */
+    private record Source(long key, double x, double y, double z, double spread, float volume) {
+    }
+
+    /** A charge clip, riding along with its cavalry block; it fades out over a second once the block stops charging. */
+    private static final class ChargeSound extends AbstractTickableSoundInstance {
+        private final int formation;
+        private final float loudness;
+        private final double offsetX;
+        private final double offsetZ;
+
+        ChargeSound(Source s, float pitch) {
+            super(CHARGE, SoundSource.NEUTRAL, RANDOM);
+            this.formation = (int) s.key();
+            this.loudness = s.volume();
+            this.volume = s.volume();
+            this.pitch = pitch;
+            this.offsetX = (RANDOM.nextDouble() * 2 - 1) * s.spread();
+            this.offsetZ = (RANDOM.nextDouble() * 2 - 1) * s.spread();
+            this.x = s.x() + offsetX;
+            this.y = s.y();
+            this.z = s.z() + offsetZ;
+        }
+
+        @Override
+        public void tick() {
+            FormationSnapshot f = DistantArmies.at(formation);
+            if (f == null || f.alive() == 0 || DistantArmies.speed(f) < GALLOP) {
+                volume -= loudness / 20;
+                if (volume <= 0) {
+                    stop();
+                }
+                return;
+            }
+            x = f.x() + offsetX;
+            y = f.y() + 1;
+            z = f.z() + offsetZ;
+        }
     }
 
     private BattleSounds() {
@@ -68,31 +116,49 @@ public final class BattleSounds {
             din = din(formations, ear);
         }
         for (Source s : hooves) {
-            if (RANDOM.nextInt(3) == 0) {
-                play(mc, SoundEvents.HORSE_GALLOP, s, 0.8F + RANDOM.nextFloat() * 0.3F);
+            if (due(nextCharge, s.key())) {
+                mc.getSoundManager().play(new ChargeSound(s, 0.95F + RANDOM.nextFloat() * 0.1F));
             }
         }
         for (Source s : din) {
-            if (RANDOM.nextInt(4) == 0) {
-                play(mc, DIN[RANDOM.nextInt(DIN.length)], s, 0.8F + RANDOM.nextFloat() * 0.4F);
+            if (due(nextDin, s.key())) {
+                play(mc, DIN, s, 0.95F + RANDOM.nextFloat() * 0.1F);
             }
         }
+        if (ticks % 200 == 0) {
+            nextCharge.values().removeIf(next -> next < ticks - 200);
+            nextDin.values().removeIf(next -> next < ticks - 200);
+        }
+    }
+
+    /**
+     * Whether a source starts its next clip now (and when the one after starts, if so). A source newly heard starts
+     * within 2 s, so sources heard at once don't all start together.
+     */
+    private static boolean due(Map<Long, Integer> next, long key) {
+        if (ticks < next.computeIfAbsent(key, k -> ticks + RANDOM.nextInt(40))) {
+            return false;
+        }
+        next.put(key, ticks + CLIP_EVERY + RANDOM.nextInt(CLIP_JITTER));
+        return true;
     }
 
     public static void clear() {
         hooves = List.of();
         din = List.of();
+        nextCharge.clear();
+        nextDin.clear();
     }
 
     private static List<Source> hooves(List<FormationSnapshot> formations, Vec3 ear) {
         List<Source> sources = new ArrayList<>();
         for (FormationSnapshot f : formations) {
             double speed = DistantArmies.speed(f);
-            if (f.kind() != Kind.CAVALRY || speed < TROTTING || distance(f.x(), f.z(), ear) < REAL_HORSES_HEARD) {
+            if (f.kind() != Kind.CAVALRY || speed < GALLOP) {
                 continue;
             }
             float volume = (float) (2 + (MAX_VOLUME - 2) * Math.min(1, f.alive() / 20.0) * Math.min(1, speed / 7));
-            sources.add(new Source(f.x(), f.y() + 1, f.z(), f.halfWidth(), volume));
+            sources.add(new Source(f.id(), f.x(), f.y() + 1, f.z(), f.halfWidth(), volume));
         }
         return nearest(sources, ear, HOOF_SOURCES);
     }
@@ -126,7 +192,9 @@ public final class BattleSounds {
             }
             int n = group.size();
             float volume = (float) (2 + (MAX_VOLUME - 2) * Math.min(1, soldiers / 100.0));
-            sources.add(new Source(x / n, y / n + 1, z / n, 8 * n, volume));
+            // A stretch is known by the cell its middle is in, to keep its clips in turn as the front moves.
+            long cell = ((long) Math.floorDiv((int) (x / n), DIN_CELL) << 32) | (Math.floorDiv((int) (z / n), DIN_CELL) & 0xFFFFFFFFL);
+            sources.add(new Source(cell, x / n, y / n + 1, z / n, 8 * n, volume));
         }
         return nearest(sources, ear, DIN_SOURCES);
     }

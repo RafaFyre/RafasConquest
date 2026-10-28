@@ -58,6 +58,17 @@ public final class DistantArmies {
         return formations;
     }
 
+    /** One formation, where it should be drawn right now; null if there is none by that id. */
+    @Nullable
+    public static FormationSnapshot at(int id) {
+        FormationSnapshot target = to.get(id);
+        if (target == null) {
+            return null;
+        }
+        FormationSnapshot start = from.get(id);
+        return start == null ? target : target.from(start, Math.min(1, (Util.getMillis() - receivedAt) / GLIDE_MILLIS));
+    }
+
     /** How fast a formation is moving, in blocks a second: from where it was to where it is going. */
     public static double speed(FormationSnapshot formation) {
         FormationSnapshot start = from.get(formation.id());

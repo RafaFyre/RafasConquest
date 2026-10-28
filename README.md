@@ -132,10 +132,11 @@ first. The old relation is restored when the battle ends.
     (the advance, a cavalry charge or recall, a wall, the general charging, the final charge), heard 256 blocks
     around, at most once every 5 s; a fallen general sounds none.
 - **The sound of the battle** (`client/BattleSounds`), from the formations the client is told about, so blocks that are
-  only numbers are heard too: hoofbeats from the 8 nearest moving cavalry blocks (none within 24 blocks, where the real
-  horses are heard), and the din of fighting (blows, sweeps, shields, cries) from the 12 nearest stretches of front of
-  up to 5 infantry blocks, about every 100 soldiers. Both are louder the more soldiers there are, and are made from
-  Minecraft's own sounds.
+  only numbers are heard too: a cavalry charge from the 8 nearest cavalry blocks riding at a gallop (each sound rides
+  along with its block and fades out when it slows), and the din of a medieval battle from the 12 nearest stretches of
+  front of up to 5 infantry blocks, about every 100 soldiers. Both are louder the more soldiers there are. They are
+  recordings cut into mono 10 s clips that fade in and out (`assets/rafasconquest/sounds/battle`); each source starts a
+  new random clip before the last ends, so it never falls silent and no two sound alike.
 - **Archers never march past their own front line**, so they don't walk out alone while the infantry waits.
 - **No open files:** a front file whose block has fallen, with no fit block left to send, is filled by any block still
   in the lines (worn or not), else the nearest resting block.

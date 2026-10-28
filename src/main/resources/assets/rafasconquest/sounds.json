@@ -1,0 +1,27 @@
+{
+  "battle.charge": {
+    "sounds": [
+      "rafasconquest:battle/charge1",
+      "rafasconquest:battle/charge2",
+      "rafasconquest:battle/charge3",
+      "rafasconquest:battle/charge4",
+      "rafasconquest:battle/charge5",
+      "rafasconquest:battle/charge6",
+      "rafasconquest:battle/charge7",
+      "rafasconquest:battle/charge8",
+      "rafasconquest:battle/charge9",
+      "rafasconquest:battle/charge10",
+      "rafasconquest:battle/charge11"
+    ]
+  },
+  "battle.din": {
+    "sounds": [
+      "rafasconquest:battle/din1",
+      "rafasconquest:battle/din2",
+      "rafasconquest:battle/din3",
+      "rafasconquest:battle/din4",
+      "rafasconquest:battle/din5",
+      "rafasconquest:battle/din6"
+    ]
+  }
+}
