@@ -119,14 +119,19 @@ first. The old relation is restored when the battle ends.
   over, and the worn block withdraws behind the last block of its file, passive on the way. It stays there, fighting
   only if the enemy reaches it. This rotation keeps fresh soldiers at the front and makes a big battle last; with no
   fit block left, a front block fights on.
-- **The general** gives every block an order every second (`battle/BattlePlan.order`). They are a Recruits soldier at
-  the top level (20 by Recruits' default config, about 80 health) with an iron sword, who stands just behind the front
-  line and charges in once it is fighting.
+- **The general** gives every block an order every second (`battle/BattlePlan.order`). They are a mounted Recruits
+  soldier at the top level (20 by Recruits' default config, about 80 health) in iron under a gold helmet, with an iron
+  sword, who rides 20 blocks behind the middle of the front, out of the enemy line's reach. **If the general falls,
+  their army retreats at once.**
+  - **The guard:** 20 riders in full iron, their horses in iron too, ride just behind the general. They ride out at
+    any enemy within 15 blocks of the general, and at cavalry charging the general from 40, and reform at the
+    general's back. Cavalry charging the general sends them to shelter behind the nearest of their own infantry.
   - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
   - Archers march until an enemy is within 30 blocks, then halt and shoot.
   - Cavalry waits on the wings until its front line is fighting, or an enemy comes within 20 blocks, then rides for
     the enemy archers.
-  - Cavalry that has charged, and the general, send any soldier with no target after the nearest enemy left.
+  - Cavalry that has charged sends any soldier with no target after the nearest enemy left. Charging cavalry that
+    runs into an enemy block on the way to its target is caught fighting it, and can't ride through.
   - **Cycle charge:** a charge builds momentum over a 20-block run-up, and a rider hits up to 3 times as hard with full
     momentum. Each second in contact loses some (0.3 against infantry, 0.6 against cavalry; all of it against a braced
     wall from the front), and spent riders' horses slow to as little as half pace, so cavalry can't ride through a
@@ -139,6 +144,43 @@ first. The old relation is restored when the battle ends.
   - **Horns:** every faction has one of Minecraft's eight goat horn calls. The general sounds it for each big order
     (the advance, a cavalry charge or recall, a wall, the general charging, the final charge), heard 256 blocks
     around, at most once every 5 s; a fallen general sounds none.
+- **Characters and doctrines** (`character/GameCharacter`, `battle/Doctrine`, `battle/WarPlan`): a character is a
+  king, merchant, warrior, politician, tactician, advisor or general; only generals act yet. Each faction follows
+  doctrines (saved with it; all three for now), and each battle's general is made for it with a name and two of
+  their faction's doctrines, chosen at random. They fight with every formation and strategy of both. The start of a
+  battle names each general and their plan, and the chat says when a strategy acts.
+  - **Spear and Shield**
+    - *Great Spear* (formation): all the cavalry waits in one wedge of blocks at least 45 blocks behind the front,
+      behind the last infantry line. It charges as one, in formation, once its lines are fighting, and breaks up on
+      striking. Its riders gather up to twice the momentum (5 times the damage at full), over a 40-block run-up.
+    - *Great Shield* (formation): every infantry block bears shields and re-forms 4 wide and 5 deep. Each front file
+      is 3 blocks closed up one behind the other, 15 ranks; relief comes from the block right behind. The front is
+      narrower for it. Blocks waiting in a file reach no further than a broken formation, so only the front block
+      fights.
+    - *Decapitate*: the wedge rides at the enemy general once the lines are fighting; charging cavalry within 60
+      blocks of the enemy general goes for them.
+    - *Mass Casualties*: soldiers who break formation, and the wedge, go for the most enemy soldiers within reach for
+      the distance; archers shoot the enemy block with the most soldiers in range.
+    - *Cavalry Flank*: cavalry charging infantry first rides in formation out to a point 15 blocks beyond the side of
+      its target's line, then turns in, so it strikes the flank, where no wall stands. A wall gives its bonus only
+      against cavalry striking its front, and a block fighting to its front can't turn to brace.
+  - **Charge and Decapitate**
+    - *Unrelenting Charge*: the general, their guard and all the cavalry wait in a wedge far behind the lines, the
+      general at its tip. The wedge's first half, which the general leads, charges once the lines are fighting. When
+      it is spent and riding back, the second half goes in, then the first again, and so on. While the general
+      leads, their own soldiers within 15 blocks take 70 % of the harm done to them.
+    - *Precision Strikes*: cavalry strikes the most exposed enemy block, even before the lines meet: one 6 blocks or
+      more ahead of its own line, fighting with a flank open (an end of the line, or a fallen neighbour), or worn to
+      half its soldiers.
+    - *Decapitate*: once the enemy general stands exposed (none of their army but the standard within 15 blocks),
+      the unrelenting charge rides at them.
+  - **Bait and Pincer**
+    - *Bait*: the middle front file (if there are at least 3) runs ahead of the line, up to 12 blocks in front. Once
+      fighting, it falls back a step a second, still fighting, to 10 blocks behind the line. The rest of the line
+      holds its ground meanwhile, fighting only what comes within reach.
+    - *Pincer*: an enemy block drawn on by the bait to within 20 blocks of it, and 6 or more ahead of its own line,
+      is struck with what is to hand: the wedge or any cavalry ready charges it, else three idle infantry blocks
+      surround it (both flanks and the rear), else one strikes its flank. The pincer gives up after 40 s.
 - **The sound of the battle** (`client/BattleSounds`), from the formations the client is told about, so blocks that are
   only numbers are heard too: a cavalry charge from the 8 nearest cavalry blocks riding at a gallop (each sound rides
   along with its block and fades out when it slows), and the din of a medieval battle from the 12 nearest stretches of
@@ -148,8 +190,9 @@ first. The old relation is restored when the battle ends.
 - **Archers never march past their own front line**, so they don't walk out alone while the infantry waits.
 - **No open files:** a front file whose block has fallen, with no fit block left to send, is filled by any block still
   in the lines (worn or not), else the nearest resting block.
-- **The end:** an army routs at 20 % strength; its survivors turn passive and run back the way they came. If nobody
-  has fallen for 30 s once fighting has begun, the lines have stalled and everyone left charges. After 30 minutes the
+- **The end:** an army whose general falls retreats; one worn to 20 % strength routs. Either way its survivors turn
+  passive and run back the way they came. If nobody has fallen for 30 s once fighting has begun, the lines have
+  stalled and everyone left charges, except the generals, their guards and the standards. After 30 minutes the
   battle is called a draw.
 - **Reports:** every 10 s the chat and server log get the soldiers left on each side, the blocks relieved so far, the
   server tick time, and how much of it the battle's own orders take. The end says whether each general and standard survived. `/pve debug battle clear` removes every soldier and horse

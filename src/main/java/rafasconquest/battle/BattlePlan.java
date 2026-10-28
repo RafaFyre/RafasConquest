@@ -88,9 +88,9 @@ public final class BattlePlan {
     /**
      * Where a block stands when the army deploys, in the army's frame (the centre of its front rank). Infantry stands
      * in {@code line} 0 (the front), 1, 2... behind it, at {@code file} along the line. Archers and cavalry have line
-     * -1.
+     * -1. {@code files} is how many soldiers wide its ranks are.
      */
-    public record Slot(Arm arm, double right, double back, int line, int file) {
+    public record Slot(Arm arm, double right, double back, int line, int file, int files) {
     }
 
     /** How many blocks of 20 an army of {@code soldiers} is: the nearest whole number, within the limits. */
@@ -99,13 +99,42 @@ public final class BattlePlan {
         return Math.max(1, Math.round(clamped / (float) SOLDIERS_PER_FORMATION));
     }
 
+    /** How an army of {@code blocks} blocks deploys in plain lines ({@link #deployment(int, boolean, boolean)}). */
+    public static List<Slot> deployment(int blocks) {
+        return deployment(blocks, false, false);
+    }
+
+    /** From one block's centre to the next in a line, for blocks {@code files} wide. */
+    public static double pitch(int files) {
+        return (files - 1) * SPACING + 3;
+    }
+
+    /**
+     * How far behind the front block of its file the block {@code place} places back stands: {@link #LINE_GAP} apart,
+     * or in a Great Shield file the first {@link #SHIELD_STACK} closed up five ranks apart, the rest behind them.
+     */
+    public static double fileBack(int place, boolean greatShield) {
+        if (!greatShield) {
+            return place * LINE_GAP;
+        }
+        if (place < SHIELD_STACK) {
+            return place * SHIELD_BLOCK_DEPTH;
+        }
+        return (SHIELD_STACK - 1) * SHIELD_BLOCK_DEPTH + (place - SHIELD_STACK + 1) * LINE_GAP;
+    }
+
     /**
      * How an army of {@code blocks} blocks deploys: a fifth archers, a fifth cavalry (rounded), the rest infantry.
      * The infantry stands in lines at most {@link #MAX_FRONT} blocks wide (a big army wider, see
      * {@link #MAX_FRONT}), at least two lines once there are more than 4 blocks, shieldwalls every third file.
      * Archers stand in rows behind the front line; cavalry on both wings (the right wing first).
+     * <p>
+     * In a Great Shield ({@code greatShield}) every infantry block bears shields and stands {@link #SHIELD_FILES} wide
+     * and five deep, and each front file is {@link #SHIELD_STACK} blocks closed up one behind the other (fifteen
+     * ranks), so the front is narrower. In a Great Spear ({@code wedge}) the cavalry stands in one wedge far behind
+     * the lines ({@link #wedgeSlot}) instead of on the wings.
      */
-    public static List<Slot> deployment(int blocks) {
+    public static List<Slot> deployment(int blocks, boolean greatShield, boolean wedge) {
         int archers = Math.round(blocks / 5f);
         int cavalry = Math.round(blocks / 5f);
         int infantry = blocks - archers - cavalry;
@@ -120,40 +149,83 @@ public final class BattlePlan {
         int inLines = infantry;
         int width = inLines <= 4 ? inLines : Math.min(MAX_WIDE_FRONT,
                 Math.max(Math.min(MAX_FRONT, (inLines + 1) / 2), (inLines + LINES_DEEP - 1) / LINES_DEEP));
+        if (greatShield) {
+            width = Math.max(1, Math.min(width, inLines / SHIELD_STACK));
+        }
         int lines = (inLines + width - 1) / width;
+        int files = greatShield ? SHIELD_FILES : FILE_WIDTH;
+        double pitch = pitch(files);
 
         List<Slot> slots = new ArrayList<>(blocks);
         for (int line = 0; line < lines; line++) {
             int inThisLine = Math.min(width, inLines - line * width);
             for (int file = 0; file < inThisLine; file++) {
-                Arm arm = file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
-                slots.add(new Slot(arm, across(file, inThisLine), line * LINE_GAP, line, file));
+                Arm arm = greatShield || file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
+                slots.add(new Slot(arm, across(file, inThisLine, pitch), fileBack(line, greatShield), line, file, files));
             }
         }
         for (int i = 0; i < archers; i++) {
             int row = i / width;
             int inRow = Math.min(width, archers - row * width);
-            slots.add(new Slot(Arm.ARCHERS, across(i % width, inRow), ARCHER_BACK + row * ARCHER_ROW, -1, i));
+            slots.add(new Slot(Arm.ARCHERS, across(i % width, inRow, BLOCK_PITCH), ARCHER_BACK + row * ARCHER_ROW, -1, i, FILE_WIDTH));
         }
-        double wingStart = width * BLOCK_PITCH / 2 + CAVALRY_GAP;
+        if (wedge) {
+            double back = Math.max(SPEAR_BACK, fileBack(lines - 1, greatShield) + LINE_GAP);
+            for (int i = 0; i < cavalry; i++) {
+                double[] at = wedgeSlot(i);
+                slots.add(new Slot(Arm.CAVALRY, at[0], back + at[1], -1, i, FILE_WIDTH));
+            }
+            return slots;
+        }
+        double wingStart = width * pitch / 2 + CAVALRY_GAP;
         int perWing = (cavalry + 1) / 2;
         int columns = Math.max(CAVALRY_COLUMNS, (perWing + CAVALRY_ROWS - 1) / CAVALRY_ROWS);
         for (int i = 0; i < cavalry; i++) {
             int side = i % 2 == 0 ? 1 : -1; // right wing first
             int inWing = i / 2;
             double out = wingStart + (inWing % columns) * BLOCK_PITCH;
-            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / columns) * CAVALRY_ROW, -1, i));
+            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / columns) * CAVALRY_ROW, -1, i, FILE_WIDTH));
         }
         return slots;
     }
 
-    /** Where block {@code i} of {@code n} side by side stands along the line, centred on the army's middle. */
-    private static double across(int i, int n) {
-        return (i - (n - 1) / 2.0) * BLOCK_PITCH;
+    /**
+     * Where the {@code i}th block of a wedge stands, relative to its tip: {right, back}. Row r (from the tip) holds
+     * r + 1 blocks side by side, so the wedge widens behind its point.
+     */
+    public static double[] wedgeSlot(int i) {
+        int row = 0;
+        while ((row + 1) * (row + 2) / 2 <= i) {
+            row++;
+        }
+        int inRow = i - row * (row + 1) / 2;
+        return new double[]{(inRow - row / 2.0) * WEDGE_PITCH, row * WEDGE_ROW};
     }
 
-    /** How far behind the front centre the general stands: just behind the line, ready to go in with it. */
-    public static final double GENERAL_BACK = 6;
+    /** Where block {@code i} of {@code n} side by side stands along the line, centred on the army's middle. */
+    private static double across(int i, int n, double pitch) {
+        return (i - (n - 1) / 2.0) * pitch;
+    }
+
+    /**
+     * Great Shield: each block re-forms this many soldiers wide (so five deep), and each front file holds this many
+     * blocks closed up one behind the other, {@link #SHIELD_BLOCK_DEPTH} apart: fifteen ranks.
+     */
+    public static final int SHIELD_FILES = 4;
+    public static final int SHIELD_STACK = 3;
+    public static final double SHIELD_BLOCK_DEPTH = 5 * SPACING;
+
+    /**
+     * A wedge of cavalry (Great Spear, Unrelenting Charge) stands at least this far behind the front, behind the last
+     * infantry line; its blocks stand this far apart across, and its rows this far apart.
+     */
+    public static final double SPEAR_BACK = 45;
+    public static final double WEDGE_PITCH = 12;
+    public static final double WEDGE_ROW = 6;
+
+    /** How far behind the front centre the general stands, mounted, with the guard this far behind them. */
+    public static final double GENERAL_BACK = 20;
+    public static final double GUARD_BACK = 4;
 
     /** The standard-bearer stands this far to the general's right. */
     public static final double BEARER_RIGHT = 2;

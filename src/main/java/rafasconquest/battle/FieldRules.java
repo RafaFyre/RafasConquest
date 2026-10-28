@@ -82,6 +82,35 @@ public final class FieldRules {
     public static final double WALL_SPACING = 1.3;
     public static final double BRACED_DEALS = 2.5;
     public static final double BRACED_TAKES = 0.4;
+    /** Great Spear cavalry gathers up to twice the usual momentum (over twice the run-up). */
+    public static final double GREAT_SPEAR_MOMENTUM = 2;
+    /**
+     * Unrelenting Charge: while the general leads the charge, their own soldiers within {@link #RESOLVE_REACH} of
+     * them take only {@link #RESOLVE_TAKES} of the harm done to them.
+     */
+    public static final double RESOLVE_REACH = 15;
+    public static final double RESOLVE_TAKES = 0.7;
+    /** A general's guard rides out against enemies that come this close to the general... */
+    public static final double GUARD_ALERT = 15;
+    /** ...and out to this far at cavalry charging the general. */
+    public static final double GUARD_INTERCEPT = 40;
+    /**
+     * Strategies' judgement: a block this far ahead of its own front line is too far forward (exposed, or drawn in by
+     * bait); one down to {@link #WORN_SHARE} of its soldiers is worn. A general with none of their army but the guard
+     * and standard within {@link #GENERAL_COVER} stands exposed.
+     */
+    public static final double TOO_FAR_FORWARD = 6;
+    public static final double WORN_SHARE = 0.5;
+    public static final double GENERAL_COVER = 15;
+    /** Cavalry striking a flank first rides to a point this far out to the side of its target's line. */
+    public static final double FLANK_RIDE_OUT = 15;
+    /** Bait: runs this far ahead of its own line, and once fighting falls back to this far behind it. */
+    public static final double BAIT_LEAD = 12;
+    public static final double BAIT_POCKET = 10;
+    /** Bait and Pincer: an enemy block this close to the bait, and too far forward, has been drawn in. */
+    public static final double LURE_REACH = 20;
+    /** A pincer gives up after this long. */
+    public static final int PINCER_SECONDS = 40;
     /**
      * How much more attacks on a block's flank or rear do: nothing more, as in Recruits, where a blow does the same
      * from any side (only a shield, held to the front, makes a difference).

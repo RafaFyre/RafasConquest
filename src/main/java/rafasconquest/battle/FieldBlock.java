@@ -26,8 +26,10 @@ public final class FieldBlock {
         RESTING,
         /** Archers and cavalry, which take their own orders. */
         SUPPORT,
-        /** The army's general, alone. */
+        /** The army's general, alone and mounted. */
         GENERAL,
+        /** The general's guard: 20 riders in full iron who stay with the general and ride out at whoever comes near. */
+        GUARD,
         /** The standard-bearer, alone at the general's side; never fights. */
         BEARER,
         /** Cavalry that spent its momentum, riding back to reform; doesn't fight on the way. */
@@ -86,6 +88,31 @@ public final class FieldBlock {
     boolean live;
     /** Damage from blocks that are only numbers, waiting to be dealt to its real soldiers. */
     double liveDamage;
+    /** How many soldiers wide its ranks are. */
+    int files = BattlePlan.FILE_WIDTH;
+    /** The most momentum it can gather (cavalry; twice as much in a Great Spear). */
+    double maxMomentum = 1;
+    /** The duty it goes back to after rallying (cavalry: SUPPORT, or GUARD for the general's guard). */
+    Duty homeDuty;
+    /** Whom it means to strike when it charges (chosen by its general's strategies), or null for the nearest. */
+    @Nullable
+    FieldBlock prey;
+    /**
+     * Riding in formation toward a charge (a wedge, or around to a flank): not yet broken up to fight, but coming, so
+     * infantry in its way braces. {@code waypoint} is where a flanking ride turns in toward its prey.
+     */
+    boolean approaching;
+    @Nullable
+    Point waypoint;
+    /** In its army's wedge: which half (Unrelenting Charge; 0 leads first), and its place behind the wedge's tip. */
+    boolean inWedge;
+    int half;
+    double wedgeRight;
+    double wedgeBack;
+    /** Pincer: the lured enemy block it was sent to strike, and from where: -1 its left, 1 its right, 0 behind. */
+    @Nullable
+    FieldBlock strikeAt;
+    int strikeSide;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
                Point line, double facingX, double facingZ, Duty duty) {
@@ -102,6 +129,7 @@ public final class FieldBlock {
         this.facingX = facingX;
         this.facingZ = facingZ;
         this.duty = duty;
+        this.homeDuty = duty;
         this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : 0;
     }
 
@@ -134,6 +162,22 @@ public final class FieldBlock {
     /** Braced against charging cavalry. */
     public boolean braced() {
         return braced;
+    }
+
+    /** How many soldiers wide its ranks are. */
+    public int files() {
+        return files;
+    }
+
+    /** Whom it means to strike, or null. */
+    @Nullable
+    public FieldBlock prey() {
+        return prey;
+    }
+
+    /** Riding in formation toward a charge, not yet broken up to fight. */
+    public boolean approaching() {
+        return approaching;
     }
 
     /** The enemy block it fought this second, or null. */
@@ -220,8 +264,9 @@ public final class FieldBlock {
         return engaged || charged || contactSeconds > 0;
     }
 
-    double halfWidth() {
-        return health.length > 1 ? FieldRules.BLOCK_HALF_WIDTH : FieldRules.LONE_HALF_WIDTH;
+    /** Half the width of its front rank. */
+    public double halfWidth() {
+        return health.length > 1 ? (files - 1) * BattlePlan.SPACING / 2 : FieldRules.LONE_HALF_WIDTH;
     }
 
     /** How far its front rank is from another block's. */

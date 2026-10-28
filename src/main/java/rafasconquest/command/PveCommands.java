@@ -8,6 +8,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
+import rafasconquest.character.GameCharacter;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.FieldArmy;
 import rafasconquest.battle.FieldBattle;
@@ -182,22 +183,34 @@ public final class PveCommands {
             throw NO_FACTION.create();
         }
         RandomSource random = server.overworld().random;
+        java.util.Random characters = new java.util.Random(random.nextLong());
+        GameCharacter generalA = GameCharacter.general(a.doctrines(), characters);
+        GameCharacter generalB = GameCharacter.general(b.doctrines(), characters);
         long start = System.nanoTime();
         FieldBattle battle = new FieldBattle(BattlePlan.blocks(firstSoldiers), BattlePlan.blocks(secondSoldiers),
-                new BattlePlan.Point(0, 0), 1, 0, random.nextLong());
+                new BattlePlan.Point(0, 0), 1, 0, random.nextLong(), generalA.plan(), generalB.plan());
         FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         long millis = (System.nanoTime() - start) / 1_000_000;
         FieldArmy armyA = battle.army(0);
         FieldArmy armyB = battle.army(1);
-        String result = outcome == null || outcome.winner() < 0 ? (outcome == null ? "no result" : outcome.result())
-                : (outcome.winner() == 0 ? a.name() : b.name()) + " wins";
+        String result;
+        if (outcome == null || outcome.winner() < 0) {
+            result = outcome == null ? "no result" : outcome.result();
+        } else {
+            Faction winner = outcome.winner() == 0 ? a : b;
+            Faction loser = outcome.winner() == 0 ? b : a;
+            boolean fell = !battle.army(1 - outcome.winner()).generalAlive();
+            result = winner.name() + " wins" + (fell ? " (" + loser.name() + "'s general fell)" : "");
+        }
         int seconds = outcome == null ? battle.seconds() : outcome.seconds();
         String line = String.format(Locale.ROOT,
                 "Simulated %s %d v %s %d: %s after %d:%02d. Left %d and %d; blocks relieved %d and %d; generals %s and %s. Worked out in %d ms.",
                 a.name(), armyA.started(), b.name(), armyB.started(), result, seconds / 60, seconds % 60,
                 armyA.alive(), armyB.alive(), armyA.reliefs(), armyB.reliefs(), armyA.generalAlive() ? "alive" : "fallen",
                 armyB.generalAlive() ? "alive" : "fallen", millis);
-        ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+        String generals = String.format(Locale.ROOT, "  %s: General %s (%s)%n  %s: General %s (%s)",
+                a.name(), generalA.name(), generalA.plan().describe(), b.name(), generalB.name(), generalB.plan().describe());
+        ctx.getSource().sendSuccess(() -> Component.literal(line + "\n" + generals), true);
         return 1;
     }
 

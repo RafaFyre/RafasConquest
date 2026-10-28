@@ -2,6 +2,13 @@ package rafasconquest.faction;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import rafasconquest.battle.Doctrine;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -15,6 +22,8 @@ public class Faction {
     private final int radiusSteps;
     private int strength;
     private final Map<ResourceType, Integer> stockpile = new EnumMap<>(ResourceType.class);
+    /** The doctrines its generals draw on; every doctrine for now, until factions differ. */
+    private final List<Doctrine> doctrines = new ArrayList<>(List.of(Doctrine.values()));
 
     public Faction(UUID id, String name, FactionType type, BlockPos origin, int radiusSteps, int strength) {
         this.id = id;
@@ -53,6 +62,10 @@ public class Faction {
         this.strength = strength;
     }
 
+    public List<Doctrine> doctrines() {
+        return List.copyOf(doctrines);
+    }
+
     public int stock(ResourceType resource) {
         return stockpile.getOrDefault(resource, 0);
     }
@@ -78,6 +91,9 @@ public class Faction {
         CompoundTag stock = new CompoundTag();
         stockpile.forEach((resource, amount) -> stock.putInt(resource.name(), amount));
         tag.put("stockpile", stock);
+        ListTag doctrineList = new ListTag();
+        doctrines.forEach(d -> doctrineList.add(StringTag.valueOf(d.name())));
+        tag.put("doctrines", doctrineList);
         return tag;
     }
 
@@ -92,6 +108,16 @@ public class Faction {
         CompoundTag stock = tag.getCompound("stockpile");
         for (String key : stock.getAllKeys()) {
             faction.stockpile.put(ResourceType.valueOf(key), stock.getInt(key));
+        }
+        if (tag.contains("doctrines")) {
+            faction.doctrines.clear();
+            for (Tag t : tag.getList("doctrines", Tag.TAG_STRING)) {
+                try {
+                    faction.doctrines.add(Doctrine.valueOf(t.getAsString()));
+                } catch (IllegalArgumentException ignored) {
+                    // a doctrine since removed
+                }
+            }
         }
         return faction;
     }

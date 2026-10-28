@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** One side of a {@link FieldBattle}: its blocks, its general and how its lines stand. */
+/** One side of a {@link FieldBattle}: its blocks, its general and their plan, and how its lines stand. */
 public final class FieldArmy {
     final int side;
     final double facingX;
@@ -20,12 +20,35 @@ public final class FieldArmy {
     FieldBlock commander;
     @Nullable
     FieldBlock bearer;
+    /** The general's guard of 20 riders. */
+    @Nullable
+    FieldBlock guard;
+    final WarPlan plan;
+    /** The wedge's blocks, tip first (Great Spear, Unrelenting Charge); empty if it has none. */
+    final List<FieldBlock> wedge = new ArrayList<>();
+    /** Where the wedge's tip waits, relative to the front centre: {right, back}. */
+    double wedgeHomeRight;
+    double wedgeHomeBack;
+    /** The wedge's charge under way: whom it rides at, and which half rides (-1 all); the half to ride next. */
+    @Nullable
+    FieldBlock wedgeTarget;
+    int wedgeHalf = -1;
+    int nextHalf;
+    int wedgeSince;
+    /** Bait: the front file that runs ahead as bait (-1 none). */
+    int baitFile = -1;
+    boolean baitSprung;
+    /** Pincer: the lured enemy block being struck, and since when. */
+    @Nullable
+    FieldBlock pincerTarget;
+    int pincerSince;
     int reliefs;
     int started;
     int queueTicket;
 
-    FieldArmy(int side, double facingX, double facingZ) {
+    FieldArmy(int side, double facingX, double facingZ, WarPlan plan) {
         this.side = side;
+        this.plan = plan;
         this.facingX = facingX;
         this.facingZ = facingZ;
     }
@@ -50,6 +73,19 @@ public final class FieldArmy {
     @Nullable
     public FieldBlock bearer() {
         return bearer;
+    }
+
+    @Nullable
+    public FieldBlock guard() {
+        return guard;
+    }
+
+    public WarPlan plan() {
+        return plan;
+    }
+
+    boolean greatShield() {
+        return plan.has(Doctrine.Formation.GREAT_SHIELD);
     }
 
     public List<FieldBlock> blocks() {
@@ -105,7 +141,7 @@ public final class FieldArmy {
 
     /** The blocks waiting behind the front in {@code file}, nearest the front first. */
     List<FieldBlock> queue(int file) {
-        return blocks.stream().filter(f -> f.duty == Duty.LINE && f.file == file && f.alive > 0)
+        return blocks.stream().filter(f -> f.duty == Duty.LINE && f.file == file && f.alive > 0 && f.strikeAt == null)
                 .sorted(Comparator.comparingInt(f -> f.queueTicket)).toList();
     }
 

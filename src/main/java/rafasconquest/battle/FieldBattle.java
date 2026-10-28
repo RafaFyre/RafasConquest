@@ -3,6 +3,8 @@ package rafasconquest.battle;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.Point;
+import rafasconquest.battle.Doctrine.Formation;
+import rafasconquest.battle.Doctrine.Strategy;
 import rafasconquest.battle.FieldBlock.Duty;
 
 import java.util.ArrayList;
@@ -13,8 +15,10 @@ import java.util.Random;
 /**
  * A battle fought as numbers, block by block, one second at a time: no entities, so it costs next to nothing however
  * big the armies are. The generals command exactly as in a live battle (lines, relief, archers, cavalry;
- * {@link BattlePlan}); blocks walk to where they are ordered and fight whoever is within reach
- * ({@link FieldRules}). Each soldier's health is kept, so a block can later become real soldiers and back.
+ * {@link BattlePlan}), each by their own {@link WarPlan}; blocks walk to where they are ordered and fight whoever is
+ * within reach ({@link FieldRules}). Each soldier's health is kept, so a block can later become real soldiers and back.
+ * <p>
+ * Each general rides with a guard of 20 iron-clad riders. When a general falls, their army retreats.
  * <p>
  * Deterministic for a given seed. Not thread safe.
  */
@@ -25,11 +29,15 @@ public final class FieldBattle {
 
     /** A big decision a general makes, which the live battle sounds on the general's horn. */
     public enum Call {
-        ADVANCE, CAVALRY_CHARGE, CAVALRY_RECALL, WALL, GENERAL_CHARGES, FINAL_CHARGE
+        ADVANCE, CAVALRY_CHARGE, CAVALRY_RECALL, WALL, GENERAL_CHARGES, FINAL_CHARGE, BAIT, PINCER
     }
 
     /** A general's call: which side made it, and what. */
     public record Order(int side, Call call) {
+    }
+
+    /** Something a general's strategy did, worth telling: which side, and what (to follow "the general"). */
+    public record Event(int side, String text) {
     }
 
     private final FieldArmy[] armies;
@@ -39,57 +47,111 @@ public final class FieldBattle {
     /** When a soldier last fell (0 before anyone has). */
     private int lastFall;
     private boolean finalMelee;
-    /** The calls made this second, for the live battle to sound. */
+    /** The calls made this second, for the live battle to sound, and what the strategies did. */
     private final List<Order> calls = new ArrayList<>();
+    private final List<Event> events = new ArrayList<>();
     private final boolean[] advanced = new boolean[2];
     @Nullable
     private Outcome outcome;
 
     /**
      * Deploys two armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit vector
-     * from the first army's side toward the second's), {@code blocks} blocks of 20 each.
+     * from the first army's side toward the second's), {@code blocks} blocks of 20 each, with no doctrine.
      */
     public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed) {
-        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES);
+        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES, WarPlan.NONE, WarPlan.NONE);
     }
 
     /** The same, fought with other rates (for calibration). */
     public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
                        FieldRules.Rates rates) {
+        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, rates, WarPlan.NONE, WarPlan.NONE);
+    }
+
+    /** The same, each general fighting by their plan. */
+    public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
+                       WarPlan first, WarPlan second) {
+        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, FieldRules.RATES, first, second);
+    }
+
+    public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
+                       FieldRules.Rates rates, WarPlan first, WarPlan second) {
         this.rates = rates;
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         armies = new FieldArmy[]{
-                deploy(0, firstBlocks, fronts[0], axisX, axisZ),
-                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ)};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second)};
     }
 
-    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ) {
-        FieldArmy army = new FieldArmy(side, facingX, facingZ);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks);
+    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan) {
+        FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
+        boolean shield = plan.has(Formation.GREAT_SHIELD);
+        boolean spear = plan.has(Formation.GREAT_SPEAR);
+        boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, spear || unrelenting);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
         int id = side * 10_000;
+        double lastLine = 0;
+        List<FieldBlock> cavalry = new ArrayList<>();
         for (BattlePlan.Slot slot : slots) {
             Point line = BattlePlan.place(front, facingX, facingZ, slot.right(), slot.back());
             Duty duty = !slot.arm().infantry() ? Duty.SUPPORT : slot.line() == 0 ? Duty.FRONT : Duty.LINE;
             FieldBlock block = new FieldBlock(id++, side, slot.arm(), BattlePlan.SOLDIERS_PER_FORMATION, FieldRules.SOLDIER_HEALTH,
                     BattlePlan.LEADER_INDEX, false, line, facingX, facingZ, duty);
             block.file = slot.file();
+            block.files = slot.files();
             army.blocks.add(block);
             if (duty == Duty.FRONT) {
                 army.front[slot.file()] = block;
             } else if (duty == Duty.LINE) {
                 army.join(block, slot.file());
             }
+            if (slot.arm().infantry()) {
+                lastLine = Math.max(lastLine, slot.back());
+            } else if (slot.arm() == Arm.CAVALRY) {
+                cavalry.add(block);
+            }
         }
         Point generalSpot = BattlePlan.place(front, facingX, facingZ, 0, BattlePlan.GENERAL_BACK);
-        army.commander = new FieldBlock(id++, side, Arm.SWORDSMEN, 1, FieldRules.WARRIOR_HEALTH,
+        army.commander = new FieldBlock(id++, side, Arm.CAVALRY, 1, FieldRules.WARRIOR_HEALTH,
                 -1, true, generalSpot, facingX, facingZ, Duty.GENERAL);
+        army.guard = new FieldBlock(id++, side, Arm.CAVALRY, BattlePlan.SOLDIERS_PER_FORMATION, FieldRules.SOLDIER_HEALTH,
+                BattlePlan.LEADER_INDEX, false, BattlePlan.place(generalSpot, facingX, facingZ, 0, BattlePlan.GUARD_BACK),
+                facingX, facingZ, Duty.GUARD);
         army.bearer = new FieldBlock(id, side, Arm.SWORDSMEN, 1, FieldRules.SOLDIER_HEALTH, -1, false,
                 BattlePlan.place(front, facingX, facingZ, BattlePlan.BEARER_RIGHT, BattlePlan.GENERAL_BACK), facingX, facingZ, Duty.BEARER);
         army.blocks.add(army.commander);
+        army.blocks.add(army.guard);
         army.blocks.add(army.bearer);
+
+        // The wedge: the general leads it (Unrelenting Charge), their guard behind, then all the cavalry.
+        if (spear || unrelenting) {
+            if (unrelenting) {
+                army.wedge.add(army.commander);
+                army.wedge.add(army.guard);
+            }
+            army.wedge.addAll(cavalry);
+            army.wedgeHomeBack = Math.max(BattlePlan.SPEAR_BACK, lastLine + BattlePlan.LINE_GAP);
+            int firstHalf = (army.wedge.size() + 1) / 2;
+            for (int i = 0; i < army.wedge.size(); i++) {
+                FieldBlock member = army.wedge.get(i);
+                double[] at = BattlePlan.wedgeSlot(i);
+                member.inWedge = true;
+                member.wedgeRight = at[0];
+                member.wedgeBack = at[1];
+                member.half = unrelenting && i >= firstHalf ? 1 : 0;
+                member.line = BattlePlan.place(front, facingX, facingZ, at[0], army.wedgeHomeBack + at[1]);
+                member.pos = member.line;
+                if (spear) {
+                    member.maxMomentum = FieldRules.GREAT_SPEAR_MOMENTUM;
+                }
+            }
+        }
+        if (plan.has(Strategy.BAIT) && files >= 3) {
+            army.baitFile = files / 2;
+        }
         army.started = army.blocks.stream().mapToInt(FieldBlock::started).sum();
         return army;
     }
@@ -143,6 +205,24 @@ public final class FieldBattle {
         return taken;
     }
 
+    /** What the generals' strategies did since last asked, oldest first; taking them clears them. */
+    public List<Event> takeEvents() {
+        List<Event> taken = List.copyOf(events);
+        events.clear();
+        return taken;
+    }
+
+    /**
+     * Whether a block takes less harm for its general's presence: an Unrelenting Charge led by its general, who rides
+     * within {@link FieldRules#RESOLVE_REACH} of it.
+     */
+    public boolean resolute(FieldBlock block) {
+        FieldArmy army = armies[block.side];
+        FieldBlock general = army.commander;
+        return army.plan.has(Strategy.UNRELENTING_CHARGE) && general != null && general.alive > 0
+                && (general.charged || general.approaching) && general.pos.distanceTo(block.pos) <= FieldRules.RESOLVE_REACH;
+    }
+
     /** Runs whole seconds until the battle ends or {@code maxSeconds} have passed; returns the outcome, if any. */
     @Nullable
     public Outcome run(int maxSeconds) {
@@ -175,8 +255,11 @@ public final class FieldBattle {
             calls.add(new Order(1, Call.FINAL_CHARGE));
             for (FieldArmy army : armies) {
                 for (FieldBlock block : army.blocks) {
-                    if (block.alive > 0 && block.duty != Duty.BEARER) {
+                    // The general, their guard and the standard stay back: if the general falls, the army is lost.
+                    if (block.alive > 0 && block.duty != Duty.BEARER && block.duty != Duty.GENERAL && block.duty != Duty.GUARD) {
                         block.charged = true;
+                        block.approaching = false;
+                        block.strikeAt = null;
                     }
                 }
             }
@@ -194,13 +277,26 @@ public final class FieldBattle {
         }
         relieve(army);
         brace(army, enemy);
+        pincer(army, enemy);
+        wedge(army, enemy, engaged);
         for (FieldBlock block : army.blocks) {
             if (block.alive == 0) {
                 continue;
             }
+            if (block.strikeAt != null) {
+                strike(army, block);
+                continue;
+            }
+            if (block.approaching) {
+                if (!block.inWedge) {
+                    ride(block);
+                }
+                continue;
+            }
             if (block.charged) {
                 if (block.arm == Arm.CAVALRY && block.momentum < FieldRules.SPENT_MOMENTUM
-                        && block.contactSeconds >= FieldRules.SPENT_SECONDS && block.duty == Duty.SUPPORT) {
+                        && block.contactSeconds >= FieldRules.SPENT_SECONDS
+                        && (block.duty == Duty.SUPPORT || block.duty == Duty.GUARD || block.duty == Duty.GENERAL)) {
                     recall(army, block);
                 }
                 continue;
@@ -219,7 +315,8 @@ public final class FieldBattle {
                 case FRONT -> holdFront(army, block, enemy, engaged);
                 case LINE -> {
                     int place = army.queue(block.file).indexOf(block) + 1;
-                    block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, 0, place * BattlePlan.LINE_GAP);
+                    block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, 0,
+                            BattlePlan.fileBack(place, army.greatShield()));
                 }
                 case RELIEVING -> {
                     if (block.pos.distanceTo(block.line) <= BattlePlan.RELIEF_ARRIVED || seconds - block.dutySince >= BattlePlan.RELIEF_SECONDS) {
@@ -237,12 +334,13 @@ public final class FieldBattle {
                 }
                 case RALLYING -> {
                     if (block.pos.distanceTo(block.line) <= BattlePlan.RELIEF_ARRIVED || seconds - block.dutySince >= FieldRules.RALLY_SECONDS) {
-                        block.duty = Duty.SUPPORT;
+                        block.duty = block.homeDuty;
                         block.reformUntil = seconds + FieldRules.REFORM_SECONDS;
                     }
                 }
                 case SUPPORT -> support(army, enemy, block, engaged);
-                case GENERAL -> general(army, enemy, block, engaged);
+                case GENERAL -> general(army, enemy, block);
+                case GUARD -> guard(army, enemy, block);
                 case BEARER -> {
                     if (army.commander != null && army.commander.alive > 0) {
                         block.line = BattlePlan.place(army.commander.pos, army.facingX, army.facingZ, BattlePlan.BEARER_RIGHT, 0);
@@ -256,7 +354,15 @@ public final class FieldBattle {
 
     private void holdFront(FieldArmy army, FieldBlock block, FieldArmy enemy, boolean engaged) {
         double nearest = nearest(block, block.line, enemy);
-        switch (BattlePlan.order(block.arm, seconds, nearest, engaged)) {
+        BattlePlan.Order order = BattlePlan.order(block.arm, seconds, nearest, engaged);
+        if (block.file == army.baitFile) {
+            bait(army, block, order);
+            return;
+        }
+        if (army.baitSprung && order == BattlePlan.Order.MARCH) {
+            order = BattlePlan.Order.HOLD; // the line waits for the bait to draw the enemy in
+        }
+        switch (order) {
             case MARCH -> {
                 // Straight ahead, keeping the line, while the nearest enemy is ahead; once the enemy is beside or
                 // behind it (its own foe gone, the lines passed through each other), toward that enemy instead.
@@ -290,6 +396,47 @@ public final class FieldBattle {
         }
     }
 
+    /**
+     * Bait: runs ahead of its own line, up to {@link FieldRules#BAIT_LEAD} in front of it; once fighting it falls back
+     * a step a second, still fighting, to {@link FieldRules#BAIT_POCKET} behind the line, drawing its enemy on.
+     */
+    private void bait(FieldArmy army, FieldBlock block, BattlePlan.Order order) {
+        double behind = behindOthers(army, block.line);
+        if (order == BattlePlan.Order.ENGAGE || block.contactFoe != null) {
+            block.engaged = true;
+            if (!army.baitSprung) {
+                army.baitSprung = true;
+                calls.add(new Order(army.side, Call.BAIT));
+                events.add(new Event(army.side, "has the bait fall back, drawing the enemy in"));
+            }
+            if (behind < FieldRules.BAIT_POCKET) {
+                block.line = block.line.plus(-army.facingX, -army.facingZ);
+            }
+        } else if (order == BattlePlan.Order.MARCH) {
+            block.engaged = false;
+            double step = behind > -FieldRules.BAIT_LEAD ? rates.footSpeed() : BattlePlan.MARCH_STEP;
+            block.line = block.line.plus(army.facingX * step, army.facingZ * step);
+        }
+    }
+
+    /** How far behind the army's other front blocks' lines a point is (negative: ahead of them). */
+    private static double behindOthers(FieldArmy army, Point at) {
+        double x = 0;
+        double z = 0;
+        int n = 0;
+        for (FieldBlock f : army.front) {
+            if (f.file != army.baitFile) {
+                x += f.line.x();
+                z += f.line.z();
+                n++;
+            }
+        }
+        if (n == 0) {
+            return 0;
+        }
+        return (x / n - at.x()) * army.facingX + (z / n - at.z()) * army.facingZ;
+    }
+
     private void relieve(FieldArmy army) {
         for (int file = 0; file < army.front.length; file++) {
             FieldBlock held = army.front[file];
@@ -297,7 +444,7 @@ public final class FieldBattle {
                 continue;
             }
             held.relief = null;
-            if (!BattlePlan.needsRelief(held.alive, held.started())) {
+            if (!BattlePlan.needsRelief(held.alive, held.started()) || held.strikeAt != null) {
                 continue;
             }
             FieldBlock relief = pickRelief(army, file, held.line);
@@ -323,7 +470,7 @@ public final class FieldBattle {
             }
         }
         return army.blocks.stream()
-                .filter(f -> f.duty == Duty.LINE && f.alive > 0 && BattlePlan.fitToRelieve(f.alive, f.started()))
+                .filter(f -> f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && BattlePlan.fitToRelieve(f.alive, f.started()))
                 .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
 
@@ -334,7 +481,7 @@ public final class FieldBattle {
     @Nullable
     private static FieldBlock lastStand(FieldArmy army, Point spot) {
         return army.blocks.stream()
-                .filter(f -> f.alive > 0 && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
+                .filter(f -> f.alive > 0 && f.strikeAt == null && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
                 .min(Comparator.comparingInt((FieldBlock f) -> f.duty == Duty.LINE ? 0 : 1)
                         .thenComparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
@@ -355,7 +502,8 @@ public final class FieldBattle {
         relieved.duty = Duty.WITHDRAWING;
         relieved.dutySince = seconds;
         int behind = army.queue(relieved.file).size() + 1;
-        relieved.rear = BattlePlan.place(relief.line, army.facingX, army.facingZ, 0, behind * BattlePlan.LINE_GAP + BattlePlan.LINE_GAP);
+        relieved.rear = BattlePlan.place(relief.line, army.facingX, army.facingZ, 0,
+                BattlePlan.fileBack(behind, army.greatShield()) + BattlePlan.LINE_GAP);
         relieved.line = relieved.rear;
     }
 
@@ -363,18 +511,92 @@ public final class FieldBattle {
         if (seconds < block.reformUntil) {
             return; // reforming after a charge
         }
-        switch (BattlePlan.order(block.arm, seconds, nearest(block, block.line, enemy), engaged)) {
+        if (block.inWedge) {
+            // Waits in the wedge for its general's word; rides out alone only at an enemy upon it.
+            block.line = wedgeHome(army, block);
+            if (seconds >= BattlePlan.FORMING_SECONDS && nearest(block, block.pos, enemy) <= BattlePlan.CAVALRY_THREAT) {
+                charge(army, block, null);
+            }
+            return;
+        }
+        BattlePlan.Order order = BattlePlan.order(block.arm, seconds, nearest(block, block.line, enemy), engaged);
+        if (block.arm == Arm.CAVALRY && order != BattlePlan.Order.CHARGE && seconds >= BattlePlan.FORMING_SECONDS
+                && army.plan.has(Strategy.PRECISION_STRIKES)) {
+            FieldBlock exposed = mostExposed(enemy, block.pos);
+            if (exposed != null) {
+                events.add(new Event(army.side, "strikes an exposed enemy block with cavalry"));
+                charge(army, block, exposed);
+                return;
+            }
+        }
+        switch (order) {
             case MARCH -> {
                 if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line))) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }
-            case CHARGE -> {
-                block.charged = true;
-                calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
-            }
+            case CHARGE -> charge(army, block, null);
             default -> {
             }
+        }
+    }
+
+    /**
+     * Sends a block in at {@code prey} (or whom its general's strategies choose): cavalry following Cavalry Flank at
+     * infantry first rides out to the side of its prey's line and turns in there; anyone else breaks formation now.
+     */
+    private void charge(FieldArmy army, FieldBlock block, @Nullable FieldBlock prey) {
+        FieldBlock enemyPick = prey != null ? prey : choosePrey(army, armies[1 - army.side], block);
+        block.prey = enemyPick;
+        if (enemyPick != null && block.arm == Arm.CAVALRY && enemyPick.arm.infantry() && army.plan.has(Strategy.CAVALRY_FLANK)) {
+            block.approaching = true;
+            block.waypoint = flankPoint(enemyPick, block.pos);
+            block.dutySince = seconds;
+        } else {
+            block.charged = true;
+        }
+        calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+    }
+
+    /** A block riding at its prey in formation: to its flank first if it has a waypoint, then in. */
+    private void ride(FieldBlock block) {
+        FieldBlock prey = block.prey;
+        if (prey == null || prey.alive == 0 || prey.duty == Duty.FLEEING) {
+            block.approaching = false;
+            block.waypoint = null;
+            block.prey = null;
+            return;
+        }
+        if (block.waypoint != null && (block.pos.distanceTo(block.waypoint) <= 6 || seconds - block.dutySince > 25)) {
+            block.waypoint = null;
+        }
+        if (block.waypoint == null && block.distanceTo(prey) <= FieldRules.CLOSE_REACH + 1.5
+                || nearest(block, block.pos, armies[1 - block.side]) <= FieldRules.CLOSE_REACH) {
+            block.approaching = false;
+            block.waypoint = null;
+            block.charged = true;
+            return;
+        }
+        Point aim = block.waypoint != null ? block.waypoint : prey.pos;
+        face(block, aim);
+        block.line = aim;
+    }
+
+    /** The point out to the side of {@code prey}'s line nearer {@code from}, where a flanking ride turns in. */
+    private static Point flankPoint(FieldBlock prey, Point from) {
+        double out = prey.halfWidth() + FieldRules.FLANK_RIDE_OUT;
+        Point right = prey.pos.plus(-prey.facingZ * out, prey.facingX * out);
+        Point left = prey.pos.plus(prey.facingZ * out, -prey.facingX * out);
+        return right.distanceTo(from) <= left.distanceTo(from) ? right : left;
+    }
+
+    private static void face(FieldBlock block, Point at) {
+        double dx = at.x() - block.pos.x();
+        double dz = at.z() - block.pos.z();
+        double length = Math.hypot(dx, dz);
+        if (length > 1e-6) {
+            block.facingX = dx / length;
+            block.facingZ = dz / length;
         }
     }
 
@@ -390,6 +612,10 @@ public final class FieldBattle {
         cavalry.facingX = army.facingX;
         cavalry.facingZ = army.facingZ;
         cavalry.line = cavalry.pos.plus(-army.facingX * FieldRules.RALLY_DISTANCE, -army.facingZ * FieldRules.RALLY_DISTANCE);
+        if (cavalry.duty == Duty.RALLYING && cavalry.homeDuty == Duty.GUARD && !cavalry.inWedge && army.commander != null) {
+            // The guard reforms at the general's back, not off behind the lines where the general would be alone.
+            cavalry.line = BattlePlan.place(army.commander.pos, army.facingX, army.facingZ, 0, BattlePlan.GUARD_BACK);
+        }
         calls.add(new Order(army.side, Call.CAVALRY_RECALL));
     }
 
@@ -400,12 +626,12 @@ public final class FieldBattle {
     private void brace(FieldArmy army, FieldArmy enemy) {
         boolean called = false;
         for (FieldBlock cavalry : enemy.blocks) {
-            if (cavalry.arm != Arm.CAVALRY || !cavalry.charged || cavalry.alive == 0) {
+            if (cavalry.arm != Arm.CAVALRY || !(cavalry.charged || cavalry.approaching) || cavalry.alive == 0) {
                 continue;
             }
             for (FieldBlock block : army.blocks) {
                 boolean free = block.duty == Duty.LINE || block.duty == Duty.RESTING || block.duty == Duty.FRONT && !block.engaged;
-                if (block.alive == 0 || !block.arm.infantry() || block.charged || !(free || block.braced)) {
+                if (block.alive == 0 || !block.arm.infantry() || block.charged || block.strikeAt != null || !(free || block.braced)) {
                     continue;
                 }
                 double dx = block.pos.x() - cavalry.pos.x();
@@ -434,13 +660,488 @@ public final class FieldBattle {
         }
     }
 
-    private void general(FieldArmy army, FieldArmy enemy, FieldBlock block, boolean engaged) {
-        if (engaged) {
-            block.charged = true;
-            calls.add(new Order(army.side, Call.GENERAL_CHARGES));
+    /**
+     * The general: in the wedge's tip if they lead it, else mounted behind the middle of the front. Cavalry charging
+     * at them sends them to shelter behind the nearest of their own infantry blocks, which it then has to cut through.
+     */
+    private void general(FieldArmy army, FieldArmy enemy, FieldBlock general) {
+        FieldBlock hunter = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.prey == general && (e.charged || e.approaching) && e.pos.distanceTo(general.pos) <= FieldRules.GUARD_INTERCEPT
+                    && (hunter == null || e.pos.distanceTo(general.pos) < hunter.pos.distanceTo(general.pos))) {
+                hunter = e;
+            }
+        }
+        if (hunter != null) {
+            FieldBlock shelter = null;
+            for (FieldBlock b : army.blocks) {
+                if (b.alive > 0 && b.arm.infantry() && b.duty != Duty.FLEEING && !b.charged
+                        && (shelter == null || b.pos.distanceTo(general.pos) < shelter.pos.distanceTo(general.pos))) {
+                    shelter = b;
+                }
+            }
+            if (shelter != null) {
+                double dx = shelter.pos.x() - hunter.pos.x();
+                double dz = shelter.pos.z() - hunter.pos.z();
+                double length = Math.max(1e-6, Math.hypot(dx, dz));
+                double behind = (double) shelter.started() / shelter.files * BattlePlan.SPACING + 4;
+                general.line = shelter.pos.plus(dx / length * behind, dz / length * behind);
+                return;
+            }
+        }
+        if (general.inWedge) {
+            general.line = wedgeHome(army, general);
             return;
         }
-        block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
+        general.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
+    }
+
+    /** The general's guard: behind the general (or in the wedge), riding out at any enemy that comes near them. */
+    private void guard(FieldArmy army, FieldArmy enemy, FieldBlock guard) {
+        if (seconds < guard.reformUntil) {
+            return;
+        }
+        if (guard.inWedge) {
+            guard.line = wedgeHome(army, guard);
+            return;
+        }
+        FieldBlock general = army.commander;
+        if (general == null || general.alive == 0) {
+            return;
+        }
+        guard.line = BattlePlan.place(general.line, army.facingX, army.facingZ, 0, BattlePlan.GUARD_BACK);
+        // Whoever comes near the general; cavalry riding at the general is met further out.
+        FieldBlock threat = null;
+        double best = Double.MAX_VALUE;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive == 0 || e.duty == Duty.FLEEING || e.duty == Duty.BEARER) {
+                continue;
+            }
+            double d = general.distanceTo(e);
+            double alert = e.prey == general && (e.charged || e.approaching) ? FieldRules.GUARD_INTERCEPT : FieldRules.GUARD_ALERT;
+            if (d <= alert && d < best) {
+                best = d;
+                threat = e;
+            }
+        }
+        if (threat != null) {
+            guard.prey = threat;
+            guard.charged = true;
+            calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+        }
+    }
+
+    // ---- the wedge (Great Spear, Unrelenting Charge) ----
+
+    /** Where a wedge member waits: its place behind the wedge's tip, far behind the front centre. */
+    private static Point wedgeHome(FieldArmy army, FieldBlock member) {
+        return BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, member.wedgeRight,
+                army.wedgeHomeBack + member.wedgeBack);
+    }
+
+    /** The wedge's members riding this charge: one half (Unrelenting Charge) or all, alive. */
+    private static List<FieldBlock> wedgeRiders(FieldArmy army, int half) {
+        List<FieldBlock> riders = new ArrayList<>();
+        for (FieldBlock m : army.wedge) {
+            if (m.alive > 0 && (half < 0 || m.half == half)) {
+                riders.add(m);
+            }
+        }
+        return riders;
+    }
+
+    /**
+     * The wedge charges as one, in formation, its tip at its target, and breaks up to fight on striking it. A Great
+     * Spear waits for its lines to be fighting; the general's strategies may send it sooner. In an Unrelenting Charge
+     * the general leads the first half; once it is spent and riding back, the other half goes in, and so on.
+     */
+    private void wedge(FieldArmy army, FieldArmy enemy, boolean engaged) {
+        if (army.wedge.isEmpty() || finalMelee) {
+            return;
+        }
+        if (army.wedgeTarget != null) {
+            steerWedge(army);
+            return;
+        }
+        boolean unrelenting = army.plan.has(Strategy.UNRELENTING_CHARGE);
+        int half = unrelenting ? army.nextHalf : -1;
+        List<FieldBlock> riders = wedgeRiders(army, half);
+        if (riders.isEmpty()) {
+            if (unrelenting) {
+                army.nextHalf = 1 - army.nextHalf;
+            }
+            return;
+        }
+        if (!wedgeReady(army)) {
+            return;
+        }
+        FieldBlock tip = riders.get(0);
+        FieldBlock target = wedgeTarget(army, enemy, engaged, tip);
+        if (target == null) {
+            return;
+        }
+        army.wedgeTarget = target;
+        army.wedgeHalf = half;
+        army.wedgeSince = seconds;
+        Point waypoint = army.plan.has(Strategy.CAVALRY_FLANK) && target.arm.infantry() ? flankPoint(target, tip.pos) : null;
+        for (FieldBlock r : riders) {
+            r.approaching = true;
+            r.prey = target;
+            r.waypoint = waypoint;
+            r.dutySince = seconds;
+        }
+        calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+        boolean led = riders.contains(army.commander);
+        if (led) {
+            calls.add(new Order(army.side, Call.GENERAL_CHARGES));
+        }
+        String who = target.duty == Duty.GENERAL ? "the enemy general" : target == army.pincerTarget ? "the lured enemy block"
+                : "the enemy line";
+        events.add(new Event(army.side, (led ? "leads " : "sends ") + (unrelenting ? (half == 0 ? "the first half of " : "the second half of ") : "")
+                + "the wedge at " + who + (waypoint != null ? ", around its flank" : "")));
+        steerWedge(army);
+    }
+
+    /**
+     * Whether the wedge (its next half, in an Unrelenting Charge) stands ready to charge: formed, none of it in or
+     * riding back from a charge, and the other half no longer in.
+     */
+    private boolean wedgeReady(FieldArmy army) {
+        if (army.wedge.isEmpty() || army.wedgeTarget != null || finalMelee || seconds < BattlePlan.FORMING_SECONDS) {
+            return false;
+        }
+        boolean unrelenting = army.plan.has(Strategy.UNRELENTING_CHARGE);
+        int half = unrelenting ? army.nextHalf : -1;
+        List<FieldBlock> riders = wedgeRiders(army, half);
+        if (riders.isEmpty()) {
+            return false;
+        }
+        for (FieldBlock r : riders) {
+            if (r.charged || r.approaching || r.duty == Duty.RALLYING || seconds < r.reformUntil) {
+                return false;
+            }
+        }
+        if (unrelenting) {
+            for (FieldBlock other : wedgeRiders(army, 1 - half)) {
+                if (other.charged || other.approaching) {
+                    return false; // the other half is still in
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Whom the wedge rides at: a lured block, an exposed general or block, else the enemy line once it is fighting. */
+    @Nullable
+    private FieldBlock wedgeTarget(FieldArmy army, FieldArmy enemy, boolean engaged, FieldBlock tip) {
+        if (army.pincerTarget != null && army.pincerTarget.alive > 0) {
+            return army.pincerTarget;
+        }
+        FieldBlock general = enemy.commander != null && enemy.commander.alive > 0 ? enemy.commander : null;
+        if (general != null && army.plan.has(Strategy.DECAPITATING_CHARGE) && exposed(enemy)) {
+            return general;
+        }
+        if (army.plan.has(Strategy.PRECISION_STRIKES)) {
+            FieldBlock e = mostExposed(enemy, tip.pos);
+            if (e != null) {
+                return e;
+            }
+        }
+        if (!engaged) {
+            return null;
+        }
+        if (general != null && army.plan.has(Strategy.DECAPITATE)) {
+            return general;
+        }
+        if (army.plan.has(Strategy.MASS_CASUALTIES)) {
+            FieldBlock e = mostSoldiers(enemy, tip.pos, Double.MAX_VALUE);
+            if (e != null) {
+                return e;
+            }
+        }
+        FieldBlock best = null;
+        for (FieldBlock f : enemy.front) {
+            if (f.alive > 0 && f.duty != Duty.FLEEING && (best == null || f.pos.distanceTo(tip.pos) < best.pos.distanceTo(tip.pos))) {
+                best = f;
+            }
+        }
+        return best != null ? best : nearestBlock(tip, enemy, null);
+    }
+
+    /** Moves the charging wedge on: each rider's line is its place behind the tip, the tip at the target (or the flank). */
+    private void steerWedge(FieldArmy army) {
+        FieldBlock target = army.wedgeTarget;
+        List<FieldBlock> riders = new ArrayList<>();
+        for (FieldBlock r : wedgeRiders(army, army.wedgeHalf)) {
+            if (r.approaching) {
+                riders.add(r);
+            }
+        }
+        if (target == null || target.alive == 0 || target.duty == Duty.FLEEING || riders.isEmpty()) {
+            for (FieldBlock r : riders) {
+                r.approaching = false;
+                r.waypoint = null;
+                r.prey = null;
+            }
+            army.wedgeTarget = null;
+            return;
+        }
+        FieldBlock tip = riders.get(0);
+        Point waypoint = tip.waypoint;
+        if (waypoint != null && (tip.pos.distanceTo(waypoint) <= 6 || seconds - army.wedgeSince > 25)) {
+            waypoint = null;
+            for (FieldBlock r : riders) {
+                r.waypoint = null;
+            }
+        }
+        // It breaks up to fight on striking its target, or whoever stands in its way first.
+        boolean struck = seconds - army.wedgeSince > 60;
+        FieldArmy enemy = armies[1 - army.side];
+        for (FieldBlock r : riders) {
+            struck |= waypoint == null && r.distanceTo(target) <= FieldRules.CLOSE_REACH + 1.5
+                    || nearest(r, r.pos, enemy) <= FieldRules.CLOSE_REACH;
+        }
+        if (struck) {
+            for (FieldBlock r : riders) {
+                r.approaching = false;
+                r.charged = true;
+            }
+            army.wedgeTarget = null;
+            if (army.plan.has(Strategy.UNRELENTING_CHARGE)) {
+                army.nextHalf = 1 - army.wedgeHalf;
+            }
+            return;
+        }
+        Point aim = waypoint != null ? waypoint : target.pos;
+        double dx = aim.x() - tip.pos.x();
+        double dz = aim.z() - tip.pos.z();
+        double length = Math.hypot(dx, dz);
+        double fx = length > 1e-6 ? dx / length : army.facingX;
+        double fz = length > 1e-6 ? dz / length : army.facingZ;
+        for (FieldBlock r : riders) {
+            r.line = BattlePlan.place(aim, fx, fz, r.wedgeRight - tip.wedgeRight, r.wedgeBack - tip.wedgeBack);
+            r.facingX = fx;
+            r.facingZ = fz;
+        }
+    }
+
+    // ---- bait and pincer ----
+
+    /**
+     * Pincer: once an enemy block, drawn on by the bait, stands too far forward near it, the general springs the
+     * trap with what is to hand: a waiting cavalry charge (the wedge, or any cavalry ready), else three blocks of
+     * infantry to surround it (its flanks and rear), else one to hit its flank.
+     */
+    private void pincer(FieldArmy army, FieldArmy enemy) {
+        if (!army.plan.has(Strategy.PINCER) || army.baitFile < 0) {
+            return;
+        }
+        FieldBlock target = army.pincerTarget;
+        if (target != null && (target.alive == 0 || target.duty == Duty.FLEEING || seconds - army.pincerSince > FieldRules.PINCER_SECONDS)) {
+            army.pincerTarget = null;
+            for (FieldBlock b : army.blocks) {
+                if (b.strikeAt == target) {
+                    release(army, b);
+                }
+            }
+            target = null;
+        }
+        FieldBlock bait = army.front[army.baitFile];
+        if (target != null || !army.baitSprung || bait.alive == 0) {
+            return;
+        }
+        FieldBlock lured = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.arm.infantry() && e.duty != Duty.FLEEING && !e.charged && e.distanceTo(bait) <= FieldRules.LURE_REACH
+                    && -behindFront(enemy, e.pos) >= FieldRules.TOO_FAR_FORWARD
+                    && (lured == null || e.distanceTo(bait) < lured.distanceTo(bait))) {
+                lured = e;
+            }
+        }
+        if (lured == null) {
+            return;
+        }
+        army.pincerTarget = lured;
+        army.pincerSince = seconds;
+        calls.add(new Order(army.side, Call.PINCER));
+        // A prepared cavalry charge: the wedge goes for the lured block first (wedgeTarget), or any cavalry ready.
+        if (wedgeReady(army)) {
+            events.add(new Event(army.side, "springs the pincer: the wedge charges the lured block"));
+            return;
+        }
+        boolean cavalry = false;
+        for (FieldBlock c : army.blocks) {
+            if (c.alive > 0 && c.arm == Arm.CAVALRY && c.duty == Duty.SUPPORT && !c.inWedge && !c.charged && !c.approaching
+                    && seconds >= c.reformUntil) {
+                charge(army, c, lured);
+                cavalry = true;
+            }
+        }
+        if (cavalry) {
+            events.add(new Event(army.side, "springs the pincer: cavalry charges the lured block"));
+            return;
+        }
+        // Else infantry not fighting, nearest first: three surround it, or one strikes its flank.
+        List<FieldBlock> free = new ArrayList<>();
+        for (FieldBlock b : army.blocks) {
+            boolean idleFront = b.duty == Duty.FRONT && b.file != army.baitFile && !b.engaged && b.contactFoe == null;
+            if (b.alive > 0 && b.arm.infantry() && !b.charged && !b.braced && b.strikeAt == null
+                    && (idleFront || b.duty == Duty.LINE) && BattlePlan.fitToRelieve(b.alive, b.started())) {
+                free.add(b);
+            }
+        }
+        FieldBlock target0 = lured;
+        free.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(target0.pos)));
+        if (free.size() >= 3) {
+            send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
+            send(free.get(1), lured, -free.get(0).strikeSide);
+            send(free.get(2), lured, 0);
+            events.add(new Event(army.side, "springs the pincer: infantry surrounds the lured block"));
+        } else if (!free.isEmpty()) {
+            send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
+            events.add(new Event(army.side, "springs the pincer: infantry strikes the lured block's flank"));
+        } else {
+            army.pincerTarget = null;
+        }
+    }
+
+    private static void send(FieldBlock block, FieldBlock target, int side) {
+        block.strikeAt = target;
+        block.strikeSide = side;
+    }
+
+    /** Which flank of {@code target} is nearer {@code from}: -1 its left, 1 its right. */
+    private static int sideNearer(FieldBlock target, Point from) {
+        double right = (from.x() - target.pos.x()) * -target.facingZ + (from.z() - target.pos.z()) * target.facingX;
+        return right >= 0 ? 1 : -1;
+    }
+
+    /** A pincer's infantry closes on the lured block's flank or rear, facing it, and fights it there. */
+    private void strike(FieldArmy army, FieldBlock block) {
+        FieldBlock t = block.strikeAt;
+        if (t == null || t.alive == 0 || t.duty == Duty.FLEEING || army.pincerTarget != t) {
+            release(army, block);
+            return;
+        }
+        Point at;
+        if (block.strikeSide == 0) {
+            double depth = (double) t.started() / t.files * BattlePlan.SPACING + 2;
+            at = t.pos.plus(-t.facingX * depth, -t.facingZ * depth);
+        } else {
+            double out = t.halfWidth() + 2;
+            at = t.pos.plus(-t.facingZ * out * block.strikeSide, t.facingX * out * block.strikeSide);
+        }
+        block.line = at;
+        face(block, t.pos);
+    }
+
+    /** Back to its place in the army: a front block holds where it stands, facing the enemy again. */
+    private static void release(FieldArmy army, FieldBlock block) {
+        block.strikeAt = null;
+        block.facingX = army.facingX;
+        block.facingZ = army.facingZ;
+        if (block.duty == Duty.FRONT) {
+            block.line = block.pos;
+        }
+    }
+
+    // ---- judging the enemy ----
+
+    /** Whether the enemy's general stands exposed: their guard away or fallen, and none of their army near. */
+    private static boolean exposed(FieldArmy enemy) {
+        FieldBlock general = enemy.commander;
+        if (general == null || general.alive == 0) {
+            return false;
+        }
+        for (FieldBlock b : enemy.blocks) {
+            if (b != general && b.alive > 0 && b.duty != Duty.BEARER && b.duty != Duty.FLEEING
+                    && b.pos.distanceTo(general.pos) <= FieldRules.GENERAL_COVER) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The most exposed enemy block, nearest {@code from} among equals: too far ahead of its own line, fighting with a
+     * flank open (an end of the line, or its neighbour fallen), or worn down. Null if none is exposed at all.
+     */
+    @Nullable
+    private static FieldBlock mostExposed(FieldArmy enemy, Point from) {
+        FieldBlock best = null;
+        int bestScore = 0;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive == 0 || e.duty == Duty.FLEEING || e.duty == Duty.BEARER || e.duty == Duty.GENERAL || !e.arm.infantry() && e.arm != Arm.ARCHERS) {
+                continue;
+            }
+            int score = 0;
+            if (-behindFront(enemy, e.pos) >= FieldRules.TOO_FAR_FORWARD) {
+                score++;
+            }
+            if (e.duty == Duty.FRONT && e.engaged && openFlank(enemy, e)) {
+                score++;
+            }
+            if (e.alive <= e.started() * FieldRules.WORN_SHARE) {
+                score++;
+            }
+            if (score > bestScore || score == bestScore && score > 0 && e.pos.distanceTo(from) < best.pos.distanceTo(from)) {
+                best = e;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private static boolean openFlank(FieldArmy army, FieldBlock block) {
+        int file = block.file;
+        boolean left = file == 0 || army.front[file - 1].alive == 0;
+        boolean right = file == army.front.length - 1 || army.front[file + 1].alive == 0;
+        return left || right;
+    }
+
+    /** The enemy block within {@code reach} of {@code from} worth the most: the most soldiers, for the distance. */
+    @Nullable
+    private static FieldBlock mostSoldiers(FieldArmy enemy, Point from, double reach) {
+        FieldBlock best = null;
+        double bestScore = 0;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive == 0 || e.duty == Duty.FLEEING || e.duty == Duty.BEARER) {
+                continue;
+            }
+            double d = e.pos.distanceTo(from);
+            double score = e.alive / (d + 20);
+            if (d <= reach && score > bestScore) {
+                best = e;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Whom a block that breaks formation goes for, by its general's strategies: cavalry the enemy general
+     * (Decapitate), else the most soldiers near (Mass Casualties), else an exposed block (Precision Strikes); null for
+     * the nearest.
+     */
+    @Nullable
+    private FieldBlock choosePrey(FieldArmy army, FieldArmy enemy, FieldBlock block) {
+        if (block.arm == Arm.CAVALRY && army.plan.has(Strategy.DECAPITATE) && enemy.commander != null && enemy.commander.alive > 0
+                && enemy.commander.pos.distanceTo(block.pos) <= 60) {
+            return enemy.commander;
+        }
+        if (army.plan.has(Strategy.MASS_CASUALTIES)) {
+            FieldBlock e = mostSoldiers(enemy, block.pos, 60);
+            if (e != null) {
+                return e;
+            }
+        }
+        if (army.plan.has(Strategy.PRECISION_STRIKES)) {
+            FieldBlock e = mostExposed(enemy, block.pos);
+            if (e != null && e.pos.distanceTo(block.pos) <= 60) {
+                return e;
+            }
+        }
+        return null;
     }
 
     /** How far behind its army's front line a point is (negative: ahead of it). */
@@ -505,30 +1206,40 @@ public final class FieldBattle {
         return best;
     }
 
+    /** Whether a block is a living enemy worth going after. */
+    private static boolean hunted(@Nullable FieldBlock prey) {
+        return prey != null && prey.alive > 0 && prey.duty != Duty.FLEEING;
+    }
+
     // ---- movement ----
 
     /** Every block walks toward its line at its pace; one that has broken formation goes for its prey. */
     private void move(FieldArmy army) {
         FieldArmy enemy = armies[1 - army.side];
         for (FieldBlock block : army.blocks) {
-            if (block.alive == 0 || block.live) {
+            if (block.alive == 0) {
+                continue;
+            }
+            if (block.charged && block.duty != Duty.FLEEING && !hunted(block.prey)) {
+                block.prey = choosePrey(army, enemy, block);
+            }
+            if (block.live) {
                 continue; // real soldiers walk themselves
             }
             Point target = block.line;
             if (block.charged && block.duty != Duty.FLEEING) {
-                FieldBlock prey = nearestBlock(block, enemy, block.arm == Arm.CAVALRY ? Arm.ARCHERS : null);
+                FieldBlock prey = hunted(block.prey) ? block.prey
+                        : nearestBlock(block, enemy, block.arm == Arm.CAVALRY ? Arm.ARCHERS : null);
                 if (prey == null) {
                     continue;
                 }
-                double dx = prey.pos.x() - block.pos.x();
-                double dz = prey.pos.z() - block.pos.z();
-                double length = Math.hypot(dx, dz);
-                if (length > 1e-6) {
-                    block.facingX = dx / length;
-                    block.facingZ = dz / length;
-                }
+                face(block, prey.pos);
                 if (block.distanceTo(prey) <= FieldRules.CLOSE_REACH) {
                     continue;
+                }
+                FieldBlock blocking = block.contactFoe;
+                if (blocking != null && blocking != prey && blocking.alive > 0 && blocking.duty != Duty.FLEEING) {
+                    continue; // caught fighting whoever stood in the way: it can't ride through them
                 }
                 target = prey.pos;
             }
@@ -543,23 +1254,26 @@ public final class FieldBattle {
     // ---- fighting ----
 
     /**
-     * Everyone within reach fights, all at once: each block strikes the nearest enemy block within its reach (an
-     * archer block with arrows shoots the nearest within range instead when nobody is at hand). Damage is dealt only
-     * once every block has struck, so the order of blocks doesn't matter.
+     * Everyone within reach fights, all at once: each block strikes its prey if within reach, else the nearest enemy
+     * block within its reach (an archer block with arrows shoots instead when nobody is at hand). Blocks waiting in a
+     * file's queue reach no further than those that broke formation. Damage is dealt only once every block has struck,
+     * so the order of blocks doesn't matter.
      */
     private void fight() {
         List<FieldBlock> targets = new ArrayList<>();
         List<Double> damages = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
+            FieldArmy army = armies[side];
             FieldArmy enemy = armies[1 - side];
-            for (FieldBlock block : armies[side].blocks) {
+            for (FieldBlock block : army.blocks) {
                 if (block.alive == 0 || block.duty == Duty.WITHDRAWING || block.duty == Duty.BEARER || block.duty == Duty.FLEEING
                         || block.duty == Duty.RALLYING) {
                     block.contactFoe = null;
                     continue;
                 }
-                double reach = block.charged ? FieldRules.CLOSE_REACH : FieldRules.HOLDING_REACH;
-                FieldBlock foe = nearestBlock(block, enemy, null);
+                boolean holding = !block.charged && !block.approaching && block.duty != Duty.LINE && block.duty != Duty.GENERAL && block.duty != Duty.GUARD;
+                double reach = holding ? FieldRules.HOLDING_REACH : FieldRules.CLOSE_REACH;
+                FieldBlock foe = hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestBlock(block, enemy, null);
                 if (foe == null) {
                     continue;
                 }
@@ -579,7 +1293,7 @@ public final class FieldBattle {
                     if (foe.braced && block.arm == Arm.CAVALRY && sideOf(foe, block) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_TAKES;
                     }
-                    if (block.braced && foe.arm == Arm.CAVALRY) {
+                    if (block.braced && foe.arm == Arm.CAVALRY && sideOf(block, foe) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_DEALS;
                     }
                     targets.add(foe);
@@ -589,15 +1303,16 @@ public final class FieldBattle {
                 block.contactSeconds = 0;
                 block.contactFoe = null;
                 if (block.arm == Arm.ARCHERS && block.arrows > 0) {
-                    shoot(block, enemy, targets, damages);
+                    shoot(army, block, enemy, targets, damages);
                 }
             }
         }
         for (int i = 0; i < targets.size(); i++) {
             FieldBlock target = targets.get(i);
+            double damage = damages.get(i) * (resolute(target) ? FieldRules.RESOLVE_TAKES : 1);
             if (target.live) {
-                target.liveDamage += damages.get(i); // dealt to the real soldiers by the live battle
-            } else if (target.takeDamage(damages.get(i), random) > 0) {
+                target.liveDamage += damage; // dealt to the real soldiers by the live battle
+            } else if (target.takeDamage(damage, random) > 0) {
                 lastFall = seconds;
             }
         }
@@ -631,22 +1346,25 @@ public final class FieldBattle {
                         block.momentum = Math.max(0, block.momentum - loss);
                     }
                 } else if (block.duty != Duty.RALLYING) {
-                    block.momentum = Math.min(1, block.momentum + moved / FieldRules.RUN_UP);
+                    block.momentum = Math.min(block.maxMomentum, block.momentum + moved / FieldRules.RUN_UP);
                 }
                 block.lastPos = block.pos;
             }
         }
     }
 
-    private void shoot(FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
-        FieldBlock foe = null;
-        double best = FieldRules.ARCHER_RANGE;
-        for (FieldBlock e : enemy.blocks) {
-            if (e.alive > 0) {
-                double d = Math.hypot(e.pos.x() - archers.pos.x(), e.pos.z() - archers.pos.z());
-                if (d <= best) {
-                    best = d;
-                    foe = e;
+    /** Archers shoot the nearest enemy in range, or the one with most soldiers (Mass Casualties). */
+    private void shoot(FieldArmy army, FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
+        FieldBlock foe = army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, archers.pos, FieldRules.ARCHER_RANGE) : null;
+        if (foe == null) {
+            double best = FieldRules.ARCHER_RANGE;
+            for (FieldBlock e : enemy.blocks) {
+                if (e.alive > 0) {
+                    double d = Math.hypot(e.pos.x() - archers.pos.x(), e.pos.z() - archers.pos.z());
+                    if (d <= best) {
+                        best = d;
+                        foe = e;
+                    }
                 }
             }
         }
@@ -667,7 +1385,22 @@ public final class FieldBattle {
 
     // ---- the end ----
 
+    /** An army whose general falls retreats at once; one worn down to {@link BattlePlan#ROUT_SHARE} routs. */
     private void checkEnd() {
+        boolean fellA = armies[0].commander != null && armies[0].commander.alive == 0;
+        boolean fellB = armies[1].commander != null && armies[1].commander.alive == 0;
+        if (fellA || fellB) {
+            if (fellA && fellB) {
+                outcome = new Outcome(-1, "both generals fell", seconds);
+                flee(armies[0]);
+                flee(armies[1]);
+            } else {
+                int loser = fellA ? 0 : 1;
+                outcome = new Outcome(1 - loser, "side " + loser + "'s general fell; side " + loser + " retreats", seconds);
+                flee(armies[loser]);
+            }
+            return;
+        }
         boolean routA = BattlePlan.routs(armies[0].alive(), armies[0].started);
         boolean routB = BattlePlan.routs(armies[1].alive(), armies[1].started);
         if (routA && routB) {
@@ -688,6 +1421,10 @@ public final class FieldBattle {
             block.charged = false;
             block.braced = false;
             block.engaged = false;
+            block.approaching = false;
+            block.waypoint = null;
+            block.prey = null;
+            block.strikeAt = null;
             block.line = block.pos.plus(-loser.facingX * 60, -loser.facingZ * 60);
         }
     }

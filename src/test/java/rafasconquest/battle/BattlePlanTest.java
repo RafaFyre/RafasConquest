@@ -96,9 +96,9 @@ class BattlePlanTest {
     }
 
     @Test
-    void theGeneralStandsJustBehindTheLine() {
-        double nearestLineBehind = BattlePlan.LINE_GAP;
-        assertTrue(BattlePlan.GENERAL_BACK > 0 && BattlePlan.GENERAL_BACK < nearestLineBehind);
+    void theGeneralStandsBehindTheLineOutOfTheEnemysReach() {
+        // With the lines in contact, an enemy block holding its place can't reach past the front to the general.
+        assertTrue(BattlePlan.GENERAL_BACK > FieldRules.HOLDING_REACH + BattlePlan.FRONT_CONTACT);
     }
 
     @Test

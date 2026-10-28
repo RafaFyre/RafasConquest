@@ -7,6 +7,7 @@ import com.talhanation.recruits.entities.BowmanEntity;
 import com.talhanation.recruits.init.ModEntityTypes;
 import com.talhanation.recruits.util.FormationUtils;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager;
+import rafasconquest.character.GameCharacter;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -181,7 +182,7 @@ public final class RecruitsBattle {
     private long snapshotNanos;
 
     /** What each side fights as: its faction, Recruits team and colours. */
-    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn) {
+    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn, GameCharacter general) {
     }
 
     /** A block that is real soldiers now: soldier i stands for the block's soldier i. */
@@ -218,7 +219,7 @@ public final class RecruitsBattle {
 
     /** What a soldier is, for its kit. */
     private enum Role {
-        SOLDIER, LEADER, GENERAL, BEARER
+        SOLDIER, LEADER, GENERAL, BEARER, GUARD
     }
 
     /** Tick time totals, in nanoseconds. */
@@ -288,12 +289,16 @@ public final class RecruitsBattle {
             throw new IllegalStateException("Recruits isn't ready");
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
+        java.util.Random characters = new java.util.Random(level.random.nextLong());
         Side[] sides = {
-                new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first)),
-                new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second))};
+                new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first),
+                        GameCharacter.general(first.doctrines(), characters)),
+                new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second),
+                        GameCharacter.general(second.doctrines(), characters))};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
-        FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong());
+        FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
+                sides[0].general.plan(), sides[1].general.plan());
         String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
@@ -305,6 +310,10 @@ public final class RecruitsBattle {
                 battle.describe(0), field.army(0).started(), battle.describe(1), field.army(1).started(),
                 Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
+        for (Side side : sides) {
+            battle.broadcast(String.format(Locale.ROOT, "  %s is led by General %s (%s)", side.faction.name(), side.general.name(),
+                    side.general.plan().describe()));
+        }
         return line;
     }
 
@@ -398,16 +407,16 @@ public final class RecruitsBattle {
         float[] health = block.health();
         boolean first = everLive.add(block);
         float yaw = (float) Math.toDegrees(Math.atan2(-army.facingX(), army.facingZ()));
-        EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.GENERAL || block.duty() == Duty.BEARER
-                ? ModEntityTypes.RECRUIT.get() : type(block.arm());
+        EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get() : type(block.arm());
         for (int i = 0; i < health.length; i++) {
             if (health[i] <= 0) {
                 continue;
             }
             Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
-                    : i == block.captain() ? Role.LEADER : Role.SOLDIER;
-            int rank = i / BattlePlan.FILE_WIDTH;
-            double right = health.length == 1 ? 0 : (i % BattlePlan.FILE_WIDTH - (BattlePlan.FILE_WIDTH - 1) / 2.0) * BattlePlan.SPACING;
+                    : block.duty() == Duty.GUARD ? Role.GUARD : i == block.captain() ? Role.LEADER : Role.SOLDIER;
+            int files = block.files();
+            int rank = i / files;
+            double right = health.length == 1 ? 0 : (i % files - (files - 1) / 2.0) * BattlePlan.SPACING;
             Point p = BattlePlan.place(block.pos(), army.facingX(), army.facingZ(), right, rank * BattlePlan.SPACING * 1.75);
             AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
             if (soldier == null) {
@@ -557,6 +566,14 @@ public final class RecruitsBattle {
      * banner; the general's own is drawn on the back by the client.
      */
     private static void dress(AbstractRecruitEntity soldier, Side side, Role role) {
+        if (role == Role.GUARD || role == Role.GENERAL) {
+            // The general's guard rides in full iron; the general too, under a gold helmet.
+            equip(soldier, EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+            equip(soldier, EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+            equip(soldier, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+            equip(soldier, EquipmentSlot.HEAD, new ItemStack(role == Role.GENERAL ? Items.GOLDEN_HELMET : Items.IRON_HELMET));
+            return;
+        }
         equip(soldier, EquipmentSlot.CHEST, dyed(Items.LEATHER_CHESTPLATE, side.uniform));
         equip(soldier, EquipmentSlot.LEGS, dyed(Items.LEATHER_LEGGINGS, side.uniform));
         equip(soldier, EquipmentSlot.FEET, dyed(Items.LEATHER_BOOTS, side.uniform));
@@ -564,6 +581,7 @@ public final class RecruitsBattle {
             case SOLDIER, BEARER -> dyed(Items.LEATHER_HELMET, side.uniform);
             case LEADER -> side.banner.copy();
             case GENERAL -> new ItemStack(Items.GOLDEN_HELMET);
+            case GUARD -> new ItemStack(Items.IRON_HELMET);
         });
         if (role == Role.BEARER) {
             equip(soldier, EquipmentSlot.MAINHAND, side.banner.copy());
@@ -648,10 +666,10 @@ public final class RecruitsBattle {
         if (block.charged() && block.duty() != Duty.FLEEING) {
             if (!l.appliedCharge) {
                 l.appliedCharge = true;
-                List<AbstractRecruitEntity> prey = enemiesOf(block.side(), block.arm() == Arm.CAVALRY);
+                List<AbstractRecruitEntity> prey = preyOf(block, enemiesOf(block.side(), block.arm() == Arm.CAVALRY));
                 living.forEach(s -> release(s, prey));
             }
-            List<AbstractRecruitEntity> foes = enemiesOf(block.side(), false);
+            List<AbstractRecruitEntity> foes = preyOf(block, enemiesOf(block.side(), false));
             for (AbstractRecruitEntity s : living) {
                 hunt(s, foes, block);
             }
@@ -674,7 +692,7 @@ public final class RecruitsBattle {
                         Vec3.atBottomCenterOf(ground(block.line())), FieldRules.WALL_FILES, FieldRules.WALL_SPACING, true);
             } else {
                 FormationUtils.lineFormation(new Vec3(army.facingX(), 0, army.facingZ()), new ArrayList<>(living),
-                        Vec3.atBottomCenterOf(ground(block.line())), BattlePlan.FILE_WIDTH, BattlePlan.SPACING, true);
+                        Vec3.atBottomCenterOf(ground(block.line())), block.files(), BattlePlan.SPACING, true);
             }
         }
     }
@@ -686,7 +704,7 @@ public final class RecruitsBattle {
 
     /**
      * Where two real blocks meet in melee, only each block's front row fights, to spare the server: the rank nearest
-     * the enemy ({@link BattlePlan#FILE_WIDTH} soldiers, or a wall's {@link FieldRules#WALL_FILES}). Each goes after
+     * the enemy (as many as its ranks are wide, or a wall's {@link FieldRules#WALL_FILES}). Each goes after
      * the nearest enemy soldier within {@link #FRONT_ROW_REACH} of its place, breaking formation to reach them, and
      * comes back to its place once there is none. The ranks behind hold their places, passive, until the front row
      * thins and they become it. The numbers leave such a fight to Recruits.
@@ -715,7 +733,7 @@ public final class RecruitsBattle {
             Vec3 place = placeOf(s);
             return -(place.x * dx + place.z * dz);
         }));
-        int front = Math.min(block.braced() ? FieldRules.WALL_FILES : BattlePlan.FILE_WIDTH, ranked.size());
+        int front = Math.min(block.braced() ? FieldRules.WALL_FILES : block.files(), ranked.size());
         List<AbstractRecruitEntity> foes = enemy.living();
         double reachSqr = FRONT_ROW_REACH * FRONT_ROW_REACH;
         for (int i = 0; i < ranked.size(); i++) {
@@ -796,6 +814,13 @@ public final class RecruitsBattle {
         return commander == null ? null : live.get(commander);
     }
 
+    /** The soldiers of the block's prey, if it is real and any stand; else {@code otherwise}. */
+    private List<AbstractRecruitEntity> preyOf(FieldBlock block, List<AbstractRecruitEntity> otherwise) {
+        Live prey = block.prey() == null ? null : live.get(block.prey());
+        List<AbstractRecruitEntity> soldiers = prey == null ? List.of() : prey.living();
+        return soldiers.isEmpty() ? otherwise : soldiers;
+    }
+
     /** The real soldiers fighting against {@code side}, its archers only if {@code archersFirst} and any are real. */
     private List<AbstractRecruitEntity> enemiesOf(int side, boolean archersFirst) {
         List<AbstractRecruitEntity> all = new ArrayList<>();
@@ -843,7 +868,7 @@ public final class RecruitsBattle {
             soldier.setTarget(foe.get());
             soldier.getNavigation().moveTo(foe.get(), 1.0);
         } else {
-            FieldBlock prey = nearestEnemyBlock(block);
+            FieldBlock prey = block.prey() != null && block.prey().alive() > 0 ? block.prey() : nearestEnemyBlock(block);
             if (prey != null) {
                 soldier.getNavigation().moveTo(prey.pos().x(), soldier.getY(), prey.pos().z(), 1.0);
             }
@@ -888,7 +913,9 @@ public final class RecruitsBattle {
     private void armourHorses(Live l) {
         for (AbstractRecruitEntity rider : l.living()) {
             if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
-                horse.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, sides[l.block.side()].uniform)); // 401: the horse's armour slot
+                boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL;
+                horse.getSlot(401).set(iron ? new ItemStack(Items.IRON_HORSE_ARMOR) // 401: the horse's armour slot
+                        : dyed(Items.LEATHER_HORSE_ARMOR, sides[l.block.side()].uniform));
             }
         }
     }
@@ -946,6 +973,11 @@ public final class RecruitsBattle {
         fieldNanos += System.nanoTime() - t;
         for (FieldBattle.Order order : field.takeCalls()) {
             soundHorn(order.side());
+        }
+        for (FieldBattle.Event event : field.takeEvents()) {
+            Side side = sides[event.side()];
+            broadcast(String.format(Locale.ROOT, "[battle %ds] %s's General %s %s", field.seconds(), side.faction.name(),
+                    side.general.name(), event.text()));
         }
         for (Live l : new ArrayList<>(live.values())) {
             dealDamage(l);
@@ -1022,8 +1054,9 @@ public final class RecruitsBattle {
 
     /**
      * A battle soldier is hurt by another: a charging rider hits harder with its block's momentum
-     * ({@link FieldRules#CHARGE_BONUS}), and a braced wall takes less from cavalry and gives it more back
-     * ({@link FieldRules#BRACED_TAKES}, {@link FieldRules#BRACED_DEALS}). A horse is hurt for its rider's block.
+     * ({@link FieldRules#CHARGE_BONUS}), and a braced wall takes less from cavalry striking its front and gives it more
+     * back ({@link FieldRules#BRACED_TAKES}, {@link FieldRules#BRACED_DEALS}). Soldiers near their general leading an
+     * Unrelenting Charge take less ({@link FieldRules#RESOLVE_TAKES}). A horse is hurt for its rider's block.
      */
     public static float adjustDamage(LivingEntity victim, @Nullable Entity attacker, float amount) {
         RecruitsBattle battle = current;
@@ -1040,11 +1073,16 @@ public final class RecruitsBattle {
         if (byCavalry && by.block.charged()) {
             amount *= 1 + FieldRules.CHARGE_BONUS * by.block.momentum();
         }
-        if (byCavalry && of.block.braced()) {
+        if (byCavalry && of.block.braced() && FieldRules.side(of.block.facingX(), of.block.facingZ(),
+                attacker.getX() - victim.getX(), attacker.getZ() - victim.getZ()) == FieldRules.Side.FRONT) {
             amount *= FieldRules.BRACED_TAKES;
         }
-        if (by.block.braced() && of.block.arm() == Arm.CAVALRY) {
+        if (by.block.braced() && of.block.arm() == Arm.CAVALRY && FieldRules.side(by.block.facingX(), by.block.facingZ(),
+                victim.getX() - attacker.getX(), victim.getZ() - attacker.getZ()) == FieldRules.Side.FRONT) {
             amount *= FieldRules.BRACED_DEALS;
+        }
+        if (battle.field.resolute(of.block)) {
+            amount *= FieldRules.RESOLVE_TAKES;
         }
         return amount;
     }
@@ -1096,8 +1134,16 @@ public final class RecruitsBattle {
             l.living().forEach(s -> s.setTarget(null));
         }
         restoreRelations();
-        String result = outcome.winner() < 0 ? outcome.result()
-                : describe(outcome.winner()) + " wins; " + describe(1 - outcome.winner()) + " routs";
+        String result;
+        if (outcome.winner() < 0) {
+            result = outcome.result();
+        } else if (!field.army(1 - outcome.winner()).generalAlive()) {
+            Side loser = sides[1 - outcome.winner()];
+            result = describe(outcome.winner()) + " wins: " + loser.faction.name() + "'s General " + loser.general.name()
+                    + " fell, and " + loser.faction.name() + " retreats";
+        } else {
+            result = describe(outcome.winner()) + " wins; " + describe(1 - outcome.winner()) + " routs";
+        }
         broadcast(String.format(Locale.ROOT, "[battle over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
                 outcome.seconds(), result, sides[0].faction.name(), field.army(0).alive(), field.army(0).started(),
                 sides[1].faction.name(), field.army(1).alive(), field.army(1).started(), whole.describe()));
@@ -1271,7 +1317,7 @@ public final class RecruitsBattle {
         long leftA = 0;
         long leftB = 0;
         for (int i = 0; i < runs; i++) {
-            FieldBattle battle = new FieldBattle(aBlocks, bBlocks, centre, axisX, axisZ, i);
+            FieldBattle battle = new FieldBattle(aBlocks, bBlocks, centre, axisX, axisZ, i, sides[0].general.plan(), sides[1].general.plan());
             FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
             wins[outcome == null || outcome.winner() < 0 ? 2 : outcome.winner()]++;
             seconds += battle.seconds();
@@ -1405,7 +1451,7 @@ public final class RecruitsBattle {
                 Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
                 all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
                         groundY(block, middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
-                        lone ? 0 : FieldRules.BLOCK_HALF_WIDTH, lone ? 0 : BattlePlan.SPACING, block.fighting(),
+                        lone ? 0 : block.halfWidth(), lone ? 0 : BattlePlan.SPACING, block.fighting(),
                         block.captainAlive(), new int[0], -1));
             }
         }
