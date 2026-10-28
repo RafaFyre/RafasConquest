@@ -51,6 +51,9 @@ public final class DistantArmyRenderer {
      */
     private static final float SIDE_SHADE = 0.8F;
 
+    /** No soldier of a formation stands further than this from its middle (a block's half width, and more). */
+    private static final double FORMATION_REACH = 32;
+
     /** This frame's handover distance, worked out before anything is drawn. Render thread only. */
     private static double handover = Double.MAX_VALUE;
 
@@ -98,6 +101,9 @@ public final class DistantArmyRenderer {
         FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
         int drawn = 0;
         for (FormationSnapshot formation : formations) {
+            if (farInDistantHorizons && !onGameTerrain(formation.x() - eye.x, formation.z() - eye.z, renderBlocks + FORMATION_REACH)) {
+                continue; // all of it is drawn in Distant Horizons' terrain
+            }
             for (Sprite sprite : formation.place(positions)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;

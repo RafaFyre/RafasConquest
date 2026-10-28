@@ -16,7 +16,7 @@ public final class BattlePlan {
     public static final int SOLDIERS_PER_FORMATION = 20;
     /** Armies are this many soldiers at least and at most (whole blocks). */
     public static final int MIN_SOLDIERS = SOLDIERS_PER_FORMATION;
-    public static final int MAX_SOLDIERS = 2000;
+    public static final int MAX_SOLDIERS = 10_000;
     /** Ranks are this many soldiers wide, so a block of 20 stands 2 deep. */
     public static final int FILE_WIDTH = 10;
     /** Which soldier of a formation is its leader (its captain): the middle of the front rank. */
@@ -25,8 +25,14 @@ public final class BattlePlan {
     public static final double SPACING = 1.75;
     /** From one block's centre to the next in a line: a block's width and a gap. */
     public static final double BLOCK_PITCH = (FILE_WIDTH - 1) * SPACING + 3;
-    /** The front line is at most this many blocks wide; more infantry stands in more lines behind it. */
+    /**
+     * The front line is at most this many blocks wide; more infantry stands in more lines behind it. A big army
+     * (over about 2000 soldiers) widens its front instead, to stand no more than {@link #LINES_DEEP} lines deep, up
+     * to {@link #MAX_WIDE_FRONT} blocks.
+     */
     public static final int MAX_FRONT = 10;
+    public static final int LINES_DEEP = 6;
+    public static final int MAX_WIDE_FRONT = 40;
     /** From one line to the next behind it. */
     public static final double LINE_GAP = 16;
     /** A tactician keeps about this share of the infantry in reserve. */
@@ -39,6 +45,8 @@ public final class BattlePlan {
     /** Cavalry stands on the wings, this far beyond the end of the front line, in columns of blocks. */
     public static final double CAVALRY_GAP = 12;
     public static final int CAVALRY_COLUMNS = 2;
+    /** A big wing (more than this many blocks per column) has more columns, so it isn't a long thin file. */
+    public static final int CAVALRY_ROWS = 5;
     public static final double CAVALRY_ROW = 8;
     public static final double CAVALRY_BACK = 4;
     /** Each army deploys this far from the battlefield's centre, so the fronts start twice this apart. */
@@ -116,7 +124,7 @@ public final class BattlePlan {
     /**
      * How an army of {@code blocks} blocks deploys: a fifth archers, a fifth cavalry (rounded), the rest infantry.
      * A tactician keeps a fifth of the infantry in reserve. The rest stands in lines at most {@link #MAX_FRONT}
-     * blocks wide, at least two lines once there are more than 4 blocks, shieldwalls every third file. Archers stand
+     * blocks wide (a big army wider, see {@link #MAX_FRONT}), at least two lines once there are more than 4 blocks, shieldwalls every third file. Archers stand
      * in rows behind the front line; cavalry on both wings (the right wing first).
      */
     public static List<Slot> deployment(General general, int blocks) {
@@ -133,7 +141,8 @@ public final class BattlePlan {
         }
         int reserve = general == General.TACTICIAN && infantry >= 3 ? Math.max(1, Math.round(infantry * (float) RESERVE_SHARE)) : 0;
         int inLines = infantry - reserve;
-        int width = inLines <= 4 ? inLines : Math.min(MAX_FRONT, (inLines + 1) / 2);
+        int width = inLines <= 4 ? inLines : Math.min(MAX_WIDE_FRONT,
+                Math.max(Math.min(MAX_FRONT, (inLines + 1) / 2), (inLines + LINES_DEEP - 1) / LINES_DEEP));
         int lines = (inLines + width - 1) / width;
 
         List<Slot> slots = new ArrayList<>(blocks);
@@ -154,11 +163,13 @@ public final class BattlePlan {
             slots.add(new Slot(Arm.ARCHERS, across(i % width, inRow), ARCHER_BACK + row * ARCHER_ROW, -1, i, false));
         }
         double wingStart = width * BLOCK_PITCH / 2 + CAVALRY_GAP;
+        int perWing = (cavalry + 1) / 2;
+        int columns = Math.max(CAVALRY_COLUMNS, (perWing + CAVALRY_ROWS - 1) / CAVALRY_ROWS);
         for (int i = 0; i < cavalry; i++) {
             int side = i % 2 == 0 ? 1 : -1; // right wing first
             int inWing = i / 2;
-            double out = wingStart + (inWing % CAVALRY_COLUMNS) * BLOCK_PITCH;
-            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / CAVALRY_COLUMNS) * CAVALRY_ROW, -1, i, false));
+            double out = wingStart + (inWing % columns) * BLOCK_PITCH;
+            slots.add(new Slot(Arm.CAVALRY, side * out, CAVALRY_BACK + (inWing / columns) * CAVALRY_ROW, -1, i, false));
         }
         return slots;
     }

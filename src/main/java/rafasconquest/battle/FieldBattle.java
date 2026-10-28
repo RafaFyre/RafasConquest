@@ -379,11 +379,26 @@ public final class FieldBattle {
         return n == 0 ? new Point(0, 0) : new Point(x / n, z / n);
     }
 
+    /**
+     * Whether {@code other} could be nearer than {@code best} to a block standing at {@code at}: their centres'
+     * distance, less both half-widths, is as near as their fronts can be. A cheap check before the exact one, which
+     * keeps a big battle's searches for the nearest enemy quick.
+     */
+    private static boolean closeEnough(FieldBlock block, Point at, FieldBlock other, double best) {
+        if (best == Double.MAX_VALUE) {
+            return true;
+        }
+        double reach = best + block.halfWidth() + other.halfWidth();
+        double dx = other.pos.x() - at.x();
+        double dz = other.pos.z() - at.z();
+        return dx * dx + dz * dz < reach * reach;
+    }
+
     /** The distance from a block standing at {@code at} to the nearest living enemy block. */
     private static double nearest(FieldBlock block, Point at, FieldArmy enemy) {
         double best = Double.MAX_VALUE;
         for (FieldBlock e : enemy.blocks) {
-            if (e.alive > 0) {
+            if (e.alive > 0 && closeEnough(block, at, e, best)) {
                 best = Math.min(best, block.distanceFrom(at, e));
             }
         }
@@ -396,7 +411,7 @@ public final class FieldBattle {
         double bestDistance = Double.MAX_VALUE;
         if (prefer != null) {
             for (FieldBlock e : enemy.blocks) {
-                if (e.alive > 0 && e.arm == prefer && e.duty == Duty.SUPPORT) {
+                if (e.alive > 0 && e.arm == prefer && e.duty == Duty.SUPPORT && closeEnough(block, block.pos, e, bestDistance)) {
                     double d = block.distanceTo(e);
                     if (d < bestDistance) {
                         bestDistance = d;
@@ -409,7 +424,7 @@ public final class FieldBattle {
             }
         }
         for (FieldBlock e : enemy.blocks) {
-            if (e.alive > 0) {
+            if (e.alive > 0 && closeEnough(block, block.pos, e, bestDistance)) {
                 double d = block.distanceTo(e);
                 if (d < bestDistance) {
                     bestDistance = d;

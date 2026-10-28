@@ -33,6 +33,8 @@ import java.util.ArrayList;
  */
 final class DistantHorizonsArmies {
     private static final long REBUILD_MILLIS = 100;
+    /** A huge battle's figures are rebuilt less often: this many more milliseconds for each box. */
+    private static final double MILLIS_PER_BOX = 0.02;
     private static final Color SKIN = new Color(0xBD8E6E);
     private static final Color GOLD = new Color(0xF9D84A);
     private static final Color POLE = new Color(0x6B4A2B);
@@ -94,7 +96,7 @@ final class DistantHorizonsArmies {
             follow(renderRegister());
         }
         IDhApiRenderableBoxGroup group = figures;
-        if (group == null || now - builtAt < REBUILD_MILLIS) {
+        if (group == null || now - builtAt < REBUILD_MILLIS + group.size() * MILLIS_PER_BOX) {
             return;
         }
         builtAt = now;

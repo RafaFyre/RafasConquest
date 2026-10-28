@@ -22,7 +22,9 @@ class BattlePlanTest {
     void armiesComeInWholeBlocksOfTwentyWithinTheLimits() {
         assertEquals(5, BattlePlan.blocks(100));
         assertEquals(100, BattlePlan.blocks(2000));
-        assertEquals(100, BattlePlan.blocks(5000));
+        assertEquals(250, BattlePlan.blocks(5000));
+        assertEquals(500, BattlePlan.blocks(10_000));
+        assertEquals(500, BattlePlan.blocks(50_000));
         assertEquals(1, BattlePlan.blocks(1));
         assertEquals(8, BattlePlan.blocks(150), "rounded to the nearest block");
     }
@@ -63,6 +65,22 @@ class BattlePlanTest {
         double reserveBack = slots.stream().filter(Slot::reserve).mapToDouble(Slot::back).min().orElseThrow();
         assertTrue(reserveBack > infantry.stream().mapToDouble(Slot::back).max().orElseThrow(), "the reserve is behind every line");
         assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.SHIELDWALL));
+    }
+
+    @Test
+    void aHugeArmyWidensItsFrontInsteadOfStandingInEndlessLines() {
+        for (General general : General.values()) {
+            List<Slot> slots = BattlePlan.deployment(general, 500);
+            assertEquals(500, slots.size());
+            long front = slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
+            int lines = slots.stream().filter(s -> s.arm().infantry() && !s.reserve()).mapToInt(Slot::line).max().orElseThrow() + 1;
+            assertTrue(front > BattlePlan.MAX_FRONT && front <= BattlePlan.MAX_WIDE_FRONT, general + " front " + front);
+            assertTrue(lines <= BattlePlan.LINES_DEEP + 2, general + " stands " + lines + " lines deep");
+            double deepestRider = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).max().orElseThrow();
+            assertTrue(deepestRider <= BattlePlan.CAVALRY_BACK + BattlePlan.CAVALRY_ROWS * BattlePlan.CAVALRY_ROW, "a wing " + deepestRider + " deep");
+        }
+        assertEquals(BattlePlan.MAX_FRONT, BattlePlan.deployment(General.WARRIOR, 100).stream()
+                .filter(s -> s.arm().infantry() && s.line() == 0).count(), "2000 soldiers still stand 10 blocks wide");
     }
 
     @Test

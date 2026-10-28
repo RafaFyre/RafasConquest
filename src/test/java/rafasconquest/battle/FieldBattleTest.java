@@ -37,6 +37,17 @@ class FieldBattleTest {
     }
 
     @Test
+    void aTenThousandStrongBattleIsStillQuickToFight() {
+        FieldBattle battle = battle(General.TACTICIAN, 500, General.WARRIOR, 500, 7);
+        long start = System.nanoTime();
+        FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
+        double seconds = (System.nanoTime() - start) / 1e9;
+        assertNotNull(outcome);
+        assertTrue(seconds < 10, "took " + seconds + " s");
+        assertTrue(seconds * 1000 / battle.seconds() < 20, "a battle-second of 10,000 a side has to fit well inside one tick");
+    }
+
+    @Test
     void theSameSeedFightsTheSameBattle() {
         FieldBattle.Outcome first = battle(General.TACTICIAN, 25, General.WARRIOR, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);
         FieldBattle.Outcome again = battle(General.TACTICIAN, 25, General.WARRIOR, 25, 11).run(BattlePlan.TIME_LIMIT_SECONDS);

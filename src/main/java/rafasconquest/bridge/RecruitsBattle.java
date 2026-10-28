@@ -106,6 +106,11 @@ public final class RecruitsBattle {
     private static int liveCap = MAX_LIVE_SOLDIERS;
     /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */
     private static final int SPAWNS_PER_SECOND = 8;
+    /**
+     * Battles up to this many blocks (both sides) are also fought through as numbers at the start, for comparing; a
+     * bigger one would hold the server up for seconds.
+     */
+    private static final int PREDICT_UP_TO_BLOCKS = 200;
     /** A charged soldier this close to its target is taken to be striking it (for calibration). */
     private static final double STRIKING_DISTANCE = 4;
 
@@ -129,8 +134,15 @@ public final class RecruitsBattle {
     private final Map<Integer, ItemStack> backBanners = new HashMap<>();
     /** Chunks held loaded, as {@link ChunkPos#toLong}. */
     private final Set<Long> heldChunks = new HashSet<>();
-    /** Ground heights where nothing is loaded, from the world generator, by 4-block cell. */
+    /**
+     * Ground heights where nothing is loaded, from the world generator, one for each chunk (taken at its middle):
+     * asking the generator is slow, and distant figures need no finer ground than that.
+     */
     private final Map<Long, Integer> groundCache = new HashMap<>();
+    /** Each block's last height, and how many generator lookups this second has made. */
+    private final Map<Integer, Integer> lastGround = new HashMap<>();
+    private int groundLookups;
+    private static final int GROUND_LOOKUPS_PER_SECOND = 40;
     private final Calibration calibration = new Calibration();
     private final Map<FieldBlock, Double> lastHealth = new HashMap<>();
     private final Map<FieldBlock, Point> lastCentre = new HashMap<>();
@@ -147,6 +159,10 @@ public final class RecruitsBattle {
     private int snapshotTicks;
     /** Time spent on the battle's own work since the last report, in nanoseconds. */
     private long ownNanos;
+    /** Of that, the numbers' own second, the switching between real and numbers, and the snapshots. */
+    private long fieldNanos;
+    private long switchNanos;
+    private long snapshotNanos;
 
     /** What each side fights as: its faction, Recruits team and colours. */
     private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner) {
@@ -756,7 +772,9 @@ public final class RecruitsBattle {
         }
         if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
             battle.holdChunks();
+            long t = System.nanoTime();
             ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
+            battle.snapshotNanos += System.nanoTime() - t;
         }
         battle.ownNanos += System.nanoTime() - ownStart;
         if (battle.tickStart != 0) {
@@ -778,7 +796,9 @@ public final class RecruitsBattle {
         if (!over) {
             measure();
         }
+        long t = System.nanoTime();
         field.second();
+        fieldNanos += System.nanoTime() - t;
         for (Live l : new ArrayList<>(live.values())) {
             dealDamage(l);
             passOnOrders(l);
@@ -786,7 +806,9 @@ public final class RecruitsBattle {
                 armourHorses(l);
             }
         }
+        t = System.nanoTime();
         switchLive();
+        switchNanos += System.nanoTime() - t;
         if (!over) {
             announce();
             if (field.seconds() % REPORT_SECONDS == 0) {
@@ -854,12 +876,20 @@ public final class RecruitsBattle {
             liveSoldiers += l.living().size();
         }
         broadcast(String.format(Locale.ROOT,
-                "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %d real soldiers in %d blocks | %s, of which battle %.1f ms/tick",
+                "[battle %ds] %s %d alive (%d reliefs), %s %d alive (%d reliefs) | %d real soldiers in %d blocks | %s, of which battle %.1f ms/tick (numbers %.1f, switching %.1f, snapshots %.1f)",
                 field.seconds(), sides[0].faction.name(), field.army(0).alive(), field.army(0).reliefs(), sides[1].faction.name(),
                 field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), window.describe(),
-                window.count == 0 ? 0 : ownNanos / 1e6 / window.count));
+                perTick(ownNanos), perTick(fieldNanos), perTick(switchNanos), perTick(snapshotNanos)));
         window.clear();
         ownNanos = 0;
+        fieldNanos = 0;
+        switchNanos = 0;
+        snapshotNanos = 0;
+    }
+
+    /** Nanoseconds spent since the last report, as milliseconds a tick. */
+    private double perTick(long nanos) {
+        return window.count == 0 ? 0 : nanos / 1e6 / window.count;
     }
 
     private void end() {
@@ -1035,6 +1065,9 @@ public final class RecruitsBattle {
      * its end can be set beside this one's.
      */
     private static String predict(General a, int aBlocks, General b, int bBlocks, Side[] sides, Point centre, double axisX, double axisZ) {
+        if (aBlocks + bBlocks > PREDICT_UP_TO_BLOCKS) {
+            return "not worked out (too big to fight through at the start)";
+        }
         int runs = Math.max(2, Math.min(20, 400 / (aBlocks + bBlocks)));
         int[] wins = new int[3];
         long seconds = 0;
@@ -1122,16 +1155,29 @@ public final class RecruitsBattle {
 
     /**
      * The ground's height at a spot, for drawing blocks that are only numbers: from the world where it is loaded,
-     * else from the world generator (as Distant Horizons draws it), without loading anything.
+     * else from the world generator (as Distant Horizons draws it), without loading anything. At most
+     * {@link #GROUND_LOOKUPS_PER_SECOND} new generator lookups a second; past that, a block keeps the height it last
+     * had, so a huge battle's first seconds don't stall the server.
      */
-    private int groundY(double x, double z) {
+    private int groundY(FieldBlock block, double x, double z) {
         int bx = Mth.floor(x);
         int bz = Mth.floor(z);
+        int y;
         if (level.hasChunk(bx >> 4, bz >> 4)) {
-            return level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx, bz);
+            y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx, bz);
+        } else {
+            long chunk = ChunkPos.asLong(bx >> 4, bz >> 4);
+            Integer known = groundCache.get(chunk);
+            if (known == null && groundLookups < GROUND_LOOKUPS_PER_SECOND) {
+                groundLookups++;
+                known = level.getChunkSource().getGenerator().getBaseHeight((bx & ~15) + 8, (bz & ~15) + 8,
+                        Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState());
+                groundCache.put(chunk, known);
+            }
+            y = known != null ? known : lastGround.getOrDefault(block.id(), level.getSeaLevel());
         }
-        return groundCache.computeIfAbsent(ChunkPos.asLong(bx >> 2, bz >> 2), k -> level.getChunkSource().getGenerator()
-                .getBaseHeight(bx, bz, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState()));
+        lastGround.put(block.id(), y);
+        return y;
     }
 
     // ---- the distant view ----
@@ -1141,6 +1187,7 @@ public final class RecruitsBattle {
      * where their soldiers stand (with their entity ids), the others from the numbers.
      */
     private List<FormationSnapshot> snapshots() {
+        groundLookups = 0;
         List<FormationSnapshot> all = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
@@ -1160,7 +1207,7 @@ public final class RecruitsBattle {
                 boolean lone = block.started() == 1;
                 Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
                 all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
-                        groundY(middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
+                        groundY(block, middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
                         lone ? 0 : FieldRules.BLOCK_HALF_WIDTH, lone ? 0 : BattlePlan.SPACING, block.fighting(),
                         block.captainAlive(), new int[0], -1));
             }

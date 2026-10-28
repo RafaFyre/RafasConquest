@@ -49,7 +49,7 @@ debug battle in `RecruitsBattle`. `/pve debug recruits` lists what Recruits hold
 
 `/pve debug battle [first [firstSoldiers] second [secondSoldiers]]` deploys two armies 45 blocks in front of you,
 marching at each other across your view: for example `/pve debug battle Osford 2000 Valoia 500`.
-Each side is 20 to 2000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
+Each side is 20 to 10,000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
 the two factions nearest you fight; quote names that contain spaces. The player is a bystander: the two factions are
 made enemies in Recruits' diplomacy for the battle, so soldiers attack each other and leave you alone unless you strike
 first. The old relation is restored when the battle ends.
@@ -58,8 +58,10 @@ first. The old relation is restored when the battle ends.
   a standard-bearer. A fifth of the blocks are archers and a fifth cavalry (rounded); the rest is infantry, with a
   shieldwall every third file (`battle/BattlePlan.deployment`).
 - **Lines:** the infantry stands in a front line at most 10 blocks wide, with relief lines 16 blocks apart behind it
-  (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. Archers
-  stand in rows just behind the front line, and the cavalry on both wings, in columns of blocks.
+  (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. A bigger
+  army widens its front instead, to stand at most 6 lines deep, up to a front of 40 blocks (750 wide; 10,000 soldiers
+  stand 40 wide and 6 to 8 deep). Archers stand in rows just behind the front line, and the cavalry on both wings, in
+  columns of blocks (more columns for a big wing, at most 5 deep).
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
@@ -76,6 +78,12 @@ first. The old relation is restored when the battle ends.
   - Measured on the dev server, 2000 against 2000: about 3 ms a tick with nobody near (all numbers), 16 to 50 ms with
     about 600 real soldiers near a watch point, 20 TPS throughout; a cavalry wing near the watch point cost more
     (68 ms), so riders now count double.
+  - 10,000 against 10,000 (dev server): 4 to 10 ms a tick with nobody near, 15 to 24 ms with a watch point and its 400
+    real soldiers, 20 TPS throughout. The numbers take about half a millisecond a tick even at this size: a cheap
+    distance check lets each block's search for the nearest enemy skip blocks that can't be nearer. The ground height
+    for drawing blocks that are only numbers is asked of the world generator once per chunk, at most 40 a second
+    (a block keeps its last height meanwhile), since those lookups had cost up to 280 ms a second. Reports break the
+    battle's share down into the numbers, switching blocks between real and numbers, and snapshots.
   - `/pve debug battle livecap <soldiers>` changes the cap until the server restarts. With a player connected (client
     and server on one 8-core machine), about 1200 real soldiers ran at 10 to 15 TPS, and even about 450 at 13 to 16
     TPS once fighting began, so the cap is 400.
@@ -156,8 +164,9 @@ first. The old relation is restored when the battle ends.
   army's general, for calibration.
 
   `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
-  2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes about
-  half a second to work out.
+  2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes a fifth of
+  a second to work out; 10,000 against 10,000 about 2 seconds. Battles over 2000 a side aren't also fought through as
+  numbers at the start for comparing (it would hold the server up).
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in
   the uniform's colour: leaders with a flag in the banner's colour, the general with a gold helmet and a flag on the
