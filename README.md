@@ -57,13 +57,19 @@ first. The old relation is restored when the battle ends.
 - **Each army** is one faction, in blocks of 20 soldiers (10 wide, 2 deep), each led by a captain, plus a general and
   a standard-bearer. A fifth of the blocks are archers and a fifth cavalry (rounded); the rest is infantry, with a
   shieldwall every third file (`battle/BattlePlan.deployment`).
-- **Lines:** the infantry stands in a front line at most 10 blocks wide, with relief lines 16 blocks apart behind it
-  (at least two lines once there are more than 4 infantry blocks), so 2000 soldiers stand about 6 lines deep. A bigger
-  army widens its front instead, to stand at most 6 lines deep, up to a front of 40 blocks (750 wide; 10,000 soldiers
-  stand 40 wide and 6 to 8 deep). Every wing (see Wings below) stands alike, side by side with the next 20 blocks
-  apart: its infantry in front, its archers in rows (at most three) just behind its front line (in a Great Shield, clear behind the shield stack), and its cavalry in reserve in
-  the rear, behind the last infantry line, in rows as wide as the wing; a small army's cavalry all in the centre's
-  rear. Wedges form only later, once the front line is established. No two blocks overlap when an army deploys.
+- **How an army deploys** (`BattlePlan.deployment`), front to back:
+  - **The front**, split into a left wing, centre and right wing (its left quarter, middle half and right quarter;
+    see Wings below), 3 blocks apart. In a Great Shield, or an army of more than 1000 soldiers, each front file is 3
+    blocks closed up one behind the other, about 70 % of the infantry, and the front always at least as wide as the
+    archers' rows behind it, up to 40 files. A smaller plain army has a single front line at most 10 blocks wide (as
+    wide as its archers need).
+  - **The archers**, in at most 3 rows right behind the front, which covers them (more rows only once the front is
+    at its 40-file limit).
+  - **The reserves**: the rest of the infantry, 24 blocks further back, in a few lines of one width, centred; each
+    joins the file of the front block it stands behind, relieves it from there, and keeps its deployed place.
+  - **The cavalry**, 10 blocks behind the reserves in at most 3 rows, centred; the left, middle and right thirds of
+    each row are the left wing's, the centre's and the right wing's.
+  - Wedges form only later, once the front line is established. No two blocks overlap when an army deploys.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
@@ -133,7 +139,7 @@ first. The old relation is restored when the battle ends.
   - After 5 s in formation, the front line marches 2 blocks a second, then fights in line.
   - Archers march until an enemy is within 30 blocks, then halt and shoot.
   - **Wings:** an army of more than 300 soldiers fights as a left wing, a centre and a right wing: the left and right
-    thirds of its front files and the middle. Each wing's cavalry acts on that wing's fighting, and each wing has its
+    quarters of its front files and the middle half. Each wing's cavalry acts on that wing's fighting, and each wing has its
     own bait and pincer, so several actions go on at once across the field. A smaller army is all centre. The chat
     says which wing did what.
   - Cavalry waits in its wing's rear reserves until its own wing's front is fighting, or an enemy comes within 20

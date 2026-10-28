@@ -85,13 +85,36 @@ class BattlePlanTest {
     }
 
     @Test
+    void theFrontCoversTheArchersAndTheReservesStandWellBehind() {
+        for (boolean shield : new boolean[]{false, true}) {
+            for (int blocks : new int[]{15, 61, 170, 500}) {
+                List<Slot> slots = BattlePlan.deployment(blocks, shield);
+                String what = blocks + " blocks, shield " + shield;
+                double frontLo = slots.stream().filter(s -> s.line() == 0).mapToDouble(s -> s.right() - (s.files() - 1) * BattlePlan.SPACING / 2).min().orElseThrow();
+                double frontHi = slots.stream().filter(s -> s.line() == 0).mapToDouble(s -> s.right() + (s.files() - 1) * BattlePlan.SPACING / 2).max().orElseThrow();
+                for (Slot a : slots.stream().filter(s -> s.arm() == Arm.ARCHERS).toList()) {
+                    double half = (a.files() - 1) * BattlePlan.SPACING / 2;
+                    assertTrue(a.right() - half >= frontLo - 3 && a.right() + half <= frontHi + 3, what + ": archers covered by the front");
+                }
+                double archersRear = slots.stream().filter(s -> s.arm() == Arm.ARCHERS).mapToDouble(Slot::back).max().orElse(0);
+                int frontRows = BattlePlan.stackFiles(blocks, shield) > 0 ? BattlePlan.SHIELD_STACK : 1;
+                slots.stream().filter(s -> s.arm().infantry() && s.line() >= frontRows).forEach(r ->
+                        assertTrue(r.back() >= archersRear + BattlePlan.RESERVE_GAP - 1e-9, what + ": reserves well behind"));
+            }
+        }
+    }
+
+    @Test
     void theWingsStandApartWithAGapBetweenThem() {
         for (boolean shield : new boolean[]{false, true}) {
-            for (int blocks : new int[]{20, 61, 100, 500}) {
+            for (int blocks : new int[]{61, 100, 500}) {
                 List<Slot> slots = BattlePlan.deployment(blocks, shield);
                 double[] lo = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
                 double[] hi = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
                 for (Slot s : slots) {
+                    if (s.line() != 0) {
+                        continue; // the front line's wings
+                    }
                     double half = (s.files() - 1) * BattlePlan.SPACING / 2;
                     lo[s.wing()] = Math.min(lo[s.wing()], s.right() - half);
                     hi[s.wing()] = Math.max(hi[s.wing()], s.right() + half);
@@ -132,15 +155,17 @@ class BattlePlanTest {
     }
 
     @Test
-    void anArmyOverAThousandStandsThreeBlocksDeep() {
-        for (int blocks : new int[]{51, 100, 150}) {
+    void anArmyOverAThousandStandsItsFrontFilesThreeBlocksDeep() {
+        for (int blocks : new int[]{51, 100, 150, 500}) {
             List<Slot> infantry = BattlePlan.deployment(blocks).stream().filter(s -> s.arm().infantry()).toList();
-            int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
-            assertEquals(BattlePlan.WIDE_LINES_DEEP, lines, blocks + " blocks");
+            long files = infantry.stream().filter(s -> s.line() == 0).count();
+            for (int row = 1; row < BattlePlan.SHIELD_STACK; row++) {
+                int r = row;
+                assertEquals(files, infantry.stream().filter(s -> s.line() == r).count(), blocks + " blocks: every front file " + (r + 1) + " deep");
+                assertEquals(r * BattlePlan.stackPitch(BattlePlan.FILE_WIDTH), infantry.stream().filter(s -> s.line() == r).findFirst().orElseThrow().back(), 1e-9);
+            }
+            assertTrue(files <= BattlePlan.MAX_WIDE_FRONT);
         }
-        // Bigger still, the front can't widen past its limit, so it stands deeper.
-        List<Slot> huge = BattlePlan.deployment(300).stream().filter(s -> s.arm().infantry()).toList();
-        assertEquals(BattlePlan.MAX_WIDE_FRONT, huge.stream().filter(s -> s.line() == 0).count());
     }
 
     @Test
@@ -148,9 +173,7 @@ class BattlePlanTest {
         List<Slot> slots = BattlePlan.deployment(500);
         assertEquals(500, slots.size());
         long front = slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
-        int lines = slots.stream().filter(s -> s.arm().infantry()).mapToInt(Slot::line).max().orElseThrow() + 1;
         assertTrue(front > BattlePlan.MAX_FRONT && front <= BattlePlan.MAX_WIDE_FRONT, "front " + front);
-        assertTrue(lines <= BattlePlan.LINES_DEEP + 2, "stands " + lines + " lines deep");
         double deepestRider = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).max().orElseThrow();
         double lastLine = slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElseThrow();
         assertTrue(deepestRider <= lastLine + BattlePlan.LINE_GAP + 5 * BattlePlan.CAVALRY_ROW, "the reserves " + deepestRider + " deep");

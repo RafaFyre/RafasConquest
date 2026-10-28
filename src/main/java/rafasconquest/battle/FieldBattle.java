@@ -87,6 +87,7 @@ public final class FieldBattle {
     private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
+        army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
@@ -115,6 +116,9 @@ public final class FieldBattle {
                 army.front[slot.file()] = block;
             } else if (duty == Duty.LINE) {
                 army.join(block, slot.file());
+                FieldBlock fileFront = army.front[slot.file()];
+                Point frontAt = BattlePlan.offset(front, facingX, facingZ, fileFront.line);
+                block.reserve = new Point(slot.right() - frontAt.x(), slot.back() - frontAt.z());
             }
             if (slot.arm().infantry()) {
                 lastLine = Math.max(lastLine, slot.back());
@@ -448,10 +452,11 @@ public final class FieldBattle {
                 case FRONT -> holdFront(army, block, enemy, engaged);
                 case LINE -> {
                     int place = army.queue(block.file).indexOf(block) + 1;
-                    block.line = block.placed != null
-                            ? BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, block.placed.x(), block.placed.z())
-                            : BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, 0,
-                            BattlePlan.fileBack(place, army.greatShield()));
+                    // Placed by hand; else in the reserves where it deployed, or closed up in a Great Shield's stack.
+                    Point offset = block.placed != null ? block.placed
+                            : block.reserve != null && (army.stackFiles() == 0 || place >= BattlePlan.SHIELD_STACK) ? block.reserve
+                            : new Point(0, BattlePlan.fileBack(place, army.stackFiles()));
+                    block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, offset.x(), offset.z());
                 }
                 case RELIEVING -> {
                     if (block.pos.distanceTo(block.line) <= BattlePlan.RELIEF_ARRIVED || seconds - block.dutySince >= BattlePlan.RELIEF_SECONDS) {
@@ -651,7 +656,7 @@ public final class FieldBattle {
         relieved.dutySince = seconds;
         int behind = army.queue(relieved.file).size() + 1;
         relieved.rear = BattlePlan.place(relief.line, army.facingX, army.facingZ, 0,
-                BattlePlan.fileBack(behind, army.greatShield()) + BattlePlan.LINE_GAP);
+                BattlePlan.fileBack(behind, army.stackFiles()) + BattlePlan.LINE_GAP);
         relieved.line = relieved.rear;
     }
 
@@ -694,7 +699,7 @@ public final class FieldBattle {
         }
         switch (order) {
             case MARCH -> {
-                if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line), army.greatShield())) {
+                if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line), army.stackFiles())) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }

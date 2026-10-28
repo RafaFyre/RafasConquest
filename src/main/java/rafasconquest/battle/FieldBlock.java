@@ -118,6 +118,9 @@ public final class FieldBlock {
     int patrolLeg = 1;
     /** How far it moved last second. */
     double moved;
+    /** Waiting in reserve: where it deployed, {right, back} of its file's front block, which it keeps. */
+    @Nullable
+    Point reserve;
     /** Placed by hand before the battle: where it keeps its place, {right, back} of what it stands by, or null. */
     @Nullable
     Point placed;

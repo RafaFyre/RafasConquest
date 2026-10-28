@@ -54,8 +54,19 @@ public final class BattlePlan {
     public static final double DEPLOY_DISTANCE = 30;
     /** An army of more than this many soldiers fights in a left wing, centre and right wing. */
     public static final int WINGS_OVER = 300;
-    /** The wings of such an army stand this far apart, side by side. */
-    public static final double WING_GAP = 20;
+    /** The wings of such an army stand side by side, this far apart. */
+    public static final double WING_GAP = 3;
+    /**
+     * Archers stand at most this many rows deep; the reserves this far behind the archers, their lines this far apart
+     * (rear rank to front rank); the cavalry this far behind the reserves, at most this many rows deep.
+     */
+    public static final int ARCHER_ROWS = 3;
+    public static final double RESERVE_GAP = 24;
+    public static final double RESERVE_ROW_GAP = 4;
+    public static final double CAVALRY_GAP_BACK = 10;
+    public static final int CAVALRY_ROWS = 3;
+    /** A stacked front takes about this share of the infantry; the rest stands in reserve. */
+    public static final double FRONT_SHARE = 0.7;
 
     /** Seconds the armies stand in their deployed lines before anyone moves. */
     public static final int FORMING_SECONDS = 5;
@@ -113,13 +124,13 @@ public final class BattlePlan {
         return blocks * SOLDIERS_PER_FORMATION > WINGS_OVER && files >= 3;
     }
 
-    /** Which wing a front file stands in: the left and right thirds of the front, the rest the centre. */
+    /** Which wing a front file stands in: the left and right quarters of the front, the middle half the centre. */
     public static int wingOf(int file, int files, boolean winged) {
         if (!winged) {
             return CENTRE;
         }
-        int third = files / 3;
-        return file < third ? LEFT : file >= files - third ? RIGHT : CENTRE;
+        int quarter = files / 4;
+        return file < quarter ? LEFT : file >= files - quarter ? RIGHT : CENTRE;
     }
 
     /** How many blocks of 20 an army of {@code soldiers} is: the nearest whole number, within the limits. */
@@ -139,30 +150,51 @@ public final class BattlePlan {
     }
 
     /**
-     * How far behind the front block of its file the block {@code place} places back stands: {@link #LINE_GAP} apart,
-     * or in a Great Shield file the first {@link #SHIELD_STACK} closed up five ranks apart, and the rest behind the
-     * archers, who stand behind the stack ({@link #archerBack}).
+     * How far behind the front block of its file the block {@code place} places back stands. In a front of single
+     * blocks ({@code stackFiles} 0) {@link #LINE_GAP} apart. In a stacked front (a Great Shield, or a big army), whose
+     * blocks are {@code stackFiles} wide, the first {@link #SHIELD_STACK} closed up one behind the other, the rest
+     * further back (the reserves keep the places they deployed to; this is where they would close up to).
      */
-    public static double fileBack(int place, boolean greatShield) {
-        if (!greatShield) {
+    public static double fileBack(int place, int stackFiles) {
+        if (stackFiles == 0) {
             return place * LINE_GAP;
         }
         if (place < SHIELD_STACK) {
-            return place * SHIELD_BLOCK_DEPTH;
+            return place * stackPitch(stackFiles);
         }
-        return archerBack(true) + ARCHER_BAND + (place - SHIELD_STACK) * LINE_GAP;
+        return archerBack(stackFiles) + ARCHER_BAND + (place - SHIELD_STACK) * LINE_GAP;
+    }
+
+    /** The same for a Great Shield's blocks, or a front of single blocks. */
+    public static double fileBack(int place, boolean greatShield) {
+        return fileBack(place, greatShield ? SHIELD_FILES : 0);
+    }
+
+    /** From one block's front rank to the next's in a stacked file: its ranks and a rank's gap. */
+    public static double stackPitch(int files) {
+        return (double) SOLDIERS_PER_FORMATION / files * SPACING;
     }
 
     /**
-     * How far behind the front archers stand, at the least: {@link #ARCHER_BACK}, or in a Great Shield clear behind
-     * the whole shield stack (its last block's rear rank, and a gap), so they don't stand among its blocks.
+     * How far behind the front archers stand, at the least: {@link #ARCHER_BACK}, or behind a stacked front (blocks
+     * {@code stackFiles} wide) clear of its whole stack (its last block's rear rank, and a gap).
      */
-    public static double archerBack(boolean greatShield) {
-        if (!greatShield) {
+    public static double archerBack(int stackFiles) {
+        if (stackFiles == 0) {
             return ARCHER_BACK;
         }
-        double stackRear = (SHIELD_STACK - 1) * SHIELD_BLOCK_DEPTH + (SOLDIERS_PER_FORMATION / SHIELD_FILES - 1) * SPACING;
+        double stackRear = (SHIELD_STACK - 1) * stackPitch(stackFiles) + (SOLDIERS_PER_FORMATION / stackFiles - 1) * SPACING;
         return stackRear + ARCHER_CLEARANCE;
+    }
+
+    /** The same for a Great Shield, or a front of single blocks. */
+    public static double archerBack(boolean greatShield) {
+        return archerBack(greatShield ? SHIELD_FILES : 0);
+    }
+
+    /** How wide the blocks of a stacked front are, or 0 if the army's front is single blocks. */
+    public static int stackFiles(int blocks, boolean greatShield) {
+        return greatShield ? SHIELD_FILES : blocks * SOLDIERS_PER_FORMATION > WIDE_OVER ? FILE_WIDTH : 0;
     }
 
     /**
@@ -191,105 +223,121 @@ public final class BattlePlan {
             }
             infantry++;
         }
-        int inLines = infantry;
-        int width = inLines <= 4 ? inLines : Math.min(MAX_WIDE_FRONT,
-                Math.max(Math.min(MAX_FRONT, (inLines + 1) / 2), (inLines + LINES_DEEP - 1) / LINES_DEEP));
-        if (blocks * SOLDIERS_PER_FORMATION > WIDE_OVER) {
-            width = Math.min(MAX_WIDE_FRONT, (inLines + WIDE_LINES_DEEP - 1) / WIDE_LINES_DEEP);
-        }
-        if (greatShield) {
-            width = Math.max(1, Math.min(width, inLines / SHIELD_STACK));
-        }
-        int lines = (inLines + width - 1) / width;
+        // The front: wide enough to cover the archers behind it (at most ARCHER_ROWS rows of them). In a Great Shield
+        // each front file is SHIELD_STACK blocks deep and the front only as wide as that; otherwise a plain front as
+        // wide as the army's size asks (a big army three lines deep), and at least that wide.
         int files = greatShield ? SHIELD_FILES : FILE_WIDTH;
         double pitch = pitch(files);
+        int archersPerRow = (archers + ARCHER_ROWS - 1) / ARCHER_ROWS;
+        int cover = Math.max(1, (int) Math.ceil(archersPerRow * BLOCK_PITCH / pitch));
+        int stackFiles = stackFiles(blocks, greatShield);
+        int width;
+        int frontRows;
+        if (stackFiles > 0) {
+            // A stacked front: each file SHIELD_STACK blocks closed up, about FRONT_SHARE of the infantry, and at least
+            // as wide as the archers need; the rest in reserve.
+            int share = (int) Math.ceil(infantry * FRONT_SHARE / SHIELD_STACK);
+            width = Math.max(1, Math.min(Math.min(MAX_WIDE_FRONT, Math.max(cover, share)), infantry / SHIELD_STACK));
+            frontRows = Math.min(SHIELD_STACK, infantry / width);
+        } else {
+            int plain = infantry <= 4 ? infantry : Math.min(MAX_WIDE_FRONT,
+                    Math.max(Math.min(MAX_FRONT, (infantry + 1) / 2), (infantry + LINES_DEEP - 1) / LINES_DEEP));
+            if (blocks * SOLDIERS_PER_FORMATION > WIDE_OVER) {
+                plain = Math.min(MAX_WIDE_FRONT, (infantry + WIDE_LINES_DEEP - 1) / WIDE_LINES_DEEP);
+            }
+            width = Math.min(infantry, Math.min(MAX_WIDE_FRONT, Math.max(plain, cover)));
+            frontRows = 1;
+        }
+        double blockDepth = (SOLDIERS_PER_FORMATION / files - 1) * SPACING;
+        // A front that can't widen enough to cover three rows of archers (its limit reached) covers more rows instead.
+        archersPerRow = Math.max(1, Math.min(archersPerRow, (int) (width * pitch / BLOCK_PITCH)));
 
+        // The wings: the front's left quarter, middle half and right quarter, side by side, WING_GAP apart.
         boolean winged = winged(blocks, width);
-        int[] order = winged ? new int[]{CENTRE, LEFT, RIGHT} : new int[]{CENTRE};
-        // Each wing's share: its front files (the thirds of the front), and archers and cavalry dealt out in turn.
         int[] wingFiles = new int[3];
         for (int file = 0; file < width; file++) {
             wingFiles[wingOf(file, width, winged)]++;
         }
-        int[] wingArchers = new int[3];
-        int[] wingCavalry = new int[3];
-        for (int i = 0; i < archers; i++) {
-            wingArchers[order[i % order.length]]++;
-        }
-        for (int i = 0; i < cavalry; i++) {
-            wingCavalry[order[i % order.length]]++;
-        }
-        // How wide each wing stands (its infantry, or its archers' or cavalry's rows, at most three deep, if wider),
-        // and so where its middle is: the wings side by side, WING_GAP apart.
-        int[] archersPerRow = new int[3];
-        int[] cavalryPerRow = new int[3];
-        double[] wingWidth = new double[3];
-        for (int wing = 0; wing < 3; wing++) {
-            double infantryWidth = wingFiles[wing] * pitch;
-            archersPerRow[wing] = perRow(wingArchers[wing], infantryWidth);
-            cavalryPerRow[wing] = perRow(wingCavalry[wing], infantryWidth);
-            wingWidth[wing] = Math.max(infantryWidth, Math.max(archersPerRow[wing], cavalryPerRow[wing]) * BLOCK_PITCH);
-        }
-        double[] middle = new double[3];
-        if (winged) {
-            double total = wingWidth[LEFT] + wingWidth[CENTRE] + wingWidth[RIGHT] + 2 * WING_GAP;
-            middle[LEFT] = -total / 2 + wingWidth[LEFT] / 2;
-            middle[CENTRE] = -total / 2 + wingWidth[LEFT] + WING_GAP + wingWidth[CENTRE] / 2;
-            middle[RIGHT] = total / 2 - wingWidth[RIGHT] / 2;
-        }
-
-        // Infantry: each file at its place in its wing; the blocks behind stand in the same file.
-        List<Slot> slots = new ArrayList<>(blocks);
+        double total = width * pitch + (winged ? 2 * WING_GAP : 0);
         double[] fileRight = new double[width];
-        int[] firstFile = new int[3];
-        for (int file = width - 1; file >= 0; file--) {
-            firstFile[wingOf(file, width, winged)] = file;
-        }
+        double at = -total / 2 + pitch / 2;
         for (int file = 0; file < width; file++) {
-            int wing = wingOf(file, width, winged);
-            fileRight[file] = middle[wing] + across(file - firstFile[wing], wingFiles[wing], pitch);
+            if (file > 0 && wingOf(file, width, winged) != wingOf(file - 1, width, winged)) {
+                at += WING_GAP;
+            }
+            fileRight[file] = at;
+            at += pitch;
         }
-        for (int line = 0; line < lines; line++) {
-            int inThisLine = Math.min(width, inLines - line * width);
-            for (int file = 0; file < inThisLine; file++) {
-                Arm arm = greatShield || file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
-                slots.add(new Slot(arm, fileRight[file], fileBack(line, greatShield), line, file, files, wingOf(file, width, winged)));
+        List<Slot> slots = new ArrayList<>(blocks);
+        for (int row = 0; row < frontRows; row++) {
+            for (int file = 0; file < width; file++) {
+                slots.add(new Slot(infantryArm(file, greatShield), fileRight[file], fileBack(row, stackFiles), row, file, files,
+                        wingOf(file, width, winged)));
             }
         }
-        // Archers: rows behind each wing's front line.
-        double archersBack = archerBack(greatShield);
-        int archerRows = 0;
-        int index = 0;
-        for (int wing : order) {
-            for (int k = 0; k < wingArchers[wing]; k++) {
-                int row = k / archersPerRow[wing];
-                int inRow = Math.min(archersPerRow[wing], wingArchers[wing] - row * archersPerRow[wing]);
-                slots.add(new Slot(Arm.ARCHERS, middle[wing] + across(k % archersPerRow[wing], inRow, BLOCK_PITCH),
-                        archersBack + row * ARCHER_ROW, -1, index++, FILE_WIDTH, wing));
-                archerRows = Math.max(archerRows, row + 1);
-            }
+        double frontRear = fileBack(frontRows - 1, stackFiles) + blockDepth;
+
+        // Archers: in rows right behind the front, which covers them.
+        double archersBack = archerBack(stackFiles);
+        int archerRows = archersPerRow == 0 ? 0 : (archers + archersPerRow - 1) / archersPerRow;
+        for (int i = 0; i < archers; i++) {
+            int row = i / archersPerRow;
+            int inRow = Math.min(archersPerRow, archers - row * archersPerRow);
+            double right = across(i % archersPerRow, inRow, BLOCK_PITCH);
+            slots.add(new Slot(Arm.ARCHERS, right, archersBack + row * ARCHER_ROW, -1, i, FILE_WIDTH, wingAt(right, fileRight, width, winged)));
         }
-        // Cavalry: in reserve in the rear of each wing, behind the last infantry line and the archers.
-        double rear = Math.max(fileBack(lines - 1, greatShield), archersBack + Math.max(0, archerRows - 1) * ARCHER_ROW) + LINE_GAP;
-        index = 0;
-        for (int wing : order) {
-            for (int k = 0; k < wingCavalry[wing]; k++) {
-                int row = k / cavalryPerRow[wing];
-                int inRow = Math.min(cavalryPerRow[wing], wingCavalry[wing] - row * cavalryPerRow[wing]);
-                slots.add(new Slot(Arm.CAVALRY, middle[wing] + across(k % cavalryPerRow[wing], inRow, BLOCK_PITCH),
-                        rear + row * CAVALRY_ROW, -1, index++, FILE_WIDTH, wing));
-            }
+        double archersRear = archerRows == 0 ? frontRear : archersBack + (archerRows - 1) * ARCHER_ROW + (SOLDIERS_PER_FORMATION / FILE_WIDTH - 1) * SPACING;
+
+        // Reserves: the rest of the infantry, after a wide gap, in lines of one width, centred; each joins the file of
+        // the front block it stands behind.
+        int reserves = infantry - width * frontRows;
+        int reserveLines = reserves == 0 ? 0 : (reserves + width - 1) / width;
+        int perLine = reserveLines == 0 ? 0 : (reserves + reserveLines - 1) / reserveLines;
+        double reservesBack = Math.max(frontRear, archersRear) + RESERVE_GAP;
+        for (int i = 0; i < reserves; i++) {
+            int line = i / perLine;
+            int inLine = Math.min(perLine, reserves - line * perLine);
+            double right = across(i % perLine, inLine, pitch);
+            int file = nearestFile(right, fileRight);
+            slots.add(new Slot(infantryArm(file, greatShield), right, reservesBack + line * (blockDepth + RESERVE_ROW_GAP),
+                    frontRows + line, file, files, wingOf(file, width, winged)));
+        }
+        double reservesRear = reserveLines == 0 ? Math.max(frontRear, archersRear)
+                : reservesBack + (reserveLines - 1) * (blockDepth + RESERVE_ROW_GAP) + blockDepth;
+
+        // Cavalry: in at most CAVALRY_ROWS rows behind the reserves, centred; its left, middle and right thirds are the
+        // left wing's, the centre's and the right wing's.
+        double cavalryBack = (reserveLines == 0 ? reservesRear + RESERVE_GAP : reservesRear) + CAVALRY_GAP_BACK;
+        int cavalryPerRow = Math.max(1, (cavalry + CAVALRY_ROWS - 1) / CAVALRY_ROWS);
+        for (int i = 0; i < cavalry; i++) {
+            int row = i / cavalryPerRow;
+            int inRow = Math.min(cavalryPerRow, cavalry - row * cavalryPerRow);
+            int k = i % cavalryPerRow;
+            int third = inRow / 3;
+            int wing = !winged ? CENTRE : k < third ? LEFT : k >= inRow - third ? RIGHT : CENTRE;
+            slots.add(new Slot(Arm.CAVALRY, across(k, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i, FILE_WIDTH, wing));
         }
         return slots;
     }
 
-    /** How many blocks of a wing's archers or cavalry stand side by side: as many as its front is wide, at most 3 rows. */
-    private static int perRow(int count, double frontWidth) {
-        if (count == 0) {
-            return 1;
+    private static Arm infantryArm(int file, boolean greatShield) {
+        return greatShield || file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
+    }
+
+    /** The front file standing nearest a point {@code right} of the army's middle. */
+    private static int nearestFile(double right, double[] fileRight) {
+        int best = 0;
+        for (int file = 1; file < fileRight.length; file++) {
+            if (Math.abs(fileRight[file] - right) < Math.abs(fileRight[best] - right)) {
+                best = file;
+            }
         }
-        int fits = Math.max(1, (int) (frontWidth / BLOCK_PITCH));
-        return Math.min(count, Math.max(fits, (count + 2) / 3));
+        return best;
+    }
+
+    /** The wing of the front file nearest a point {@code right} of the army's middle. */
+    private static int wingAt(double right, double[] fileRight, int width, boolean winged) {
+        return wingOf(nearestFile(right, fileRight), width, winged);
     }
 
     /**
@@ -418,12 +466,12 @@ public final class BattlePlan {
      * may march another step: never past the line, so they don't walk out alone ahead of infantry that is waiting.
      */
     public static boolean archersMayAdvance(double behindFront) {
-        return archersMayAdvance(behindFront, false);
+        return archersMayAdvance(behindFront, 0);
     }
 
     /** The same, for an army in a Great Shield or not: never into its shield stack either. */
-    public static boolean archersMayAdvance(double behindFront, boolean greatShield) {
-        return behindFront - MARCH_STEP >= archerBack(greatShield);
+    public static boolean archersMayAdvance(double behindFront, int stackFiles) {
+        return behindFront - MARCH_STEP >= archerBack(stackFiles);
     }
 
     /** Whether a battle has stalled: fighting began, and nobody has fallen for {@link #STALL_SECONDS}. */

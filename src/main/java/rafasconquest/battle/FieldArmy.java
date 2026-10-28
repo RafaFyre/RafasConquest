@@ -24,6 +24,7 @@ public final class FieldArmy {
     @Nullable
     FieldBlock guard;
     final WarPlan plan;
+    int stackFiles;
     /** Where its front centre stood when it deployed, which hand-placed blocks are saved relative to. */
     Point origin;
     /** The wedge's blocks, tip first (Great Spear, Unrelenting Charge); empty if it has none. */
@@ -109,6 +110,11 @@ public final class FieldArmy {
 
     boolean greatShield() {
         return plan.has(Doctrine.Formation.GREAT_SHIELD);
+    }
+
+    /** How wide its stacked front's blocks are (a Great Shield, or a big army), or 0 for a front of single blocks. */
+    int stackFiles() {
+        return stackFiles;
     }
 
     public List<FieldBlock> blocks() {
