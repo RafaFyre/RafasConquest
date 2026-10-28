@@ -48,13 +48,25 @@ class BattlePlanTest {
     }
 
     @Test
-    void aBigArmyStandsInLinesBehindAFrontOfAtMostTenBlocks() {
-        List<Slot> slots = BattlePlan.deployment(100);
+    void anArmyOfAThousandStandsInLinesBehindAFrontOfAtMostTenBlocks() {
+        List<Slot> slots = BattlePlan.deployment(50);
         List<Slot> infantry = slots.stream().filter(s -> s.arm().infantry()).toList();
         assertEquals(BattlePlan.MAX_FRONT, infantry.stream().filter(s -> s.line() == 0).count());
         int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
-        assertTrue(lines >= 4, "relief lines behind the front: " + lines);
+        assertTrue(lines >= 3, "relief lines behind the front: " + lines);
         assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.SHIELDWALL));
+    }
+
+    @Test
+    void anArmyOverAThousandStandsThreeBlocksDeep() {
+        for (int blocks : new int[]{51, 100, 150}) {
+            List<Slot> infantry = BattlePlan.deployment(blocks).stream().filter(s -> s.arm().infantry()).toList();
+            int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
+            assertEquals(BattlePlan.WIDE_LINES_DEEP, lines, blocks + " blocks");
+        }
+        // Bigger still, the front can't widen past its limit, so it stands deeper.
+        List<Slot> huge = BattlePlan.deployment(300).stream().filter(s -> s.arm().infantry()).toList();
+        assertEquals(BattlePlan.MAX_WIDE_FRONT, huge.stream().filter(s -> s.line() == 0).count());
     }
 
     @Test

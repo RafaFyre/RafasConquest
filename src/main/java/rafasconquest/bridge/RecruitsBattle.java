@@ -695,7 +695,7 @@ public final class RecruitsBattle {
                 FormationUtils.lineFormation(new Vec3(block.facingX(), 0, block.facingZ()), new ArrayList<>(living),
                         Vec3.atBottomCenterOf(ground(block.line())), FieldRules.WALL_FILES, FieldRules.WALL_SPACING, true);
             } else {
-                FormationUtils.lineFormation(new Vec3(army.facingX(), 0, army.facingZ()), new ArrayList<>(living),
+                FormationUtils.lineFormation(new Vec3(block.facingX(), 0, block.facingZ()), new ArrayList<>(living),
                         Vec3.atBottomCenterOf(ground(block.line())), block.files(), BattlePlan.SPACING, true);
             }
         }

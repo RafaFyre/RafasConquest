@@ -149,6 +149,16 @@ first. The old relation is restored when the battle ends.
     melee, or waiting) is set on by up to two idle infantry blocks within 25 blocks (front blocks not fighting, or
     blocks waiting in the files), which close in on its flanks. They let it go once it rides on at 3 blocks a second
     or more, or leads them more than 50 blocks off.
+  - **Envelopment:** once the army is fighting, a front block with no enemy ahead of it and not fighting anyone (its
+    wing reaches past the end of the enemy's line) wheels onto the nearest enemy infantry beside it, within 60
+    blocks: the first block strikes its flank, a second its rear. When that block falls it turns on the next, so an
+    overlapping wing rolls up the enemy's exposed flank; the blocks waiting in its file follow it round.
+  - **A moving front:** a front block with fewer than 70 % of the soldiers of the block it fights gives ground, half
+    a block a second, while the stronger side presses on, so the line bends where one side is winning.
+  - **3 deep:** an army of more than 1000 soldiers stands 3 lines deep (as far as a front of at most 40 blocks
+    allows), so each wing has a broad front of its own.
+  - **The general keeps clear:** the general stands 20 blocks behind the middle of the blocks holding the line,
+    and falls further back wherever the enemy has pushed in, keeping at least 25 blocks from any enemy.
   - **Walls:** an infantry block that charged enemy cavalry is heading for (within 30 blocks), or that cavalry comes
     within 10 blocks of, turns to face it and closes up 5 wide at 1.3 spacing. A braced wall takes 40 % of cavalry's
     damage and deals it 2.5 times as much; it stands down 5 s after the last threat. The wall is one-sided: struck

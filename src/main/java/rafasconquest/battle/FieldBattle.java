@@ -358,6 +358,7 @@ public final class FieldBattle {
         pincer(army, enemy);
         huntStoppedCavalry(army, enemy);
         shieldGeneral(army, enemy);
+        envelop(army, enemy);
         wedge(army, enemy, engaged);
         for (FieldBlock block : army.blocks) {
             if (block.alive == 0) {
@@ -477,8 +478,14 @@ public final class FieldBattle {
                 block.line = block.line.plus(stepX * BattlePlan.MARCH_STEP, stepZ * BattlePlan.MARCH_STEP);
             }
             case ENGAGE -> {
-                // Presses on, in its ranks, until the lines meet.
+                // Presses on, in its ranks, until the lines meet; one clearly outnumbered by the block it fights gives
+                // ground, a little at a time, so the stronger side pushes in and the line bends.
                 block.engaged = true;
+                FieldBlock foe = block.contactFoe;
+                if (foe != null && foe.arm.infantry() && block.alive < foe.alive * FieldRules.GIVE_GROUND_SHARE) {
+                    block.line = block.line.plus(-army.facingX * FieldRules.GIVE_GROUND, -army.facingZ * FieldRules.GIVE_GROUND);
+                    return;
+                }
                 double step = Math.min(BattlePlan.MARCH_STEP, nearest - BattlePlan.FRONT_CONTACT);
                 if (step > 0) {
                     block.line = block.line.plus(army.facingX * step, army.facingZ * step);
@@ -822,7 +829,38 @@ public final class FieldBattle {
             general.line = wedgeHome(army, general);
             return;
         }
-        general.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
+        // Behind the middle of the line, but never where the enemy has pushed in: further back until clear of them.
+        Point spot = BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, 0, BattlePlan.GENERAL_BACK);
+        for (int i = 0; i < 8 && nearestEnemy(enemy, spot) < FieldRules.GENERAL_SAFE; i++) {
+            spot = spot.plus(-army.facingX * 10, -army.facingZ * 10);
+        }
+        general.line = spot;
+    }
+
+    /** The middle of the front blocks holding the line (those off striking a flank aside). */
+    private static Point holdingCentre(FieldArmy army) {
+        double x = 0;
+        double z = 0;
+        int n = 0;
+        for (FieldBlock f : army.front) {
+            if (f.strikeAt == null) {
+                x += f.line.x();
+                z += f.line.z();
+                n++;
+            }
+        }
+        return n == 0 ? army.frontCentre() : new Point(x / n, z / n);
+    }
+
+    /** How far the nearest living enemy block stands from a point. */
+    private static double nearestEnemy(FieldArmy enemy, Point at) {
+        double best = Double.MAX_VALUE;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.duty != Duty.FLEEING) {
+                best = Math.min(best, e.pos.distanceTo(at));
+            }
+        }
+        return best;
     }
 
     /** The general's guard: behind the general (or in the wedge), riding out at any enemy that comes near them. */
@@ -1213,6 +1251,77 @@ public final class FieldBattle {
      * {@link FieldRules#HUNTERS_PER_RIDERS} idle blocks within {@link FieldRules#HUNT_REACH} close in on its flanks.
      * They let it go once it rides on ({@link #strike}).
      */
+    /**
+     * Envelopment: once the army is fighting, a front block with no enemy ahead of it (its wing reaches past the end
+     * of the enemy's line) wheels onto the nearest enemy infantry beside it, within {@link FieldRules#ENVELOP_REACH}:
+     * the first block strikes its flank, a second its rear. When that block falls it turns on the next, so an
+     * overlapping wing rolls up the enemy's exposed flank. The blocks waiting in its file follow it round.
+     */
+    private void envelop(FieldArmy army, FieldArmy enemy) {
+        if (seconds < BattlePlan.FORMING_SECONDS || !army.infantryEngaged()) {
+            return;
+        }
+        java.util.Map<FieldBlock, Integer> attackers = new java.util.HashMap<>();
+        for (FieldBlock b : army.blocks) {
+            if (b.strikeAt != null) {
+                attackers.merge(b.strikeAt, 1, Integer::sum);
+            }
+        }
+        boolean[] wheeling = new boolean[3];
+        for (FieldBlock b : army.front) {
+            if (b.alive == 0 || b.duty != Duty.FRONT || b.contactFoe != null || b.strikeAt != null || b.braced
+                    || b.charged || isBait(army, b.file)) {
+                continue;
+            }
+            List<FieldBlock> beside = new ArrayList<>();
+            boolean ahead = false;
+            for (FieldBlock e : enemy.blocks) {
+                if (e.alive == 0 || !e.arm.infantry() || e.duty == Duty.FLEEING || e.pos.distanceTo(b.pos) > FieldRules.ENVELOP_REACH) {
+                    continue;
+                }
+                double dx = e.pos.x() - b.pos.x();
+                double dz = e.pos.z() - b.pos.z();
+                double front = dx * army.facingX + dz * army.facingZ;
+                double side = Math.abs(dx * army.facingZ - dz * army.facingX);
+                if (front >= side) {
+                    ahead = true; // an enemy in front: the line deals with it
+                    break;
+                }
+                beside.add(e);
+            }
+            if (ahead || beside.isEmpty()) {
+                continue;
+            }
+            beside.sort(Comparator.comparingDouble(e -> e.pos.distanceTo(b.pos)));
+            for (FieldBlock target : beside) {
+                int n = attackers.getOrDefault(target, 0);
+                if (n < FieldRules.ENVELOPERS) {
+                    send(b, target, n == 0 ? sideNearer(target, b.pos) : 0);
+                    attackers.merge(target, 1, Integer::sum);
+                    wheeling[b.wing] = true;
+                    break;
+                }
+            }
+        }
+        for (int wing = 0; wing < 3; wing++) {
+            if (wheeling[wing] && !army.enveloping[wing]) {
+                events.add(new Event(army.side, "wheels" + (army.where(wing).isEmpty() ? " the line's end" : army.where(wing).replace(" on the", " the").replace(" in the", " the"))
+                        + " onto the enemy's exposed flank"));
+            }
+            army.enveloping[wing] = wheeling[wing] || army.enveloping[wing] && struckBy(army, wing);
+        }
+    }
+
+    /** Whether any block of a wing is striking something (enveloping, in a pincer, or hunting cavalry). */
+    private static boolean struckBy(FieldArmy army, int wing) {
+        for (FieldBlock b : army.blocks) {
+            if (b.wing == wing && b.strikeAt != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void huntStoppedCavalry(FieldArmy army, FieldArmy enemy) {
         if (seconds < BattlePlan.FORMING_SECONDS) {
             return;

@@ -175,14 +175,18 @@ class DoctrineTest {
             FieldBattle battle = battle(100, CHARGE_BAIT, SPEAR_BAIT, seed);
             FieldBlock general = battle.army(0).commander();
             FieldBlock guard = battle.army(0).guard();
+            boolean wasAlone = false;
             while (!battle.over() && battle.seconds() < BattlePlan.TIME_LIMIT_SECONDS) {
                 battle.second();
                 metThreats += (int) battle.takeEvents().stream()
                         .filter(e -> e.side() == 0 && e.text().startsWith("has their guard ride out")).count();
                 battle.takeCalls();
-                if (general.alive() > 0 && general.approaching() && !(guard.approaching() && guard.alive() > 0)) {
+                // A guard cut down mid-charge leaves the general alone until their next order, a second later.
+                boolean isAlone = general.alive() > 0 && general.approaching() && !(guard.approaching() && guard.alive() > 0);
+                if (isAlone && wasAlone) {
                     alone++;
                 }
+                wasAlone = isAlone;
             }
         }
         assertTrue(metThreats > 0, "the guard rode out at a threat to the general");
@@ -254,6 +258,16 @@ class DoctrineTest {
         }
         assertTrue(riding > 0, "cavalry riding its backline");
         assertTrue(riding > waiting * 3, riding + " seconds riding to " + waiting + " standing");
+    }
+
+    @Test
+    void aWingThatOverlapsTheEnemysLineWheelsOntoItsExposedFlank() {
+        // 2000 stand 20 files wide, 800 only 10: the bigger army's wings reach past the smaller one's line.
+        FieldBattle battle = new FieldBattle(100, 40, new Point(0, 0), 1, 0, 1);
+        List<String> events = fight(battle);
+        assertTrue(events.stream().anyMatch(e -> e.startsWith("0:wheels the left wing onto")), events.toString());
+        assertTrue(events.stream().anyMatch(e -> e.startsWith("0:wheels the right wing onto")), events.toString());
+        assertEquals(0, battle.outcome().winner());
     }
 
     @Test

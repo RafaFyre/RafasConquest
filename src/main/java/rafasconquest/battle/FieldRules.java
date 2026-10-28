@@ -104,6 +104,8 @@ public final class FieldRules {
     public static final double TOO_FAR_FORWARD = 6;
     public static final double WORN_SHARE = 0.5;
     public static final double GENERAL_COVER = 15;
+    /** A general keeps at least this far from any enemy, falling back behind their lines to stay clear. */
+    public static final double GENERAL_SAFE = 25;
     /** Cavalry striking a flank first rides to a point this far out to the side of its target's line. */
     public static final double FLANK_RIDE_OUT = 15;
     /** Bait: runs this far ahead of its own line, and once fighting falls back to this far behind it. */
@@ -124,6 +126,15 @@ public final class FieldRules {
     public static final double STOPPED = 1;
     public static final double HUNT_REACH = 25;
     public static final int HUNTERS_PER_RIDERS = 2;
+    /**
+     * Envelopment: a front block with no enemy ahead wheels onto enemy infantry beside it within this reach, at most
+     * this many onto each enemy block (its flank, then its rear).
+     */
+    public static final double ENVELOP_REACH = 60;
+    public static final int ENVELOPERS = 2;
+    /** A front block with fewer than this share of the soldiers of the block it fights gives ground this far a second. */
+    public static final double GIVE_GROUND_SHARE = 0.7;
+    public static final double GIVE_GROUND = 0.5;
     /**
      * How much more attacks on a block's flank or rear do: nothing more, as in Recruits, where a blow does the same
      * from any side (only a shield, held to the front, makes a difference).

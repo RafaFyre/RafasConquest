@@ -54,6 +54,8 @@ public final class FieldArmy {
     /** Pincer: the lured enemy block each wing is striking, and since when. */
     final FieldBlock[] pincerTarget = new FieldBlock[3];
     final int[] pincerSince = new int[3];
+    /** Whether each wing is wheeling onto the enemy's exposed flank. */
+    final boolean[] enveloping = new boolean[3];
     int reliefs;
     int started;
     int queueTicket;

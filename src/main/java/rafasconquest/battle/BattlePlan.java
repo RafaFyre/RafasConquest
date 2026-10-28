@@ -28,11 +28,14 @@ public final class BattlePlan {
     /**
      * The front line is at most this many blocks wide; more infantry stands in more lines behind it. A big army
      * (over about 2000 soldiers) widens its front instead, to stand no more than {@link #LINES_DEEP} lines deep, up
-     * to {@link #MAX_WIDE_FRONT} blocks.
+     * to {@link #MAX_WIDE_FRONT} blocks. An army of more than {@link #WIDE_OVER} soldiers stands
+     * {@link #WIDE_LINES_DEEP} lines deep, so each wing has a broad front of its own.
      */
     public static final int MAX_FRONT = 10;
     public static final int LINES_DEEP = 6;
     public static final int MAX_WIDE_FRONT = 40;
+    public static final int WIDE_OVER = 1000;
+    public static final int WIDE_LINES_DEEP = 3;
     /** From one line to the next behind it. */
     public static final double LINE_GAP = 16;
     /** Archers stand in rows this far behind the front line, and this far apart. */
@@ -151,6 +154,9 @@ public final class BattlePlan {
         int inLines = infantry;
         int width = inLines <= 4 ? inLines : Math.min(MAX_WIDE_FRONT,
                 Math.max(Math.min(MAX_FRONT, (inLines + 1) / 2), (inLines + LINES_DEEP - 1) / LINES_DEEP));
+        if (blocks * SOLDIERS_PER_FORMATION > WIDE_OVER) {
+            width = Math.min(MAX_WIDE_FRONT, (inLines + WIDE_LINES_DEEP - 1) / WIDE_LINES_DEEP);
+        }
         if (greatShield) {
             width = Math.max(1, Math.min(width, inLines / SHIELD_STACK));
         }
