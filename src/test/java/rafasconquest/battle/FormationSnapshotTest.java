@@ -107,6 +107,15 @@ class FormationSnapshotTest {
     }
 
     @Test
+    void aBlockThatIsOnlyNumbersStandsInItsRanks() {
+        FormationSnapshot s = twoRanksFacingEast(false);
+        FormationSnapshot numbers = new FormationSnapshot(s.id(), s.kind(), s.rgb(), s.mark(), s.alive(), s.x(), s.y(), s.z(),
+                s.facingX(), s.facingZ(), s.halfWidth(), s.halfDepth(), false, true, new int[0], -1);
+        assertEquals(numbers.layout(), numbers.place(id -> null, false));
+        assertEquals(numbers.layout(), numbers.place(id -> null, true), "no ids to be missing, so nobody has fallen");
+    }
+
+    @Test
     void closeByAMissingSoldierHasFallen() {
         List<Sprite> sprites = twoRanksFacingEast(false).place(id -> id % 2 == 0 ? new double[]{0, 0, 0} : null, true);
         assertEquals(10, sprites.size());

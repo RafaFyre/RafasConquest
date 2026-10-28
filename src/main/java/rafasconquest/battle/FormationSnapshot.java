@@ -135,8 +135,16 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
      */
     public List<Sprite> place(Positions positions, boolean missingHaveFallen) {
         List<Sprite> ranks = null;
-        List<Sprite> sprites = new ArrayList<>(soldierIds.length);
-        for (int i = 0; i < soldierIds.length; i++) {
+        List<Sprite> sprites = new ArrayList<>(alive);
+        // A block that is only numbers has no soldiers' ids at all: every soldier takes its place in the ranks.
+        for (int i = 0; i < alive; i++) {
+            if (i >= soldierIds.length) {
+                if (ranks == null) {
+                    ranks = layout();
+                }
+                sprites.add(ranks.get(i));
+                continue;
+            }
             double[] feet = positions.of(soldierIds[i]);
             if (feet != null) {
                 sprites.add(new Sprite(feet[0], feet[1], feet[2], soldierIds[i] == leaderId));
