@@ -144,7 +144,8 @@ first. The old relation is restored when the battle ends.
   Above the hotbar, in the faction's colour, they're told what their block is doing: **Charge!**, **Pullback!**,
   **Rotate!**, **Retreat!**. In the middle of the screen come the Marshals' and general's orders: **ALL TROOPS
   CHARGE!** when the army advances, **Hold the left wing!** when their wing holds for a bait, **Target ...!** when
-  their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general.
+  their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general. Officers'
+  orders come at most one every 3 seconds; a newer one waiting replaces the older.
 - **Shields:** a soldier with a shield raises it within 50 blocks of enemy archers, or with an enemy within 12 blocks
   that it isn't striking itself, so long as it is near its place (a raised shield slows it to half pace or less). A
   charged or passive soldier lowers it. Charged soldiers go after real enemies within 80 blocks (was 40).

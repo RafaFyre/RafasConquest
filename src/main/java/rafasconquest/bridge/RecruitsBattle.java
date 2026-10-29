@@ -133,6 +133,8 @@ public final class RecruitsBattle {
     private static final int HORN_SECONDS = 5;
     /** How long an enlisted player's latest order stays above their hotbar. */
     private static final int ORDER_SHOWN_SECONDS = 6;
+    /** Officers (Marshals and the general) give an enlisted player at most one order this often; a newer one replaces one waiting. */
+    private static final int OFFICER_ORDER_SECONDS = 3;
     /** A front-row soldier goes after enemies this close to its place, and returns to it when there are none. */
     private static final double FRONT_ROW_REACH = 12;
     private static final float HORN_VOLUME = 16;
@@ -230,6 +232,10 @@ public final class RecruitsBattle {
         final Set<Integer> given = new HashSet<>();
         String order = "";
         int orderSince;
+        /** The officers' latest order not yet shown, and when the last was shown. */
+        @Nullable
+        String pendingTitle;
+        int titleAt = -OFFICER_ORDER_SECONDS;
         @Nullable
         Duty lastDuty;
         @Nullable
@@ -1495,32 +1501,44 @@ public final class RecruitsBattle {
         FieldArmy army = field.army(e.side);
         if (!e.toldHold && army.holding(b.wing())) {
             e.toldHold = true;
-            title(player, e.side, "Hold the " + wingTitle(b.wing(), army.winged()) + "!");
+            title(e, "Hold the " + wingTitle(b.wing(), army.winged()) + "!");
         }
         FieldBlock strike = b.strikeAt();
         if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
-            title(player, e.side, "Target " + sides[1 - e.side].faction.name() + "'s " + wingTitle(strike.wing(), field.army(1 - e.side).winged())
+            title(e, "Target " + sides[1 - e.side].faction.name() + "'s " + wingTitle(strike.wing(), field.army(1 - e.side).winged())
                     + " block!");
         }
         e.lastStrike = strike;
         FieldBlock prey = b.prey();
         if (!e.toldKill && prey != null && prey.duty() == Duty.GENERAL && (b.charged() || b.approaching())) {
             e.toldKill = true;
-            title(player, e.side, "Kill General " + sides[1 - e.side].general.name() + "!");
+            title(e, "Kill General " + sides[1 - e.side].general.name() + "!");
         }
+        showTitle(e, player);
     }
 
     /** A Marshal's or general's order, in big letters in the middle of the screen of every player enlisted with a side. */
     private void announce(int side, String text) {
         for (Enlisted e : enlisted.values()) {
-            ServerPlayer player = e.side == side ? level.getServer().getPlayerList().getPlayer(e.player) : null;
-            if (player != null) {
-                title(player, side, text);
+            if (e.side == side) {
+                title(e, text);
             }
         }
     }
 
-    private void title(ServerPlayer player, int side, String text) {
+    /** Queues an officer's order for an enlisted player; {@link #showTitle} shows it when the last is old enough. */
+    private static void title(Enlisted e, String text) {
+        e.pendingTitle = text;
+    }
+
+    private void showTitle(Enlisted e, ServerPlayer player) {
+        if (e.pendingTitle == null || field.seconds() - e.titleAt < OFFICER_ORDER_SECONDS) {
+            return;
+        }
+        String text = e.pendingTitle;
+        int side = e.side;
+        e.pendingTitle = null;
+        e.titleAt = field.seconds();
         player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 50, 15));
         player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(text).withStyle(style -> style.withColor(color(side)))));
     }
