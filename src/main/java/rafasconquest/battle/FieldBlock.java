@@ -89,6 +89,8 @@ public final class FieldBlock {
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
+    /** How many of its soldiers are real (see {@link #setReal}). */
+    int real;
     /** Damage from blocks that are only numbers, waiting to be dealt to its real soldiers. */
     double liveDamage;
     /** How many soldiers wide its ranks are. */
@@ -172,6 +174,28 @@ public final class FieldBlock {
     public void setLive(boolean live) {
         this.live = live;
         liveDamage = 0;
+    }
+
+    /**
+     * How many of its soldiers are real now: a block is live while any are. The rest are still numbers, and fight as
+     * numbers even against a live enemy.
+     */
+    public void setReal(int real) {
+        this.real = real;
+        if ((real > 0) != live) {
+            setLive(real > 0);
+        }
+    }
+
+    public int real() {
+        return real;
+    }
+
+    /** Soldier i, who is only numbers in a live block, takes a hit; who has fallen is counted at the next report. */
+    public void hurt(int i, float amount) {
+        if (health[i] > 0) {
+            health[i] = Math.max(0, health[i] - amount);
+        }
     }
 
     /** Takes the damage waiting for its real soldiers, which the caller now deals. */

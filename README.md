@@ -82,11 +82,14 @@ first. The old relation is restored when the battle ends.
     back wherever the enemy has pushed in, so the general in one is never caught there. No two blocks overlap when an
     army deploys.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
-  (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
-  where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
-  soldier's health. At most 300 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
-  blocks become real each second. Players see real soldiers only within about 67 blocks, so they never see a block
-  switch.
+  (`battle/FieldBattle`, below), and soldiers within 96 blocks of a player become real Recruits soldiers one by
+  one, each at its place in its block's ranks with the health it has left; beyond 128 each goes back to numbers,
+  keeping its health. At most 300 soldiers are real at once (a rider counts as two), the nearest first, and at most
+  160 become real each second. A real soldier stays real until 6 blocks further out, so the edge doesn't flicker.
+  So a block can be part real, part figures: its real soldiers keep their own places in its ranks among the figures,
+  its position is the middle of all its soldiers (from where the real ones stand and their places in the ranks), and
+  where it meets a real enemy, Recruits fights between the real soldiers while its figures fight on as numbers. The
+  numbers' blows on it fall on real soldiers and figures alike.
   - While a block is real, its soldiers walk and fight as Recruits soldiers; each second they report where they stand
     and their health, the numbers give the block its orders, and those are passed on (stand in line here, charge,
     withdraw without fighting).

@@ -1918,10 +1918,16 @@ public final class FieldBattle {
                         block.fightSeconds++;
                     }
                     block.contactFoe = foe;
-                    if (block.live && foe.live) {
-                        continue; // real soldiers on both sides: Recruits fights it out
-                    }
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
+                    if (block.live && foe.live) {
+                        // Real soldiers on both sides: Recruits fights it out between them. Those of the block still
+                        // only numbers fight on as numbers.
+                        int figures = block.alive - block.real;
+                        if (figures <= 0) {
+                            continue;
+                        }
+                        fighters = block.champion ? fighters : figures;
+                    }
                     double damage = fighters * rates.meleeDps(block.arm)
                             * rates.meleeFactor(sideOf(foe, block), foe.arm);
                     if (block.arm == Arm.CAVALRY && block.charged) {

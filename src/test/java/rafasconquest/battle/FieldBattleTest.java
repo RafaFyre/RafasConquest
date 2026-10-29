@@ -193,7 +193,7 @@ class FieldBattleTest {
         FieldBlock a = battle.army(0).front[0];
         FieldBlock b = battle.army(1).front[0];
         for (int side = 0; side < 2; side++) {
-            battle.army(side).blocks().forEach(block -> block.setLive(true));
+            battle.army(side).blocks().forEach(block -> block.setReal(block.alive()));
         }
         Point meet = new Point(0, 0);
         for (int i = 0; i < 30; i++) {
@@ -203,6 +203,27 @@ class FieldBattleTest {
             assertEquals(0, a.drainLiveDamage());
             assertEquals(0, b.drainLiveDamage());
         }
+    }
+
+    @Test
+    void soldiersStillNumbersInAPartRealBlockFightOn() {
+        FieldBattle battle = battle(1, 1, 6);
+        FieldBlock a = battle.army(0).front[0];
+        FieldBlock b = battle.army(1).front[0];
+        for (int side = 0; side < 2; side++) {
+            battle.army(side).blocks().forEach(block -> block.setReal(block.alive()));
+        }
+        a.setReal(a.alive() / 2); // half of it still figures
+        Point meet = new Point(0, 0);
+        double dealt = 0;
+        for (int i = 0; i < 10; i++) {
+            battle.sync(a, meet, a.health());
+            battle.sync(b, meet.plus(1, 0), b.health());
+            battle.second();
+            assertEquals(0, a.drainLiveDamage(), "b is wholly real: Recruits fights its blows");
+            dealt += b.drainLiveDamage();
+        }
+        assertTrue(dealt > 0, "a's figures strike b as numbers");
     }
 
     @Test

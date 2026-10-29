@@ -122,8 +122,14 @@ public final class RecruitsBattle {
     /** The cap in force: {@code /pve debug battle livecap}, kept in {@link #LIVE_CAP_FILE} across restarts. */
     private static int liveCap = loadLiveCap();
     private static final String LIVE_CAP_FILE = "livecap.txt";
-    /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */
-    private static final int SPAWNS_PER_SECOND = 8;
+    /** At most this many soldiers become real each second, the nearest first, so a crowd doesn't appear in one tick. */
+    private static final int SPAWNS_PER_SECOND = 160;
+    /** A real soldier stays real until this much further out than one that is numbers becomes real, against flicker. */
+    private static final double KEEP_REAL_BIAS = 6;
+    /** How far a block's soldiers may stand from its position, for skipping blocks far from everyone. */
+    private static final double BLOCK_REACH = 40;
+    /** Ranks stand this many soldiers' spacings apart, front to back. */
+    private static final double SLOT_DEPTH = 1.75;
     /**
      * Battles up to this many blocks (both sides) are also fought through as numbers at the start, for comparing; a
      * bigger one would hold the server up for seconds.
@@ -161,7 +167,8 @@ public final class RecruitsBattle {
     /** The blocks that are real soldiers now, and their soldiers. */
     private final Map<FieldBlock, Live> live = new LinkedHashMap<>();
     /** Blocks that have been real at some time (their soldiers' starting health is measured once). */
-    private final Set<FieldBlock> everLive = new HashSet<>();
+    /** Soldiers ever real (block id and index), counted once for calibration. */
+    private final Set<Long> everReal = new HashSet<>();
     /** Spots treated like a player standing there, for testing the live area without one. */
     private final List<Point> watchPoints = new ArrayList<>();
     private final DiplomacyStatus[] oldRelations = new DiplomacyStatus[2];
@@ -509,55 +516,107 @@ public final class RecruitsBattle {
 
     // ---- real soldiers: becoming and leaving ----
 
-    /** A block becomes real soldiers: its survivors stand in its ranks, each with the health they have left. */
-    private void materialise(FieldBlock block) {
-        FieldArmy army = field.army(block.side());
-        Side side = sides[block.side()];
-        loadGround(block.pos());
-        Live l = new Live(block);
-        float[] health = block.health();
-        boolean first = everLive.add(block);
-        Point enemyWay = field.enemyDirection(block);
-        float yaw = yawOf(enemyWay);
-        EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get() : type(block.arm());
+    /**
+     * Soldier i's place in its block's ranks, from the front rank's centre: how far to the right and back. The
+     * captain stands in the middle of the front rank, as the figures draw it.
+     */
+    private static double slotRight(FieldBlock block, int i) {
+        int files = Math.max(1, block.files());
+        return block.started() == 1 ? 0 : (i % files - (files - 1) / 2.0) * BattlePlan.SPACING;
+    }
+
+    private static double slotBack(FieldBlock block, int i) {
+        return (i / Math.max(1, block.files())) * BattlePlan.SPACING * SLOT_DEPTH;
+    }
+
+    /** Where soldier i stands in the ranks of a block whose front rank's centre is at {@code front}. */
+    private static Point slot(FieldBlock block, Point front, int i) {
+        return BattlePlan.place(front, block.facingX(), block.facingZ(), slotRight(block, i), slotBack(block, i));
+    }
+
+    /**
+     * Where a block's front rank stands, for placing the soldiers who are only numbers. A live block's position is
+     * the middle of all its soldiers (see {@link #readBack}), so its front is that much ahead of it.
+     */
+    private static Point front(FieldBlock block, float[] health) {
+        if (!block.live()) {
+            return block.pos();
+        }
+        double right = 0;
+        double back = 0;
+        int n = 0;
         for (int i = 0; i < health.length; i++) {
-            if (health[i] <= 0) {
-                continue;
+            if (health[i] > 0) {
+                right += slotRight(block, i);
+                back += slotBack(block, i);
+                n++;
             }
-            Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
-                    : block.duty() == Duty.GUARD ? Role.GUARD : i == block.captain() ? Role.LEADER : Role.SOLDIER;
-            int files = block.files();
-            int rank = i / files;
-            double right = health.length == 1 ? 0 : (i % files - (files - 1) / 2.0) * BattlePlan.SPACING;
-            Point p = BattlePlan.place(block.pos(), army.facingX(), army.facingZ(), right, rank * BattlePlan.SPACING * 1.75);
-            AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
-            if (soldier == null) {
-                continue;
-            }
-            if (block.champion()) {
-                makeChampion(soldier);
-            }
-            if (first && (role == Role.SOLDIER || role == Role.LEADER)) {
-                calibration.addSoldier(soldier.getHealth());
-            }
-            soldier.setHealth(Math.min(health[i], soldier.getMaxHealth()));
-            l.soldiers[i] = soldier;
-            byEntity.put(soldier.getId(), l);
         }
-        block.setLive(true);
-        live.put(block, l);
+        return n == 0 ? block.pos() : BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), -right / n, -back / n);
+    }
+
+    /** A block's first soldier becomes real: the block is real from now on, in part or in whole. */
+    private Live liveOf(FieldBlock block) {
+        Live l = live.get(block);
+        if (l == null) {
+            loadGround(block.pos());
+            l = new Live(block);
+            live.put(block, l);
+        }
+        return l;
+    }
+
+    /** Soldier i of a block becomes real, at {@code p}, with the health they have left. */
+    private void makeReal(Live l, int i, Point p, float health) {
+        FieldBlock block = l.block;
+        Side side = sides[block.side()];
+        float yaw = yawOf(field.enemyDirection(block));
+        EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get() : type(block.arm());
+        Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
+                : block.duty() == Duty.GUARD ? Role.GUARD : i == block.captain() ? Role.LEADER : Role.SOLDIER;
+        AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
+        if (soldier == null) {
+            return;
+        }
+        if (block.champion()) {
+            makeChampion(soldier);
+        }
+        if (everReal.add(((long) block.id() << 16) | i) && (role == Role.SOLDIER || role == Role.LEADER)) {
+            calibration.addSoldier(soldier.getHealth());
+        }
+        soldier.setHealth(Math.min(health, soldier.getMaxHealth()));
         if (block.duty() == Duty.BEARER) {
-            for (AbstractRecruitEntity s : l.living()) {
-                s.setAggroState(3); // passive: carries the flag, doesn't fight
-            }
+            soldier.setAggroState(3); // passive: carries the flag, doesn't fight
         }
-        passOnOrders(l);
+        l.soldiers[i] = soldier;
+        byEntity.put(soldier.getId(), l);
+    }
+
+    /** Soldier i goes back to numbers (its health already read back), leaving with its horse. */
+    private void makeNumbers(Live l, int i) {
+        AbstractRecruitEntity e = l.soldiers[i];
+        l.soldiers[i] = null;
+        if (e == null) {
+            return;
+        }
+        // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
+        UUID mountId = e.getMountUUID();
+        Entity mount = mountId == null ? null : level.getEntity(mountId);
+        if (mount != null) {
+            mount.discard();
+        }
+        backBanners.remove(e.getId());
+        byEntity.remove(e.getId());
+        commanded.remove(e.getId());
+        if (!e.isRemoved()) {
+            e.discard();
+        }
     }
 
     /** A block goes back to numbers, each soldier's health kept (already read this second), and its soldiers leave. */
     private void dematerialise(Live l) {
         discard(l);
-        l.block.setLive(false);
+        l.block.setReal(0);
         live.remove(l.block);
         lastHealth.remove(l.block);
         lastCentre.remove(l.block);
@@ -566,33 +625,28 @@ public final class RecruitsBattle {
     /** Removes a block's soldiers and their horses; returns how many soldiers were still standing. */
     private int discard(Live l) {
         int removed = 0;
-        for (AbstractRecruitEntity e : l.soldiers) {
-            if (e == null) {
-                continue;
-            }
-            // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
-            UUID mountId = e.getMountUUID();
-            Entity mount = mountId == null ? null : level.getEntity(mountId);
-            if (mount != null) {
-                mount.discard();
-            }
-            backBanners.remove(e.getId());
-            byEntity.remove(e.getId());
-            if (!e.isRemoved()) {
-                e.discard();
+        for (int i = 0; i < l.soldiers.length; i++) {
+            AbstractRecruitEntity e = l.soldiers[i];
+            if (e != null && !e.isRemoved()) {
                 removed++;
             }
+            makeNumbers(l, i);
         }
         return removed;
     }
 
-    /** Where each block should be: real near players (the nearest first, within the budget), else numbers. */
+    /**
+     * Which soldiers should be real: each one near a player (the nearest first, within the budget) is real, the rest
+     * are numbers, soldier by soldier, so a block can be part real and part figures as it comes into view. A real
+     * soldier is measured from where it stands, one that is numbers from its place in its block's ranks; a real one
+     * is kept a little longer than one that is numbers is made real ({@link #KEEP_REAL_BIAS}), so they don't flicker.
+     */
     private void switchLive() {
         List<Point> watchers = new ArrayList<>(watchPoints);
         for (ServerPlayer player : level.players()) {
             watchers.add(new Point(player.getX(), player.getZ()));
         }
-        record Candidate(FieldBlock block, double distance) {
+        record Candidate(FieldBlock block, int index, Point at, double distance, boolean real, int cost) {
         }
         List<Candidate> wanted = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
@@ -600,37 +654,95 @@ public final class RecruitsBattle {
                 if (block.alive() == 0) {
                     continue;
                 }
-                double distance = Double.MAX_VALUE;
+                double near = Double.MAX_VALUE;
                 for (Point w : watchers) {
-                    distance = Math.min(distance, w.distanceTo(block.pos()));
+                    near = Math.min(near, w.distanceTo(block.pos()));
                 }
-                if (distance <= LIVE_WITHIN || block.live() && distance <= NUMBERS_BEYOND) {
-                    wanted.add(new Candidate(block, distance));
+                if (near > NUMBERS_BEYOND + BLOCK_REACH) {
+                    continue;
+                }
+                Live l = live.get(block);
+                float[] health = block.health();
+                Point front = front(block, health);
+                int cost = block.arm() == Arm.CAVALRY && block.started() > 1 ? 2 : 1;
+                for (int i = 0; i < health.length; i++) {
+                    AbstractRecruitEntity s = l == null ? null : l.soldiers[i];
+                    boolean real = s != null && s.isAlive() && !s.isRemoved();
+                    if (!real && health[i] <= 0) {
+                        continue;
+                    }
+                    Point at = real ? new Point(s.getX(), s.getZ()) : slot(block, front, i);
+                    double distance = Double.MAX_VALUE;
+                    for (Point w : watchers) {
+                        distance = Math.min(distance, w.distanceTo(at));
+                    }
+                    if (distance <= LIVE_WITHIN || real && distance <= NUMBERS_BEYOND) {
+                        wanted.add(new Candidate(block, i, at, real ? distance - KEEP_REAL_BIAS : distance, real, cost));
+                    }
                 }
             }
         }
         wanted.sort(Comparator.comparingDouble(Candidate::distance));
-        Set<FieldBlock> keep = new HashSet<>();
+        Map<FieldBlock, Set<Integer>> keep = new HashMap<>();
         int soldiers = 0;
         for (Candidate c : wanted) {
-            int cost = c.block.alive() * (c.block.arm() == Arm.CAVALRY && c.block.started() > 1 ? 2 : 1);
-            if (soldiers + cost > liveCap) {
+            if (soldiers + c.cost() > liveCap) {
                 break;
             }
-            soldiers += cost;
-            keep.add(c.block);
+            soldiers += c.cost();
+            keep.computeIfAbsent(c.block(), b -> new HashSet<>()).add(c.index());
         }
+        Set<Live> changed = new HashSet<>();
         for (Live l : new ArrayList<>(live.values())) {
-            if (!keep.contains(l.block) || l.block.alive() == 0) {
-                dematerialise(l);
+            Set<Integer> kept = keep.getOrDefault(l.block, Set.of());
+            List<Integer> leaving = new ArrayList<>();
+            for (int i = 0; i < l.soldiers.length; i++) {
+                if (l.soldiers[i] != null && !kept.contains(i)) {
+                    leaving.add(i);
+                }
             }
+            if (leaving.isEmpty()) {
+                continue;
+            }
+            readBack(l); // their health as it is now, before they go
+            if (live.get(l.block) != l) {
+                continue; // lost to unloading meanwhile, and gone back to numbers
+            }
+            for (int i : leaving) {
+                makeNumbers(l, i);
+            }
+            changed.add(l);
         }
         int spawned = 0;
         for (Candidate c : wanted) {
-            if (keep.contains(c.block) && !c.block.live() && spawned < SPAWNS_PER_SECOND) {
-                materialise(c.block);
-                spawned++;
+            if (spawned >= SPAWNS_PER_SECOND) {
+                break;
             }
+            if (c.real() || !keep.getOrDefault(c.block(), Set.of()).contains(c.index())) {
+                continue;
+            }
+            Live l = liveOf(c.block());
+            if (l.soldiers[c.index()] != null) {
+                continue;
+            }
+            makeReal(l, c.index(), c.at(), c.block().health()[c.index()]);
+            changed.add(l);
+            spawned++;
+        }
+        for (Live l : changed) {
+            int real = l.living().size();
+            if (real == 0) {
+                dematerialise(l);
+                continue;
+            }
+            l.block.setReal(real);
+            // Their orders again, for the soldiers who came and the places of those who went.
+            l.appliedLine = null;
+            l.appliedDuty = null;
+            l.appliedCharge = false;
+            lastHealth.remove(l.block);
+            lastCentre.remove(l.block);
+            passOnOrders(l);
         }
     }
 
@@ -801,7 +913,16 @@ public final class RecruitsBattle {
             l.appliedLine = block.line();
             l.appliedBraced = block.braced();
             FieldArmy army = field.army(block.side());
-            if (living.size() == 1) {
+            if (block.real() < block.alive()) {
+                // Part real, part figures: each real soldier takes its own place in the ranks, among the figures.
+                for (int i = 0; i < l.soldiers.length; i++) {
+                    AbstractRecruitEntity s = l.soldiers[i];
+                    if (s != null && s.isAlive() && !commanded.contains(s.getId())) {
+                        hold(s, slot(block, block.line(), i));
+                        s.isInFormation = true;
+                    }
+                }
+            } else if (living.size() == 1) {
                 hold(living.get(0), block.line());
             } else if (block.braced()) {
                 // A wall: closed up, a few files wide and deep, facing the cavalry.
@@ -1044,19 +1165,39 @@ public final class RecruitsBattle {
         return candidates.stream().min(Comparator.comparingDouble(c -> c.distanceToSqr(soldier)));
     }
 
-    /** Deals the numbers' damage to a real block: whole hits to random living soldiers, past their armour. */
+    /**
+     * Deals the numbers' damage to a real block: whole hits to random living soldiers, real ones past their armour,
+     * those still numbers in the numbers.
+     */
     private void dealDamage(Live l) {
         l.damageCarry += l.block.drainLiveDamage();
-        List<AbstractRecruitEntity> living = l.living();
-        while (l.damageCarry >= FieldRules.HIT && !living.isEmpty()) {
-            l.damageCarry -= FieldRules.HIT;
-            AbstractRecruitEntity s = living.get(level.random.nextInt(living.size()));
-            s.hurt(level.damageSources().magic(), FieldRules.HIT);
-            if (!s.isAlive()) {
-                living.remove(s);
+        float[] health = l.block.health();
+        List<Integer> standing = new ArrayList<>();
+        for (int i = 0; i < health.length; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            if (s != null ? s.isAlive() : health[i] > 0) {
+                standing.add(i);
             }
         }
-        if (living.isEmpty()) {
+        while (l.damageCarry >= FieldRules.HIT && !standing.isEmpty()) {
+            l.damageCarry -= FieldRules.HIT;
+            int pick = level.random.nextInt(standing.size());
+            int i = standing.get(pick);
+            AbstractRecruitEntity s = l.soldiers[i];
+            boolean fell;
+            if (s != null) {
+                s.hurt(level.damageSources().magic(), FieldRules.HIT);
+                fell = !s.isAlive();
+            } else {
+                l.block.hurt(i, FieldRules.HIT);
+                health[i] -= FieldRules.HIT;
+                fell = health[i] <= 0;
+            }
+            if (fell) {
+                standing.remove(pick);
+            }
+        }
+        if (standing.isEmpty()) {
             l.damageCarry = 0;
         }
     }
@@ -1595,8 +1736,11 @@ public final class RecruitsBattle {
 
     /** A real block's soldiers report to the numbers: where the block stands and each soldier's health. */
     private void readBack(Live l) {
+        FieldBlock block = l.block;
         float[] health = new float[l.soldiers.length];
-        float[] known = l.block.health();
+        float[] known = block.health();
+        // Where the front stands, as each real soldier has it from its place in the ranks; the block's position is
+        // the middle of all its soldiers, real or not (just their middle, when all are real).
         double x = 0;
         double z = 0;
         int n = 0;
@@ -1612,12 +1756,29 @@ public final class RecruitsBattle {
             if (s.isAlive()) {
                 health[i] = s.getHealth();
                 Entity feet = s.getVehicle() != null ? s.getVehicle() : s;
-                x += feet.getX();
-                z += feet.getZ();
+                Point front = BattlePlan.place(new Point(feet.getX(), feet.getZ()), block.facingX(), block.facingZ(),
+                        -slotRight(block, i), -slotBack(block, i));
+                x += front.x();
+                z += front.z();
                 n++;
             }
         }
-        field.sync(l.block, n == 0 ? l.block.pos() : new Point(x / n, z / n), health);
+        Point pos = block.pos();
+        if (n > 0) {
+            double right = 0;
+            double back = 0;
+            int all = 0;
+            for (int i = 0; i < health.length; i++) {
+                if (health[i] > 0) {
+                    right += slotRight(block, i);
+                    back += slotBack(block, i);
+                    all++;
+                }
+            }
+            pos = BattlePlan.place(new Point(x / n, z / n), block.facingX(), block.facingZ(), right / Math.max(1, all), back / Math.max(1, all));
+        }
+        field.sync(block, pos, health);
+        block.setReal(n);
         if (lost) {
             dematerialise(l);
         }
@@ -2049,9 +2210,35 @@ public final class RecruitsBattle {
         return all;
     }
 
+    /**
+     * A real block, from where its real soldiers stand (with their entity ids) and, for a block only part real, where
+     * the rest stand in its ranks (with no id, so the client draws them as figures there), in the order of the ranks.
+     */
     private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, FieldArmy army, Live l,
                                                   List<AbstractRecruitEntity> soldiers) {
-        int n = soldiers.size();
+        float[] health = block.health();
+        Point front = front(block, health);
+        double groundY = 0;
+        for (AbstractRecruitEntity s : soldiers) {
+            groundY += (s.getVehicle() != null ? s.getVehicle() : s).getY();
+        }
+        groundY /= soldiers.size();
+        List<double[]> at = new ArrayList<>();
+        List<Integer> idList = new ArrayList<>();
+        for (int i = 0; i < health.length; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            if (s != null && s.isAlive()) {
+                // A rider stands on the ground where their horse does, not up in the saddle.
+                Entity feet = s.getVehicle() != null ? s.getVehicle() : s;
+                at.add(new double[]{feet.getX(), feet.getY(), feet.getZ()});
+                idList.add(s.getId());
+            } else if (s == null && health[i] > 0) {
+                Point p = slot(block, front, i);
+                at.add(new double[]{p.x(), groundY, p.z()});
+                idList.add(-1);
+            }
+        }
+        int n = at.size();
         double[] xs = new double[n];
         double[] ys = new double[n];
         double[] zs = new double[n];
@@ -2059,13 +2246,10 @@ public final class RecruitsBattle {
         int leaderId = -1;
         int captain = block.captain();
         for (int i = 0; i < n; i++) {
-            AbstractRecruitEntity s = soldiers.get(i);
-            // A rider stands on the ground where their horse does, not up in the saddle.
-            Entity feet = s.getVehicle() != null ? s.getVehicle() : s;
-            xs[i] = feet.getX();
-            ys[i] = feet.getY();
-            zs[i] = feet.getZ();
-            ids[i] = s.getId();
+            xs[i] = at.get(i)[0];
+            ys[i] = at.get(i)[1];
+            zs[i] = at.get(i)[2];
+            ids[i] = idList.get(i);
         }
         if (captain >= 0 && block.captainAlive()) {
             AbstractRecruitEntity c = l.soldiers[captain];
