@@ -230,7 +230,8 @@ first. The old relation is restored when the battle ends.
   king, merchant, warrior, politician, tactician, advisor or general; only generals act yet. Each faction follows
   doctrines (saved with it; all three for now), and each battle's general is made for it with a name and two of
   their faction's doctrines, chosen at random. They fight with every formation and strategy of both. The start of a
-  battle names each general and their plan, and the chat says when a strategy acts.
+  battle names each general and their plan, and the chat says when a strategy acts. The order itself is shown in the
+  general's nation's colour.
   - **Spear and Shield**
     - *Great Spear* (formation): once the front line is established, all the cavalry forms one wedge of blocks at
       least 45 blocks behind the front, behind the reserves. It charges as one, in formation, and breaks up on

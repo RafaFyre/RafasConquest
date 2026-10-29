@@ -1277,8 +1277,10 @@ public final class RecruitsBattle {
         }
         for (FieldBattle.Event event : field.takeEvents()) {
             Side side = sides[event.side()];
-            broadcast(String.format(Locale.ROOT, "[battle %ds] %s's General %s %s", field.seconds(), side.faction.name(),
-                    side.general.name(), event.text()));
+            // The order itself in the nation's colour, so it stands out from the reports.
+            String who = String.format(Locale.ROOT, "[battle %ds] %s's General %s ", field.seconds(), side.faction.name(), side.general.name());
+            TextColor color = color(event.side());
+            broadcast(who + event.text(), Component.literal(who).append(Component.literal(event.text()).withStyle(style -> style.withColor(color))));
         }
         for (Live l : new ArrayList<>(live.values())) {
             dealDamage(l);
@@ -2297,10 +2299,15 @@ public final class RecruitsBattle {
 
     /** To every player; the server log gets it too. */
     private void broadcast(String line) {
+        broadcast(line, Component.literal(line));
+    }
+
+    /** To every player as {@code shown}; the server log and the battle's lines get it as plain text. */
+    private void broadcast(String line, Component shown) {
         lines.add(line);
         if (lines.size() > 60) {
             lines.remove(0);
         }
-        level.getServer().getPlayerList().broadcastSystemMessage(Component.literal(line), false);
+        level.getServer().getPlayerList().broadcastSystemMessage(shown, false);
     }
 }
