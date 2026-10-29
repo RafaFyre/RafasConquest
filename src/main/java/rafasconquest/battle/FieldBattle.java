@@ -273,6 +273,7 @@ public final class FieldBattle {
         }
         FieldArmy army = armies[block.side];
         block.line = at;
+        block.deployed = at;
         if (!block.live) {
             block.pos = at;
         }
@@ -486,6 +487,9 @@ public final class FieldBattle {
             if (block.strikeAt != null) {
                 strike(army, block);
                 continue;
+            }
+            if (block.task == FieldBlock.Task.AMBUSH && !block.sprung) {
+                continue; // lying hidden where it was put, whatever its file does
             }
             if (block.approaching) {
                 if (!block.inWedge) {
@@ -1595,13 +1599,21 @@ public final class FieldBattle {
                     || b.charged || b.braced || b.duty != Duty.LINE && b.duty != Duty.FRONT) {
                 continue;
             }
+            if (b.task == FieldBlock.Task.AMBUSH && b.sprung && b.strikeAt == null) {
+                b.sprung = false; // its quarry gone: it waits for the next
+            }
             FieldBlock target = switch (b.task) {
                 case SUPPORT -> losingFoe(army, b);
                 case FLANK -> nearestFighting(enemy, b, FieldRules.TASK_REACH);
                 case KILL -> officers(enemy, b);
+                case AMBUSH -> nearestFighting(enemy, b, FieldRules.AMBUSH_SPRING);
                 default -> null;
             };
             if (target != null) {
+                if (b.task == FieldBlock.Task.AMBUSH && !b.sprung) {
+                    b.sprung = true;
+                    events.add(new Event(army.side, "springs an ambush from the woods" + army.where(b.wing)));
+                }
                 send(b, target, b.task == FieldBlock.Task.FLANK && struck(army, target) ? 0 : sideNearer(target, b.pos));
             }
         }

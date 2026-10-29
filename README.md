@@ -151,6 +151,23 @@ first. The old relation is restored when the battle ends.
   middle (the Battle Command Table, for now); behind it, rows of small ridge tents (one per 100 soldiers, 6 to 36)
   with campfires. Ten heavy infantry (iron armour, axes, the nation's shields) stand guard at the entrance, five
   either side of the way in. Everything a camp replaces is recorded and put back when it is struck.
+- **Deploying to the land** (`battle/GroundPlan`, read by `bridge/Terrain` on a grid of 4 to 8 blocks without
+  loading or generating anything: the world where a chunk is loaded, else the world generator; a wood is a canopy of
+  leaves, or a forest, taiga or jungle biome): before the battle and every morning, each block moves from its place
+  in the template, up to 40 blocks, to the best ground near it. Armies keep out of water entirely (nothing of a
+  block's front or its middle may stand in it), love high ground (archers most of all, then infantry; cavalry little),
+  keep together (each block near its place, 8 blocks clear of the others), and go no more than 8 blocks further toward
+  the enemy. The front chooses first, then the archers (searching as far as the front, for the high ground), then
+  the rest, each following its file's front and choosing within 20 blocks of where that puts it.
+- **Ambushes:** where a wood lies within 60 blocks of a wing's outer end, up to three of that wing's reserve blocks
+  hide in it. They stay where they hide, whatever their file does, until an enemy block is fighting within 50 blocks;
+  then they strike it in the flank (or the rear, if others strike it already), and the general's chat says an ambush
+  was sprung. When their quarry is gone they wait for the next.
+- **A camp per wing:** a winged army has three camps, each behind its wing: the general's in the centre, with the
+  command tent and war council, and one behind each wing with its Marshal's tent (9 by 9 inside, 4 tall, six guards,
+  the nation's banners) and that wing's own rows of tents. A camp is put on the nearest dry, fairly level ground
+  within 48 blocks of where it should be (never on water or over a drop), and a tent is pitched only on dry ground
+  within 6 blocks of its command tent's floor in height. Players sleep in their wing's camp.
 - **War council** (`bridge/WarCouncil`): while the armies deploy, the general and the Marshals of the left and right
   wings stand around the command table. An officer of the army (rank 5 and up; others are turned away) right-clicks
   the general to be briefed, a line every 2.5 s: the numbers on each side, the plan, how the troops stand, the enemy,

@@ -137,6 +137,8 @@ public final class FieldRules {
     public static final double WING_REACH = 80;
     /** A player's unit with a task (flank, kill) looks for targets this far off. */
     public static final double TASK_REACH = 200;
+    /** An ambush strikes an enemy block fighting within this reach of it. */
+    public static final double AMBUSH_SPRING = 50;
     /** A block is back where it was sent once this close (blocks). */
     public static final double ARRIVED = 6;
     /** A beaten army running from a pursuit makes for a point this far further back each second. */

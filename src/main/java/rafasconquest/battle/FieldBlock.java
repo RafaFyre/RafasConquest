@@ -150,6 +150,8 @@ public final class FieldBlock {
     FieldBlock strikeAt;
     /** A task a player's unit was given for the battle; the general leaves such a block to it. */
     Task task = Task.NONE;
+    /** An ambush that has been sprung. */
+    boolean sprung;
     int strikeSide;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
@@ -173,7 +175,9 @@ public final class FieldBlock {
 
     /** What a player's unit does in a battle ({@link FieldBattle#assign}). */
     public enum Task {
-        NONE, BAIT, SUPPORT, FLANK, KILL
+        NONE, BAIT, SUPPORT, FLANK, KILL,
+        /** Hidden in a wood before the battle; strikes an enemy block fighting near it. */
+        AMBUSH
     }
 
     /** The duty it was deployed to: its general's, the guard's, the standard's, or a soldier's. */

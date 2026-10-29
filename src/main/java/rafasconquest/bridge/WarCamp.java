@@ -37,9 +37,18 @@ import java.util.Map;
  */
 final class WarCamp {
     /** Half the command tent's outer size: walls 7 out from the middle, 13 by 13 inside. */
-    private static final int HALF = 7;
+    private static final int GENERAL_HALF = 7;
     /** Its walls stand 5 tall inside, under the roof. */
-    private static final int HEIGHT = 5;
+    private static final int GENERAL_HEIGHT = 5;
+    /** A wing's Marshal's tent: 9 by 9 inside, 4 tall. */
+    private static final int MARSHAL_HALF = 5;
+    private static final int MARSHAL_HEIGHT = 4;
+    /** A camp's site is looked for this far about where it should be, for dry ground this level at most. */
+    private static final int SITE_SEARCH = 48;
+    private static final int SITE_STEP = 4;
+    private static final int SITE_ROUGHNESS = 3;
+    /** A small tent is pitched only on dry ground this near the command tent's floor in height. */
+    private static final int TENT_RISE = 6;
     private static final int TENTS_PER_ROW = 6;
     private static final int TENT_SPACING = 7;
     private static final int ROW_SPACING = 9;
@@ -58,24 +67,32 @@ final class WarCamp {
     private final Direction right;
     /** The command tent's floor, in the middle (where the bedrock stands). */
     private final BlockPos middle;
+    /** The command tent's size: half its width outside, and its height inside; whether the war council meets in it. */
+    private final int half;
+    private final int height;
+    private final boolean council;
 
-    private WarCamp(ServerLevel level, BlockPos middle, Direction front) {
+    private WarCamp(ServerLevel level, BlockPos middle, Direction front, boolean council) {
         this.level = level;
+        this.council = council;
+        this.half = council ? GENERAL_HALF : MARSHAL_HALF;
+        this.height = council ? GENERAL_HEIGHT : MARSHAL_HEIGHT;
         this.middle = middle;
         this.front = front;
         this.right = front.getClockWise();
     }
 
     /**
-     * Builds a camp with its command tent at {@code at}, facing ({@code facingX}, {@code facingZ}) toward the enemy
-     * (squared to the nearest compass direction), with {@code tents} small tents behind it.
+     * Builds a camp near {@code at} (on the nearest dry, fairly level ground: never on water or hanging over a drop),
+     * facing ({@code facingX}, {@code facingZ}) toward the enemy (squared to the nearest compass direction), with
+     * {@code tents} small tents behind it. The general's camp has the command tent where the war council meets; a
+     * wing's has its Marshal's smaller tent.
      */
-    static WarCamp build(ServerLevel level, Point at, double facingX, double facingZ, int tents, DyeColor colour, ItemStack banner) {
+    static WarCamp build(ServerLevel level, Point at, double facingX, double facingZ, int tents, DyeColor colour, ItemStack banner,
+                         boolean council) {
         Direction front = Direction.getNearest(facingX, 0, facingZ);
-        int x = (int) Math.floor(at.x());
-        int z = (int) Math.floor(at.z());
-        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-        WarCamp camp = new WarCamp(level, new BlockPos(x, y, z), front);
+        BlockPos site = site(level, at, council ? GENERAL_HALF : MARSHAL_HALF);
+        WarCamp camp = new WarCamp(level, site, front, council);
         camp.commandTent(colour, banner);
         camp.tents(tents, colour);
         return camp;
@@ -113,12 +130,12 @@ final class WarCamp {
         return spot(2, 0);
     }
 
-    /** Ten guards at the entrance, five either side of the way in, facing out. */
+    /** Guards at the entrance, half either side of the way in, facing out: ten at the general's tent, six at a Marshal's. */
     List<Vec3> guardSpots() {
         List<Vec3> spots = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            spots.add(groundSpot(-2, HALF + 2 + i));
-            spots.add(groundSpot(2, HALF + 2 + i));
+        for (int i = 0; i < (council ? 5 : 3); i++) {
+            spots.add(groundSpot(-2, half + 2 + i));
+            spots.add(groundSpot(2, half + 2 + i));
         }
         return spots;
     }
@@ -144,7 +161,7 @@ final class WarCamp {
         int dz = p.getZ() - middle.getZ();
         int r = dx * right.getStepX() + dz * right.getStepZ();
         int f = dx * front.getStepX() + dz * front.getStepZ();
-        return Math.abs(r) < HALF && Math.abs(f) < HALF && p.getY() >= middle.getY() - 1 && p.getY() <= middle.getY() + HEIGHT;
+        return Math.abs(r) < half && Math.abs(f) < half && p.getY() >= middle.getY() - 1 && p.getY() <= middle.getY() + height;
     }
 
     private Vec3 groundSpot(int r, int f) {
@@ -155,43 +172,45 @@ final class WarCamp {
 
     private void commandTent(DyeColor colour, ItemStack banner) {
         BlockState wool = wool(colour);
-        for (int r = -HALF; r <= HALF; r++) {
-            for (int f = -HALF; f <= HALF; f++) {
+        for (int r = -half; r <= half; r++) {
+            for (int f = -half; f <= half; f++) {
                 foundation(local(r, f, -1));
-                boolean wall = Math.abs(r) == HALF || Math.abs(f) == HALF;
-                for (int up = 0; up < HEIGHT; up++) {
+                boolean wall = Math.abs(r) == half || Math.abs(f) == half;
+                for (int up = 0; up < height; up++) {
                     set(local(r, f, up), wall ? wool : Blocks.AIR.defaultBlockState());
                 }
-                set(local(r, f, HEIGHT), wool);
+                set(local(r, f, height), wool);
                 // A ridge above the roof, so it reads as a tent.
-                if (Math.abs(r) <= HALF - 2 && Math.abs(f) <= HALF - 2) {
-                    set(local(r, f, HEIGHT + 1), wool);
+                if (Math.abs(r) <= half - 2 && Math.abs(f) <= half - 2) {
+                    set(local(r, f, height + 1), wool);
                 }
-                if (Math.abs(r) <= 1 && Math.abs(f) <= HALF - 2) {
-                    set(local(r, f, HEIGHT + 2), wool);
+                if (Math.abs(r) <= 1 && Math.abs(f) <= half - 2) {
+                    set(local(r, f, height + 2), wool);
                 }
             }
         }
         // The way in: three wide, three tall, toward the enemy.
         for (int r = -1; r <= 1; r++) {
             for (int up = 0; up < 3; up++) {
-                set(local(r, HALF, up), Blocks.AIR.defaultBlockState());
+                set(local(r, half, up), Blocks.AIR.defaultBlockState());
             }
         }
-        set(local(0, 0, 0), Blocks.BEDROCK.defaultBlockState()); // the Battle Command Table, for now
-        for (int r : new int[]{-HALF + 1, HALF - 1}) {
-            for (int f : new int[]{-HALF + 1, HALF - 1}) {
+        if (council) {
+            set(local(0, 0, 0), Blocks.BEDROCK.defaultBlockState()); // the Battle Command Table, for now
+        }
+        for (int r : new int[]{-half + 1, half - 1}) {
+            for (int f : new int[]{-half + 1, half - 1}) {
                 set(local(r, f, 0), Blocks.LANTERN.defaultBlockState());
             }
         }
         // Banners: on the back wall and both side walls inside, and either side of the way in outside.
         for (int r : new int[]{-3, 0, 3}) {
-            wallBanner(local(r, -HALF + 1, 3), front, banner);
+            wallBanner(local(r, -half + 1, 3), front, banner);
         }
-        wallBanner(local(-HALF + 1, 0, 3), right, banner);
-        wallBanner(local(HALF - 1, 0, 3), right.getOpposite(), banner);
+        wallBanner(local(-half + 1, 0, 3), right, banner);
+        wallBanner(local(half - 1, 0, 3), right.getOpposite(), banner);
         for (int r : new int[]{-4, 4}) {
-            BlockPos p = local(r, HALF + 1, 0);
+            BlockPos p = local(r, half + 1, 0);
             p = new BlockPos(p.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ()), p.getZ());
             standingBanner(p, front, banner);
         }
@@ -203,10 +222,13 @@ final class WarCamp {
             int row = i / TENTS_PER_ROW;
             int col = i % TENTS_PER_ROW;
             int r = (col - (TENTS_PER_ROW - 1) / 2) * TENT_SPACING;
-            int f = -HALF - 6 - row * ROW_SPACING;
+            int f = -half - 6 - row * ROW_SPACING;
             BlockPos centre = local(r, f, 0);
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centre.getX(), centre.getZ());
             BlockPos base = new BlockPos(centre.getX(), y, centre.getZ());
+            if (Math.abs(y - middle.getY()) > TENT_RISE || wet(base)) {
+                continue; // no tents in the water, nor up a cliff or down a drop
+            }
             // A ridge tent along the line of battle's depth: two sloping sides and the ridge, open at both ends.
             for (int along = -2; along <= 1; along++) {
                 BlockPos p = base.relative(front, along);
@@ -231,6 +253,53 @@ final class WarCamp {
                 set(new BlockPos(fire.getX(), fy, fire.getZ()), Blocks.CAMPFIRE.defaultBlockState().setValue(CampfireBlock.LIT, true));
             }
         }
+    }
+
+    /**
+     * Where to put a camp wanted at {@code at}: the nearest point within {@link #SITE_SEARCH} whose command tent would
+     * stand on dry ground no rougher than {@link #SITE_ROUGHNESS}; failing that the least rough dry one; failing that,
+     * {@code at}. Its floor is the ground there.
+     */
+    private static BlockPos site(ServerLevel level, Point at, int half) {
+        BlockPos best = null;
+        double bestScore = Double.MAX_VALUE;
+        for (int dx = -SITE_SEARCH; dx <= SITE_SEARCH; dx += SITE_STEP) {
+            for (int dz = -SITE_SEARCH; dz <= SITE_SEARCH; dz += SITE_STEP) {
+                int x = (int) Math.floor(at.x()) + dx;
+                int z = (int) Math.floor(at.z()) + dz;
+                int low = Integer.MAX_VALUE;
+                int high = Integer.MIN_VALUE;
+                boolean wet = false;
+                for (int sx = -half; sx <= half; sx += half) {
+                    for (int sz = -half; sz <= half; sz += half) {
+                        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + sx, z + sz);
+                        low = Math.min(low, y);
+                        high = Math.max(high, y);
+                        wet |= !level.getFluidState(new BlockPos(x + sx, y - 1, z + sz)).isEmpty();
+                    }
+                }
+                if (wet) {
+                    continue;
+                }
+                int rough = high - low;
+                double score = Math.hypot(dx, dz) + (rough <= SITE_ROUGHNESS ? 0 : 1000 + rough * 10);
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+                }
+            }
+        }
+        if (best == null) {
+            int x = (int) Math.floor(at.x());
+            int z = (int) Math.floor(at.z());
+            best = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+        }
+        return best;
+    }
+
+    /** Whether the ground at a point is under water (or lava). */
+    private boolean wet(BlockPos ground) {
+        return !level.getFluidState(ground.below()).isEmpty() || !level.getFluidState(ground).isEmpty();
     }
 
     /** Solid ground under a floor: planks, with dirt below where the ground falls away. */

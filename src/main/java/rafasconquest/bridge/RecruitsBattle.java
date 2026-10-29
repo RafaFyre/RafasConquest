@@ -67,6 +67,7 @@ import rafasconquest.battle.FieldBattle;
 import rafasconquest.battle.FieldBlock;
 import rafasconquest.battle.FieldBlock.Duty;
 import rafasconquest.battle.FieldRules;
+import rafasconquest.battle.GroundPlan;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.faction.Faction;
 import rafasconquest.faction.FactionBanner;
@@ -249,6 +250,13 @@ public final class RecruitsBattle {
     private final boolean[] faded = new boolean[2];
     private final List<UUID> fading = new ArrayList<>();
     private final WarCamp[] camps = new WarCamp[2];
+    /** Each winged army's camps behind its left and right wings (by {@link FieldArmy#LEFT}, {@link FieldArmy#RIGHT}). */
+    private final WarCamp[][] wingCamps = new WarCamp[2][3];
+    /** How many tents of each camp are taken by enlisted players. */
+    private final Map<WarCamp, Integer> tentsTaken = new HashMap<>();
+    /** The land the battle is fought on, as read for deploying. */
+    @Nullable
+    private Terrain terrain;
     /** Each camp's guards, by side; the war council in the tents, with their side. */
     private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
     private final Map<UUID, Integer> councillors = new HashMap<>();
@@ -257,7 +265,7 @@ public final class RecruitsBattle {
     private final ServerBossEvent[] deploymentBars = new ServerBossEvent[3];
     /** Each enlisted player's tent for the battle, and the next free tent of each camp. */
     private final Map<UUID, Integer> tents = new HashMap<>();
-    private final int[] nextTent = new int[2];
+    private final Map<UUID, WarCamp> tentCamps = new HashMap<>();
     /** The general's orders for the day, for players given another task than their own. */
     private final Map<UUID, GeneralTask> dayRoles = new HashMap<>();
     private final Side[] sides;
@@ -352,8 +360,10 @@ public final class RecruitsBattle {
         float formYaw;
         long lastCombat = Long.MIN_VALUE / 2;
         long lastTrample;
-        /** Their tent in camp (an index into the camp's tents), or -1. */
+        /** Their tent in camp (an index into that camp's tents), or -1. */
         int tent = -1;
+        @Nullable
+        WarCamp tentCamp;
         /** Heading out of camp to their position, their soldiers following them, not yet there. */
         boolean marching;
         /** A messenger with the general's orders, waiting at their tent, and whether they've heard them. */
@@ -501,8 +511,12 @@ public final class RecruitsBattle {
         int blocksB = BattlePlan.blocks(secondSoldiers);
         FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
                 sides[0].general.plan(), sides[1].general.plan());
+        Terrain terrain = new Terrain(level, Terrain.stepFor(firstSoldiers + secondSoldiers));
+        int hidden = GroundPlan.deploy(field, terrain);
         String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
+        battle.terrain = terrain;
+        RafasConquest.LOGGER.info("[battle] deployed to the ground; {} blocks hide in ambush", hidden);
         battle.centre = centre;
         battle.axisX = axisX;
         battle.axisZ = axisZ;
@@ -1658,10 +1672,16 @@ public final class RecruitsBattle {
                 e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
-                int s = side;
-                Integer tent = tents.computeIfAbsent(player.getUUID(),
-                        id -> camps[s] != null && nextTent[s] < camps[s].tents() ? nextTent[s]++ : -1);
-                e.tent = tent;
+                WarCamp camp = tentCamps.computeIfAbsent(player.getUUID(), id -> campOf(e.side, home.wing()));
+                e.tentCamp = camp;
+                e.tent = tents.computeIfAbsent(player.getUUID(), id -> {
+                    int used = camp == null ? 0 : tentsTaken.getOrDefault(camp, 0);
+                    if (camp == null || used >= camp.tents()) {
+                        return -1;
+                    }
+                    tentsTaken.put(camp, used + 1);
+                    return used;
+                });
                 if (day == 1) {
                     // The first day, straight to their place; on later days they walk out of camp with their unit.
                     Point spot = home.line();
@@ -2050,7 +2070,7 @@ public final class RecruitsBattle {
                 cavalryMomentum(e, player);
             }
             FieldBlock home = e.home;
-            WarCamp camp = camps[e.side];
+            WarCamp camp = e.tentCamp;
             if ((phase == Phase.PULLBACK || phase == Phase.NIGHT) && camp != null && e.tent >= 0) {
                 Vec3 door = camp.tentDoor(e.tent); // to bed
                 ConquestNetwork.sendBattleSpot(player, true, door.x, door.y, door.z);
@@ -3044,18 +3064,47 @@ public final class RecruitsBattle {
     private void buildCamps() {
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
-            double rear = 0;
-            for (FieldBlock b : army.blocks()) {
-                rear = Math.max(rear, BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line()).z());
+            int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
+            for (int wing : wings) {
+                // Behind the wing's rearmost block, across from its middle.
+                double rear = 0;
+                double right = 0;
+                int n = 0;
+                int soldiers = 0;
+                for (FieldBlock b : army.blocks()) {
+                    if (army.winged() && b.wing() != wing) {
+                        continue;
+                    }
+                    Point at = BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line());
+                    rear = Math.max(rear, at.z());
+                    right += at.x();
+                    n++;
+                    soldiers += b.started();
+                }
+                if (n == 0) {
+                    continue;
+                }
+                double back = rear + CAMP_GAP;
+                Point at = BattlePlan.place(army.origin(), army.facingX(), army.facingZ(), right / n, back);
+                int tents = Math.max(MIN_TENTS, Math.min(MAX_TENTS, soldiers / SOLDIERS_PER_TENT));
+                loadGround(at);
+                WarCamp camp = WarCamp.build(level, at, army.facingX(), army.facingZ(), tents, nearestDye(sides[side].uniform),
+                        sides[side].banner, wing == FieldArmy.CENTRE);
+                if (wing == FieldArmy.CENTRE) {
+                    camps[side] = camp;
+                } else {
+                    wingCamps[side][wing] = camp;
+                }
+                spawnGuards(side, camp);
             }
-            double back = rear + CAMP_GAP;
-            Point at = army.origin().plus(-army.facingX() * back, -army.facingZ() * back);
-            int tents = Math.max(MIN_TENTS, Math.min(MAX_TENTS, army.started() / SOLDIERS_PER_TENT));
-            loadGround(at);
-            camps[side] = WarCamp.build(level, at, army.facingX(), army.facingZ(), tents, nearestDye(sides[side].uniform),
-                    sides[side].banner);
-            spawnGuards(side);
         }
+    }
+
+    /** The camp a player of a wing sleeps in: their wing's, else the general's. */
+    @Nullable
+    private WarCamp campOf(int side, int wing) {
+        WarCamp camp = wing >= 0 && wing < 3 ? wingCamps[side][wing] : null;
+        return camp != null ? camp : camps[side];
     }
 
     /** The dye colour nearest an RGB colour, for a camp's wool. */
@@ -3077,8 +3126,7 @@ public final class RecruitsBattle {
     }
 
     /** Ten heavy infantry stand guard at the command tent's entrance, facing out, as long as the camp stands. */
-    private void spawnGuards(int side) {
-        WarCamp camp = camps[side];
+    private void spawnGuards(int side, WarCamp camp) {
         for (Vec3 at : camp.guardSpots()) {
             AbstractRecruitEntity guard = campFigure(ModEntityTypes.RECRUIT_SHIELDMAN.get(), side, Role.SOLDIER, at, camp.yaw(0),
                     null);
@@ -3442,7 +3490,7 @@ public final class RecruitsBattle {
 
     /** A messenger stands at the player's tent (or beside them, if they have none), facing in. */
     private void spawnMessenger(Enlisted e, ServerPlayer player) {
-        WarCamp camp = camps[e.side];
+        WarCamp camp = e.tentCamp;
         Vec3 at = camp != null && e.tent >= 0 ? camp.tentDoor(e.tent) : player.position().add(1.5, 0, 0);
         float yaw = camp != null ? camp.intoTent() : player.getYRot() + 180;
         AbstractRecruitEntity messenger = campFigure(ModEntityTypes.RECRUIT.get(), e.side, Role.SOLDIER, at, yaw, "Messenger");
@@ -3570,6 +3618,9 @@ public final class RecruitsBattle {
         dismissEnlisted();
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
                 level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
+        if (terrain != null) {
+            GroundPlan.deploy(field, terrain);
+        }
         started = false;
         day++;
         setPhase(Phase.DEPLOYMENT);
@@ -3703,6 +3754,12 @@ public final class RecruitsBattle {
         if (camps[side] != null) {
             camps[side].restore();
             camps[side] = null;
+        }
+        for (int wing = 0; wing < 3; wing++) {
+            if (wingCamps[side][wing] != null) {
+                wingCamps[side][wing].restore();
+                wingCamps[side][wing] = null;
+            }
         }
     }
 
