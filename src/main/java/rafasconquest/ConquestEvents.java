@@ -16,6 +16,8 @@ import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraft.world.InteractionResult;
 import rafasconquest.bridge.RecruitsBattle;
 import rafasconquest.dev.BattleMap;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -104,6 +106,26 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
         event.setAmount(RecruitsBattle.adjustDamage(event.getEntity(), event.getSource().getEntity(), event.getAmount()));
+    }
+
+    /**
+     * A battle's soldiers (and their horses) can't be hired, or otherwise used, by right-clicking them: Recruits would
+     * open its hire menu for any recruit nearby.
+     */
+    @SubscribeEvent
+    public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
+        if (RecruitsBattle.isOurs(event.getTarget())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.FAIL);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onEntityInteractAt(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (RecruitsBattle.isOurs(event.getTarget())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.FAIL);
+        }
     }
 
     @SubscribeEvent

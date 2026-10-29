@@ -119,6 +119,8 @@ first. The old relation is restored when the battle ends.
   - **General:** a gold helmet and the faction banner on the back, like a sashimono (`client/BackBannerLayer`; the server
     tells each client which soldiers wear one).
   - **Standard-bearer:** a dyed cap and the faction banner carried in hand. They stay at the general's side and don't fight.
+- **Battle soldiers can't be hired:** right-clicking a battle soldier, or its horse, does nothing (Recruits would
+  otherwise open its hire menu).
 - **Battle soldiers can't pick up items, and drop nothing when they die**, so nobody swaps the uniform for loot and
   the field stays clear.
 - **Line fighting:** front blocks march in line until an enemy is within 10 blocks, then engage: they keep pressing on,
