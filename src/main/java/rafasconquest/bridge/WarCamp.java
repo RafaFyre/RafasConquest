@@ -10,6 +10,8 @@ import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
@@ -49,6 +51,8 @@ final class WarCamp {
 
     private final ServerLevel level;
     private final Map<BlockPos, Saved> replaced = new LinkedHashMap<>();
+    /** Just outside each small tent's way in, in the order they were pitched. */
+    private final List<Vec3> tentDoors = new ArrayList<>();
     /** The way the camp faces: toward the enemy, and its right. */
     private final Direction front;
     private final Direction right;
@@ -117,6 +121,20 @@ final class WarCamp {
             spots.add(groundSpot(2, HALF + 2 + i));
         }
         return spots;
+    }
+
+    /** How many small tents there are, and where tent {@code i}'s way in is (outside it). */
+    int tents() {
+        return tentDoors.size();
+    }
+
+    Vec3 tentDoor(int i) {
+        return tentDoors.get(i);
+    }
+
+    /** The yaw of someone at a tent's way in, facing into it. */
+    float intoTent() {
+        return yaw(2);
     }
 
     /** Whether a point is inside the command tent. */
@@ -189,7 +207,7 @@ final class WarCamp {
             BlockPos centre = local(r, f, 0);
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centre.getX(), centre.getZ());
             BlockPos base = new BlockPos(centre.getX(), y, centre.getZ());
-            // A ridge tent along the line of battle\'s depth: two sloping sides and the ridge, open at both ends.
+            // A ridge tent along the line of battle's depth: two sloping sides and the ridge, open at both ends.
             for (int along = -2; along <= 1; along++) {
                 BlockPos p = base.relative(front, along);
                 set(p.relative(right, -1), wool);
@@ -199,6 +217,14 @@ final class WarCamp {
                 set(p.relative(right, -1).above(), Blocks.AIR.defaultBlockState());
                 set(p.relative(right, 1).above(), Blocks.AIR.defaultBlockState());
             }
+            // A bed inside, its head to the back, and the way in toward the enemy.
+            Block bed = BuiltInRegistries.BLOCK.get(new ResourceLocation(colour.getName() + "_bed"));
+            Direction head = front.getOpposite();
+            set(base, bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.FOOT));
+            set(base.relative(head), bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.HEAD));
+            BlockPos door = base.relative(front, 2);
+            int dy = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, door.getX(), door.getZ());
+            tentDoors.add(Vec3.atBottomCenterOf(new BlockPos(door.getX(), dy, door.getZ())));
             if (col % 2 == 1) {
                 BlockPos fire = base.relative(right, TENT_SPACING / 2 + 1).relative(front, 3);
                 int fy = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, fire.getX(), fire.getZ());

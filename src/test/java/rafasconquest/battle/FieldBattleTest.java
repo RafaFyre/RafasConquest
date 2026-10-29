@@ -263,6 +263,21 @@ class FieldBattleTest {
     }
 
     @Test
+    void inTheMorningTheArmiesMarchOutOfCampToTheirPlaces() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.formUp(25);
+        assertFalse(battle.arrived());
+        for (int i = 0; i < 120 && !battle.arrived(); i++) {
+            battle.second();
+        }
+        assertTrue(battle.arrived(), "never got there");
+        assertFalse(battle.begun(), "marching out isn't the battle");
+        battle.formed();
+        battle.second();
+        assertTrue(battle.begun());
+    }
+
+    @Test
     void inTheEveningEveryBlockMarchesBackToCampWithoutFighting() {
         FieldBattle battle = battle(60, 60, 3);
         for (int i = 0; i < 120; i++) {

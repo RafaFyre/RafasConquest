@@ -180,6 +180,15 @@ final class WarCouncil {
         }
     }
 
+    /** Lines for a player from someone other than the council (a messenger), a line at a time like a briefing. */
+    void deliver(ServerPlayer player, List<Component> lines, long now) {
+        Talk talk = talks.computeIfAbsent(player.getUUID(), id -> new Talk());
+        if (talk.queue.isEmpty()) {
+            talk.nextAt = now;
+        }
+        talk.queue.addAll(lines);
+    }
+
     /** The battle begins: the council breaks up, and whatever was still to be said goes unsaid. */
     void adjourn() {
         talks.values().forEach(t -> t.queue.clear());

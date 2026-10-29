@@ -171,8 +171,6 @@ public final class RecruitsBattle {
     private static final long DAWN = 23000;
     /** A day's battle lasts at least this long, even if begun late in the day. */
     private static final int MIN_BATTLE_SECONDS = 60;
-    /** After the first day, the armies charge this long after they deploy. */
-    private static final int DEPLOY_SECONDS = 90;
     /** A camp's command tent stands this far behind its army's rearmost block. */
     private static final double CAMP_GAP = 40;
     /** In the evening the armies re-form this far short of their camps. */
@@ -185,6 +183,15 @@ public final class RecruitsBattle {
     /** A pursuit lasts a day at most (a Minecraft day is 20 minutes). */
     private static final int PURSUIT_SECONDS = 1200;
     private static final int FADE_PER_TICK = 6;
+    /** A morning's deployment lasts at least this, and at most this, before the charge. */
+    private static final int DEPLOY_MIN = 30;
+    private static final int DEPLOY_MAX = 240;
+    /** A player this close to their place is in position. */
+    private static final double IN_POSITION = 5;
+    /** How likely a general is, each morning, to give a player another task when there is a reason to. */
+    private static final double NEW_TASK_CHANCE = 0.6;
+    /** A messenger gives the orders to a player who comes this close. */
+    private static final double MESSENGER_REACH = 4;
     /** A horse this fast (blocks a tick; a Recruits horse gallops at about 0.3) is charging. */
     private static final double GALLOP = 0.15;
     /** Marks the kit a player is given for a battle, to take back after. */
@@ -223,6 +230,11 @@ public final class RecruitsBattle {
     private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
     private final Map<UUID, Integer> councillors = new HashMap<>();
     private final WarCouncil council = new WarCouncil();
+    /** Each enlisted player's tent for the battle, and the next free tent of each camp. */
+    private final Map<UUID, Integer> tents = new HashMap<>();
+    private final int[] nextTent = new int[2];
+    /** The general's orders for the day, for players given another task than their own. */
+    private final Map<UUID, GeneralTask> dayRoles = new HashMap<>();
     private final Side[] sides;
     /** The blocks that are real soldiers now, and their soldiers. */
     private final Map<FieldBlock, Live> live = new LinkedHashMap<>();
@@ -317,6 +329,15 @@ public final class RecruitsBattle {
         @Nullable
         Point squareAt;
         boolean takenOver;
+        /** Their tent in camp (an index into the camp's tents), or -1. */
+        int tent = -1;
+        /** Heading out of camp to their position, their soldiers following them, not yet there. */
+        boolean marching;
+        /** A messenger with the general's orders, waiting at their tent, and whether they've heard them. */
+        @Nullable
+        UUID messenger;
+        boolean briefed;
+        int messengerLeaves;
         Job job = Job.HEAVY_INFANTRY;
         /** The horse a cavalry player was given. */
         @Nullable
@@ -1499,7 +1520,14 @@ public final class RecruitsBattle {
         if (battle.started) {
             return "The battle has already begun";
         }
-        battle.enlist();
+        if (battle.enlisted.isEmpty()) {
+            battle.enlist();
+        }
+        battle.field.formed();
+        for (Enlisted e : battle.enlisted.values()) {
+            e.marching = false;
+            battle.removeMessenger(e);
+        }
         battle.started = true;
         battle.dismissCouncil();
         battle.setPhase(Phase.BATTLE);
@@ -1570,7 +1598,8 @@ public final class RecruitsBattle {
                 }
                 FieldArmy army = field.army(side);
                 Job job = ranks.job(player.getUUID());
-                BattleRole role = ranks.role(player.getUUID());
+                BattleRole role = dayRoles.containsKey(player.getUUID()) ? dayRoles.get(player.getUUID()).role()
+                        : ranks.role(player.getUUID());
                 List<FieldBlock> front = unitPool(army, role, taken);
                 if (front.isEmpty()) {
                     continue;
@@ -1600,9 +1629,16 @@ public final class RecruitsBattle {
                 }
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
-                Point spot = home.line();
-                player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
-                        yawOf(new Point(army.facingX(), army.facingZ())), 0);
+                int s = side;
+                Integer tent = tents.computeIfAbsent(player.getUUID(),
+                        id -> camps[s] != null && nextTent[s] < camps[s].tents() ? nextTent[s]++ : -1);
+                e.tent = tent;
+                if (day == 1) {
+                    // The first day, straight to their place; on later days they walk out of camp with their unit.
+                    Point spot = home.line();
+                    player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
+                            yawOf(new Point(army.facingX(), army.facingZ())), 0);
+                }
                 kitPlayer(player, e);
                 player.sendSystemMessage(Component.literal(String.format(Locale.ROOT,
                         "You fight for %s as a %s of %s, %s, leading %d. Keep to your ring.",
@@ -1973,12 +2009,19 @@ public final class RecruitsBattle {
             if (giveSoldiers(e) && RecruitEvents.recruitsGroupsManager != null) {
                 RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
             }
-            keepSquare(e);
+            campLife(e, player);
+            if (!e.marching) {
+                keepSquare(e);
+            }
             if (e.job == Job.CAVALRY) {
                 cavalryMomentum(e, player);
             }
             FieldBlock home = e.home;
-            if (home.alive() > 0) {
+            WarCamp camp = camps[e.side];
+            if ((phase == Phase.PULLBACK || phase == Phase.NIGHT) && camp != null && e.tent >= 0) {
+                Vec3 door = camp.tentDoor(e.tent); // to bed
+                ConquestNetwork.sendBattleSpot(player, true, door.x, door.y, door.z);
+            } else if (home.alive() > 0) {
                 Point spot = home.line();
                 ConquestNetwork.sendBattleSpot(player, true, spot.x(), groundY(home, spot.x(), spot.z()), spot.z());
             } else {
@@ -2252,6 +2295,7 @@ public final class RecruitsBattle {
                 ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
             }
             unkitPlayer(player, e);
+            removeMessenger(e);
             if (e.group != null && RecruitEvents.recruitsGroupsManager != null) {
                 RecruitEvents.recruitsGroupsManager.removeGroup(e.group);
                 if (player != null) {
@@ -2720,6 +2764,11 @@ public final class RecruitsBattle {
         if (battle == null || battle.phase != Phase.DEPLOYMENT) {
             return;
         }
+        Enlisted mine = battle.enlisted.get(player.getUUID());
+        if (mine != null && target.getUUID().equals(mine.messenger) && !mine.briefed) {
+            battle.hearMessenger(mine, player);
+            return;
+        }
         Integer side = battle.councillors.get(target.getUUID());
         if (side == null) {
             return;
@@ -2743,11 +2792,184 @@ public final class RecruitsBattle {
         return "You're in neither army";
     }
 
-    /** Deployment: the armies stand in formation before their camps; after the first day, they charge on their own. */
+    /**
+     * Deployment: on the first day the armies stand in formation before their camps until the battle is started. On
+     * later mornings they march out of camp to their places, and enlisted players lead their units out to theirs; once
+     * all are in position (at least {@link #DEPLOY_MIN}, at most {@link #DEPLOY_MAX}) they charge.
+     */
     private void deployment() {
-        prepare();
-        if (day > 1 && clock - phaseSince >= DEPLOY_SECONDS && morning()) {
+        if (day == 1) {
+            prepare();
+            return;
+        }
+        for (Live l : new ArrayList<>(live.values())) {
+            readBack(l);
+        }
+        if (field.forming()) {
+            field.second();
+        }
+        for (Live l : new ArrayList<>(live.values())) {
+            passOnOrders(l);
+        }
+        updateEnlisted();
+        switchLive();
+        int t = clock - phaseSince;
+        boolean ready = field.arrived() && enlisted.values().stream().noneMatch(e -> e.marching);
+        if (morning() && (t >= DEPLOY_MIN && ready || t >= DEPLOY_MAX)) {
             startFighting();
+        }
+    }
+
+    /** A task the general gives a player for the day, and why. */
+    private record GeneralTask(BattleRole role, String reason) {
+    }
+
+    /**
+     * Whether the general gives a player another task than their own this morning, from how the battle stands and the
+     * general's trait: hunt the enemy general who leads their own charge, support when outnumbered, flank a thin wing,
+     * bait for a cunning general, lead the charge for a bold one with the numbers. Not always, even with a reason.
+     */
+    @Nullable
+    private GeneralTask generalTask(int side, BattleRole own) {
+        Side s = sides[side];
+        Side enemy = sides[1 - side];
+        FieldArmy ours = field.army(side);
+        FieldArmy theirs = field.army(1 - side);
+        List<GeneralTask> reasons = new ArrayList<>();
+        if (enemy.general.plan().has(Strategy.UNRELENTING_CHARGE) && s.traits[0] != Trait.CAUTIOUS) {
+            reasons.add(new GeneralTask(BattleRole.KILL_SQUAD, "General " + enemy.general.name()
+                    + " rides at the head of their charge. Bring them down, and their army breaks."));
+        }
+        if (ours.alive() < theirs.alive() * 0.85) {
+            reasons.add(new GeneralTask(BattleRole.SUPPORT, "We're outnumbered now. Hold your men back of the line "
+                    + "and go wherever it bends."));
+        }
+        for (String w : weaknesses(theirs, enemy.general.plan())) {
+            if (w.contains("wing is thin")) {
+                reasons.add(new GeneralTask(BattleRole.FLANKER, w + " Take your men round and strike it in the side."));
+            }
+        }
+        if (s.traits[0] == Trait.CUNNING) {
+            reasons.add(new GeneralTask(BattleRole.BAIT, "Run ahead of the line, then give ground once they bite. "
+                    + "Draw them in, and we'll close on them."));
+        }
+        if (s.traits[0] == Trait.BOLD && ours.alive() >= theirs.alive()) {
+            reasons.add(new GeneralTask(BattleRole.FRONTLINE, "You'll lead the first charge today. Make it count."));
+        }
+        reasons.removeIf(r -> r.role() == own);
+        if (reasons.isEmpty() || level.random.nextDouble() >= NEW_TASK_CHANCE) {
+            return null;
+        }
+        return reasons.get(level.random.nextInt(reasons.size()));
+    }
+
+    /**
+     * The morning: each enlisted player wakes in camp, enlisted anew with their unit, and heads out to their place,
+     * their soldiers following; unless the general has given them another task, and then a messenger waits at their
+     * tent to tell them.
+     */
+    private void morningMuster() {
+        dayRoles.clear();
+        Ranks ranks = Ranks.get(level.getServer());
+        for (ServerPlayer player : level.players()) {
+            for (int side = 0; side < 2; side++) {
+                if (player.getTeam() != null && player.getTeam().getName().equals(sides[side].team.getName())) {
+                    GeneralTask task = generalTask(side, ranks.role(player.getUUID()));
+                    if (task != null) {
+                        dayRoles.put(player.getUUID(), task);
+                    }
+                }
+            }
+        }
+        enlist();
+        for (Enlisted e : enlisted.values()) {
+            e.marching = true;
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null) {
+                continue;
+            }
+            if (dayRoles.containsKey(e.player)) {
+                spawnMessenger(e, player);
+                title(e, "A messenger waits at your tent");
+            } else {
+                title(e, "Form up at your position!");
+                player.sendSystemMessage(Component.literal("Dawn. Lead your men out to your ring.")
+                        .withStyle(style -> style.withColor(color(e.side))));
+            }
+        }
+    }
+
+    /** A messenger stands at the player's tent (or beside them, if they have none), facing in. */
+    private void spawnMessenger(Enlisted e, ServerPlayer player) {
+        WarCamp camp = camps[e.side];
+        Vec3 at = camp != null && e.tent >= 0 ? camp.tentDoor(e.tent) : player.position().add(1.5, 0, 0);
+        float yaw = camp != null ? camp.intoTent() : player.getYRot() + 180;
+        AbstractRecruitEntity messenger = campFigure(ModEntityTypes.RECRUIT.get(), e.side, Role.SOLDIER, at, yaw, "Messenger");
+        if (messenger != null) {
+            e.messenger = messenger.getUUID();
+        }
+    }
+
+    /** The messenger gives a player the general's orders for the day, then leaves. */
+    private void hearMessenger(Enlisted e, ServerPlayer player) {
+        GeneralTask task = dayRoles.get(e.player);
+        e.briefed = true;
+        e.messengerLeaves = clock + 12;
+        if (task == null) {
+            return;
+        }
+        List<Component> lines = new ArrayList<>();
+        lines.add(messengerSays(e, e.rank.title() + "! Word from General " + sides[e.side].general.name() + "."));
+        lines.add(messengerSays(e, "The general orders your men to fight " + task.role().title() + " today."));
+        lines.add(messengerSays(e, task.reason()));
+        lines.add(messengerSays(e, "Your ring marks where your men gather."));
+        council.deliver(player, lines, level.getGameTime());
+    }
+
+    private Component messengerSays(Enlisted e, String text) {
+        return Component.literal("Messenger: ").withStyle(style -> style.withColor(color(e.side)))
+                .append(Component.literal(text).withStyle(net.minecraft.ChatFormatting.WHITE));
+    }
+
+    private void removeMessenger(Enlisted e) {
+        if (e.messenger != null) {
+            Entity m = level.getEntity(e.messenger);
+            if (m != null) {
+                m.discard();
+            }
+            e.messenger = null;
+        }
+    }
+
+    /**
+     * Each second for an enlisted player out of the fight: their ring points to their tent in the evening and at
+     * night; in the morning, their soldiers follow them out of camp until they reach their place, and a messenger, if
+     * any, gives them the general's orders when they come near.
+     */
+    private void campLife(Enlisted e, ServerPlayer player) {
+        if (e.messenger != null) {
+            Entity m = level.getEntity(e.messenger);
+            if (!e.briefed && m != null && player.distanceTo(m) <= MESSENGER_REACH) {
+                hearMessenger(e, player);
+            } else if (e.briefed && clock >= e.messengerLeaves) {
+                if (m != null) {
+                    level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF, m.getX(), m.getY() + 1, m.getZ(), 6, 0.3, 0.5, 0.3, 0.02);
+                }
+                removeMessenger(e);
+            }
+        }
+        if (e.marching) {
+            for (AbstractRecruitEntity s : soldiersOf(e)) {
+                if (s.getFollowState() != 1) {
+                    s.setFollowState(1); // following their leader out of camp
+                }
+            }
+            Point spot = e.home.line();
+            if (Math.hypot(player.getX() - spot.x(), player.getZ() - spot.z()) <= IN_POSITION) {
+                e.marching = false;
+                e.squarePlace.clear();
+                title(e, "In position");
+            }
         }
     }
 
@@ -2778,6 +3000,9 @@ public final class RecruitsBattle {
         switchLive();
         if (phase == Phase.PULLBACK && (field.arrived() || nightfall())) {
             setPhase(Phase.NIGHT);
+            for (Enlisted e : enlisted.values()) {
+                title(e, "Night falls. Rest in your tent.");
+            }
             broadcast(String.format(Locale.ROOT, "[battle day %d] Night falls; the armies rest in their camps", day));
         }
         if (phase == Phase.NIGHT && morning()) {
@@ -2813,6 +3038,9 @@ public final class RecruitsBattle {
         started = false;
         day++;
         setPhase(Phase.DEPLOYMENT);
+        morningMuster();
+        // The armies rested in camp: they start the day there and march out to their places.
+        field.formUp(CAMP_GAP - PULLBACK_SHORT_OF_CAMP);
         broadcast(String.format(Locale.ROOT, "[battle day %d] Dawn: %s musters %d, %s %d; the armies deploy", day,
                 sides[0].faction.name(), field.army(0).started(), sides[1].faction.name(), field.army(1).started()));
         spawnCouncil();

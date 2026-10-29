@@ -55,6 +55,8 @@ public final class FieldBattle {
     private final List<Order> calls = new ArrayList<>();
     private final List<Event> events = new ArrayList<>();
     private final List<Volley> volleys = new ArrayList<>();
+    /** The armies are marching out of camp to their places for the day (see {@link #formUp}). */
+    private boolean forming;
     /** Pulled back to camp for the night: blocks only march. */
     private boolean pulledBack;
     /** The winner pursues the beaten army. */
@@ -394,6 +396,13 @@ public final class FieldBattle {
     /** One second: each general gives orders, then blocks move, then everyone within reach fights. */
     public void second() {
         volleys.clear();
+        if (forming) {
+            // The morning's deployment: blocks march out of camp to their places, nothing else. The battle hasn't begun.
+            for (FieldArmy army : armies) {
+                move(army);
+            }
+            return;
+        }
         if (pulledBack) {
             seconds++;
             for (FieldArmy army : armies) {
@@ -2229,6 +2238,28 @@ public final class FieldBattle {
                 b.facingZ = army.facingZ;
             }
         }
+    }
+
+    /**
+     * A morning: every block starts {@code back} behind its place, in camp where it rested, and marches out to it,
+     * until {@link #formed}. Blocks only march meanwhile.
+     */
+    public void formUp(double back) {
+        forming = true;
+        for (FieldArmy army : armies) {
+            for (FieldBlock b : army.blocks) {
+                b.pos = b.line.plus(-army.facingX * back, -army.facingZ * back);
+            }
+        }
+    }
+
+    public boolean forming() {
+        return forming;
+    }
+
+    /** The armies are in place (or out of time): the battle may begin. */
+    public void formed() {
+        forming = false;
     }
 
     public boolean pulledBack() {

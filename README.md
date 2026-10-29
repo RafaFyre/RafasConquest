@@ -136,8 +136,15 @@ first. The old relation is restored when the battle ends.
   meets) → *battle* (from the charge until sunset, time 12000, at least a minute) → *evening pullback* (the fighting
   stops; every block marches back 25 blocks, re-forming just short of its camp, before nightfall at 13000) →
   *night* in camp, nobody fighting → at dawn (23000) the survivors regroup into fresh blocks of 20 (the wounded
-  recovered), and the armies deploy anew under the same generals and plans; 90 s later they charge. Day 1 waits
-  for the Start button (or `/pve debug battle start`). It repeats until the battle is won.
+  recovered), in camp, under the same generals and plans, and march out to their places: a smaller deployment
+  than the first. Enlisted players wake in camp (each has a tent with a bed; the ring points to it in the evening
+  and at night), are enlisted anew, and lead their unit out: their soldiers follow them until they are within 5
+  blocks of their ring, then form their square. Unless the general gives them another task for the day (60 % of
+  mornings when there is a reason: hunt an enemy general who leads their own charge, support when outnumbered,
+  flank a thin wing, bait for a cunning general, lead the charge for a bold one): then a messenger waits at their
+  tent and gives them the orders, a line at a time, when they come near (or right-click). The charge comes once both
+  armies and every enlisted player are in position, at least 30 s and at most 4 minutes after dawn. Day 1 waits for
+  the Start button (or `/pve debug battle start`). It repeats until the battle is won.
 - **War camps** (`bridge/WarCamp`): each army's camp is built of blocks 40 behind its rearmost block, facing the
   enemy: a command tent 13 × 13 inside and 5 tall in the wool nearest the army's uniform colour, with a plank floor,
   lanterns, the nation's banners on three walls inside and either side of the entrance, and a bedrock block in the
