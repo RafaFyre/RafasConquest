@@ -28,6 +28,8 @@ public final class FieldArmy {
     @Nullable
     BlockGrid grid;
     int stackFiles;
+    /** How many blocks deep each front file stands: the conveyor that rotates them (1: none). */
+    int stackDepth = 1;
     /** Where its front centre stood when it deployed, which hand-placed blocks are saved relative to. */
     Point origin;
     /** The wedge's blocks, tip first (Great Spear, Unrelenting Charge); empty if it has none. */
@@ -206,6 +208,22 @@ public final class FieldArmy {
     List<FieldBlock> queue(int file) {
         return blocks.stream().filter(f -> f.duty == Duty.LINE && f.file == file && f.alive > 0 && f.strikeAt == null)
                 .sorted(Comparator.comparingInt(f -> f.queueTicket)).toList();
+    }
+
+    /** Puts a block into a file's queue at {@code index} (0: next to go forward), or at its back if shorter. */
+    void insertInQueue(FieldBlock f, int file, int index) {
+        List<FieldBlock> queue = queue(file);
+        f.duty = Duty.LINE;
+        f.file = file;
+        if (index >= queue.size()) {
+            f.queueTicket = queueTicket++;
+            return;
+        }
+        f.queueTicket = queue.get(index).queueTicket;
+        for (int i = index; i < queue.size(); i++) {
+            queue.get(i).queueTicket++;
+        }
+        queueTicket = Math.max(queueTicket, queue.get(queue.size() - 1).queueTicket + 1);
     }
 
     /** Puts a block at the back of a file's queue. */

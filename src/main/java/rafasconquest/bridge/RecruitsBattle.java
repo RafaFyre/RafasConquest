@@ -412,7 +412,8 @@ public final class RecruitsBattle {
         Live l = new Live(block);
         float[] health = block.health();
         boolean first = everLive.add(block);
-        float yaw = (float) Math.toDegrees(Math.atan2(-army.facingX(), army.facingZ()));
+        Point enemyWay = field.enemyDirection(block);
+        float yaw = yawOf(enemyWay);
         EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get() : type(block.arm());
         for (int i = 0; i < health.length; i++) {
             if (health[i] <= 0) {
@@ -705,11 +706,41 @@ public final class RecruitsBattle {
                         Vec3.atBottomCenterOf(ground(block.line())), block.files(), BattlePlan.SPACING, true);
             }
         }
+        faceTheEnemy(l, living);
+    }
+
+    /** The yaw a soldier looks along to face the direction (x, z). */
+    private static float yawOf(Point direction) {
+        return (float) Math.toDegrees(Math.atan2(-direction.x(), direction.z()));
+    }
+
+    /**
+     * Soldiers standing in their places with nobody to fight turn to face their block's enemy (the block it fights,
+     * else the nearest), rather than whichever way they last walked.
+     */
+    private void faceTheEnemy(Live l, List<AbstractRecruitEntity> living) {
+        if (l.block.charged() || passive(l.block.duty())) {
+            return;
+        }
+        float yaw = yawOf(field.enemyDirection(l.block));
+        for (AbstractRecruitEntity s : living) {
+            LivingEntity target = s.getTarget();
+            if ((target == null || !target.isAlive()) && s.getNavigation().isDone()) {
+                s.setYRot(yaw);
+                s.setYBodyRot(yaw);
+                s.setYHeadRot(yaw);
+                if (s.getVehicle() instanceof LivingEntity horse) {
+                    horse.setYRot(yaw);
+                    horse.setYBodyRot(yaw);
+                    horse.setYHeadRot(yaw);
+                }
+            }
+        }
     }
 
     /** Soldiers on these duties hold back from fighting. */
     private static boolean passive(Duty duty) {
-        return duty == Duty.WITHDRAWING || duty == Duty.BEARER || duty == Duty.FLEEING || duty == Duty.RALLYING;
+        return duty == Duty.WITHDRAWING || duty == Duty.BEARER || duty == Duty.FLEEING || duty == Duty.RALLYING || duty == Duty.ROUTED;
     }
 
     /**

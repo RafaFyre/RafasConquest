@@ -157,7 +157,7 @@ class DoctrineTest {
                 for (int i = 0; i < cavalry.size(); i++) {
                     FieldBlock c = cavalry.get(i);
                     FieldBlock foe = c.contactFoe();
-                    if (foe == null || foe.braced() || !foe.arm().infantry() || c.alive() == 0 || before[i] < 0.5) {
+                    if (foe == null || foe.braced() || foe.duty() == Duty.ROUTED || !foe.arm().infantry() || c.alive() == 0 || before[i] < 0.5) {
                         continue; // only full losses to infantry not braced
                     }
                     double lost = before[i] - c.momentum();
@@ -206,7 +206,7 @@ class DoctrineTest {
         int springs = 0;
         int baits = 0;
         for (long seed = 1; seed <= 4; seed++) {
-            List<String> events = fight(battle(25, CHARGE_BAIT, List.of(), seed));
+            List<String> events = fight(battle(100, CHARGE_BAIT, List.of(), seed));
             baits += events.stream().anyMatch(e -> e.startsWith("0:has a bait fall back")) ? 1 : 0;
             springs += events.stream().anyMatch(e -> e.startsWith("0:springs the pincer")) ? 1 : 0;
         }
@@ -303,6 +303,52 @@ class DoctrineTest {
         Point back = BattlePlan.offset(p, 0.6, 0.8, BattlePlan.place(p, 0.6, 0.8, 7, -2));
         assertEquals(7, back.x(), 1e-9);
         assertEquals(-2, back.z(), 1e-9);
+    }
+
+    @Test
+    void frontBlocksRotateToTheBackOfTheirStackAfterTwoMinutesOfFighting() {
+        assertEquals(1, BattlePlan.stackDepth(15, false));
+        assertEquals(2, BattlePlan.stackDepth(50, false));
+        assertEquals(3, BattlePlan.stackDepth(51, false));
+        assertEquals(3, BattlePlan.stackDepth(15, true));
+        FieldBattle battle = new FieldBattle(100, 100, new Point(0, 0), 1, 0, 1);
+        int rotations = 0;
+        java.util.Map<FieldBlock, Duty> last = new java.util.HashMap<>();
+        while (!battle.over() && battle.seconds() < 600) {
+            battle.second();
+            for (FieldBlock b : battle.army(0).blocks()) {
+                Duty was = last.put(b, b.duty());
+                if (was == Duty.FRONT && b.duty() == Duty.LINE) {
+                    rotations++;
+                    assertTrue(b.fightSeconds() == 0, "rested on rotating out");
+                }
+            }
+        }
+        assertTrue(rotations > 0);
+    }
+
+    @Test
+    void blocksThatLoseHalfInAMinuteRoutAndTheirFoesRally() {
+        int routs = 0;
+        int rallied = 0;
+        int regrouped = 0;
+        FieldBattle battle = new FieldBattle(100, 100, new Point(0, 0), 1, 0, 2);
+        java.util.Map<FieldBlock, Duty> last = new java.util.HashMap<>();
+        while (!battle.over() && battle.seconds() < 900) {
+            battle.second();
+            for (int side = 0; side < 2; side++) {
+                for (FieldBlock b : battle.army(side).blocks()) {
+                    Duty was = last.put(b, b.duty());
+                    routs += b.duty() == Duty.ROUTED && was != Duty.ROUTED ? 1 : 0;
+                    regrouped += was == Duty.ROUTED && b.duty() == Duty.LINE ? 1 : 0;
+                    rallied += b.rallied(battle.seconds()) ? 1 : 0;
+                    if (b.duty() == Duty.ROUTED) {
+                        assertFalse(b.fighting() && b.contactFoe() != null, "a routed block doesn't fight");
+                    }
+                }
+            }
+        }
+        assertTrue(routs > 0 && rallied > 0 && regrouped > 0, routs + " routs, " + rallied + " rallied, " + regrouped + " regrouped");
     }
 
     @Test

@@ -34,6 +34,9 @@ public final class FieldBlock {
         BEARER,
         /** Cavalry that spent its momentum, riding back to reform; doesn't fight on the way. */
         RALLYING,
+        /** An infantry block that broke (lost half its soldiers within a minute): running to its wing's backline to
+         * regroup, not fighting on the way. */
+        ROUTED,
         /** Running from a lost battle; never fights. */
         FLEEING
     }
@@ -121,6 +124,20 @@ public final class FieldBlock {
     /** Waiting in reserve: where it deployed, {right, back} of its file's front block, which it keeps. */
     @Nullable
     Point reserve;
+    /**
+     * Morale: how many soldiers it had each of the last {@link FieldRules#ROUT_WINDOW} seconds (to tell how many it lost
+     * in that time), until when it is shaken by its captain's fall, until when it is rallied (can't rout), and
+     * whether its captain was alive a second ago.
+     */
+    int[] history;
+    int shakenUntil;
+    int rallyUntil;
+    boolean captainWasAlive = true;
+
+    /** Seconds it has fought in the front since it last rotated in, and whether it is being rotated out. */
+    int fightSeconds;
+    boolean rotating;
+
     /** Placed by hand before the battle: where it keeps its place, {right, back} of what it stands by, or null. */
     @Nullable
     Point placed;
@@ -205,6 +222,11 @@ public final class FieldBlock {
         return prey;
     }
 
+    /** Seconds it has fought in the front since it last rotated in. */
+    public int fightSeconds() {
+        return fightSeconds;
+    }
+
     /** Riding in formation toward a charge, not yet broken up to fight. */
     public boolean approaching() {
         return approaching;
@@ -214,6 +236,11 @@ public final class FieldBlock {
     @Nullable
     public FieldBlock strikeAt() {
         return strikeAt;
+    }
+
+    /** Rallied: its foe routed or lost its captain, and for a while it can't rout. */
+    public boolean rallied(int now) {
+        return now < rallyUntil;
     }
 
     /** The enemy block it fought this second, or null. */

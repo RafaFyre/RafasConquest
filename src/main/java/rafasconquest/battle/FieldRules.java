@@ -119,6 +119,20 @@ public final class FieldRules {
     public static final double LURE_REACH = 20;
     /** A pincer gives up after this long. */
     public static final int PINCER_SECONDS = 40;
+    /** The conveyor: a front block that has fought this long is rotated to the back of its file's stack. */
+    public static final int ROTATE_SECONDS = 120;
+    /**
+     * Morale: an infantry block that loses {@link #ROUT_LOSS} of its soldiers within {@link #ROUT_WINDOW} seconds routs
+     * (its captain's fall counts as {@link #CAPTAIN_SHOCK} more for as long), runs {@link #ROUT_RUN} behind its army's
+     * reserves and regroups for {@link #REGROUP_SECONDS} before rejoining its file. The blocks that broke it, or killed
+     * its captain, rally: for {@link #RALLIED_SECONDS} they can't rout.
+     */
+    public static final int ROUT_WINDOW = 60;
+    public static final double ROUT_LOSS = 0.5;
+    public static final double CAPTAIN_SHOCK = 0.25;
+    public static final double ROUT_RUN = 30;
+    public static final int REGROUP_SECONDS = 120;
+    public static final int RALLIED_SECONDS = 45;
     /** Wing cavalry looks for exposed enemies this far around it. */
     public static final double WING_REACH = 80;
     /** Cavalry riding its backline goes this far each way of its post. */

@@ -152,7 +152,7 @@ public final class BattlePlan {
         if (place < SHIELD_STACK) {
             return place * stackPitch(stackFiles);
         }
-        return archerBack(stackFiles) + ARCHER_BAND + (place - SHIELD_STACK) * LINE_GAP;
+        return archerBack(stackFiles, SHIELD_STACK) + ARCHER_BAND + (place - SHIELD_STACK) * LINE_GAP;
     }
 
     /** The same for a Great Shield's blocks, or a front of single blocks. */
@@ -169,22 +169,31 @@ public final class BattlePlan {
      * How far behind the front archers stand, at the least: {@link #ARCHER_BACK}, or behind a stacked front (blocks
      * {@code stackFiles} wide) clear of its whole stack (its last block's rear rank, and a gap).
      */
-    public static double archerBack(int stackFiles) {
-        if (stackFiles == 0) {
-            return ARCHER_BACK;
+    public static double archerBack(int stackFiles, int depth) {
+        if (stackFiles == 0 || depth <= 1) {
+            return stackFiles == 0 ? ARCHER_BACK : (SOLDIERS_PER_FORMATION / stackFiles - 1) * SPACING + ARCHER_CLEARANCE;
         }
-        double stackRear = (SHIELD_STACK - 1) * stackPitch(stackFiles) + (SOLDIERS_PER_FORMATION / stackFiles - 1) * SPACING;
+        double stackRear = (depth - 1) * stackPitch(stackFiles) + (SOLDIERS_PER_FORMATION / stackFiles - 1) * SPACING;
         return stackRear + ARCHER_CLEARANCE;
     }
 
     /** The same for a Great Shield, or a front of single blocks. */
     public static double archerBack(boolean greatShield) {
-        return archerBack(greatShield ? SHIELD_FILES : 0);
+        return archerBack(greatShield ? SHIELD_FILES : 0, SHIELD_STACK);
+    }
+
+    /**
+     * How many blocks deep each front file stands (the conveyor that rotates its blocks): 3 in a Great Shield or an
+     * army of more than {@link #WIDE_OVER} soldiers, 2 in one of more than {@link #WINGS_OVER}, else 1 (no conveyor).
+     */
+    public static int stackDepth(int blocks, boolean greatShield) {
+        int soldiers = blocks * SOLDIERS_PER_FORMATION;
+        return greatShield || soldiers > WIDE_OVER ? SHIELD_STACK : soldiers > WINGS_OVER ? 2 : 1;
     }
 
     /** How wide the blocks of a stacked front are, or 0 if the army's front is single blocks. */
     public static int stackFiles(int blocks, boolean greatShield) {
-        return greatShield ? SHIELD_FILES : blocks * SOLDIERS_PER_FORMATION > WIDE_OVER ? FILE_WIDTH : 0;
+        return greatShield ? SHIELD_FILES : stackDepth(blocks, false) > 1 ? FILE_WIDTH : 0;
     }
 
     /** How an army of {@code blocks} blocks deploys, its troops shared evenly between its wings. */
@@ -200,7 +209,7 @@ public final class BattlePlan {
      * {@link #wingGap} between them. A smaller army is all centre. Each stands alike, front to back:
      * <ul>
      *   <li>its front, at least as wide as its archers' rows. In a Great Shield, or an army of more than
-     *   {@link #WIDE_OVER} soldiers, each front file is {@link #SHIELD_STACK} blocks closed up one behind the other,
+     *   {@link #WINGS_OVER} soldiers, each front file is {@link #stackDepth} blocks closed up one behind the other,
      *   about {@link #FRONT_SHARE} of its infantry; else a single line at most {@link #MAX_FRONT} wide. The army's
      *   front is at most {@link #maxFront} files, shared between its wings;</li>
      *   <li>its archers, in at most {@link #ARCHER_ROWS} rows right behind the front, which covers them;</li>
@@ -229,6 +238,7 @@ public final class BattlePlan {
         int[] wingArchers = share(archers, shares, 0);
         int[] wingCavalry = share(cavalry, shares, 0);
         int stackFiles = stackFiles(blocks, greatShield);
+        int depth = stackDepth(blocks, greatShield);
         int files = greatShield ? SHIELD_FILES : FILE_WIDTH;
         double pitch = pitch(files);
         double frontCap = maxFront(soldiers);
@@ -242,7 +252,7 @@ public final class BattlePlan {
             if (wingInfantry[wing] + wingArchers[wing] + wingCavalry[wing] > 0) {
                 int cap = Math.max(1, (int) Math.round(frontCap * (winged ? shares[wing] : 1)));
                 widths[wing] = layoutWing(slots, wing, firstFile, wingInfantry[wing], wingArchers[wing], wingCavalry[wing],
-                        greatShield, stackFiles, files, pitch, cap);
+                        greatShield, stackFiles, depth, files, pitch, cap);
                 firstFile += (int) slots.stream().filter(s -> s.line() == 0).count();
             }
             wings.add(slots);
@@ -272,7 +282,7 @@ public final class BattlePlan {
      * are numbered from {@code firstFile}. Returns how wide it stands.
      */
     private static double layoutWing(List<Slot> slots, int wing, int firstFile, int infantry, int archers, int cavalry,
-                                     boolean greatShield, int stackFiles, int files, double pitch, int frontCap) {
+                                     boolean greatShield, int stackFiles, int depth, int files, double pitch, int frontCap) {
         int archersPerRow = Math.max(1, (archers + ARCHER_ROWS - 1) / ARCHER_ROWS);
         int cover = archers == 0 ? 1 : (int) Math.ceil(archersPerRow * BLOCK_PITCH / pitch);
         int width;
@@ -281,9 +291,9 @@ public final class BattlePlan {
             width = 0;
             frontRows = 0;
         } else if (stackFiles > 0) {
-            int share = (int) Math.ceil(infantry * FRONT_SHARE / SHIELD_STACK);
-            width = Math.max(1, Math.min(Math.min(frontCap, Math.max(cover, share)), infantry / SHIELD_STACK));
-            frontRows = Math.max(1, Math.min(SHIELD_STACK, infantry / width));
+            int share = (int) Math.ceil(infantry * FRONT_SHARE / depth);
+            width = Math.max(1, Math.min(Math.min(frontCap, Math.max(cover, share)), Math.max(1, infantry / depth)));
+            frontRows = Math.max(1, Math.min(depth, infantry / width));
         } else {
             int plain = infantry <= 4 ? infantry : Math.max(Math.min(MAX_FRONT, (infantry + 1) / 2), (infantry + LINES_DEEP - 1) / LINES_DEEP);
             width = Math.max(1, Math.min(infantry, Math.min(frontCap, Math.max(plain, cover))));
@@ -307,7 +317,7 @@ public final class BattlePlan {
         if (width > 0) {
             archersPerRow = Math.max(1, Math.min(archersPerRow, (int) (width * pitch / BLOCK_PITCH)));
         }
-        double archersBack = frontRows == 0 ? 0 : archerBack(stackFiles);
+        double archersBack = frontRows == 0 ? 0 : archerBack(stackFiles, frontRows);
         int archerRows = archers == 0 ? 0 : (archers + archersPerRow - 1) / archersPerRow;
         for (int i = 0; i < archers; i++) {
             int row = i / archersPerRow;
@@ -549,7 +559,7 @@ public final class BattlePlan {
 
     /** The same, for an army in a Great Shield or not: never into its shield stack either. */
     public static boolean archersMayAdvance(double behindFront, int stackFiles) {
-        return behindFront - MARCH_STEP >= archerBack(stackFiles);
+        return behindFront - MARCH_STEP >= archerBack(stackFiles, stackFiles == 0 ? 1 : SHIELD_STACK);
     }
 
     /** Whether a battle has stalled: fighting began, and nobody has fallen for {@link #STALL_SECONDS}. */

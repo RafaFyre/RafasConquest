@@ -384,7 +384,9 @@ public final class BattleMap {
             a.add("groups", groups);
             armies.add(a);
             for (Map.Entry<String, FieldBlock> e : keys(army).entrySet()) {
-                blocks.add(block(e.getKey(), e.getValue()));
+                JsonObject b = block(e.getKey(), e.getValue());
+                b.addProperty("rallied", e.getValue().rallied(field.seconds()));
+                blocks.add(b);
             }
         }
         o.add("armies", armies);
@@ -419,6 +421,7 @@ public final class BattleMap {
         o.addProperty("braced", b.braced());
         o.addProperty("fighting", b.fighting());
         o.addProperty("inWedge", b.inWedge());
+        o.addProperty("fightSeconds", b.fightSeconds());
         o.addProperty("prey", b.prey() == null ? -1 : b.prey().id());
         o.addProperty("strike", b.strikeAt() == null ? -1 : b.strikeAt().id());
         return o;

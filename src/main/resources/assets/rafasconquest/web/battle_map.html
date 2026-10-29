@@ -231,6 +231,8 @@ function draw() {
     let outline = null;
     if (selected.has(b.id)) outline = '#ffffff';
     else if (groupIds.has(b.id)) outline = '#ffd84a';
+    else if (b.duty === 'ROUTED') outline = '#c77dff';
+    else if (b.rallied) outline = '#5fd38d';
     else if (b.braced) outline = '#9fd0ff';
     else if (b.fighting) outline = 'rgba(255,107,107,.9)';
     if (outline) {
@@ -424,7 +426,8 @@ function showSelection() {
       `at ${b.x.toFixed(1)}, ${b.z.toFixed(1)}\n` +
       `ordered to ${b.lx.toFixed(1)}, ${b.lz.toFixed(1)}\n` +
       `${b.live ? 'real soldiers' : 'numbers only'}${b.inWedge ? ', in the wedge' : ''}\n` +
-      `fighting ${b.fighting}  charged ${b.charged}  riding in ${b.approaching}  braced ${b.braced}\n` +
+      `fighting ${b.fighting} (${b.fightSeconds}s in the front)  charged ${b.charged}  riding in ${b.approaching}  braced ${b.braced}\n` +
+      `${b.duty === 'ROUTED' ? 'ROUTED, regrouping\n' : ''}${b.rallied ? 'RALLIED\n' : ''}` +
       `going for ${prey}   striking ${strike}`;
   } else {
     const counts = {};

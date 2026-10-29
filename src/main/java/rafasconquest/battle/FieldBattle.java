@@ -88,6 +88,7 @@ public final class FieldBattle {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
         army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
+        army.stackDepth = BattlePlan.stackDepth(blocks, plan.has(Formation.GREAT_SHIELD));
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
@@ -341,6 +342,22 @@ public final class FieldBattle {
                 && (general.charged || general.approaching) && general.pos.distanceTo(block.pos) <= FieldRules.RESOLVE_REACH;
     }
 
+    /**
+     * Which way a block's enemy lies, as a unit vector: the block it is fighting, else whom it is going for, else the
+     * nearest enemy block; its army's facing if there is none.
+     */
+    public Point enemyDirection(FieldBlock block) {
+        FieldArmy army = armies[block.side];
+        FieldBlock foe = hunted(block.contactFoe) ? block.contactFoe : hunted(block.prey) ? block.prey : nearestBlock(block, armies[1 - block.side], null);
+        if (foe == null) {
+            return new Point(army.facingX, army.facingZ);
+        }
+        double dx = foe.pos.x() - block.pos.x();
+        double dz = foe.pos.z() - block.pos.z();
+        double length = Math.hypot(dx, dz);
+        return length < 1e-6 ? new Point(army.facingX, army.facingZ) : new Point(dx / length, dz / length);
+    }
+
     /** Whether a block is a general who leads the charge (Unrelenting Charge), or that general's guard. */
     public static boolean leadsTheCharge(FieldBlock block) {
         return block.inWedge && (block.homeDuty == Duty.GENERAL || block.homeDuty == Duty.GUARD);
@@ -374,6 +391,9 @@ public final class FieldBattle {
         index();
         fight();
         momentum();
+        for (FieldArmy army : armies) {
+            morale(army, armies[1 - army.side]);
+        }
         if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
             finalMelee = true;
             calls.add(new Order(0, Call.FINAL_CHARGE));
@@ -465,7 +485,7 @@ public final class FieldBattle {
                     int place = queues.computeIfAbsent(block.file, army::queue).indexOf(block) + 1;
                     // Placed by hand; else in the reserves where it deployed, or closed up in a Great Shield's stack.
                     Point offset = block.placed != null ? block.placed
-                            : block.reserve != null && (army.stackFiles() == 0 || place >= BattlePlan.SHIELD_STACK) ? block.reserve
+                            : block.reserve != null && (army.stackFiles() == 0 || place >= army.stackDepth) ? block.reserve
                             : new Point(0, BattlePlan.fileBack(place, army.stackFiles()));
                     block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, offset.x(), offset.z());
                 }
@@ -495,6 +515,13 @@ public final class FieldBattle {
                 case SUPPORT -> support(army, enemy, block, engaged);
                 case GENERAL -> general(army, enemy, block);
                 case GUARD -> guard(army, enemy, block);
+                case ROUTED -> {
+                    if (seconds - block.dutySince >= FieldRules.REGROUP_SECONDS) {
+                        // Regrouped: back to the back of its file, its morale whole again.
+                        java.util.Arrays.fill(block.history, block.alive);
+                        army.join(block, block.file);
+                    }
+                }
                 case BEARER -> {
                     if (army.commander != null && army.commander.alive > 0) {
                         Point at = block.placed != null ? block.placed : new Point(BattlePlan.BEARER_RIGHT, 0);
@@ -606,7 +633,23 @@ public final class FieldBattle {
                 continue;
             }
             held.relief = null;
-            if (!BattlePlan.needsRelief(held.alive, held.started()) || held.strikeAt != null) {
+            if (held.strikeAt != null) {
+                continue;
+            }
+            boolean worn = BattlePlan.needsRelief(held.alive, held.started());
+            if (!worn) {
+                // The conveyor: after ROTATE_SECONDS of fighting, the block behind takes its place, and it goes to the
+                // back of its file's stack to rest.
+                List<FieldBlock> stack = army.queue(file);
+                if (army.stackDepth > 1 && held.fightSeconds >= FieldRules.ROTATE_SECONDS && !stack.isEmpty() && held.alive > 0) {
+                    FieldBlock next = stack.get(0);
+                    next.duty = Duty.RELIEVING;
+                    next.file = file;
+                    next.dutySince = seconds;
+                    next.line = held.line;
+                    held.relief = next;
+                    held.rotating = true;
+                }
                 continue;
             }
             FieldBlock relief = pickRelief(army, file, held.line);
@@ -659,6 +702,18 @@ public final class FieldBattle {
         relief.dutySince = seconds;
         relieved.relief = null;
         relieved.engaged = false;
+        if (relieved.rotating && relieved.alive > 0) {
+            // Rotated out: to the back of its file's stack, where it rests until its turn comes round again.
+            relieved.rotating = false;
+            relieved.fightSeconds = 0;
+            relieved.duty = Duty.LINE;
+            relieved.file = relief.file;
+            relieved.placed = null;
+            army.insertInQueue(relieved, relief.file, army.stackDepth - 2);
+            relief.fightSeconds = 0;
+            return;
+        }
+        relieved.rotating = false;
         if (relieved.alive == 0) {
             relieved.duty = Duty.RESTING;
             return;
@@ -710,7 +765,7 @@ public final class FieldBattle {
         }
         switch (order) {
             case MARCH -> {
-                if (block.arm != Arm.ARCHERS || BattlePlan.archersMayAdvance(behindFront(army, block.line), army.stackFiles())) {
+                if (block.arm != Arm.ARCHERS || behindFront(army, block.line) - BattlePlan.MARCH_STEP >= BattlePlan.archerBack(army.stackFiles(), army.stackDepth)) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }
@@ -1514,6 +1569,95 @@ public final class FieldBattle {
         }
     }
 
+    // ---- morale ----
+
+    /**
+     * Each second, after the fighting: an infantry block that has lost {@link FieldRules#ROUT_LOSS} of its soldiers
+     * within the last {@link FieldRules#ROUT_WINDOW} seconds routs, unless rallied; its captain's fall shakes it, counting
+     * as {@link FieldRules#CAPTAIN_SHOCK} more for as long. The enemy blocks fighting a block that routs or loses its
+     * captain rally.
+     */
+    private void morale(FieldArmy army, FieldArmy enemy) {
+        int slot = seconds % FieldRules.ROUT_WINDOW;
+        for (FieldBlock block : army.blocks) {
+            if (!block.arm.infantry() || block.started() == 1) {
+                continue;
+            }
+            if (block.history == null) {
+                block.history = new int[FieldRules.ROUT_WINDOW];
+                java.util.Arrays.fill(block.history, block.alive);
+            }
+            int before = block.history[slot];
+            block.history[slot] = block.alive;
+            if (block.alive == 0 || block.duty == Duty.ROUTED || block.duty == Duty.FLEEING || block.duty == Duty.WITHDRAWING) {
+                block.captainWasAlive = block.captainAlive();
+                continue;
+            }
+            boolean captainFell = block.captainWasAlive && !block.captainAlive();
+            block.captainWasAlive = block.captainAlive();
+            if (captainFell) {
+                block.shakenUntil = seconds + FieldRules.ROUT_WINDOW;
+                rallyAgainst(enemy, block);
+            }
+            double lost = before == 0 ? 0 : (double) (before - block.alive) / before;
+            if (seconds < block.shakenUntil) {
+                lost += FieldRules.CAPTAIN_SHOCK;
+            }
+            if (lost >= FieldRules.ROUT_LOSS && !block.rallied(seconds)) {
+                rout(army, block);
+                rallyAgainst(enemy, block);
+            }
+        }
+    }
+
+    /** The enemy blocks fighting a block that just broke, or lost its captain, rally. */
+    private void rallyAgainst(FieldArmy enemy, FieldBlock broken) {
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.contactFoe == broken) {
+                e.rallyUntil = seconds + FieldRules.RALLIED_SECONDS;
+                if (e.history != null) {
+                    java.util.Arrays.fill(e.history, e.alive);
+                }
+                e.shakenUntil = 0;
+            }
+        }
+    }
+
+    /**
+     * A block routs: it stops fighting and runs behind its army's reserves to regroup. A front block's place is
+     * taken at once by the next block of its file, if there is one.
+     */
+    private void rout(FieldArmy army, FieldBlock block) {
+        if (block.duty == Duty.FRONT && army.front[block.file] == block) {
+            List<FieldBlock> queue = army.queue(block.file);
+            if (!queue.isEmpty()) {
+                FieldBlock next = queue.get(0);
+                army.front[block.file] = next;
+                next.duty = Duty.FRONT;
+                next.line = block.line;
+                next.engaged = false;
+                next.relief = null;
+                next.fightSeconds = 0;
+                next.placed = null;
+            }
+        }
+        block.duty = Duty.ROUTED;
+        block.dutySince = seconds;
+        block.contactFoe = null;
+        block.contactSeconds = 0;
+        block.charged = false;
+        block.approaching = false;
+        block.braced = false;
+        block.engaged = false;
+        block.strikeAt = null;
+        block.relief = null;
+        block.rotating = false;
+        block.fightSeconds = 0;
+        block.facingX = army.facingX;
+        block.facingZ = army.facingZ;
+        block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, block.homeRight, army.rearBack + FieldRules.ROUT_RUN);
+    }
+
     // ---- judging the enemy ----
 
     /** Whether the enemy's general stands exposed: their guard away or fallen, and none of their army near. */
@@ -1761,7 +1905,7 @@ public final class FieldBattle {
             FieldArmy enemy = armies[1 - side];
             for (FieldBlock block : army.blocks) {
                 if (block.alive == 0 || block.duty == Duty.WITHDRAWING || block.duty == Duty.BEARER || block.duty == Duty.FLEEING
-                        || block.duty == Duty.RALLYING) {
+                        || block.duty == Duty.RALLYING || block.duty == Duty.ROUTED) {
                     block.contactFoe = null;
                     continue;
                 }
@@ -1770,6 +1914,9 @@ public final class FieldBattle {
                 FieldBlock foe = hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestWithin(block, enemy, reach);
                 if (foe != null) {
                     block.contactSeconds++;
+                    if (block.duty == Duty.FRONT) {
+                        block.fightSeconds++;
+                    }
                     block.contactFoe = foe;
                     if (block.live && foe.live) {
                         continue; // real soldiers on both sides: Recruits fights it out

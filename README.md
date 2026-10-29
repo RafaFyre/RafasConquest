@@ -119,6 +119,17 @@ first. The old relation is restored when the battle ends.
   - **General:** a gold helmet and the faction banner on the back, like a sashimono (`client/BackBannerLayer`; the server
     tells each client which soldiers wear one).
   - **Standard-bearer:** a dyed cap and the faction banner carried in hand. They stay at the general's side and don't fight.
+- **The conveyor:** each front file stands 3 blocks deep in an army of more than 1000 soldiers (or a Great Shield), 2
+  deep in one of more than 300, and 1 deep (no conveyor) in a smaller one. A front block that has fought for 2 minutes
+  swaps with the block behind it and goes to the back of its file's stack, so the front turns like a slow conveyor
+  belt; a badly worn block is still relieved from the reserves.
+- **Morale:** an infantry block that loses half its soldiers within a minute **routs**: it stops fighting, runs 30
+  blocks behind its army's reserves, regroups for 2 minutes and rejoins the back of its file. The next block of its
+  file takes its place at once. Its captain's fall shakes it, counting as a quarter more lost for a minute. The enemy
+  blocks fighting a block that routs or loses its captain **rally**: their losses are forgotten and for 45 s they
+  can't rout. The battle map outlines routed blocks purple and rallied ones green.
+- **Facing the enemy:** real soldiers spawn facing their block's enemy (the block it fights, else the nearest), and
+  those standing in their places with nobody to fight turn to face it each second.
 - **Battle soldiers can't be hired:** right-clicking a battle soldier, or its horse, does nothing (Recruits would
   otherwise open its hire menu).
 - **Battle soldiers can't pick up items, and drop nothing when they die**, so nobody swaps the uniform for loot and
