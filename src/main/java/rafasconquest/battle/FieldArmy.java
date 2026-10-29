@@ -24,6 +24,9 @@ public final class FieldArmy {
     @Nullable
     FieldBlock guard;
     final WarPlan plan;
+    /** Its living blocks by where they stood when last filed (each second, before orders and before fighting). */
+    @Nullable
+    BlockGrid grid;
     int stackFiles;
     /** Where its front centre stood when it deployed, which hand-placed blocks are saved relative to. */
     Point origin;

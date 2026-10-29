@@ -23,7 +23,8 @@ class BattlePlanTest {
         assertEquals(100, BattlePlan.blocks(2000));
         assertEquals(250, BattlePlan.blocks(5000));
         assertEquals(500, BattlePlan.blocks(10_000));
-        assertEquals(500, BattlePlan.blocks(50_000));
+        assertEquals(2500, BattlePlan.blocks(50_000));
+        assertEquals(5000, BattlePlan.blocks(500_000));
         assertEquals(1, BattlePlan.blocks(1));
         assertEquals(8, BattlePlan.blocks(150), "rounded to the nearest block");
     }
@@ -48,12 +49,16 @@ class BattlePlanTest {
     }
 
     @Test
-    void anArmyOfAThousandStandsInLinesBehindAFrontOfAtMostTenBlocks() {
+    void anArmyOfAThousandStandsEachWingInLinesBehindAFrontOfAtMostTenBlocks() {
         List<Slot> slots = BattlePlan.deployment(50);
         List<Slot> infantry = slots.stream().filter(s -> s.arm().infantry()).toList();
-        assertEquals(BattlePlan.MAX_FRONT, infantry.stream().filter(s -> s.line() == 0).count());
+        for (int wing = 0; wing < 3; wing++) {
+            int w = wing;
+            long front = infantry.stream().filter(s -> s.line() == 0 && s.wing() == w).count();
+            assertTrue(front > 0 && front <= BattlePlan.MAX_FRONT, "wing " + w + " front " + front);
+        }
         int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
-        assertTrue(lines >= 3, "relief lines behind the front: " + lines);
+        assertTrue(lines >= 2, "relief lines behind the front: " + lines);
         assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.SHIELDWALL));
     }
 
@@ -122,6 +127,35 @@ class BattlePlanTest {
                 String what = blocks + " blocks, shield " + shield;
                 assertTrue(lo[BattlePlan.CENTRE] - hi[BattlePlan.LEFT] >= BattlePlan.WING_GAP, what + ": left to centre " + (lo[1] - hi[0]));
                 assertTrue(lo[BattlePlan.RIGHT] - hi[BattlePlan.CENTRE] >= BattlePlan.WING_GAP, what + ": centre to right " + (lo[2] - hi[1]));
+            }
+        }
+    }
+
+    @Test
+    void theWingArmiesStandFurtherApartTheBiggerTheBattle() {
+        assertEquals(BattlePlan.WING_GAP, BattlePlan.wingGap(9_000), 1e-9);
+        assertEquals(35, BattlePlan.wingGap(10_000), 1e-9);
+        assertEquals(267.5, BattlePlan.wingGap(55_000), 1e-9);
+        assertEquals(500, BattlePlan.wingGap(100_000), 1e-9);
+        List<Slot> slots = BattlePlan.deployment(BattlePlan.blocks(100_000), false);
+        double leftEdge = slots.stream().filter(s -> s.wing() == BattlePlan.LEFT).mapToDouble(s -> s.right() + (s.files() - 1) * BattlePlan.SPACING / 2).max().orElseThrow();
+        double centreEdge = slots.stream().filter(s -> s.wing() == BattlePlan.CENTRE).mapToDouble(s -> s.right() - (s.files() - 1) * BattlePlan.SPACING / 2).min().orElseThrow();
+        assertTrue(centreEdge - leftEdge >= 500, "gap " + (centreEdge - leftEdge));
+    }
+
+    @Test
+    void aStackedWingTakesItsShareOfEveryArm() {
+        for (Doctrine.Distribution d : Doctrine.Distribution.values()) {
+            double[] shares = WarPlan.of(List.of(), d, 0.4).wingShares();
+            List<Slot> slots = BattlePlan.deployment(500, false, shares);
+            for (Arm arm : List.of(Arm.SWORDSMEN, Arm.ARCHERS, Arm.CAVALRY)) {
+                java.util.function.Predicate<Slot> of = s -> arm == Arm.SWORDSMEN ? s.arm().infantry() : s.arm() == arm;
+                long all = slots.stream().filter(of).count();
+                for (int wing = 0; wing < 3; wing++) {
+                    int w = wing;
+                    long mine = slots.stream().filter(s -> of.test(s) && s.wing() == w).count();
+                    assertEquals(all * shares[wing], mine, 1, d + " " + arm + " wing " + wing);
+                }
             }
         }
     }

@@ -30,6 +30,8 @@ public final class FieldRules {
      * soldiers step out to whoever comes within reach and return), one that has broken formation must close in.
      */
     public static final double HOLDING_REACH = 12;
+    /** Orders weigh how near the nearest enemy is up to this far (the furthest any order looks: archers' range). */
+    public static final double ORDERS_REACH = 50;
     public static final double CLOSE_REACH = 2.5;
 
     /** Damage a second dealt by one fighting soldier, by arm. */

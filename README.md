@@ -49,7 +49,7 @@ debug battle in `RecruitsBattle`. `/pve debug recruits` lists what Recruits hold
 
 `/pve debug battle [first [firstSoldiers] second [secondSoldiers]]` deploys two armies 45 blocks in front of you,
 marching at each other across your view: for example `/pve debug battle Osford 2000 Valoia 500`.
-Each side is 20 to 10,000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
+Each side is 20 to 100,000 soldiers (rounded to whole blocks of 20), or 100 if no number is given. With no names given,
 the two factions nearest you fight; quote names that contain spaces. The player is a bystander: the two factions are
 made enemies in Recruits' diplomacy for the battle, so soldiers attack each other and leave you alone unless you strike
 first. The old relation is restored when the battle ends.
@@ -57,19 +57,29 @@ first. The old relation is restored when the battle ends.
 - **Each army** is one faction, in blocks of 20 soldiers (10 wide, 2 deep), each led by a captain, plus a general and
   a standard-bearer. A fifth of the blocks are archers and a fifth cavalry (rounded); the rest is infantry, with a
   shieldwall every third file (`battle/BattlePlan.deployment`).
-- **How an army deploys** (`BattlePlan.deployment`), front to back:
-  - **The front**, split into a left wing, centre and right wing (its left quarter, middle half and right quarter;
-    see Wings below), 3 blocks apart. In a Great Shield, or an army of more than 1000 soldiers, each front file is 3
-    blocks closed up one behind the other, about 70 % of the infantry, and the front always at least as wide as the
-    archers' rows behind it, up to 40 files. A smaller plain army has a single front line at most 10 blocks wide (as
-    wide as its archers need).
+- **How an army deploys** (`BattlePlan.deployment`): an army of more than 300 soldiers stands as three armies side
+  by side, a left wing, a centre and a right wing (see Wings below), sharing all its troops (infantry, archers and
+  cavalry alike) by its general's distribution:
+  - **Evenly Distributed**: a third each; **Stacked Left Wing**, **Stacked Centre**, **Stacked Right Wing**: that
+    wing 35 to 45 % (drawn for each general), the other two the rest evenly. Every general draws one of the four at
+    random; a battle without a general's plan is evenly distributed.
+  - **The gap between the wing armies** grows with the size of the side: 3 blocks up to 10,000 soldiers, then evenly
+    from 35 at 10,000 to 500 at 100,000.
+
+  Each wing army (or a small army, all centre) stands alike, front to back:
+  - **The front.** In a Great Shield, or an army of more than 1000 soldiers, each front file is 3 blocks closed up
+    one behind the other, about 70 % of the wing's infantry, and always at least as wide as its archers' rows. A
+    smaller plain army has a single front line at most 10 blocks wide (as wide as its archers need). The whole
+    army's front is at most 40 files up to 10,000 soldiers, more beyond (about 126 at 100,000), shared between its
+    wings.
   - **The archers**, in at most 3 rows right behind the front, which covers them (more rows only once the front is
-    at its 40-file limit).
+    at its limit).
   - **The reserves**: the rest of the infantry, 24 blocks further back, in a few lines of one width, centred; each
     joins the file of the front block it stands behind, relieves it from there, and keeps its deployed place.
-  - **The cavalry**, 10 blocks behind the reserves in at most 3 rows, centred; the left, middle and right thirds of
-    each row are the left wing's, the centre's and the right wing's.
-  - Wedges form only later, once the front line is established. No two blocks overlap when an army deploys.
+  - **The cavalry**, 10 blocks behind the reserves in at most 3 rows, centred.
+  - Wedges form only later, once the front line is established, and wait behind the middle of the line, further
+    back wherever the enemy has pushed in, so the general in one is never caught there. No two blocks overlap when an
+    army deploys.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
@@ -289,7 +299,9 @@ first. The old relation is restored when the battle ends.
 
   `/pve debug battle simulate <first> <soldiers> <second> <soldiers>` fights one at once and reports the outcome.
   2000 against 2000 lasts several minutes of battle, with dozens of blocks relieved on each side, and takes a fifth of
-  a second to work out; 10,000 against 10,000 about 7 ms per battle-second (a 20-minute battle in about 9 s). Battles over 2000 a side aren't also fought through as
+  a second to work out. Searches for the nearest enemy look only at the blocks filed near it (`battle/BlockGrid`), and
+  only as far as matters: 10,000 against 10,000 costs about 6 ms per battle-second, 50,000 about 28, 100,000 about
+  68 (at worst 100). Battles over 2000 a side aren't also fought through as
   numbers at the start for comparing (it would hold the server up).
 - **Seeing the whole field:** the game stops drawing a soldier about 67 blocks away (a horse at about 94, both scaled
   by the Entity Distance video setting). Beyond that, each soldier is drawn as a flat figure turned to face you, in

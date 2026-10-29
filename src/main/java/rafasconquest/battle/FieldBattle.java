@@ -91,10 +91,10 @@ public final class FieldBattle {
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares());
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
-        army.winged = BattlePlan.winged(blocks, files);
+        army.winged = slots.stream().anyMatch(s -> s.wing() != FieldArmy.CENTRE);
         double reserves = Double.MAX_VALUE;
         int id = side * 10_000;
         double lastLine = 0;
@@ -364,12 +364,14 @@ public final class FieldBattle {
             return;
         }
         seconds++;
+        index();
         for (int side = 0; side < 2; side++) {
             command(armies[side], armies[1 - side]);
         }
         for (FieldArmy army : armies) {
             move(army);
         }
+        index();
         fight();
         momentum();
         if (!finalMelee && BattlePlan.stalled(seconds, lastFall)) {
@@ -390,6 +392,13 @@ public final class FieldBattle {
         checkEnd();
     }
 
+    /** Files each army's blocks by where they now stand, for quick searches ({@link BlockGrid}). */
+    private void index() {
+        for (FieldArmy army : armies) {
+            army.grid = new BlockGrid(army.blocks);
+        }
+    }
+
     // ---- orders: the same rules as a live battle (RecruitsBattle) ----
 
     private void command(FieldArmy army, FieldArmy enemy) {
@@ -399,6 +408,8 @@ public final class FieldBattle {
             calls.add(new Order(army.side, Call.ADVANCE));
         }
         relieve(army);
+        // Each file's queue, worked out once for this second's places (a block's place in it).
+        java.util.Map<Integer, List<FieldBlock>> queues = new java.util.HashMap<>();
         brace(army, enemy);
         pincer(army, enemy);
         huntStoppedCavalry(army, enemy);
@@ -451,7 +462,7 @@ public final class FieldBattle {
             switch (block.duty) {
                 case FRONT -> holdFront(army, block, enemy, engaged);
                 case LINE -> {
-                    int place = army.queue(block.file).indexOf(block) + 1;
+                    int place = queues.computeIfAbsent(block.file, army::queue).indexOf(block) + 1;
                     // Placed by hand; else in the reserves where it deployed, or closed up in a Great Shield's stack.
                     Point offset = block.placed != null ? block.placed
                             : block.reserve != null && (army.stackFiles() == 0 || place >= BattlePlan.SHIELD_STACK) ? block.reserve
@@ -819,7 +830,13 @@ public final class FieldBattle {
             if (cavalry.arm != Arm.CAVALRY || !(cavalry.charged || cavalry.approaching) || cavalry.alive == 0) {
                 continue;
             }
-            for (FieldBlock block : army.blocks) {
+            List<FieldBlock> near = new ArrayList<>();
+            if (army.grid != null) {
+                army.grid.within(cavalry.pos, FieldRules.WALL_ALERT, near::add);
+            } else {
+                near = army.blocks;
+            }
+            for (FieldBlock block : near) {
                 boolean free = block.duty == Duty.LINE || block.duty == Duty.RESTING || block.duty == Duty.FRONT && !block.engaged;
                 if (block.alive == 0 || !block.arm.infantry() || block.charged || block.strikeAt != null || !(free || block.braced)) {
                     continue;
@@ -1006,9 +1023,17 @@ public final class FieldBattle {
     }
 
     /** Where a wedge member waits: its place behind the wedge's tip, far behind the front centre. */
-    private static Point wedgeHome(FieldArmy army, FieldBlock member) {
-        return BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, member.wedgeRight,
-                army.wedgeHomeBack + member.wedgeBack);
+    private Point wedgeHome(FieldArmy army, FieldBlock member) {
+        // Behind the middle of the line, but never where the enemy has pushed in (drawn in by bait, say): the whole
+        // wedge stands further back until its tip is well clear of them, so the general waiting in it is safe.
+        FieldArmy enemy = armies[1 - army.side];
+        Point tip = BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, 0, army.wedgeHomeBack);
+        double back = army.wedgeHomeBack;
+        for (int i = 0; i < 8 && nearestEnemy(enemy, tip) < 2 * FieldRules.GENERAL_SAFE; i++) {
+            back += 10;
+            tip = BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, 0, back);
+        }
+        return BattlePlan.place(holdingCentre(army), army.facingX, army.facingZ, member.wedgeRight, back + member.wedgeBack);
     }
 
     /** The wedge's members riding this charge: one half (Unrelenting Charge) or all, alive. */
@@ -1299,10 +1324,7 @@ public final class FieldBattle {
     private static List<FieldBlock> idleInfantry(FieldArmy army, int wing, @Nullable FieldBlock target, double reach) {
         List<FieldBlock> free = new ArrayList<>();
         for (FieldBlock b : army.blocks) {
-            boolean idleFront = b.duty == Duty.FRONT && !isBait(army, b.file) && !b.engaged && b.contactFoe == null;
-            if (b.alive > 0 && b.arm.infantry() && !b.charged && !b.braced && b.strikeAt == null && (wing < 0 || b.wing == wing)
-                    && (idleFront || b.duty == Duty.LINE) && BattlePlan.fitToRelieve(b.alive, b.started())
-                    && (target == null || b.pos.distanceTo(target.pos) <= reach)) {
+            if (idle(army, b, wing) && (target == null || b.pos.distanceTo(target.pos) <= reach)) {
                 free.add(b);
             }
         }
@@ -1310,6 +1332,13 @@ public final class FieldBattle {
             free.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(target.pos)));
         }
         return free;
+    }
+
+    /** Whether a block is infantry free to be sent to strike: not fighting, fit, of {@code wing} (any if -1). */
+    private static boolean idle(FieldArmy army, FieldBlock b, int wing) {
+        boolean idleFront = b.duty == Duty.FRONT && !isBait(army, b.file) && !b.engaged && b.contactFoe == null;
+        return b.alive > 0 && b.arm.infantry() && !b.charged && !b.braced && b.strikeAt == null && (wing < 0 || b.wing == wing)
+                && (idleFront || b.duty == Duty.LINE) && BattlePlan.fitToRelieve(b.alive, b.started());
     }
 
     /** Whether any of the army's infantry has been sent against {@code target} already. */
@@ -1409,7 +1438,6 @@ public final class FieldBattle {
                 hunters.merge(b.strikeAt, 1, Integer::sum);
             }
         }
-        List<FieldBlock> idle = null;
         for (FieldBlock c : enemy.blocks) {
             if (c.alive == 0 || c.arm != Arm.CAVALRY || c.duty == Duty.FLEEING || c.lastPos == null || c.moved >= FieldRules.STOPPED) {
                 continue;
@@ -1418,14 +1446,16 @@ public final class FieldBattle {
             if (sent >= FieldRules.HUNTERS_PER_RIDERS) {
                 continue;
             }
-            if (idle == null) {
-                idle = idleInfantry(army, -1, null, Double.MAX_VALUE);
-            }
             List<FieldBlock> near = new ArrayList<>();
-            for (FieldBlock b : idle) {
-                if (b.strikeAt == null && b.pos.distanceTo(c.pos) <= FieldRules.HUNT_REACH) {
+            java.util.function.Consumer<FieldBlock> consider = b -> {
+                if (b.strikeAt == null && b.pos.distanceTo(c.pos) <= FieldRules.HUNT_REACH && idle(army, b, -1)) {
                     near.add(b);
                 }
+            };
+            if (army.grid != null) {
+                army.grid.within(c.pos, FieldRules.HUNT_REACH, consider);
+            } else {
+                army.blocks.forEach(consider);
             }
             near.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(c.pos)));
             for (int i = 0; i < near.size() && sent < FieldRules.HUNTERS_PER_RIDERS; i++, sent++) {
@@ -1607,6 +1637,11 @@ public final class FieldBattle {
 
     /** The distance from a block standing at {@code at} to the nearest living enemy block. */
     private static double nearest(FieldBlock block, Point at, FieldArmy enemy) {
+        if (enemy.grid != null) {
+            // Orders only care how near an enemy is up to a few dozen blocks: further is as good as none.
+            FieldBlock e = enemy.grid.nearest(at, block.halfWidth(), b -> true, b -> block.distanceFrom(at, b), FieldRules.ORDERS_REACH);
+            return e == null ? Double.MAX_VALUE : block.distanceFrom(at, e);
+        }
         double best = Double.MAX_VALUE;
         for (FieldBlock e : enemy.blocks) {
             if (e.alive > 0 && closeEnough(block, at, e, best)) {
@@ -1616,8 +1651,27 @@ public final class FieldBattle {
         return best;
     }
 
+    /** The nearest living enemy block no further than {@code reach}, or null. */
+    @Nullable
+    private static FieldBlock nearestWithin(FieldBlock block, FieldArmy enemy, double reach) {
+        if (enemy.grid != null) {
+            return enemy.grid.nearest(block.pos, block.halfWidth(), b -> true, block::distanceTo, reach);
+        }
+        FieldBlock e = nearestBlock(block, enemy, null);
+        return e != null && block.distanceTo(e) <= reach ? e : null;
+    }
+
     @Nullable
     private static FieldBlock nearestBlock(FieldBlock block, FieldArmy enemy, @Nullable Arm prefer) {
+        if (enemy.grid != null) {
+            if (prefer != null) {
+                FieldBlock e = enemy.grid.nearest(block.pos, block.halfWidth(), b -> b.arm == prefer && b.duty == Duty.SUPPORT, block::distanceTo);
+                if (e != null) {
+                    return e;
+                }
+            }
+            return enemy.grid.nearest(block.pos, block.halfWidth(), b -> true, block::distanceTo);
+        }
         FieldBlock best = null;
         double bestDistance = Double.MAX_VALUE;
         if (prefer != null) {
@@ -1713,12 +1767,8 @@ public final class FieldBattle {
                 }
                 boolean holding = !block.charged && !block.approaching && block.duty != Duty.LINE && block.duty != Duty.GENERAL && block.duty != Duty.GUARD;
                 double reach = holding ? FieldRules.HOLDING_REACH : FieldRules.CLOSE_REACH;
-                FieldBlock foe = hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestBlock(block, enemy, null);
-                if (foe == null) {
-                    continue;
-                }
-                double distance = block.distanceTo(foe);
-                if (distance <= reach) {
+                FieldBlock foe = hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestWithin(block, enemy, reach);
+                if (foe != null) {
                     block.contactSeconds++;
                     block.contactFoe = foe;
                     if (block.live && foe.live) {
@@ -1800,16 +1850,23 @@ public final class FieldBattle {
     private void shoot(FieldArmy army, FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
         FieldBlock foe = army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, archers.pos, FieldRules.ARCHER_RANGE) : null;
         if (foe == null) {
-            double best = FieldRules.ARCHER_RANGE;
-            for (FieldBlock e : enemy.blocks) {
+            FieldBlock[] nearest = {null};
+            double[] best = {FieldRules.ARCHER_RANGE};
+            java.util.function.Consumer<FieldBlock> consider = e -> {
                 if (e.alive > 0) {
                     double d = Math.hypot(e.pos.x() - archers.pos.x(), e.pos.z() - archers.pos.z());
-                    if (d <= best) {
-                        best = d;
-                        foe = e;
+                    if (d <= best[0]) {
+                        best[0] = d;
+                        nearest[0] = e;
                     }
                 }
+            };
+            if (enemy.grid != null) {
+                enemy.grid.within(archers.pos, FieldRules.ARCHER_RANGE, consider);
+            } else {
+                enemy.blocks.forEach(consider);
             }
+            foe = nearest[0];
         }
         if (foe == null) {
             return;

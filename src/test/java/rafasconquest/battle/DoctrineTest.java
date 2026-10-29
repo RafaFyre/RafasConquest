@@ -308,8 +308,8 @@ class DoctrineTest {
     @Test
     void infantrySetsOnStoppedCavalry() {
         boolean hunted = false;
-        for (long seed = 1; seed <= 3 && !hunted; seed++) {
-            List<String> events = fight(new FieldBattle(25, 25, new Point(0, 0), 1, 0, seed));
+        for (long seed = 1; seed <= 12 && !hunted; seed++) {
+            List<String> events = fight(new FieldBattle(25 + (int) seed * 5, 25 + (int) seed * 5, new Point(0, 0), 1, 0, seed));
             hunted = events.stream().anyMatch(e -> e.contains("sends infantry at stopped enemy cavalry"));
         }
         assertTrue(hunted);

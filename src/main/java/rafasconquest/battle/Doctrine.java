@@ -63,6 +63,27 @@ public enum Doctrine {
         }
     }
 
+    /**
+     * How a general shares their troops between the left wing, centre and right wing (every general draws one): evenly,
+     * or one wing stacked with 35 to 45 % of them and the rest shared evenly between the other two.
+     */
+    public enum Distribution {
+        EVEN("Evenly Distributed"),
+        STACKED_LEFT("Stacked Left Wing"),
+        STACKED_CENTRE("Stacked Centre"),
+        STACKED_RIGHT("Stacked Right Wing");
+
+        private final String title;
+
+        Distribution(String title) {
+            this.title = title;
+        }
+
+        public String title() {
+            return title;
+        }
+    }
+
     /** How a general means to win. */
     public enum Strategy {
         /** Spear and Shield: the cavalry goes for the enemy general. */

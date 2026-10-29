@@ -11,10 +11,14 @@ import java.util.Random;
  * A notable person of a faction: a king, merchant, warrior, politician, tactician, advisor or general. Only generals
  * act yet: they plan battles from their doctrines. For now characters are made for each battle and not kept.
  */
-public record GameCharacter(String name, Role role, List<Doctrine> doctrines) {
+public record GameCharacter(String name, Role role, List<Doctrine> doctrines, Doctrine.Distribution distribution, double stackShare) {
     public enum Role {
         KING, MERCHANT, WARRIOR, POLITICIAN, TACTICIAN, ADVISOR, GENERAL
     }
+
+    /** A stacked wing takes between this share of the troops and that. */
+    private static final double STACK_LEAST = 0.35;
+    private static final double STACK_MOST = 0.45;
 
     private static final String[] GIVEN = {
             "Aldric", "Bertrand", "Cedric", "Dorian", "Edric", "Falk", "Gerold", "Hadrian", "Ivo", "Jorund",
@@ -27,7 +31,8 @@ public record GameCharacter(String name, Role role, List<Doctrine> doctrines) {
 
     /**
      * A general for a faction following {@code factionDoctrines}: they follow two of them, chosen at random (all of
-     * them if the faction has two or fewer).
+     * them if the faction has two or fewer), and one of the four ways to share their troops between the wings
+     * ({@link Doctrine.Distribution}), a stacked wing taking 35 to 45 % of them.
      */
     public static GameCharacter general(List<Doctrine> factionDoctrines, Random random) {
         List<Doctrine> pool = new ArrayList<>(factionDoctrines);
@@ -36,7 +41,10 @@ public record GameCharacter(String name, Role role, List<Doctrine> doctrines) {
             chosen.add(pool.remove(random.nextInt(pool.size())));
         }
         chosen.sort(null);
-        return new GameCharacter(name(random), Role.GENERAL, List.copyOf(chosen));
+        Doctrine.Distribution[] spreads = Doctrine.Distribution.values();
+        Doctrine.Distribution spread = spreads[random.nextInt(spreads.length)];
+        double share = STACK_LEAST + random.nextDouble() * (STACK_MOST - STACK_LEAST);
+        return new GameCharacter(name(random), Role.GENERAL, List.copyOf(chosen), spread, share);
     }
 
     public static String name(Random random) {
@@ -44,6 +52,6 @@ public record GameCharacter(String name, Role role, List<Doctrine> doctrines) {
     }
 
     public WarPlan plan() {
-        return WarPlan.of(doctrines);
+        return WarPlan.of(doctrines, distribution, stackShare);
     }
 }
