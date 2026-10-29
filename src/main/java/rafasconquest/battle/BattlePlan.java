@@ -336,9 +336,11 @@ public final class BattlePlan {
         double reservesRear = reserveLines == 0 ? Math.max(frontRear, archersRear)
                 : reservesBack + (reserveLines - 1) * (blockDepth + RESERVE_ROW_GAP) + blockDepth;
 
-        // Cavalry: in at most CAVALRY_ROWS rows behind the reserves, centred.
+        // Cavalry: behind the reserves, centred, in rows no wider than the front (more rows rather than wider ones), so
+        // the whole formation stands as one rectangle; at least CAVALRY_ROWS deep's worth of width for a narrow front.
         double cavalryBack = (reserveLines == 0 ? reservesRear + RESERVE_GAP : reservesRear) + CAVALRY_GAP_BACK;
-        int cavalryPerRow = Math.max(1, (cavalry + CAVALRY_ROWS - 1) / CAVALRY_ROWS);
+        int cavalryPerRow = width == 0 ? Math.max(1, (cavalry + CAVALRY_ROWS - 1) / CAVALRY_ROWS)
+                : Math.max(1, Math.min(cavalry, (int) (width * pitch / BLOCK_PITCH)));
         for (int i = 0; i < cavalry; i++) {
             int row = i / cavalryPerRow;
             int inRow = Math.min(cavalryPerRow, cavalry - row * cavalryPerRow);

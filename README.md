@@ -76,7 +76,8 @@ first. The old relation is restored when the battle ends.
     at its limit).
   - **The reserves**: the rest of the infantry, 24 blocks further back, in a few lines of one width, centred; each
     joins the file of the front block it stands behind, relieves it from there, and keeps its deployed place.
-  - **The cavalry**, 10 blocks behind the reserves in at most 3 rows, centred.
+  - **The cavalry**, 10 blocks behind the reserves, centred, in rows no wider than the front (more rows rather than
+    wider ones), so each wing army stands as one rectangle about as wide as its front.
   - Wedges form only later, once the front line is established, and wait behind the middle of the line, further
     back wherever the enemy has pushed in, so the general in one is never caught there. No two blocks overlap when an
     army deploys.

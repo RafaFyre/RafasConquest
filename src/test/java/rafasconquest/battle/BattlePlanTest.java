@@ -161,6 +161,29 @@ class BattlePlanTest {
     }
 
     @Test
+    void eachWingStandsAsARectangleNoWiderThanItsFront() {
+        for (boolean shield : new boolean[]{false, true}) {
+            for (int blocks : new int[]{15, 61, 170, 500, 2500, 5000}) {
+                List<Slot> slots = BattlePlan.deployment(blocks, shield);
+                for (int wing = 0; wing < 3; wing++) {
+                    int w = wing;
+                    List<Slot> mine = slots.stream().filter(s -> s.wing() == w).toList();
+                    if (mine.stream().noneMatch(s -> s.line() == 0)) {
+                        continue;
+                    }
+                    double lo = mine.stream().filter(s -> s.line() == 0).mapToDouble(s -> s.right() - (s.files() - 1) * BattlePlan.SPACING / 2).min().orElseThrow();
+                    double hi = mine.stream().filter(s -> s.line() == 0).mapToDouble(s -> s.right() + (s.files() - 1) * BattlePlan.SPACING / 2).max().orElseThrow();
+                    for (Slot s : mine) {
+                        double half = (s.files() - 1) * BattlePlan.SPACING / 2;
+                        assertTrue(s.right() - half >= lo - 3 && s.right() + half <= hi + 3,
+                                blocks + " blocks, shield " + shield + ", wing " + w + ": " + s + " sticks out past the front");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     void noTwoBlocksOverlapWhenAnArmyDeploys() {
         for (boolean shield : new boolean[]{false, true}) {
             for (int blocks : new int[]{5, 15, 30, 50, 100, 300, 500}) {
