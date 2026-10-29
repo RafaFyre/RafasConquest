@@ -149,6 +149,9 @@ first. The old relation is restored when the battle ends.
   CHARGE!** when the army advances, **Hold the left wing!** when their wing holds for a bait, **Target ...!** when
   their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general. Officers'
   orders come at most one every 3 seconds; a newer one waiting replaces the older.
+- **Charges hit at impact:** a real rider's charge bonus (from its block's momentum, or a cavalry player's or their
+  riders') counts only while its horse is at a gallop (0.15 blocks a tick or more); a rider standing in the melee hits
+  like anyone else.
 - **Jobs** (`character/Job`, `/pve job [cavalry|footman|archer|shieldman|heavy_infantry]`, saved with the rank;
   heavy infantry by default): what an enlisted player and their soldiers fight as. Each soldier given to the player
   is remade as the job's kind where it stands, with the health it had, and the player gets the job's kit, taken back
@@ -195,9 +198,11 @@ first. The old relation is restored when the battle ends.
   ahead of it, else toward that enemy, so a line that has broken through turns on what is left instead of walking
   off the field.
 - **Front rows fight:** where two blocks of real soldiers meet, only the front row of each fights (to spare the
-  server): the 10 soldiers nearest the enemy (5 in a wall) each go after the nearest enemy within 12 blocks of their
-  place, breaking ranks to reach them, and return to it when there is none. The ranks behind hold their places,
-  passive, until the front row thins and they become it. The numbers leave these fights to Recruits; the reports
+  server): the two ranks nearest the enemy (20 soldiers; 10 in a wall) each go after the nearest enemy within 12 blocks
+  of their place, breaking ranks to reach them, and return to it when there is none. The enemies at hand are those of
+  the block it fights and of any real enemy block within 24 blocks, so blocks fight what is near them even before
+  the numbers have them in contact. The ranks behind hold their places, passive, until the front thins and they
+  become it, but fight any enemy that comes within 4 blocks of them. The numbers leave these fights to Recruits; the reports
   count the blocks fighting front to front. For the battle the two factions are enemies in Recruits' diplomacy; when
   it ends or is cleared, their old relations come back.
 - **Relief:** a front block down to half its soldiers is relieved by the first fit block (at least 60 % strong)

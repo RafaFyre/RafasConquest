@@ -148,6 +148,12 @@ public final class RecruitsBattle {
     private static final int OFFICER_ORDER_SECONDS = 3;
     /** A front-row soldier goes after enemies this close to its place, and returns to it when there are none. */
     private static final double FRONT_ROW_REACH = 12;
+    /** How many ranks of a block fight where real soldiers meet. */
+    private static final int FRONT_RANKS = 2;
+    /** A soldier in the ranks behind fights an enemy this close to it. */
+    private static final double SELF_DEFENCE = 4;
+    /** Real enemy blocks this near a block (their positions) are at hand for its soldiers to fight. */
+    private static final double ENGAGE_NEAR = 24;
     private static final float HORN_VOLUME = 16;
     /** A charged soldier with no foe goes after the nearest real enemy this close. */
     private static final double HUNT_REACH = 80;
@@ -157,6 +163,8 @@ public final class RecruitsBattle {
     private static final double MELEE_SHIELD_REACH = 12;
     /** Recruits' square formation, for the command screen. */
     private static final int SQUARE_FORMATION = 2;
+    /** A horse this fast (blocks a tick; a Recruits horse gallops at about 0.3) is charging. */
+    private static final double GALLOP = 0.15;
     /** Marks the kit a player is given for a battle, to take back after. */
     private static final String KIT_TAG = "RafasConquestBattleKit";
     /** The slowing put on a spent charge's horses. */
@@ -996,19 +1004,44 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Where two real blocks meet in melee, only each block's front row fights, to spare the server: the rank nearest
-     * the enemy (as many as its ranks are wide, or a wall's {@link FieldRules#WALL_FILES}). Each goes after
-     * the nearest enemy soldier within {@link #FRONT_ROW_REACH} of its place, breaking formation to reach them, and
-     * comes back to its place once there is none. The ranks behind hold their places, passive, until the front row
-     * thins and they become it. The numbers leave such a fight to Recruits.
+     * Where real soldiers meet real enemies (its foe's, and those of any enemy block within {@link #ENGAGE_NEAR}), only
+     * a block's front ranks fight, to spare the server: the {@link #FRONT_RANKS} ranks nearest the enemy (as many as
+     * its ranks are wide, or a wall's {@link FieldRules#WALL_FILES}). Each goes after the nearest enemy within
+     * {@link #FRONT_ROW_REACH} of its place, breaking formation to reach them, and comes back to its place once there is
+     * none. The ranks behind hold their places, passive, until the front thins and they become it, but defend
+     * themselves against an enemy within {@link #SELF_DEFENCE}. The numbers leave such a fight to Recruits.
      */
     private void frontRowFights(Live l) {
         FieldBlock block = l.block;
         List<AbstractRecruitEntity> living = l.living();
         living.removeIf(s -> commanded.contains(s.getId()));
+        // The real enemies at hand: its foe's, and every real enemy block near it.
         FieldBlock foe = block.contactFoe();
-        Live enemy = foe == null ? null : live.get(foe);
-        boolean fighting = enemy != null && block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty());
+        List<AbstractRecruitEntity> foes = new ArrayList<>();
+        FieldBlock toward = foe != null && live.containsKey(foe) ? foe : null;
+        double nearestBlock = Double.MAX_VALUE;
+        if (block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty())) {
+            for (Live e : live.values()) {
+                if (e.block.side() == block.side()) {
+                    continue;
+                }
+                double d = e.block.pos().distanceTo(block.pos());
+                if (e.block == foe || d <= ENGAGE_NEAR) {
+                    foes.addAll(e.living());
+                    if (toward == null && d < nearestBlock) {
+                        nearestBlock = d;
+                    }
+                }
+            }
+            if (toward == null && !foes.isEmpty()) {
+                for (Live e : live.values()) {
+                    if (e.block.side() != block.side() && e.block.pos().distanceTo(block.pos()) == nearestBlock) {
+                        toward = e.block;
+                    }
+                }
+            }
+        }
+        boolean fighting = !foes.isEmpty() && toward != null;
         if (!fighting) {
             if (l.frontRow) {
                 l.frontRow = false;
@@ -1020,22 +1053,28 @@ public final class RecruitsBattle {
             return;
         }
         l.frontRow = true;
-        double dx = foe.pos().x() - block.pos().x();
-        double dz = foe.pos().z() - block.pos().z();
+        double dx = toward.pos().x() - block.pos().x();
+        double dz = toward.pos().z() - block.pos().z();
         List<AbstractRecruitEntity> ranked = new ArrayList<>(living);
         ranked.sort(Comparator.comparingDouble(s -> {
             Vec3 place = placeOf(s);
             return -(place.x * dx + place.z * dz);
         }));
-        int front = Math.min(block.braced() ? FieldRules.WALL_FILES : block.files(), ranked.size());
-        List<AbstractRecruitEntity> foes = enemy.living();
+        int front = Math.min((block.braced() ? FieldRules.WALL_FILES : block.files()) * FRONT_RANKS, ranked.size());
         double reachSqr = FRONT_ROW_REACH * FRONT_ROW_REACH;
+        double defenceSqr = SELF_DEFENCE * SELF_DEFENCE;
         for (int i = 0; i < ranked.size(); i++) {
             AbstractRecruitEntity s = ranked.get(i);
             if (i >= front) {
-                s.setTarget(null);
-                s.setAggroState(3);
-                s.holdFormation = true;
+                // Behind the front: holds its place, unless an enemy comes at it.
+                LivingEntity attacker = foes.stream().filter(f -> f.distanceToSqr(s) <= defenceSqr)
+                        .min(Comparator.comparingDouble(f -> f.distanceToSqr(s))).orElse(null);
+                if (attacker == null) {
+                    attacker = nearestEnemyPlayer(block.side(), s.position(), defenceSqr, s);
+                }
+                s.setTarget(attacker);
+                s.setAggroState(attacker == null ? 3 : 0);
+                s.holdFormation = attacker == null;
                 continue;
             }
             s.setAggroState(0);
@@ -1734,6 +1773,15 @@ public final class RecruitsBattle {
         return null;
     }
 
+    /**
+     * Whether a rider strikes at a gallop: its horse covered at least {@link #GALLOP} blocks in the last tick. A
+     * charge's momentum tells only at impact; a rider standing in the melee hacks like anyone else.
+     */
+    private static boolean galloping(Entity rider) {
+        Entity horse = rider.getVehicle();
+        return horse != null && Math.hypot(horse.getX() - horse.xo, horse.getZ() - horse.zo) >= GALLOP;
+    }
+
     /** Whether {@code attacker} stands in front of {@code defender}, as the defender faces. */
     private static boolean inFront(Entity defender, Entity attacker) {
         double yaw = Math.toRadians(defender.getYRot());
@@ -1767,7 +1815,9 @@ public final class RecruitsBattle {
         }
         if (rider != null) {
             boolean cavalry = victimRides || of != null && of.block.arm() == Arm.CAVALRY;
-            amount *= (float) (1 + FieldRules.CHARGE_BONUS * (player ? rider.momentum : rider.unitMomentum));
+            if (galloping(attacker)) {
+                amount *= (float) (1 + FieldRules.CHARGE_BONUS * (player ? rider.momentum : rider.unitMomentum));
+            }
             if (player) {
                 rider.playerContact = true;
                 rider.playerContactCavalry |= cavalry;
@@ -2225,7 +2275,7 @@ public final class RecruitsBattle {
             return amount;
         }
         boolean byCavalry = by.block.arm() == Arm.CAVALRY;
-        if (byCavalry && by.block.charged()) {
+        if (byCavalry && by.block.charged() && galloping(attacker)) {
             amount *= 1 + FieldRules.CHARGE_BONUS * by.block.momentum();
         }
         if (byCavalry && of.block.braced() && FieldRules.side(of.block.facingX(), of.block.facingZ(),
