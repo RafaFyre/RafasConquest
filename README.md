@@ -149,6 +149,36 @@ first. The old relation is restored when the battle ends.
   CHARGE!** when the army advances, **Hold the left wing!** when their wing holds for a bait, **Target ...!** when
   their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general. Officers'
   orders come at most one every 3 seconds; a newer one waiting replaces the older.
+- **Jobs** (`character/Job`, `/pve job [cavalry|footman|archer|shieldman|heavy_infantry]`, saved with the rank;
+  heavy infantry by default): what an enlisted player and their soldiers fight as. Each soldier given to the player
+  is remade as the job's kind where it stands, with the health it had, and the player gets the job's kit, taken back
+  when the battle ends:
+  - *Cavalry:* horsemen; the player rides a saddled horse in the uniform's colour. Cavalry momentum works for the
+    player's horse and, as one, for their riders as for cavalry blocks: gathered riding (full after 20 blocks), it
+    makes their blows up to three times as hard; each second in melee spends 0.3 of it (0.6 against cavalry), and
+    spent in melee their horses slow to half pace.
+  - *Footman:* swordsmen with iron swords; the player gets an iron sword with Sweeping Edge III.
+  - *Archer:* bowmen; the player gets a bow with Infinity and Unbreaking II, and an arrow.
+  - *Shieldman:* shieldmen with the nation's banner on their shields; the player gets such a shield.
+  - *Heavy infantry:* shieldmen in iron armour (the captain keeps the banner on the head) with iron axes and the
+    nation's shields; the player gets the same.
+  A soldier of a player's unit with its shield up (Recruits' Shields command; the battle no longer raises them
+  itself) is braced like a wall against riders striking its front: it takes 40 % of the blow and the rider's charge
+  is spent, and it hits riders in front of it 2.5 times as hard. A player's own soldiers stay real however far off.
+- **Roles** (`character/BattleRole`, `/pve role [frontline|bait|support|flanker|kill_squad]`; frontline by default):
+  where the player's unit starts and what the numbers have it do (`FieldBlock.Task`); the general leaves its blocks
+  to it (no relief duty, no pincers or envelopments):
+  - *Frontline:* the front block nearest the middle, the first to charge.
+  - *Bait:* that front block becomes its wing's bait, whatever the general's plan: it runs ahead of the line and,
+    once fighting, falls back to draw the enemy on.
+  - *Support:* a reserve block near the middle; once the lines have formed it goes for the enemy fighting the
+    nearest block of its wing that is losing (under 60 % strong, or outnumbered by its foe).
+  - *Flanker:* a reserve block on a wing (the outermost); it strikes the nearest enemy infantry in a fight (within
+    200 blocks) from the side nearer it, or from behind if others strike it already.
+  - *Kill squad:* a reserve block near the middle; it goes for the enemy general within 200 blocks, chasing them,
+    else the nearest enemy block whose captain stands, those fighting first. Its player hears "Kill General ...!".
+  Blocks sent this way strike as the general's do: to the target's flank or rear, facing it, and fighting there;
+  the player's square follows the ring there, and the player hears "Charge!" once they're fighting.
 - **Shields:** a soldier with a shield raises it within 50 blocks of enemy archers, or with an enemy within 12 blocks
   that it isn't striking itself, so long as it is near its place (a raised shield slows it to half pace or less). A
   charged or passive soldier lowers it. Charged soldiers go after real enemies within 80 blocks (was 40).

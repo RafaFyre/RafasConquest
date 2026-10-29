@@ -12,6 +12,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import rafasconquest.character.GameCharacter;
 import rafasconquest.character.Rank;
+import rafasconquest.character.BattleRole;
+import rafasconquest.character.Job;
 import rafasconquest.data.Ranks;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.level.ServerPlayer;
@@ -67,6 +69,8 @@ public final class PveCommands {
                                 .then(Commands.argument("name", StringArgumentType.greedyString())
                                         .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(factionNames(), builder))
                                         .executes(ctx -> factionInfo(ctx, StringArgumentType.getString(ctx, "name"))))))
+                .then(jobCommand())
+                .then(roleCommand())
                 .then(Commands.literal("rank")
                         .executes(PveCommands::rankShow)
                         .then(Commands.literal("set").requires(source -> source.hasPermission(2))
@@ -239,6 +243,44 @@ public final class PveCommands {
                 a.name(), generalA.name(), generalA.plan().describe(), b.name(), generalB.name(), generalB.plan().describe());
         ctx.getSource().sendSuccess(() -> Component.literal(line + "\n" + generals), true);
         return 1;
+    }
+
+    /** {@code /pve job}: shows the player's job; {@code /pve job <job>} sets it. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> jobCommand() {
+        var job = Commands.literal("job").executes(ctx -> {
+            ServerPlayer player = ctx.getSource().getPlayerOrException();
+            Job j = Ranks.get(ctx.getSource().getServer()).job(player.getUUID());
+            ctx.getSource().sendSuccess(() -> Component.literal("Your job in battle: " + j.title()), false);
+            return 1;
+        });
+        for (Job j : Job.values()) {
+            job.then(Commands.literal(j.id()).executes(ctx -> {
+                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                Ranks.get(ctx.getSource().getServer()).setJob(player.getUUID(), j);
+                ctx.getSource().sendSuccess(() -> Component.literal("You will fight as " + j.title()), false);
+                return 1;
+            }));
+        }
+        return job;
+    }
+
+    /** {@code /pve role}: shows the player's role; {@code /pve role <role>} sets it. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> roleCommand() {
+        var role = Commands.literal("role").executes(ctx -> {
+            ServerPlayer player = ctx.getSource().getPlayerOrException();
+            BattleRole r = Ranks.get(ctx.getSource().getServer()).role(player.getUUID());
+            ctx.getSource().sendSuccess(() -> Component.literal("Your unit's role in battle: " + r.title()), false);
+            return 1;
+        });
+        for (BattleRole r : BattleRole.values()) {
+            role.then(Commands.literal(r.id()).executes(ctx -> {
+                ServerPlayer player = ctx.getSource().getPlayerOrException();
+                Ranks.get(ctx.getSource().getServer()).setRole(player.getUUID(), r);
+                ctx.getSource().sendSuccess(() -> Component.literal("Your unit will fight as " + r.title()), false);
+                return 1;
+            }));
+        }
+        return role;
     }
 
     /** Shows the player's own rank. */

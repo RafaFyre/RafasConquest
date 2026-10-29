@@ -444,6 +444,7 @@ public final class FieldBattle {
         brace(army, enemy);
         pincer(army, enemy);
         huntStoppedCavalry(army, enemy);
+        tasks(army, enemy);
         shieldGeneral(army, enemy);
         envelop(army, enemy);
         formWedge(army, enemy);
@@ -686,7 +687,7 @@ public final class FieldBattle {
             }
         }
         return army.blocks.stream()
-                .filter(f -> f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && BattlePlan.fitToRelieve(f.alive, f.started()))
+                .filter(f -> f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && f.task == FieldBlock.Task.NONE && BattlePlan.fitToRelieve(f.alive, f.started()))
                 .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
 
@@ -1403,7 +1404,7 @@ public final class FieldBattle {
     /** Whether a block is infantry free to be sent to strike: not fighting, fit, of {@code wing} (any if -1). */
     private static boolean idle(FieldArmy army, FieldBlock b, int wing) {
         boolean idleFront = b.duty == Duty.FRONT && !isBait(army, b.file) && !b.engaged && b.contactFoe == null;
-        return b.alive > 0 && b.arm.infantry() && !b.charged && !b.braced && b.strikeAt == null && (wing < 0 || b.wing == wing)
+        return b.alive > 0 && b.task == FieldBlock.Task.NONE && b.arm.infantry() && !b.charged && !b.braced && b.strikeAt == null && (wing < 0 || b.wing == wing)
                 && (idleFront || b.duty == Duty.LINE) && BattlePlan.fitToRelieve(b.alive, b.started());
     }
 
@@ -1534,6 +1535,111 @@ public final class FieldBattle {
         }
     }
 
+    /**
+     * Before the battle begins, gives a block a player's unit's task: bait (a front block, which becomes its wing's
+     * bait whatever the general's plan), support, flank or kill. The general leaves such a block to its task.
+     */
+    public void assign(FieldBlock block, FieldBlock.Task task) {
+        if (begun()) {
+            throw new IllegalStateException("the battle has begun");
+        }
+        block.task = task;
+        if (task == FieldBlock.Task.BAIT && block.duty == Duty.FRONT) {
+            armies[block.side].baitFile[block.wing] = block.file;
+        }
+    }
+
+    /**
+     * Blocks with a task, once the lines have formed, free and not yet sent: support goes for the enemy fighting the
+     * nearest losing block of its wing; a flanker for the nearest enemy infantry in a fight, from the side nearer it
+     * (from behind, if others strike it already); a kill squad for the enemy general, else the nearest enemy block whose
+     * captain still stands, the nearer to a fight the better. Each strikes as infantry sent by the general does
+     * ({@link #strike}), and when its target is gone it waits where it belongs until the next.
+     */
+    private void tasks(FieldArmy army, FieldArmy enemy) {
+        if (seconds < BattlePlan.FORMING_SECONDS) {
+            return;
+        }
+        for (FieldBlock b : army.blocks) {
+            if (b.alive == 0 || b.task == FieldBlock.Task.NONE || b.task == FieldBlock.Task.BAIT || b.strikeAt != null
+                    || b.charged || b.braced || b.duty != Duty.LINE && b.duty != Duty.FRONT) {
+                continue;
+            }
+            FieldBlock target = switch (b.task) {
+                case SUPPORT -> losingFoe(army, b);
+                case FLANK -> nearestFighting(enemy, b, FieldRules.TASK_REACH);
+                case KILL -> officers(enemy, b);
+                default -> null;
+            };
+            if (target != null) {
+                send(b, target, b.task == FieldBlock.Task.FLANK && struck(army, target) ? 0 : sideNearer(target, b.pos));
+            }
+        }
+    }
+
+    /** The enemy fighting the nearest block of its wing that is losing (worn down, or outnumbered by its foe). */
+    @Nullable
+    private static FieldBlock losingFoe(FieldArmy army, FieldBlock block) {
+        FieldBlock best = null;
+        for (FieldBlock f : army.blocks) {
+            FieldBlock foe = f.contactFoe;
+            if (f == block || f.alive == 0 || foe == null || foe.alive == 0 || army.winged && f.wing != block.wing) {
+                continue;
+            }
+            boolean losing = f.alive < f.started() * FieldRules.LOSING_SHARE || f.alive < foe.alive * FieldRules.GIVE_GROUND_SHARE;
+            if (losing && (best == null || f.pos.distanceTo(block.pos) < best.pos.distanceTo(block.pos))) {
+                best = f;
+            }
+        }
+        return best == null ? null : best.contactFoe;
+    }
+
+    /** The nearest enemy infantry block in a fight, within {@code reach}. */
+    @Nullable
+    private static FieldBlock nearestFighting(FieldArmy enemy, FieldBlock block, double reach) {
+        FieldBlock best = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.arm.infantry() && e.contactFoe != null && e.duty != Duty.FLEEING && e.duty != Duty.ROUTED
+                    && e.pos.distanceTo(block.pos) <= reach
+                    && (best == null || e.pos.distanceTo(block.pos) < best.pos.distanceTo(block.pos))) {
+                best = e;
+            }
+        }
+        return best;
+    }
+
+    /** The enemy general within reach, else the nearest enemy block whose captain stands, those fighting first. */
+    @Nullable
+    private static FieldBlock officers(FieldArmy enemy, FieldBlock block) {
+        FieldBlock general = enemy.commander;
+        if (general != null && general.alive > 0 && general.pos.distanceTo(block.pos) <= FieldRules.TASK_REACH) {
+            return general;
+        }
+        FieldBlock best = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive == 0 || !e.captainAlive() || e.duty == Duty.FLEEING || e.duty == Duty.ROUTED || e.pos.distanceTo(block.pos) > FieldRules.TASK_REACH) {
+                continue;
+            }
+            boolean better;
+            if (best == null) {
+                better = true;
+            } else if ((e.contactFoe != null) != (best.contactFoe != null)) {
+                better = e.contactFoe != null;
+            } else {
+                better = e.pos.distanceTo(block.pos) < best.pos.distanceTo(block.pos);
+            }
+            if (better) {
+                best = e;
+            }
+        }
+        return best;
+    }
+
+    /** A cavalry block's charge is broken against a braced shield: all its momentum is spent. */
+    public void breakCharge(FieldBlock block) {
+        block.momentum = 0;
+    }
+
     private static void send(FieldBlock block, FieldBlock target, int side) {
         block.strikeAt = target;
         block.strikeSide = side;
@@ -1552,7 +1658,8 @@ public final class FieldBattle {
     private void strike(FieldArmy army, FieldBlock block) {
         FieldBlock t = block.strikeAt;
         boolean gone = t == null || t.alive == 0 || t.duty == Duty.FLEEING;
-        boolean escaped = !gone && t.arm == Arm.CAVALRY && (t.moved >= FieldRules.STOPPED * 3
+        // A kill squad keeps after its officer, mounted or not.
+        boolean escaped = !gone && block.task != FieldBlock.Task.KILL && t.arm == Arm.CAVALRY && (t.moved >= FieldRules.STOPPED * 3
                 || block.pos.distanceTo(t.pos) > FieldRules.HUNT_REACH * 2);
         if (gone || escaped) {
             release(army, block);

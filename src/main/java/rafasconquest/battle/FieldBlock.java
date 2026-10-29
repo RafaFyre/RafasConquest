@@ -146,6 +146,8 @@ public final class FieldBlock {
     /** Pincer: the lured enemy block it was sent to strike, and from where: -1 its left, 1 its right, 0 behind. */
     @Nullable
     FieldBlock strikeAt;
+    /** A task a player's unit was given for the battle; the general leaves such a block to it. */
+    Task task = Task.NONE;
     int strikeSide;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
@@ -165,6 +167,15 @@ public final class FieldBlock {
         this.duty = duty;
         this.homeDuty = duty;
         this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : 0;
+    }
+
+    /** What a player's unit does in a battle ({@link FieldBattle#assign}). */
+    public enum Task {
+        NONE, BAIT, SUPPORT, FLANK, KILL
+    }
+
+    public Task task() {
+        return task;
     }
 
     public boolean live() {

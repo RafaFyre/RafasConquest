@@ -16,6 +16,11 @@ import net.minecraft.network.chat.TextColor;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import rafasconquest.character.Rank;
+import rafasconquest.character.BattleRole;
+import rafasconquest.character.Job;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.BannerItem;
+import net.minecraft.world.item.enchantment.Enchantments;
 import rafasconquest.data.Ranks;
 import rafasconquest.character.GameCharacter;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
@@ -152,6 +157,8 @@ public final class RecruitsBattle {
     private static final double MELEE_SHIELD_REACH = 12;
     /** Recruits' square formation, for the command screen. */
     private static final int SQUARE_FORMATION = 2;
+    /** Marks the kit a player is given for a battle, to take back after. */
+    private static final String KIT_TAG = "RafasConquestBattleKit";
     /** The slowing put on a spent charge's horses. */
     private static final UUID SPENT_HORSE = UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f");
     /** A charged soldier this close to its target is taken to be striking it (for calibration, and for momentum). */
@@ -257,6 +264,21 @@ public final class RecruitsBattle {
         @Nullable
         Point squareAt;
         boolean takenOver;
+        Job job = Job.HEAVY_INFANTRY;
+        /** The horse a cavalry player was given. */
+        @Nullable
+        UUID horse;
+        /** Cavalry momentum: the player's own, and their riders'; whether each was in melee this second, and with cavalry. */
+        double momentum;
+        double unitMomentum;
+        @Nullable
+        Vec3 lastRide;
+        @Nullable
+        Point lastUnitCentre;
+        boolean playerContact;
+        boolean playerContactCavalry;
+        boolean unitContact;
+        boolean unitContactCavalry;
 
         Enlisted(UUID player, int side, Rank rank, FieldBlock home, List<FieldBlock> blocks, int quota) {
             this.player = player;
@@ -676,7 +698,10 @@ public final class RecruitsBattle {
                     for (Point w : watchers) {
                         distance = Math.min(distance, w.distanceTo(at));
                     }
-                    if (distance <= LIVE_WITHIN || real && distance <= NUMBERS_BEYOND) {
+                    if (real && commanded.contains(s.getId())) {
+                        // A player's own soldiers stay real however far they go: they're theirs, not the numbers'.
+                        wanted.add(new Candidate(block, i, at, -Double.MAX_VALUE, true, cost));
+                    } else if (distance <= LIVE_WITHIN || real && distance <= NUMBERS_BEYOND) {
                         wanted.add(new Candidate(block, i, at, real ? distance - KEEP_REAL_BIAS : distance, real, cost));
                     }
                 }
@@ -1396,16 +1421,12 @@ public final class RecruitsBattle {
                     continue;
                 }
                 FieldArmy army = field.army(side);
-                List<FieldBlock> front = new ArrayList<>();
-                for (FieldBlock b : army.blocks()) {
-                    if (b.duty() == Duty.FRONT && b.alive() > 0 && !taken.contains(b)) {
-                        front.add(b);
-                    }
-                }
+                Job job = ranks.job(player.getUUID());
+                BattleRole role = ranks.role(player.getUUID());
+                List<FieldBlock> front = unitPool(army, role, taken);
                 if (front.isEmpty()) {
                     continue;
                 }
-                front.sort(Comparator.comparingDouble(b -> Math.abs(BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line()).x())));
                 FieldBlock home = front.get(0);
                 Rank rank = ranks.of(player.getUUID());
                 int leads = Math.min(rank.leads(), Rank.CAPTAIN.leads());
@@ -1420,8 +1441,12 @@ public final class RecruitsBattle {
                 }
                 taken.addAll(blocks);
                 Enlisted e = new Enlisted(player.getUUID(), side, rank, home, blocks, leads - 1);
+                e.job = job;
+                for (FieldBlock b : blocks) {
+                    field.assign(b, b == home || role != BattleRole.BAIT ? task(role) : FieldBlock.Task.NONE);
+                }
                 if (RecruitEvents.recruitsGroupsManager != null) {
-                    RecruitsGroup group = new RecruitsGroup(home.arm() == Arm.SHIELDWALL ? "Shields" : "Battle line", player, 0);
+                    RecruitsGroup group = new RecruitsGroup(capitalised(job.title()), player, 0);
                     RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
                     e.group = group.getUUID();
                 }
@@ -1430,11 +1455,353 @@ public final class RecruitsBattle {
                 Point spot = home.line();
                 player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
                         yawOf(new Point(army.facingX(), army.facingZ())), 0);
+                kitPlayer(player, e);
                 player.sendSystemMessage(Component.literal(String.format(Locale.ROOT,
-                        "You fight for %s as a %s, in the first block to charge, leading %d. Keep to your ring.",
-                        sides[side].faction.name(), rank.title(), leads)).withStyle(style -> style.withColor(color(e.side))));
+                        "You fight for %s as a %s of %s, %s, leading %d. Keep to your ring.",
+                        sides[side].faction.name(), rank.title(), job.title(), roleTitle(role), leads)).withStyle(style -> style.withColor(color(e.side))));
             }
         }
+    }
+
+    /**
+     * The blocks a player's unit is drawn from, by their role: the front line for frontline and bait (the block nearest
+     * the middle first), the reserves behind it for support and kill squads (nearest the middle and the front first),
+     * the reserves of a wing for flankers (the outermost first). Only infantry blocks no one else has taken; the front
+     * line if the reserves are empty.
+     */
+    private static List<FieldBlock> unitPool(FieldArmy army, BattleRole role, Set<FieldBlock> taken) {
+        boolean reserve = role == BattleRole.SUPPORT || role == BattleRole.FLANKER || role == BattleRole.KILL_SQUAD;
+        List<FieldBlock> pool = new ArrayList<>();
+        for (int pass = 0; pass < 2 && pool.isEmpty(); pass++) {
+            Duty duty = reserve && pass == 0 ? Duty.LINE : Duty.FRONT;
+            for (FieldBlock b : army.blocks()) {
+                if (b.duty() == duty && b.alive() > 0 && b.arm().infantry() && b.task() == FieldBlock.Task.NONE && !taken.contains(b)) {
+                    pool.add(b);
+                }
+            }
+        }
+        Comparator<FieldBlock> order = Comparator.comparingDouble(b -> {
+            Point at = BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line());
+            return role == BattleRole.FLANKER ? -Math.abs(at.x()) + Math.abs(at.z()) * 0.5 : Math.abs(at.x()) + Math.abs(at.z()) * 0.5;
+        });
+        pool.sort(order);
+        return pool;
+    }
+
+    /** Where a player's unit fights, as told them at the start. */
+    private static String roleTitle(BattleRole role) {
+        return switch (role) {
+            case FRONTLINE -> "in the first block to charge";
+            case BAIT -> "as bait, running ahead of the line";
+            case SUPPORT -> "in support, reinforcing your wing's losing blocks";
+            case FLANKER -> "flanking: striking enemy blocks from the side or behind";
+            case KILL_SQUAD -> "in a kill squad, hunting the enemy's officers";
+        };
+    }
+
+    private static String capitalised(String s) {
+        return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static FieldBlock.Task task(BattleRole role) {
+        return switch (role) {
+            case BAIT -> FieldBlock.Task.BAIT;
+            case SUPPORT -> FieldBlock.Task.SUPPORT;
+            case FLANKER -> FieldBlock.Task.FLANK;
+            case KILL_SQUAD -> FieldBlock.Task.KILL;
+            case FRONTLINE -> FieldBlock.Task.NONE;
+        };
+    }
+
+    /** What a player's soldiers are, by the player's job. */
+    private static EntityType<? extends AbstractRecruitEntity> jobType(Job job) {
+        return switch (job) {
+            case CAVALRY -> ModEntityTypes.HORSEMAN.get();
+            case FOOTMAN -> ModEntityTypes.RECRUIT.get();
+            case ARCHER -> ModEntityTypes.BOWMAN.get();
+            case SHIELDMAN, HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
+        };
+    }
+
+    /**
+     * Soldier i of a block is given to a player: remade as their job's kind of soldier if it isn't one already (where
+     * it stands, with the health it has), and given their job's kit. Returns the soldier, or null if it couldn't be.
+     */
+    @Nullable
+    private AbstractRecruitEntity enlistSoldier(Live l, int i, AbstractRecruitEntity s, Enlisted e) {
+        Side side = sides[l.block.side()];
+        EntityType<? extends AbstractRecruitEntity> type = jobType(e.job);
+        AbstractRecruitEntity soldier = s;
+        if (s.getType() != type) {
+            float health = s.getHealth();
+            Point at = new Point(s.getX(), s.getZ());
+            float yaw = s.getYRot();
+            makeNumbers(l, i);
+            soldier = spawn(type, side, i == l.block.captain() ? Role.LEADER : Role.SOLDIER, at, yaw);
+            if (soldier == null) {
+                return null;
+            }
+            soldier.setHealth(Math.min(health, soldier.getMaxHealth()));
+            l.soldiers[i] = soldier;
+            byEntity.put(soldier.getId(), l);
+        }
+        boolean leader = i == l.block.captain();
+        switch (e.job) {
+            case FOOTMAN -> equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+            case SHIELDMAN -> equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
+            case HEAVY_INFANTRY -> {
+                equip(soldier, EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                equip(soldier, EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+                equip(soldier, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+                if (!leader) {
+                    equip(soldier, EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)); // the captain keeps the banner
+                }
+                equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+                equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
+            }
+            default -> {
+            }
+        }
+        return soldier;
+    }
+
+    /** A shield bearing the nation's banner. */
+    private static ItemStack bannerShield(Side side) {
+        ItemStack shield = new ItemStack(Items.SHIELD);
+        CompoundTag pattern = side.banner.getTagElement("BlockEntityTag");
+        CompoundTag tag = pattern == null ? new CompoundTag() : pattern.copy();
+        DyeColor base = side.banner.getItem() instanceof BannerItem banner ? banner.getColor() : DyeColor.WHITE;
+        tag.putInt("Base", base.getId());
+        shield.getOrCreateTag().put("BlockEntityTag", tag);
+        return shield;
+    }
+
+    /**
+     * The player's own kit for their job, taken back when the battle ends: a horse to ride (cavalry), an iron sword
+     * with Sweeping Edge (footman), a bow with Infinity and Unbreaking II (archer), the nation's shield (shieldman),
+     * iron armour, an axe and the nation's shield (heavy infantry).
+     */
+    private void kitPlayer(ServerPlayer player, Enlisted e) {
+        Side side = sides[e.side];
+        List<ItemStack> kit = new ArrayList<>();
+        switch (e.job) {
+            case CAVALRY -> {
+                Horse horse = EntityType.HORSE.create(level);
+                if (horse != null) {
+                    horse.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), 0);
+                    horse.setTamed(true);
+                    horse.setOwnerUUID(player.getUUID());
+                    horse.equipSaddle(null);
+                    horse.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, side.uniform)); // 401: the armour slot
+                    horse.setPersistenceRequired();
+                    level.addFreshEntity(horse);
+                    player.startRiding(horse, true);
+                    e.horse = horse.getUUID();
+                }
+            }
+            case FOOTMAN -> {
+                ItemStack sword = new ItemStack(Items.IRON_SWORD);
+                sword.enchant(Enchantments.SWEEPING_EDGE, 3);
+                kit.add(sword);
+            }
+            case ARCHER -> {
+                ItemStack bow = new ItemStack(Items.BOW);
+                bow.enchant(Enchantments.INFINITY_ARROWS, 1);
+                bow.enchant(Enchantments.UNBREAKING, 2);
+                kit.add(bow);
+                kit.add(new ItemStack(Items.ARROW));
+            }
+            case SHIELDMAN -> kit.add(bannerShield(side));
+            case HEAVY_INFANTRY -> {
+                kit.add(new ItemStack(Items.IRON_AXE));
+                kit.add(bannerShield(side));
+                kit.add(new ItemStack(Items.IRON_HELMET));
+                kit.add(new ItemStack(Items.IRON_CHESTPLATE));
+                kit.add(new ItemStack(Items.IRON_LEGGINGS));
+                kit.add(new ItemStack(Items.IRON_BOOTS));
+            }
+        }
+        for (ItemStack stack : kit) {
+            stack.getOrCreateTag().putBoolean(KIT_TAG, true);
+            player.getInventory().add(stack);
+        }
+    }
+
+    /** The battle is over for an enlisted player: their kit is taken back and their horse led away. */
+    private void unkitPlayer(@Nullable ServerPlayer player, Enlisted e) {
+        if (e.horse != null) {
+            Entity horse = level.getEntity(e.horse);
+            if (horse != null) {
+                horse.ejectPassengers();
+                horse.discard();
+            }
+        }
+        if (player == null) {
+            return;
+        }
+        var inventory = player.getInventory();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.hasTag() && stack.getTag().getBoolean(KIT_TAG)) {
+                inventory.setItem(i, ItemStack.EMPTY);
+            }
+        }
+    }
+
+    /**
+     * Cavalry momentum for a cavalry player and their riders, as for cavalry blocks: gathered riding (full after
+     * {@link FieldRules#RUN_UP} blocks), spent each second in melee (more against cavalry, all of it against a braced
+     * shield struck from the front), and while spent in melee their horses slow to half pace.
+     */
+    private void cavalryMomentum(Enlisted e, ServerPlayer player) {
+        Entity mount = player.getVehicle();
+        if (mount == null) {
+            e.momentum = 0;
+            e.lastRide = null;
+        } else {
+            Vec3 at = mount.position();
+            double moved = e.lastRide == null ? 0 : Math.hypot(at.x - e.lastRide.x, at.z - e.lastRide.z);
+            e.lastRide = at;
+            e.momentum = nextMomentum(e.momentum, moved, e.playerContact, e.playerContactCavalry);
+            slow(mount, e.playerContact ? 0.5 + 0.5 * e.momentum : 1);
+        }
+        List<AbstractRecruitEntity> riders = soldiersOf(e);
+        double x = 0;
+        double z = 0;
+        int n = 0;
+        for (AbstractRecruitEntity rider : riders) {
+            Entity horse = rider.getVehicle();
+            if (horse == null) {
+                continue;
+            }
+            if (horse instanceof Horse h && ours.add(h.getUUID())) {
+                h.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, sides[e.side].uniform));
+            }
+            x += horse.getX();
+            z += horse.getZ();
+            n++;
+        }
+        if (n > 0) {
+            Point centre = new Point(x / n, z / n);
+            double moved = e.lastUnitCentre == null ? 0 : centre.distanceTo(e.lastUnitCentre);
+            e.lastUnitCentre = centre;
+            e.unitMomentum = nextMomentum(e.unitMomentum, moved, e.unitContact, e.unitContactCavalry);
+            double factor = e.unitContact ? 0.5 + 0.5 * e.unitMomentum : 1;
+            for (AbstractRecruitEntity rider : riders) {
+                if (rider.getVehicle() != null) {
+                    slow(rider.getVehicle(), factor);
+                }
+            }
+        }
+        e.playerContact = false;
+        e.playerContactCavalry = false;
+        e.unitContact = false;
+        e.unitContactCavalry = false;
+    }
+
+    private static double nextMomentum(double momentum, double moved, boolean contact, boolean againstCavalry) {
+        if (contact) {
+            return Math.max(0, momentum - (againstCavalry ? FieldRules.MOMENTUM_LOSS_CAVALRY : FieldRules.MOMENTUM_LOSS_INFANTRY));
+        }
+        return Math.min(1, momentum + moved / FieldRules.RUN_UP);
+    }
+
+    private static void slow(Entity horse, double factor) {
+        if (!(horse instanceof LivingEntity living)) {
+            return;
+        }
+        AttributeInstance speed = living.getAttribute(Attributes.MOVEMENT_SPEED);
+        if (speed == null) {
+            return;
+        }
+        speed.removeModifier(SPENT_HORSE);
+        if (factor < 1) {
+            speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, "spent charge", factor - 1, AttributeModifier.Operation.MULTIPLY_TOTAL));
+        }
+    }
+
+    /** The enlisted player whose soldier this is, or null. */
+    @Nullable
+    private Enlisted commanderOf(Entity soldier) {
+        if (!commanded.contains(soldier.getId())) {
+            return null;
+        }
+        for (Enlisted e : enlisted.values()) {
+            if (e.given.contains(soldier.getId())) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    /** Whether {@code attacker} stands in front of {@code defender}, as the defender faces. */
+    private static boolean inFront(Entity defender, Entity attacker) {
+        double yaw = Math.toRadians(defender.getYRot());
+        return FieldRules.side(-Math.sin(yaw), Math.cos(yaw), attacker.getX() - defender.getX(), attacker.getZ() - defender.getZ())
+                == FieldRules.Side.FRONT;
+    }
+
+    /**
+     * The players' units' rules on a blow: a cavalry player's or their riders' charge does 1 + {@link
+     * FieldRules#CHARGE_BONUS} x their momentum times as much, and puts them in melee; a soldier of a player's unit with
+     * its shield up (Recruits' Shields command) is braced like a wall against riders striking its front: it takes
+     * {@link FieldRules#BRACED_TAKES} of the blow and the rider's charge is spent, and it deals {@link
+     * FieldRules#BRACED_DEALS} times as much to riders in front of it.
+     */
+    private float unitRules(Entity victim, Entity attacker, float amount) {
+        Live of = byEntity.get(victim.getId());
+        boolean victimRides = victim.getVehicle() != null;
+        Enlisted rider = null;
+        boolean player = false;
+        for (Enlisted e : enlisted.values()) {
+            if (e.job == Job.CAVALRY && attacker.getUUID().equals(e.player) && attacker.getVehicle() != null) {
+                rider = e;
+                player = true;
+            }
+        }
+        if (rider == null && attacker.getVehicle() != null) {
+            Enlisted e = commanderOf(attacker);
+            if (e != null && e.job == Job.CAVALRY) {
+                rider = e;
+            }
+        }
+        if (rider != null) {
+            boolean cavalry = victimRides || of != null && of.block.arm() == Arm.CAVALRY;
+            amount *= (float) (1 + FieldRules.CHARGE_BONUS * (player ? rider.momentum : rider.unitMomentum));
+            if (player) {
+                rider.playerContact = true;
+                rider.playerContactCavalry |= cavalry;
+            } else {
+                rider.unitContact = true;
+                rider.unitContactCavalry |= cavalry;
+            }
+        }
+        for (Enlisted e : enlisted.values()) {
+            if (e.job == Job.CAVALRY && victim.getUUID().equals(e.player) && byEntity.containsKey(attacker.getId())) {
+                e.playerContact = true; // struck in melee: the charge is spent all the same
+            }
+        }
+        Enlisted shielded = commanderOf(victim);
+        if (shielded != null && victim instanceof AbstractRecruitEntity s && s.getShouldBlock() && attacker.getVehicle() != null
+                && inFront(victim, attacker)) {
+            amount *= (float) FieldRules.BRACED_TAKES;
+            Live by = byEntity.get(attacker.getId());
+            if (by != null && by.block.arm() == Arm.CAVALRY) {
+                field.breakCharge(by.block);
+            }
+            if (rider != null) {
+                if (player) {
+                    rider.momentum = 0;
+                } else {
+                    rider.unitMomentum = 0;
+                }
+            }
+        }
+        Enlisted bracing = commanderOf(attacker);
+        if (bracing != null && attacker instanceof AbstractRecruitEntity s && s.getShouldBlock() && victimRides && inFront(attacker, victim)) {
+            amount *= (float) FieldRules.BRACED_DEALS;
+        }
+        return amount;
     }
 
     /** Each second: enlisted players get their soldiers as they become real, their ring, and their orders. */
@@ -1448,6 +1815,9 @@ public final class RecruitsBattle {
                 RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
             }
             keepSquare(e);
+            if (e.job == Job.CAVALRY) {
+                cavalryMomentum(e, player);
+            }
             FieldBlock home = e.home;
             if (home.alive() > 0) {
                 Point spot = home.line();
@@ -1470,11 +1840,16 @@ public final class RecruitsBattle {
             if (l == null) {
                 continue;
             }
-            for (AbstractRecruitEntity s : l.living()) {
+            for (int i = 0; i < l.soldiers.length; i++) {
+                AbstractRecruitEntity s = l.soldiers[i];
+                if (s == null || !s.isAlive() || commanded.contains(s.getId())) {
+                    continue;
+                }
                 if (e.given.size() >= e.quota) {
                     return any;
                 }
-                if (commanded.add(s.getId())) {
+                s = enlistSoldier(l, i, s, e);
+                if (s != null && commanded.add(s.getId())) {
                     e.given.add(s.getId());
                     any = true;
                     s.setOwnerUUID(Optional.of(e.player));
@@ -1571,7 +1946,8 @@ public final class RecruitsBattle {
             }
         }
         for (AbstractRecruitEntity s : l.living()) {
-            if (!s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) || takenOver(s)) {
+            if (!s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) || commanded.contains(s.getId())) {
+                // A player's soldiers raise their shields at the player's order (Recruits' Shields command).
                 continue;
             }
             LivingEntity target = s.getTarget();
@@ -1584,18 +1960,6 @@ public final class RecruitsBattle {
                 s.setShouldBlock(raise);
             }
         }
-    }
-
-    private boolean takenOver(AbstractRecruitEntity s) {
-        if (!commanded.contains(s.getId())) {
-            return false;
-        }
-        for (Enlisted e : enlisted.values()) {
-            if (e.given.contains(s.getId())) {
-                return e.takenOver;
-            }
-        }
-        return false;
     }
 
     /** Whether a real enemy soldier stands within reach of a soldier (looking only at its block's foe and nearby blocks). */
@@ -1631,7 +1995,7 @@ public final class RecruitsBattle {
             now = "Pullback!";
         } else if (e.lastDuty == Duty.FRONT && b.duty() != Duty.FRONT) {
             now = "Rotate!";
-        } else if (b.duty() == Duty.FRONT && b.fighting()) {
+        } else if ((b.duty() == Duty.FRONT || b.strikeAt() != null) && b.fighting()) {
             now = "Charge!";
         }
         e.lastDuty = b.duty();
@@ -1648,7 +2012,9 @@ public final class RecruitsBattle {
             title(e, "Hold the " + wingTitle(b.wing(), army.winged()) + "!");
         }
         FieldBlock strike = b.strikeAt();
-        if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
+        if (strike != null && strike != e.lastStrike && strike.alive() > 0 && strike == field.army(1 - e.side).commander()) {
+            title(e, "Kill General " + sides[1 - e.side].general.name() + "!");
+        } else if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
             title(e, "Target " + sides[1 - e.side].faction.name() + "'s " + wingTitle(strike.wing(), field.army(1 - e.side).winged())
                     + " block!");
         }
@@ -1726,6 +2092,7 @@ public final class RecruitsBattle {
             if (player != null) {
                 ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
             }
+            unkitPlayer(player, e);
             if (e.group != null && RecruitEvents.recruitsGroupsManager != null) {
                 RecruitEvents.recruitsGroupsManager.removeGroup(e.group);
                 if (player != null) {
@@ -1848,8 +2215,11 @@ public final class RecruitsBattle {
         if (battle == null || attacker == null) {
             return amount;
         }
-        Live by = battle.byEntity.get(attacker.getId());
         Entity rider = victim.getPassengers().isEmpty() ? victim : victim.getPassengers().get(0);
+        if (!battle.enlisted.isEmpty()) {
+            amount = battle.unitRules(rider, attacker, amount);
+        }
+        Live by = battle.byEntity.get(attacker.getId());
         Live of = battle.byEntity.get(rider.getId());
         if (by == null || of == null || by.block.side() == of.block.side()) {
             return amount;

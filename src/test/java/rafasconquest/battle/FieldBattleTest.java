@@ -205,6 +205,63 @@ class FieldBattleTest {
         }
     }
 
+    /** A reserve block of an army of 2000, nearest its middle. */
+    private static FieldBlock reserveBlock(FieldBattle battle) {
+        return battle.army(0).blocks().stream().filter(b -> b.duty() == FieldBlock.Duty.LINE && b.arm().infantry())
+                .min(java.util.Comparator.comparingDouble(b -> Math.abs(b.line().x()))).orElseThrow();
+    }
+
+    @Test
+    void aKillSquadGoesForTheEnemyGeneralOrACaptain() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock squad = reserveBlock(battle);
+        battle.assign(squad, FieldBlock.Task.KILL);
+        FieldBlock target = null;
+        for (int i = 0; i < 300 && target == null; i++) {
+            battle.second();
+            target = squad.strikeAt();
+        }
+        assertNotNull(target, "never sent");
+        assertTrue(target == battle.army(1).commander() || target.captainAlive(), "sent at a block with no officer");
+    }
+
+    @Test
+    void aFlankerStrikesEnemyInfantryInAFight() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock flanker = reserveBlock(battle);
+        battle.assign(flanker, FieldBlock.Task.FLANK);
+        FieldBlock target = null;
+        for (int i = 0; i < 300 && target == null; i++) {
+            battle.second();
+            target = flanker.strikeAt();
+        }
+        assertNotNull(target, "never sent");
+        assertTrue(target.arm().infantry() && target.side() == 1);
+        assertEquals(FieldBlock.Duty.LINE, flanker.duty(), "the general doesn't take it into the line");
+    }
+
+    @Test
+    void aSupportBlockReinforcesALosingBlockOfItsWing() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock support = reserveBlock(battle);
+        battle.assign(support, FieldBlock.Task.SUPPORT);
+        FieldBlock target = null;
+        for (int i = 0; i < 600 && target == null; i++) {
+            battle.second();
+            target = support.strikeAt();
+        }
+        assertNotNull(target, "never sent");
+        assertEquals(1, target.side());
+    }
+
+    @Test
+    void aPlayersBaitIsItsWingsBait() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock front = battle.army(0).front[0];
+        battle.assign(front, FieldBlock.Task.BAIT);
+        assertEquals(front.file(), battle.army(0).baitFile[front.wing()]);
+    }
+
     @Test
     void soldiersStillNumbersInAPartRealBlockFightOn() {
         FieldBattle battle = battle(1, 1, 6);
