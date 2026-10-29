@@ -164,7 +164,7 @@ first. The old relation is restored when the battle ends.
   first charge (frontline). A choice sets the player's role for the charge.
 - **Victory:** if a general falls, their army retreats, and the winner may pursue it (a bold general, or one who
   leads charges or hunts generals, does; a cautious one doesn't; else a coin toss): the winner's blocks make for the
-  nearest of the enemy as it runs back the way it came, for a day at most. Once none of the beaten army has been
+  nearest of the enemy as it runs back the way it came, for 5 minutes at most. Once none of the beaten army has been
   harmed by the winner for 30 s, it fades away (a few soldiers a tick, in a puff) and its camp is struck. Without a
   pursuit it simply runs, and fades 30 s after the last blow. An army worn down with its general alive surrenders:
   the fighting stops where it stands, and after 30 s of milling about it fades and its camp is struck. The factions'
@@ -172,6 +172,27 @@ first. The old relation is restored when the battle ends.
   A beaten army runs a quarter faster than its pursuers march, so foot outruns foot and only horse rides it down.
   For testing, `/pve debug battle end general <side>` fells a side's general and `/pve debug battle end surrender
   <side>` makes a side surrender. (Minecraft 1.20.1 has no `/tick` command to speed time up.)
+- **Deployment countdown:** a bar at the top of the screen counts the deployment down, in the nation's colour for
+  players of each army (neutral for others): 4 minutes the first day, 1 minute every morning after. At 0 the battle
+  begins (`/pve debug battle start` still starts it at once). Players on a side are enlisted as soon as the battle is
+  set up, and while the armies deploy a beacon beam rises over their ring when they are more than 10 blocks from it.
+- **A player's units** (one per block they were given, each its own group in Recruits' command screen, so each
+  forms its own formation): they stand side by side behind the player in formation and move as the player moves:
+  each soldier is walked straight to its place every couple of ticks rather than pathing after the player, so they
+  keep up and stop when the player stops. They turn as the player turns, except within 4 s of the player fighting.
+  A soldier fighting an enemy at hand is left to it. An order the player gives in Recruits' own screen takes that
+  unit over until the war horn orders it again.
+- **The war horn** (every enlisted player gets one, in their nation's call): right-clicking it opens its screen: a
+  map of the field around the player, north up, with their units and every formation of the battle. Click a unit to
+  select it (shift adds), click the map to send the selected units there, or order them: follow me, hold, charge
+  (let loose on the nearest real enemy within 40 blocks), square, line (10 wide), shields up or down. Nothing is
+  limited to Recruits' 99. Orders wait until the screen closes; then, if any were given, the horn blows, heard far
+  across the field, and they are carried out.
+- **Blows on figures:** soldiers that are only numbers (figures) can be hit. A player's swing that meets no entity
+  but a figure within reach (3.5 blocks, 5 riding) strikes it as hard as the player hits (with their charge, for a
+  cavalry player at a gallop); a galloping cavalry player tramples the figures their horse runs into; and a player's
+  soldiers with nobody real at hand strike a figure within 2.5 blocks once a second. The blows count in the numbers.
+- **Pursuits** last 5 minutes at most, and a winner outnumbered by 20 % or more by the beaten army doesn't pursue.
 - **Ranks** (`character/Rank`, saved per player with the world in `data/Ranks`): Soldier (1, leads 1), Corporal (2,
   5), Serjeant (3, 20), Captain (4, 100), Major (5, 500), Colonel (6, 1000), Marshal (7, 3000), Grand Marshal (8,
   10,000). Ranks 1 to 4 are enlisted; 5 to 8 are officers, whose commands come later. `/pve rank` shows yours;

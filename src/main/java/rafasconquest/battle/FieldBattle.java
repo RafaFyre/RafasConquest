@@ -1665,6 +1665,26 @@ public final class FieldBattle {
         return best;
     }
 
+    /**
+     * A real soldier or player strikes soldier {@code i} of a block where it is only a figure: it takes the blow in
+     * the numbers (a block part real counts its fallen at its next report).
+     */
+    public void strikeFigure(FieldBlock block, int i, float damage) {
+        if (i < 0 || i >= block.health.length || block.health[i] <= 0) {
+            return;
+        }
+        lastHurt[block.side] = seconds;
+        if (block.live) {
+            block.hurt(i, damage);
+            return;
+        }
+        block.health[i] = Math.max(0, block.health[i] - damage);
+        if (block.health[i] == 0) {
+            block.alive--;
+            lastFall = seconds;
+        }
+    }
+
     /** A cavalry block's charge is broken against a braced shield: all its momentum is spent. */
     public void breakCharge(FieldBlock block) {
         block.momentum = 0;

@@ -69,7 +69,7 @@ public final class ClientEvents {
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
             ArrowVolleys.render(event.getPoseStack(), event.getCamera());
-            BattleSpotRing.render(event.getPoseStack(), event.getCamera());
+            BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
         }
     }
 
@@ -87,6 +87,63 @@ public final class ClientEvents {
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         if (DistantArmyRenderer.hides(event.getEntity(), eye, event.getPartialTick())) {
             event.setCanceled(true);
+        }
+    }
+
+    /** Right-clicking the war horn opens its screen instead of blowing it. */
+    @SubscribeEvent
+    public static void onRightClickItem(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem event) {
+        if (event.getLevel().isClientSide() && rafasconquest.bridge.WarHorn.is(event.getItemStack())) {
+            event.setCanceled(true);
+            event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+            if (Minecraft.getInstance().screen == null) {
+                HornScreen.open();
+            }
+        }
+    }
+
+    /**
+     * A swing that meets no entity may meet a figure: a soldier the battle keeps as numbers, drawn by {@link
+     * DistantArmyRenderer}. The nearest figure along the player's line of sight within reach is struck; the server
+     * decides what the blow does.
+     */
+    @SubscribeEvent
+    public static void onAttack(net.minecraftforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!event.isAttack() || mc.player == null || mc.hitResult != null && mc.hitResult.getType() == net.minecraft.world.phys.HitResult.Type.ENTITY) {
+            return;
+        }
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 look = mc.player.getViewVector(1);
+        double reach = mc.player.getVehicle() != null ? 5 : 3.5;
+        double best = reach;
+        int formation = -1;
+        double fx = 0;
+        double fz = 0;
+        for (rafasconquest.battle.FormationSnapshot f : DistantArmies.now()) {
+            if (Math.hypot(f.x() - eye.x, f.z() - eye.z) > 40) {
+                continue;
+            }
+            for (rafasconquest.battle.FormationSnapshot.Sprite s : f.place(DistantArmies.positions(1))) {
+                if (s.real()) {
+                    continue;
+                }
+                Vec3 middle = new Vec3(s.x(), s.y() + 1, s.z());
+                Vec3 to = middle.subtract(eye);
+                double along = to.dot(look);
+                if (along < 0 || along > best) {
+                    continue;
+                }
+                if (to.subtract(look.scale(along)).length() <= 0.8) {
+                    best = along;
+                    formation = f.id();
+                    fx = s.x();
+                    fz = s.z();
+                }
+            }
+        }
+        if (formation >= 0) {
+            rafasconquest.net.ConquestNetwork.sendFigureStrike(formation, fx, fz);
         }
     }
 

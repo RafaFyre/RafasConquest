@@ -81,29 +81,189 @@ public final class ConquestNetwork {
                 .decoder(Volleys::read)
                 .consumerMainThread(ConquestNetwork::handleVolleys)
                 .add();
+        CHANNEL.messageBuilder(UnitsRequest.class, 8, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(UnitsRequest::write)
+                .decoder(UnitsRequest::read)
+                .consumerMainThread(ConquestNetwork::handleUnitsRequest)
+                .add();
+        CHANNEL.messageBuilder(UnitsState.class, 9, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(UnitsState::write)
+                .decoder(UnitsState::read)
+                .consumerMainThread(ConquestNetwork::handleUnitsState)
+                .add();
+        CHANNEL.messageBuilder(HornOrders.class, 10, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(HornOrders::write)
+                .decoder(HornOrders::read)
+                .consumerMainThread(ConquestNetwork::handleHornOrders)
+                .add();
+        CHANNEL.messageBuilder(FigureStrike.class, 11, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(FigureStrike::write)
+                .decoder(FigureStrike::read)
+                .consumerMainThread(ConquestNetwork::handleFigureStrike)
+                .add();
+    }
+
+    // ---- the war horn: a player's units ----
+
+    /** One of a player's units, as the war horn's screen shows it. */
+    public record UnitInfo(int number, int soldiers, double x, double z, int mode, int shape, boolean shields, int rgb) {
+    }
+
+    /** Client → server: the war horn's screen wants the player's units. */
+    public record UnitsRequest() {
+        void write(FriendlyByteBuf buf) {
+        }
+
+        static UnitsRequest read(FriendlyByteBuf buf) {
+            return new UnitsRequest();
+        }
+    }
+
+    public static void requestUnits() {
+        CHANNEL.sendToServer(new UnitsRequest());
+    }
+
+    private static void handleUnitsRequest(UnitsRequest msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new UnitsState(rafasconquest.bridge.RecruitsBattle.unitInfo(player)));
+        }
+    }
+
+    /** Server → client: the player's units. */
+    public record UnitsState(List<UnitInfo> units) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(units.size());
+            for (UnitInfo u : units) {
+                buf.writeVarInt(u.number());
+                buf.writeVarInt(u.soldiers());
+                buf.writeDouble(u.x());
+                buf.writeDouble(u.z());
+                buf.writeVarInt(u.mode());
+                buf.writeVarInt(u.shape());
+                buf.writeBoolean(u.shields());
+                buf.writeInt(u.rgb());
+            }
+        }
+
+        static UnitsState read(FriendlyByteBuf buf) {
+            int n = buf.readVarInt();
+            List<UnitInfo> units = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                units.add(new UnitInfo(buf.readVarInt(), buf.readVarInt(), buf.readDouble(), buf.readDouble(), buf.readVarInt(),
+                        buf.readVarInt(), buf.readBoolean(), buf.readInt()));
+            }
+            return new UnitsState(units);
+        }
+    }
+
+    private static void handleUnitsState(UnitsState msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.HornScreen.receive(msg.units()));
+    }
+
+    /** Client → server: the orders given in the war horn's screen, each to some units, with a place for a move. */
+    public record HornOrders(List<int[]> units, int[] orders, double[] xs, double[] zs) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(orders.length);
+            for (int i = 0; i < orders.length; i++) {
+                buf.writeVarIntArray(units.get(i));
+                buf.writeVarInt(orders[i]);
+                buf.writeDouble(xs[i]);
+                buf.writeDouble(zs[i]);
+            }
+        }
+
+        static HornOrders read(FriendlyByteBuf buf) {
+            int n = Math.min(buf.readVarInt(), 256);
+            List<int[]> units = new ArrayList<>(n);
+            int[] orders = new int[n];
+            double[] xs = new double[n];
+            double[] zs = new double[n];
+            for (int i = 0; i < n; i++) {
+                units.add(buf.readVarIntArray(64));
+                orders[i] = buf.readVarInt();
+                xs[i] = buf.readDouble();
+                zs[i] = buf.readDouble();
+            }
+            return new HornOrders(units, orders, xs, zs);
+        }
+    }
+
+    public static void sendHornOrders(HornOrders orders) {
+        CHANNEL.sendToServer(orders);
+    }
+
+    private static void handleHornOrders(HornOrders msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player == null) {
+            return;
+        }
+        rafasconquest.bridge.RecruitsBattle.UnitOrder[] all = rafasconquest.bridge.RecruitsBattle.UnitOrder.values();
+        List<int[]> units = new ArrayList<>();
+        List<rafasconquest.bridge.RecruitsBattle.UnitOrder> orders = new ArrayList<>();
+        List<net.minecraft.world.phys.Vec3> places = new ArrayList<>();
+        for (int i = 0; i < msg.orders().length; i++) {
+            if (msg.orders()[i] < 0 || msg.orders()[i] >= all.length) {
+                continue;
+            }
+            units.add(msg.units().get(i));
+            orders.add(all[msg.orders()[i]]);
+            places.add(new net.minecraft.world.phys.Vec3(msg.xs()[i], player.getY(), msg.zs()[i]));
+        }
+        rafasconquest.bridge.RecruitsBattle.hornOrders(player, units, orders, places);
+    }
+
+    /** Client → server: the player's swing met a figure of formation {@code formation}, at (x, z). */
+    public record FigureStrike(int formation, double x, double z) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(formation);
+            buf.writeDouble(x);
+            buf.writeDouble(z);
+        }
+
+        static FigureStrike read(FriendlyByteBuf buf) {
+            return new FigureStrike(buf.readVarInt(), buf.readDouble(), buf.readDouble());
+        }
+    }
+
+    public static void sendFigureStrike(int formation, double x, double z) {
+        CHANNEL.sendToServer(new FigureStrike(formation, x, z));
+    }
+
+    private static void handleFigureStrike(FigureStrike msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            rafasconquest.bridge.RecruitsBattle.playerStrikesFigure(player, msg.formation(), msg.x(), msg.z());
+        }
     }
 
     /** Tells an enlisted player where they should stand in their block (shown as a ring), or that they have no spot. */
     public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z));
+        sendBattleSpot(player, has, x, y, z, false);
+    }
+
+    /** The same, with a beacon over the spot (while the armies deploy) for a player far from it. */
+    public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z, boolean beacon) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z, beacon));
     }
 
     /** Server → client: where the player should stand in their block, if anywhere. */
-    public record BattleSpot(boolean has, double x, double y, double z) {
+    public record BattleSpot(boolean has, double x, double y, double z, boolean beacon) {
         void write(FriendlyByteBuf buf) {
             buf.writeBoolean(has);
             buf.writeDouble(x);
             buf.writeDouble(y);
             buf.writeDouble(z);
+            buf.writeBoolean(beacon);
         }
 
         static BattleSpot read(FriendlyByteBuf buf) {
-            return new BattleSpot(buf.readBoolean(), buf.readDouble(), buf.readDouble(), buf.readDouble());
+            return new BattleSpot(buf.readBoolean(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readBoolean());
         }
     }
 
     private static void handleBattleSpot(BattleSpot msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z()));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z(), msg.beacon()));
     }
 
     /** Tells players of the arrows archers loosed as numbers this second, for drawing in flight. */

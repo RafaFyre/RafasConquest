@@ -13,6 +13,8 @@ import com.talhanation.recruits.world.RecruitsGroup;
 import net.minecraftforge.common.ToolActions;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.world.BossEvent;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import rafasconquest.character.Rank;
@@ -75,6 +77,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -180,12 +183,32 @@ public final class RecruitsBattle {
     private static final int MAX_TENTS = 36;
     /** A beaten army leaves the field once the winner hasn't harmed it for this long. */
     private static final int QUIET_SECONDS = 30;
-    /** A pursuit lasts a day at most (a Minecraft day is 20 minutes). */
-    private static final int PURSUIT_SECONDS = 1200;
+    /** A pursuit lasts this long at most. */
+    private static final int PURSUIT_SECONDS = 300;
+    /** A winner outnumbered by this much by the beaten army doesn't pursue it. */
+    private static final double PURSUE_ONLY_UNDER = 0.8;
     private static final int FADE_PER_TICK = 6;
-    /** A morning's deployment lasts at least this, and at most this, before the charge. */
-    private static final int DEPLOY_MIN = 30;
-    private static final int DEPLOY_MAX = 240;
+    /** A unit in a line stands this many files wide. */
+    private static final int LINE_FILES = 10;
+    /** Units following their player stand this far apart, and their front this far behind the player. */
+    private static final double UNIT_GAP = 3;
+    private static final double FOLLOW_BEHIND = 2.5;
+    /** A player who fought this recently (ticks) is in a fight: their units stop turning with them. */
+    private static final int COMBAT_TICKS = 80;
+    /** A charging unit goes after real enemies this close. */
+    private static final double CHARGE_REACH = 40;
+    /** Figures are looked for among enemy blocks this near a player, and struck by soldiers within this reach. */
+    private static final double FIGURE_SEARCH = 60;
+    private static final double SOLDIER_REACH = 2.5;
+    /** A galloping cavalry player tramples a figure this close to their horse, at most once every this many ticks. */
+    private static final double TRAMPLE_REACH = 1.8;
+    private static final int TRAMPLE_TICKS = 10;
+    private static final double TRAMPLE_DAMAGE = 4;
+    /** A player's blow at a figure counts if the figure is this close. */
+    private static final double PLAYER_FIGURE_REACH = 6;
+    /** The deployment's countdown: the first day's, and every later morning's. */
+    private static final int FIRST_DEPLOYMENT = 240;
+    private static final int MORNING_DEPLOYMENT = 60;
     /** A player this close to their place is in position. */
     private static final double IN_POSITION = 5;
     /** How likely a general is, each morning, to give a player another task when there is a reason to. */
@@ -230,6 +253,8 @@ public final class RecruitsBattle {
     private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
     private final Map<UUID, Integer> councillors = new HashMap<>();
     private final WarCouncil council = new WarCouncil();
+    /** The deployment's countdown bars: one per army, and one for players in neither. */
+    private final ServerBossEvent[] deploymentBars = new ServerBossEvent[3];
     /** Each enlisted player's tent for the battle, and the next free tent of each camp. */
     private final Map<UUID, Integer> tents = new HashMap<>();
     private final int[] nextTent = new int[2];
@@ -321,14 +346,12 @@ public final class RecruitsBattle {
         FieldBlock lastStrike;
         boolean toldHold;
         boolean toldKill;
-        /** The Recruits group the soldiers join, so they show in the player's command screen. */
-        @Nullable
-        UUID group;
-        /** Where each soldier was put in the square; once the player orders them otherwise, they're the player's. */
-        final Map<Integer, Vec3> squarePlace = new HashMap<>();
-        @Nullable
-        Point squareAt;
-        boolean takenOver;
+        /** Their soldiers, a unit per block, each its own group in Recruits and its own formation. */
+        final List<Unit> units = new ArrayList<>();
+        /** Which way their following units face (the player's, until they fight), and when they last fought. */
+        float formYaw;
+        long lastCombat = Long.MIN_VALUE / 2;
+        long lastTrample;
         /** Their tent in camp (an index into the camp's tents), or -1. */
         int tent = -1;
         /** Heading out of camp to their position, their soldiers following them, not yet there. */
@@ -485,6 +508,7 @@ public final class RecruitsBattle {
         battle.axisZ = axisZ;
         battle.buildCamps();
         battle.spawnCouncil();
+        battle.enlist(); // players already on a side take their places for the deployment
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
@@ -605,6 +629,7 @@ public final class RecruitsBattle {
         battle.clearSnapshots();
         battle.dismissEnlisted();
         battle.dismissCouncil();
+        battle.hideDeploymentBars();
         for (int side = 0; side < 2; side++) {
             battle.strikeCamp(side);
         }
@@ -1398,6 +1423,12 @@ public final class RecruitsBattle {
             battle.second();
         }
         battle.council.tick(battle.level.getServer(), battle.level.getGameTime());
+        if (battle.ticks % 2 == 0) {
+            battle.driveUnits();
+        }
+        if (battle.ticks % 4 == 0) {
+            battle.trample();
+        }
         battle.fadeSome();
         if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
             battle.holdChunks();
@@ -1520,10 +1551,9 @@ public final class RecruitsBattle {
         if (battle.started) {
             return "The battle has already begun";
         }
-        if (battle.enlisted.isEmpty()) {
-            battle.enlist();
-        }
+        battle.enlist(); // anyone who joined a side since
         battle.field.formed();
+        battle.hideDeploymentBars();
         for (Enlisted e : battle.enlisted.values()) {
             e.marching = false;
             battle.removeMessenger(e);
@@ -1596,6 +1626,9 @@ public final class RecruitsBattle {
                 if (!player.getTeam().getName().equals(sides[side].team.getName())) {
                     continue;
                 }
+                if (enlisted.containsKey(player.getUUID())) {
+                    continue; // enlisted already, for the day
+                }
                 FieldArmy army = field.army(side);
                 Job job = ranks.job(player.getUUID());
                 BattleRole role = dayRoles.containsKey(player.getUUID()) ? dayRoles.get(player.getUUID()).role()
@@ -1622,11 +1655,7 @@ public final class RecruitsBattle {
                 for (FieldBlock b : blocks) {
                     field.assign(b, b == home || role != BattleRole.BAIT ? task(role) : FieldBlock.Task.NONE);
                 }
-                if (RecruitEvents.recruitsGroupsManager != null) {
-                    RecruitsGroup group = new RecruitsGroup(capitalised(job.title()), player, 0);
-                    RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
-                    e.group = group.getUUID();
-                }
+                e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
                 int s = side;
@@ -1805,6 +1834,7 @@ public final class RecruitsBattle {
                 kit.add(new ItemStack(Items.IRON_BOOTS));
             }
         }
+        kit.add(WarHorn.make(side.horn)); // every enlisted player commands their units with it
         for (ItemStack stack : kit) {
             stack.getOrCreateTag().putBoolean(KIT_TAG, true);
             player.getInventory().add(stack);
@@ -1972,7 +2002,11 @@ public final class RecruitsBattle {
             }
         }
         for (Enlisted e : enlisted.values()) {
-            if (e.job == Job.CAVALRY && victim.getUUID().equals(e.player) && byEntity.containsKey(attacker.getId())) {
+            boolean struck = victim.getUUID().equals(e.player) && byEntity.containsKey(attacker.getId());
+            if (struck || attacker.getUUID().equals(e.player) && byEntity.containsKey(victim.getId())) {
+                e.lastCombat = level.getGameTime();
+            }
+            if (e.job == Job.CAVALRY && struck) {
                 e.playerContact = true; // struck in melee: the charge is spent all the same
             }
         }
@@ -2006,13 +2040,12 @@ public final class RecruitsBattle {
             if (player == null) {
                 continue;
             }
-            if (giveSoldiers(e) && RecruitEvents.recruitsGroupsManager != null) {
+            if (giveSoldiers(e, player) && RecruitEvents.recruitsGroupsManager != null) {
                 RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
             }
             campLife(e, player);
-            if (!e.marching) {
-                keepSquare(e);
-            }
+            unitOrders(e);
+            strikeFigures(e, player);
             if (e.job == Job.CAVALRY) {
                 cavalryMomentum(e, player);
             }
@@ -2023,7 +2056,7 @@ public final class RecruitsBattle {
                 ConquestNetwork.sendBattleSpot(player, true, door.x, door.y, door.z);
             } else if (home.alive() > 0) {
                 Point spot = home.line();
-                ConquestNetwork.sendBattleSpot(player, true, spot.x(), groundY(home, spot.x(), spot.z()), spot.z());
+                ConquestNetwork.sendBattleSpot(player, true, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(), phase == Phase.DEPLOYMENT);
             } else {
                 ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
             }
@@ -2035,7 +2068,7 @@ public final class RecruitsBattle {
      * The player's soldiers, from their block and those beside it as they become real: owned by them and in a group
      * of theirs, so Recruits' command screen lists them. Returns whether any were given.
      */
-    private boolean giveSoldiers(Enlisted e) {
+    private boolean giveSoldiers(Enlisted e, ServerPlayer player) {
         boolean any = false;
         for (FieldBlock b : e.blocks) {
             Live l = live.get(b);
@@ -2058,9 +2091,11 @@ public final class RecruitsBattle {
                     s.setIsOwned(true);
                     s.setAggroState(0);
                     s.setTarget(null);
-                    if (e.group != null) {
-                        s.setGroupUUID(e.group);
-                        RecruitEvents.recruitsGroupsManager.addMember(e.group, s.getUUID(), level);
+                    Unit u = unitFor(e, b, player);
+                    u.ids.add(s.getId());
+                    if (u.group != null) {
+                        s.setGroupUUID(u.group);
+                        RecruitEvents.recruitsGroupsManager.addMember(u.group, s.getUUID(), level);
                     }
                 }
             }
@@ -2071,65 +2106,10 @@ public final class RecruitsBattle {
     /** The player's soldiers that are still alive. */
     private List<AbstractRecruitEntity> soldiersOf(Enlisted e) {
         List<AbstractRecruitEntity> soldiers = new ArrayList<>();
-        for (FieldBlock b : e.blocks) {
-            Live l = live.get(b);
-            if (l != null) {
-                for (AbstractRecruitEntity s : l.living()) {
-                    if (e.given.contains(s.getId())) {
-                        soldiers.add(s);
-                    }
-                }
-            }
+        for (Unit u : e.units) {
+            soldiers.addAll(soldiersOf(u));
         }
         return soldiers;
-    }
-
-    /**
-     * Until the player gives their soldiers orders of their own (from Recruits' command screen), they stand in a square
-     * behind the player's ring, facing the enemy, and move with it as the block advances. A soldier found off its place
-     * in the square, or no longer holding, means the player has taken them over.
-     */
-    private void keepSquare(Enlisted e) {
-        if (e.takenOver || e.home.alive() == 0) {
-            return;
-        }
-        List<AbstractRecruitEntity> soldiers = soldiersOf(e);
-        for (AbstractRecruitEntity s : soldiers) {
-            Vec3 placed = e.squarePlace.get(s.getId());
-            Vec3 hold = s.getHoldPos();
-            if (placed != null && (s.getFollowState() != 3 || hold == null || hold.distanceToSqr(placed) > 1)) {
-                e.takenOver = true;
-                return;
-            }
-        }
-        Point spot = e.home.line();
-        boolean newcomers = soldiers.stream().anyMatch(s -> !e.squarePlace.containsKey(s.getId()));
-        if (soldiers.isEmpty() || (!newcomers && e.squarePlace.size() == soldiers.size() && e.squareAt != null
-                && Math.hypot(e.squareAt.x() - spot.x(), e.squareAt.z() - spot.z()) < 2)) {
-            return;
-        }
-        e.squareAt = spot;
-        e.squarePlace.clear();
-        double fx = e.home.facingX();
-        double fz = e.home.facingZ();
-        int cols = (int) Math.ceil(Math.sqrt(soldiers.size()));
-        double sp = BattlePlan.SPACING;
-        for (int i = 0; i < soldiers.size(); i++) {
-            int row = i / cols;
-            int col = i % cols;
-            double right = (col - (cols - 1) / 2.0) * sp;
-            double back = (row + 1) * sp;
-            double x = spot.x() - fx * back - fz * right;
-            double z = spot.z() - fz * back + fx * right;
-            Vec3 place = new Vec3(x, groundY(e.home, x, z), z);
-            AbstractRecruitEntity s = soldiers.get(i);
-            s.setHoldPos(place);
-            s.setFollowState(3);
-            s.isInFormation = true;
-            s.holdFormation = false; // free to fight what comes near, then back to its place
-            s.formationPos = i;
-            e.squarePlace.put(s.getId(), place);
-        }
     }
 
     /**
@@ -2287,6 +2267,494 @@ public final class RecruitsBattle {
         return best;
     }
 
+    // ---- a player's units: one per block, moved with the player or by the war horn's orders ----
+
+    /**
+     * How a player's unit moves: in formation with the player (moving as they move, turning as they turn until they
+     * fight), held where it stands, sent to a place, let loose on the enemy, or left to the orders the player gave it in
+     * Recruits' own command screen.
+     */
+    public enum UnitMode {
+        FOLLOW, HOLD, MOVE, CHARGE, RECRUITS
+    }
+
+    /** A unit's formation: a square, or a line {@link #LINE_FILES} wide. */
+    public enum Shape {
+        SQUARE, LINE
+    }
+
+    /** A war horn order, given in the horn's screen. */
+    public enum UnitOrder {
+        FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN
+    }
+
+    /** One block's worth of a player's soldiers: its own group in Recruits, its own formation, its own orders. */
+    static final class Unit {
+        final FieldBlock block;
+        final int number;
+        @Nullable
+        UUID group;
+        final Set<Integer> ids = new LinkedHashSet<>();
+        UnitMode mode = UnitMode.FOLLOW;
+        Shape shape = Shape.SQUARE;
+        boolean shields;
+        /** Where it holds, and which way it faces (held or sent somewhere). */
+        @Nullable
+        Vec3 at;
+        float yaw;
+        /** Where the battle last put each soldier, to tell the player's own Recruits orders from ours. */
+        final Map<Integer, Vec3> placed = new HashMap<>();
+        /** Soldiers whose places must be set again (new, or the unit was given another order). */
+        boolean replace = true;
+
+        Unit(FieldBlock block, int number) {
+            this.block = block;
+            this.number = number;
+        }
+    }
+
+    /** The unit a block's soldiers make for a player, made (with its own Recruits group) the first time. */
+    private Unit unitFor(Enlisted e, FieldBlock block, ServerPlayer player) {
+        for (Unit u : e.units) {
+            if (u.block == block) {
+                return u;
+            }
+        }
+        Unit u = new Unit(block, e.units.size() + 1);
+        if (RecruitEvents.recruitsGroupsManager != null) {
+            RecruitsGroup group = new RecruitsGroup(capitalised(e.job.title()) + " " + u.number, player, 0);
+            RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
+            u.group = group.getUUID();
+        }
+        e.units.add(u);
+        return u;
+    }
+
+    /** A unit's soldiers still standing, in the order they joined. */
+    private List<AbstractRecruitEntity> soldiersOf(Unit u) {
+        List<AbstractRecruitEntity> soldiers = new ArrayList<>();
+        Live l = live.get(u.block);
+        if (l != null) {
+            for (AbstractRecruitEntity s : l.soldiers) {
+                if (s != null && s.isAlive() && u.ids.contains(s.getId())) {
+                    soldiers.add(s);
+                }
+            }
+        }
+        return soldiers;
+    }
+
+    /** How many files a unit stands in. */
+    private static int files(Unit u, int soldiers) {
+        return u.shape == Shape.LINE ? Math.max(1, Math.min(soldiers, LINE_FILES)) : Math.max(1, (int) Math.ceil(Math.sqrt(soldiers)));
+    }
+
+    private static double spacing(Enlisted e) {
+        return e.job == Job.CAVALRY ? BattlePlan.SPACING * 1.8 : BattlePlan.SPACING;
+    }
+
+    /**
+     * Each couple of ticks: units in formation with their player stand side by side behind them, and move as they move
+     * (each soldier walked straight to its place, not pathed after the player, so they keep up), turning as the player
+     * turns unless the player has fought in the last few seconds. A soldier fighting an enemy at hand is left to it.
+     */
+    private void driveUnits() {
+        long now = level.getGameTime();
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null || !player.isAlive()) {
+                continue;
+            }
+            if (now - e.lastCombat >= COMBAT_TICKS) {
+                e.formYaw = player.getYRot();
+            }
+            double yaw = Math.toRadians(e.formYaw);
+            double fx = -Math.sin(yaw);
+            double fz = Math.cos(yaw);
+            double sp = spacing(e);
+            List<Unit> following = new ArrayList<>();
+            List<List<AbstractRecruitEntity>> soldiers = new ArrayList<>();
+            double total = 0;
+            for (Unit u : e.units) {
+                List<AbstractRecruitEntity> s = soldiersOf(u);
+                if (u.mode == UnitMode.FOLLOW && !s.isEmpty()) {
+                    following.add(u);
+                    soldiers.add(s);
+                    total += (files(u, s.size()) - 1) * sp;
+                }
+            }
+            total += Math.max(0, following.size() - 1) * UNIT_GAP;
+            double left = -total / 2;
+            for (int k = 0; k < following.size(); k++) {
+                Unit u = following.get(k);
+                List<AbstractRecruitEntity> s = soldiers.get(k);
+                int files = files(u, s.size());
+                double width = (files - 1) * sp;
+                for (int j = 0; j < s.size(); j++) {
+                    double right = left + (j % files) * sp;
+                    double back = FOLLOW_BEHIND + (j / files) * sp;
+                    double x = player.getX() - fz * right - fx * back;
+                    double z = player.getZ() + fx * right - fz * back;
+                    double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
+                    drive(u, s.get(j), new Vec3(x, y, z), now);
+                }
+                left += width + UNIT_GAP;
+            }
+        }
+    }
+
+    /** Walks a soldier of a following unit straight to its place, unless it is fighting, or the player took it over. */
+    private void drive(Unit u, AbstractRecruitEntity s, Vec3 place, long now) {
+        LivingEntity target = s.getTarget();
+        if (target != null && target.isAlive() && target.distanceToSqr(s) < 25) {
+            return; // fighting what's at hand
+        }
+        if (takenOver(u, s)) {
+            return;
+        }
+        s.setHoldPos(place);
+        if (s.getFollowState() != 3) {
+            s.setFollowState(3);
+        }
+        s.holdFormation = false;
+        u.placed.put(s.getId(), place);
+        Entity mover = s.getVehicle() != null ? s.getVehicle() : s;
+        double d = Math.hypot(mover.getX() - place.x, mover.getZ() - place.z);
+        if (d < 0.4) {
+            return;
+        }
+        double speed = Math.min(1.7, 1.0 + d * 0.12);
+        if (s.getVehicle() != null || d > 8) {
+            if (now % 10 == 0 || s.getNavigation().isDone()) {
+                s.getNavigation().moveTo(place.x, place.y, place.z, speed);
+            }
+        } else {
+            s.getNavigation().stop();
+            s.getMoveControl().setWantedPosition(place.x, place.y, place.z, speed);
+        }
+    }
+
+    /**
+     * Whether the player has given this soldier an order of their own in Recruits' command screen (it no longer holds
+     * where the battle put it); then its unit is theirs until the war horn orders it again.
+     */
+    private boolean takenOver(Unit u, AbstractRecruitEntity s) {
+        if (u.mode == UnitMode.RECRUITS) {
+            return true;
+        }
+        Vec3 placed = u.placed.get(s.getId());
+        Vec3 hold = s.getHoldPos();
+        if (placed != null && (s.getFollowState() != 3 || hold == null || hold.distanceToSqr(placed) > 1)) {
+            u.mode = UnitMode.RECRUITS;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Each second, for units not following: a held or sent unit stands in its formation where it was told (placed
+     * again when soldiers join it); a charging unit goes after the nearest enemy; every unit's shields are as ordered.
+     */
+    private void unitOrders(Enlisted e) {
+        for (Unit u : e.units) {
+            List<AbstractRecruitEntity> soldiers = soldiersOf(u);
+            if (soldiers.isEmpty()) {
+                continue;
+            }
+            for (AbstractRecruitEntity s : soldiers) {
+                if (s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) && s.getShouldBlock() != u.shields
+                        && u.mode != UnitMode.RECRUITS) {
+                    s.setShouldBlock(u.shields);
+                }
+            }
+            switch (u.mode) {
+                case HOLD, MOVE -> {
+                    boolean newcomer = soldiers.stream().anyMatch(s -> !u.placed.containsKey(s.getId()));
+                    if (!u.replace && !newcomer) {
+                        for (AbstractRecruitEntity s : soldiers) {
+                            if (takenOver(u, s)) {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+                    u.replace = false;
+                    double sp = spacing(e);
+                    int files = files(u, soldiers.size());
+                    double yaw = Math.toRadians(u.yaw);
+                    double fx = -Math.sin(yaw);
+                    double fz = Math.cos(yaw);
+                    for (int j = 0; j < soldiers.size(); j++) {
+                        double right = (j % files - (files - 1) / 2.0) * sp;
+                        double back = (j / files) * sp;
+                        double x = u.at.x - fz * right - fx * back;
+                        double z = u.at.z + fx * right - fz * back;
+                        double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
+                        AbstractRecruitEntity s = soldiers.get(j);
+                        Vec3 place = new Vec3(x, y, z);
+                        s.setHoldPos(place);
+                        s.setFollowState(3);
+                        s.holdFormation = false;
+                        u.placed.put(s.getId(), place);
+                    }
+                }
+                case CHARGE -> {
+                    List<AbstractRecruitEntity> foes = enemiesOf(u.block.side(), true);
+                    for (AbstractRecruitEntity s : soldiers) {
+                        LivingEntity target = s.getTarget();
+                        if (target == null || !target.isAlive()) {
+                            nearestTo(s, foes).filter(f -> f.distanceTo(s) <= CHARGE_REACH).ifPresent(f -> {
+                                s.setTarget(f);
+                                s.getNavigation().moveTo(f, 1.2);
+                            });
+                        }
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+    }
+
+    /** War horn orders, given in the horn's screen to some of a player's units; the horn blows if any were. */
+    public static void hornOrders(ServerPlayer player, List<int[]> units, List<UnitOrder> orders, List<Vec3> places) {
+        RecruitsBattle battle = current;
+        if (battle == null) {
+            return;
+        }
+        Enlisted e = battle.enlisted.get(player.getUUID());
+        if (e == null || orders.isEmpty()) {
+            return;
+        }
+        for (int k = 0; k < orders.size(); k++) {
+            for (int number : units.get(k)) {
+                if (number >= 1 && number <= e.units.size()) {
+                    battle.order(e, e.units.get(number - 1), orders.get(k), places.get(k), player);
+                }
+            }
+        }
+        Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(battle.sides[e.side].horn);
+        battle.level.playSound(null, player.getX(), player.getEyeY(), player.getZ(), horn.value(), SoundSource.RECORDS, HORN_VOLUME, 1);
+    }
+
+    private void order(Enlisted e, Unit u, UnitOrder order, Vec3 place, ServerPlayer player) {
+        List<AbstractRecruitEntity> soldiers = soldiersOf(u);
+        switch (order) {
+            case FOLLOW -> {
+                u.mode = UnitMode.FOLLOW;
+                u.placed.clear();
+            }
+            case HOLD -> {
+                u.mode = UnitMode.HOLD;
+                u.at = centreOf(soldiers, player.position());
+                u.yaw = e.formYaw;
+                u.replace = true;
+                u.placed.clear();
+            }
+            case MOVE -> {
+                u.mode = UnitMode.MOVE;
+                Vec3 from = centreOf(soldiers, player.position());
+                u.at = place;
+                u.yaw = (float) Math.toDegrees(Math.atan2(-(place.x - from.x), place.z - from.z));
+                u.replace = true;
+                u.placed.clear();
+            }
+            case CHARGE -> {
+                u.mode = UnitMode.CHARGE;
+                u.placed.clear();
+                for (AbstractRecruitEntity s : soldiers) {
+                    s.setFollowState(0);
+                    s.holdFormation = false;
+                    s.isInFormation = false;
+                    s.setAggroState(1);
+                }
+            }
+            case SQUARE, LINE -> {
+                u.shape = order == UnitOrder.SQUARE ? Shape.SQUARE : Shape.LINE;
+                u.replace = true;
+            }
+            case SHIELDS_UP, SHIELDS_DOWN -> u.shields = order == UnitOrder.SHIELDS_UP;
+        }
+        if (u.mode != UnitMode.CHARGE) {
+            for (AbstractRecruitEntity s : soldiers) {
+                s.setAggroState(0);
+            }
+        }
+    }
+
+    private static Vec3 centreOf(List<AbstractRecruitEntity> soldiers, Vec3 otherwise) {
+        if (soldiers.isEmpty()) {
+            return otherwise;
+        }
+        double x = 0;
+        double z = 0;
+        for (AbstractRecruitEntity s : soldiers) {
+            x += s.getX();
+            z += s.getZ();
+        }
+        return new Vec3(x / soldiers.size(), soldiers.get(0).getY(), z / soldiers.size());
+    }
+
+    /** What the war horn's screen shows of a player's units: number, size, where, how. */
+    public static List<ConquestNetwork.UnitInfo> unitInfo(ServerPlayer player) {
+        RecruitsBattle battle = current;
+        List<ConquestNetwork.UnitInfo> info = new ArrayList<>();
+        Enlisted e = battle == null ? null : battle.enlisted.get(player.getUUID());
+        if (e == null) {
+            return info;
+        }
+        for (Unit u : e.units) {
+            List<AbstractRecruitEntity> soldiers = battle.soldiersOf(u);
+            Vec3 c = centreOf(soldiers, player.position());
+            info.add(new ConquestNetwork.UnitInfo(u.number, soldiers.size(), c.x, c.z, u.mode.ordinal(), u.shape.ordinal(), u.shields,
+                    battle.mainColorOf(e.side)));
+        }
+        return info;
+    }
+
+    private int mainColorOf(int side) {
+        return mainColor(sides[side].faction);
+    }
+
+    // ---- blows on figures: soldiers that are only numbers ----
+
+    /** Soldier {@code i} of an enemy block, standing at {@code at} as a figure. */
+    private record Figure(FieldBlock block, int index, Point at) {
+    }
+
+    /** Enemy blocks near a point (by where they stand), to look for figures among. */
+    private List<FieldBlock> enemyBlocksNear(int side, Vec3 at, double reach) {
+        List<FieldBlock> near = new ArrayList<>();
+        if (faded[1 - side]) {
+            return near;
+        }
+        for (FieldBlock b : field.army(1 - side).blocks()) {
+            if (b.alive() > 0 && b.pos().distanceTo(new Point(at.x, at.z)) <= reach + BLOCK_REACH) {
+                near.add(b);
+            }
+        }
+        return near;
+    }
+
+    /** The nearest enemy figure (not a real soldier) within {@code reach} of a point, among {@code blocks}. */
+    @Nullable
+    private Figure nearestFigure(List<FieldBlock> blocks, Vec3 at, double reach) {
+        Figure best = null;
+        double bestDistance = reach;
+        for (FieldBlock b : blocks) {
+            float[] health = b.health();
+            Point front = front(b, health);
+            Live l = live.get(b);
+            for (int i = 0; i < health.length; i++) {
+                if (health[i] <= 0 || l != null && l.soldiers[i] != null) {
+                    continue;
+                }
+                Point p = slot(b, front, i);
+                double d = Math.hypot(p.x() - at.x, p.z() - at.z);
+                if (d <= bestDistance) {
+                    bestDistance = d;
+                    best = new Figure(b, i, p);
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Each second: a player's soldiers with nobody real at hand strike an enemy figure within their reach, as hard as
+     * they hit (a cavalry player's riders harder at a gallop, with their momentum).
+     */
+    private void strikeFigures(Enlisted e, ServerPlayer player) {
+        if (!mayFight(e.side)) {
+            return;
+        }
+        List<FieldBlock> near = enemyBlocksNear(e.side, player.position(), FIGURE_SEARCH);
+        if (near.isEmpty()) {
+            return;
+        }
+        for (Unit u : e.units) {
+            for (AbstractRecruitEntity s : soldiersOf(u)) {
+                LivingEntity target = s.getTarget();
+                if (target != null && target.isAlive() && target.distanceToSqr(s) < 9) {
+                    continue;
+                }
+                Figure f = nearestFigure(near, s.position(), SOLDIER_REACH);
+                if (f == null) {
+                    continue;
+                }
+                float damage = (float) s.getAttributeValue(Attributes.ATTACK_DAMAGE);
+                if (e.job == Job.CAVALRY && galloping(s)) {
+                    damage *= (float) (1 + FieldRules.CHARGE_BONUS * e.unitMomentum);
+                    e.unitContact = true;
+                }
+                field.strikeFigure(f.block(), f.index(), damage);
+                s.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, new Vec3(f.at().x(), s.getEyeY(), f.at().z()));
+                s.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            }
+        }
+    }
+
+    /** Every few ticks: a cavalry player riding at a gallop tramples the enemy figures their horse runs into. */
+    private void trample() {
+        long now = level.getGameTime();
+        for (Enlisted e : enlisted.values()) {
+            if (e.job != Job.CAVALRY || !mayFight(e.side)) {
+                continue;
+            }
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null || player.getVehicle() == null || !galloping(player)) {
+                continue;
+            }
+            List<FieldBlock> near = enemyBlocksNear(e.side, player.position(), TRAMPLE_REACH);
+            Figure f = nearestFigure(near, player.getVehicle().position(), TRAMPLE_REACH);
+            if (f == null || now - e.lastTrample < TRAMPLE_TICKS) {
+                continue;
+            }
+            e.lastTrample = now;
+            field.strikeFigure(f.block(), f.index(), (float) (TRAMPLE_DAMAGE * (1 + FieldRules.CHARGE_BONUS * e.momentum)));
+            e.playerContact = true;
+            e.lastCombat = now;
+        }
+    }
+
+    /**
+     * A player struck at a figure of formation {@code formation} near ({@code x}, {@code z}) (the client saw the swing
+     * meet it): the nearest figure of that block there takes the blow, as hard as the player hits (with their charge,
+     * for a cavalry player at a gallop), if it is an enemy within reach.
+     */
+    public static void playerStrikesFigure(ServerPlayer player, int formation, double x, double z) {
+        RecruitsBattle battle = current;
+        if (battle == null) {
+            return;
+        }
+        Enlisted e = battle.enlisted.get(player.getUUID());
+        int side = e != null ? e.side : -1;
+        if (side < 0 || !battle.mayFight(side) || Math.hypot(player.getX() - x, player.getZ() - z) > PLAYER_FIGURE_REACH) {
+            return;
+        }
+        FieldBlock block = null;
+        for (FieldBlock b : battle.field.army(1 - side).blocks()) {
+            if (b.id() == formation) {
+                block = b;
+            }
+        }
+        if (block == null || block.alive() == 0) {
+            return;
+        }
+        Figure f = battle.nearestFigure(List.of(block), new Vec3(x, player.getY(), z), 2.5);
+        if (f == null) {
+            return;
+        }
+        float damage = (float) player.getAttributeValue(Attributes.ATTACK_DAMAGE) * player.getAttackStrengthScale(0.5F);
+        player.resetAttackStrengthTicker();
+        if (e.job == Job.CAVALRY && player.getVehicle() != null && galloping(player)) {
+            damage *= (float) (1 + FieldRules.CHARGE_BONUS * e.momentum);
+            e.playerContact = true;
+        }
+        e.lastCombat = battle.level.getGameTime();
+        battle.field.strikeFigure(f.block(), f.index(), damage);
+    }
+
     /** The battle is over or cleared: enlisted players lose their ring. */
     private void dismissEnlisted() {
         for (Enlisted e : enlisted.values()) {
@@ -2296,8 +2764,12 @@ public final class RecruitsBattle {
             }
             unkitPlayer(player, e);
             removeMessenger(e);
-            if (e.group != null && RecruitEvents.recruitsGroupsManager != null) {
-                RecruitEvents.recruitsGroupsManager.removeGroup(e.group);
+            if (RecruitEvents.recruitsGroupsManager != null) {
+                for (Unit u : e.units) {
+                    if (u.group != null) {
+                        RecruitEvents.recruitsGroupsManager.removeGroup(u.group);
+                    }
+                }
                 if (player != null) {
                     RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
                 }
@@ -2793,13 +3265,15 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Deployment: on the first day the armies stand in formation before their camps until the battle is started. On
-     * later mornings they march out of camp to their places, and enlisted players lead their units out to theirs; once
-     * all are in position (at least {@link #DEPLOY_MIN}, at most {@link #DEPLOY_MAX}) they charge.
+     * Deployment: on the first day the armies stand in formation before their camps; on later mornings they march out
+     * of camp to their places, and enlisted players lead their units out to theirs. When the countdown runs out
+     * ({@link #countDown}) they charge.
      */
     private void deployment() {
         if (day == 1) {
             prepare();
+            updateEnlisted();
+            countDown();
             return;
         }
         for (Live l : new ArrayList<>(live.values())) {
@@ -2813,11 +3287,78 @@ public final class RecruitsBattle {
         }
         updateEnlisted();
         switchLive();
-        int t = clock - phaseSince;
-        boolean ready = field.arrived() && enlisted.values().stream().noneMatch(e -> e.marching);
-        if (morning() && (t >= DEPLOY_MIN && ready || t >= DEPLOY_MAX)) {
+        countDown();
+    }
+
+    /**
+     * The deployment's countdown, at the top of every player's screen in their nation's colour (a neutral one for
+     * players in neither army): {@link #FIRST_DEPLOYMENT} on the first day, {@link #MORNING_DEPLOYMENT} on later
+     * mornings. At 0 the battle begins.
+     */
+    private void countDown() {
+        int total = day == 1 ? FIRST_DEPLOYMENT : MORNING_DEPLOYMENT;
+        int left = Math.max(0, total - (clock - phaseSince));
+        String time = String.format(Locale.ROOT, "%d:%02d", left / 60, left % 60);
+        for (int side = 0; side < 3; side++) {
+            ServerBossEvent bar = deploymentBars[side];
+            if (bar == null) {
+                bar = side < 2
+                        ? new ServerBossEvent(Component.empty(), barColour(mainColor(sides[side].faction)), BossEvent.BossBarOverlay.PROGRESS)
+                        : new ServerBossEvent(Component.empty(), BossEvent.BossBarColor.WHITE, BossEvent.BossBarOverlay.PROGRESS);
+                deploymentBars[side] = bar;
+            }
+            String text = (side < 2 ? sides[side].faction.name() + " deploys" : "The armies deploy") + " (day " + day + "): " + time;
+            int s = side;
+            bar.setName(side < 2 ? Component.literal(text).withStyle(style -> style.withColor(color(s))) : Component.literal(text));
+            bar.setProgress((float) left / total);
+        }
+        for (ServerPlayer player : level.players()) {
+            int side = 2;
+            for (int i = 0; i < 2; i++) {
+                if (player.getTeam() != null && player.getTeam().getName().equals(sides[i].team.getName())) {
+                    side = i;
+                }
+            }
+            for (int i = 0; i < 3; i++) {
+                if (i == side) {
+                    deploymentBars[i].addPlayer(player);
+                } else {
+                    deploymentBars[i].removePlayer(player);
+                }
+            }
+        }
+        if (left == 0) {
             startFighting();
         }
+    }
+
+    private void hideDeploymentBars() {
+        for (ServerBossEvent bar : deploymentBars) {
+            if (bar != null) {
+                bar.removeAllPlayers();
+            }
+        }
+    }
+
+    /** The boss bar colour nearest a nation's colour. */
+    private static BossEvent.BossBarColor barColour(int rgb) {
+        int[][] colours = {{0xEC00B8}, {0x00B7EC}, {0xEC0000}, {0x00EC00}, {0xECEC00}, {0x7B00EC}, {0xECECEC}};
+        BossEvent.BossBarColor[] bars = {BossEvent.BossBarColor.PINK, BossEvent.BossBarColor.BLUE, BossEvent.BossBarColor.RED,
+                BossEvent.BossBarColor.GREEN, BossEvent.BossBarColor.YELLOW, BossEvent.BossBarColor.PURPLE, BossEvent.BossBarColor.WHITE};
+        BossEvent.BossBarColor best = BossEvent.BossBarColor.WHITE;
+        double bestDistance = Double.MAX_VALUE;
+        for (int i = 0; i < bars.length; i++) {
+            int c = colours[i][0];
+            double dr = (c >> 16 & 255) - (rgb >> 16 & 255);
+            double dg = (c >> 8 & 255) - (rgb >> 8 & 255);
+            double db = (c & 255) - (rgb & 255);
+            double distance = dr * dr + dg * dg + db * db;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = bars[i];
+            }
+        }
+        return best;
     }
 
     /** A task the general gives a player for the day, and why. */
@@ -2959,15 +3500,9 @@ public final class RecruitsBattle {
             }
         }
         if (e.marching) {
-            for (AbstractRecruitEntity s : soldiersOf(e)) {
-                if (s.getFollowState() != 1) {
-                    s.setFollowState(1); // following their leader out of camp
-                }
-            }
             Point spot = e.home.line();
             if (Math.hypot(player.getX() - spot.x(), player.getZ() - spot.z()) <= IN_POSITION) {
                 e.marching = false;
-                e.squarePlace.clear();
                 title(e, "In position");
             }
         }
@@ -3062,9 +3597,10 @@ public final class RecruitsBattle {
         int loser = 1 - winner;
         Side w = sides[winner];
         if (!field.army(loser).generalAlive()) {
+            boolean outnumbered = field.army(winner).alive() < field.army(loser).alive() * PURSUE_ONLY_UNDER;
             Trait trait = w.traits[0];
-            boolean pursue = trait == Trait.BOLD || trait != Trait.CAUTIOUS && (w.general.plan().has(Strategy.UNRELENTING_CHARGE)
-                    || w.general.plan().has(Strategy.DECAPITATE) || level.random.nextBoolean());
+            boolean pursue = !outnumbered && (trait == Trait.BOLD || trait != Trait.CAUTIOUS && (w.general.plan().has(Strategy.UNRELENTING_CHARGE)
+                    || w.general.plan().has(Strategy.DECAPITATE) || level.random.nextBoolean()));
             if (pursue) {
                 field.pursue();
                 setPhase(Phase.PURSUIT);

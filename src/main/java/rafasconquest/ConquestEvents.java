@@ -112,6 +112,15 @@ public final class ConquestEvents {
      * A battle's soldiers (and their horses) can't be hired, or otherwise used, by right-clicking them: Recruits would
      * open its hire menu for any recruit nearby.
      */
+    /** The war horn isn't blown on use: it opens its screen on the client, and blows when orders are given. */
+    @SubscribeEvent
+    public static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+        if (rafasconquest.bridge.WarHorn.is(event.getItemStack())) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.SUCCESS);
+        }
+    }
+
     @SubscribeEvent
     public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
         if (RecruitsBattle.isOurs(event.getTarget())) {

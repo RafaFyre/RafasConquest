@@ -10,6 +10,9 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.blockentity.BeaconRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
@@ -19,11 +22,16 @@ import org.joml.Matrix4f;
  */
 public final class BattleSpotRing {
     private static final double HIDE_WITHIN = 5;
+    private static final double BEACON_BEYOND = 10;
+    private static final ResourceLocation BEAM = new ResourceLocation("textures/entity/beacon_beam.png");
+    private static final float[] WHITE = {1, 1, 1};
     private static final float OUTER = 0.55f;
     private static final float INNER = 0.42f;
     private static final int SEGMENTS = 32;
 
     private static boolean has;
+    /** While the armies deploy: a beacon beam over the spot, for a player more than {@link #BEACON_BEYOND} from it. */
+    private static boolean beacon;
     private static double x;
     private static double y;
     private static double z;
@@ -31,7 +39,8 @@ public final class BattleSpotRing {
     private BattleSpotRing() {
     }
 
-    public static void set(boolean has, double x, double y, double z) {
+    public static void set(boolean has, double x, double y, double z, boolean beacon) {
+        BattleSpotRing.beacon = beacon;
         BattleSpotRing.has = has;
         BattleSpotRing.x = x;
         BattleSpotRing.y = y;
@@ -42,12 +51,24 @@ public final class BattleSpotRing {
         has = false;
     }
 
-    public static void render(PoseStack pose, Camera camera) {
+    public static void render(PoseStack pose, Camera camera, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
-        if (!has || mc.player == null || mc.player.position().distanceTo(new Vec3(x, mc.player.getY(), z)) <= HIDE_WITHIN) {
+        if (!has || mc.player == null || mc.level == null) {
             return;
         }
+        double away = mc.player.position().distanceTo(new Vec3(x, mc.player.getY(), z));
         Vec3 cam = camera.getPosition();
+        if (beacon && away > BEACON_BEYOND) {
+            pose.pushPose();
+            pose.translate(Math.floor(x) - cam.x, y - cam.y, Math.floor(z) - cam.z);
+            MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
+            BeaconRenderer.renderBeaconBeam(pose, buffers, BEAM, partialTick, 1, mc.level.getGameTime(), 0, BeaconRenderer.MAX_RENDER_Y, WHITE, 0.2F, 0.25F);
+            buffers.endBatch();
+            pose.popPose();
+        }
+        if (away <= HIDE_WITHIN) {
+            return;
+        }
         pose.pushPose();
         pose.translate(x - cam.x, y + 0.05 - cam.y, z - cam.z);
         Matrix4f matrix = pose.last().pose();
