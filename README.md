@@ -134,7 +134,8 @@ first. The old relation is restored when the battle ends.
   can't rout. The battle map outlines routed blocks purple and rallied ones green.
 - **Phases and days** (by Minecraft's clock): *deployment* (the armies form up before their camps; the war council
   meets) → *battle* (from the charge until sunset, time 12000, at least a minute) → *evening pullback* (the fighting
-  stops; every block marches back 25 blocks, re-forming just short of its camp, before nightfall at 13000) →
+  stops; every block marches back 25 blocks, re-forming just short of its camp, before nightfall at 13000) (the din of
+  battle and the hoofbeats of charges fade out over 3 s) →
   *night* in camp, nobody fighting → at dawn (23000) the survivors regroup into fresh blocks of 20 (the wounded
   recovered), in camp, under the same generals and plans, and march out to their places: a smaller deployment
   than the first. Enlisted players wake in camp (each has a tent with a bed; the ring points to it in the evening

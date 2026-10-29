@@ -2396,6 +2396,7 @@ public final class FieldBattle {
     /** A block stops whatever it was doing. */
     private static void stand(FieldBlock b) {
         b.charged = false;
+        b.contactSeconds = 0; // no longer in a fight: the sounds of battle die away
         b.braced = false;
         b.engaged = false;
         b.approaching = false;

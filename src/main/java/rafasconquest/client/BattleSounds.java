@@ -2,7 +2,6 @@ package rafasconquest.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -51,6 +50,8 @@ public final class BattleSounds {
     private static final int CLIP_JITTER = 20;
     /** The size of the cells stretches of front are known by. */
     private static final int DIN_CELL = 32;
+    /** The sounds of a fight die away over this many ticks once it stops. */
+    private static final int FADE_TICKS = 60;
 
     private static final RandomSource RANDOM = RandomSource.create();
     private static List<Source> hooves = List.of();
@@ -64,7 +65,52 @@ public final class BattleSounds {
     private record Source(long key, double x, double y, double z, double spread, float volume) {
     }
 
-    /** A charge clip, riding along with its cavalry block; it fades out over a second once the block stops charging. */
+    /**
+     * A din clip, from its stretch of front; it fades out over {@link #FADE_TICKS} once nobody is fighting there any
+     * more (the lines broke apart, or pulled back for the night).
+     */
+    private static final class DinSound extends AbstractTickableSoundInstance {
+        private final float loudness;
+        private final double reach;
+
+        DinSound(Source s, double x, double z, float pitch) {
+            super(DIN, SoundSource.NEUTRAL, RANDOM);
+            this.loudness = s.volume();
+            this.volume = s.volume();
+            this.pitch = pitch;
+            this.x = x;
+            this.y = s.y();
+            this.z = z;
+            this.reach = s.spread() + DIN_GROUP_REACH;
+        }
+
+        @Override
+        public void tick() {
+            if (ticks % 10 == 0) {
+                fighting = fightingNear(x, z, reach);
+            }
+            if (!fighting) {
+                volume -= loudness / FADE_TICKS;
+                if (volume <= 0) {
+                    stop();
+                }
+            }
+        }
+
+        private boolean fighting = true;
+    }
+
+    /** Whether any infantry is fighting within {@code reach} of a point. */
+    private static boolean fightingNear(double x, double z, double reach) {
+        for (FormationSnapshot f : DistantArmies.now()) {
+            if (f.fighting() && (f.kind() == Kind.SWORDSMEN || f.kind() == Kind.SHIELDWALL) && Math.hypot(f.x() - x, f.z() - z) <= reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A charge clip, riding along with its cavalry block; it fades out over three seconds once the block stops charging. */
     private static final class ChargeSound extends AbstractTickableSoundInstance {
         private final int formation;
         private final float loudness;
@@ -88,7 +134,7 @@ public final class BattleSounds {
         public void tick() {
             FormationSnapshot f = DistantArmies.at(formation);
             if (f == null || f.alive() == 0 || DistantArmies.speed(f) < GALLOP) {
-                volume -= loudness / 20;
+                volume -= loudness / FADE_TICKS;
                 if (volume <= 0) {
                     stop();
                 }
@@ -122,7 +168,9 @@ public final class BattleSounds {
         }
         for (Source s : din) {
             if (due(nextDin, s.key())) {
-                play(mc, DIN, s, 0.95F + RANDOM.nextFloat() * 0.1F);
+                double x = s.x() + (RANDOM.nextDouble() * 2 - 1) * s.spread();
+                double z = s.z() + (RANDOM.nextDouble() * 2 - 1) * s.spread();
+                mc.getSoundManager().play(new DinSound(s, x, z, 0.95F + RANDOM.nextFloat() * 0.1F));
             }
         }
         if (ticks % 200 == 0) {
@@ -206,12 +254,5 @@ public final class BattleSounds {
 
     private static double distance(double x, double z, Vec3 ear) {
         return Math.hypot(x - ear.x, z - ear.z);
-    }
-
-    /** One sound from somewhere across the source's width, so many of them sound like many soldiers. */
-    private static void play(Minecraft mc, SoundEvent sound, Source s, float pitch) {
-        double x = s.x() + (RANDOM.nextDouble() * 2 - 1) * s.spread();
-        double z = s.z() + (RANDOM.nextDouble() * 2 - 1) * s.spread();
-        mc.getSoundManager().play(new SimpleSoundInstance(sound, SoundSource.NEUTRAL, s.volume(), pitch, RANDOM, x, s.y(), z));
     }
 }
