@@ -11,6 +11,10 @@ import net.minecraft.Util;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import rafasconquest.character.GameCharacter;
+import rafasconquest.character.Rank;
+import rafasconquest.data.Ranks;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.server.level.ServerPlayer;
 import rafasconquest.dev.BattleMap;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.FieldArmy;
@@ -63,6 +67,12 @@ public final class PveCommands {
                                 .then(Commands.argument("name", StringArgumentType.greedyString())
                                         .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(factionNames(), builder))
                                         .executes(ctx -> factionInfo(ctx, StringArgumentType.getString(ctx, "name"))))))
+                .then(Commands.literal("rank")
+                        .executes(PveCommands::rankShow)
+                        .then(Commands.literal("set").requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("rank", IntegerArgumentType.integer(1, 8))
+                                                .executes(ctx -> rankSet(ctx, EntityArgument.getPlayer(ctx, "player"), IntegerArgumentType.getInteger(ctx, "rank")))))))
                 .then(Commands.literal("poi")
                         .then(Commands.literal("list")
                                 .executes(ctx -> poiList(ctx, 500))
@@ -223,6 +233,23 @@ public final class PveCommands {
         String generals = String.format(Locale.ROOT, "  %s: General %s (%s)%n  %s: General %s (%s)",
                 a.name(), generalA.name(), generalA.plan().describe(), b.name(), generalB.name(), generalB.plan().describe());
         ctx.getSource().sendSuccess(() -> Component.literal(line + "\n" + generals), true);
+        return 1;
+    }
+
+    /** Shows the player's own rank. */
+    private static int rankShow(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        Rank rank = Ranks.get(ctx.getSource().getServer()).of(player.getUUID());
+        ctx.getSource().sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "You are a %s (rank %d): you lead %d in battle",
+                rank.title(), rank.number(), rank.leads())), false);
+        return rank.number();
+    }
+
+    private static int rankSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, int number) {
+        Rank rank = Rank.of(number);
+        Ranks.get(ctx.getSource().getServer()).set(player.getUUID(), rank);
+        ctx.getSource().sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "%s is now a %s (rank %d)",
+                player.getName().getString(), rank.title(), rank.number())), true);
         return 1;
     }
 

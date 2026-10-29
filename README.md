@@ -128,6 +128,20 @@ first. The old relation is restored when the battle ends.
   file takes its place at once. Its captain's fall shakes it, counting as a quarter more lost for a minute. The enemy
   blocks fighting a block that routs or loses its captain **rally**: their losses are forgotten and for 45 s they
   can't rout. The battle map outlines routed blocks purple and rallied ones green.
+- **Ranks** (`character/Rank`, saved per player with the world in `data/Ranks`): Soldier (1, leads 1), Corporal (2,
+  5), Serjeant (3, 20), Captain (4, 100), Major (5, 500), Colonel (6, 1000), Marshal (7, 3000), Grand Marshal (8,
+  10,000). Ranks 1 to 4 are enlisted; 5 to 8 are officers, whose commands come later. `/pve rank` shows yours;
+  `/pve rank set <player> <1-8>` (operators) sets one. Every army of 10,000 or more is led by a Grand Marshal, others
+  by a General, and an army fighting in wings names a Marshal for each wing.
+- **Enlisted players:** a player who has joined one side's team (`/team join`) when the battle starts is enlisted
+  with it. They are teleported to the front of the front block nearest the middle of the line (the first to charge)
+  and given that block's soldiers, then the blocks beside it, as many as their rank leads (a Captain's 100 at most),
+  following them; the battle gives those soldiers no orders. A white ring on the ground marks their place in the
+  block, shown when they are more than 5 blocks from it. The other side's front rows go for them as for any foe.
+  Above the hotbar, in the faction's colour, they're told what their block is doing: **Charge!**, **Pullback!**,
+  **Rotate!**, **Retreat!**. In the middle of the screen come the Marshals' and general's orders: **ALL TROOPS
+  CHARGE!** when the army advances, **Hold the left wing!** when their wing holds for a bait, **Target ...!** when
+  their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general.
 - **Facing the enemy:** real soldiers spawn facing their block's enemy (the block it fights, else the nearest), and
   those standing in their places with nobody to fight turn to face it each second.
 - **Battle soldiers can't be hired:** right-clicking a battle soldier, or its horse, does nothing (Recruits would

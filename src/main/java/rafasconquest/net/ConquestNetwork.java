@@ -71,6 +71,34 @@ public final class ConquestNetwork {
                 .decoder(BattleSnapshot::read)
                 .consumerMainThread(ConquestNetwork::handleBattleSnapshot)
                 .add();
+        CHANNEL.messageBuilder(BattleSpot.class, 6, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(BattleSpot::write)
+                .decoder(BattleSpot::read)
+                .consumerMainThread(ConquestNetwork::handleBattleSpot)
+                .add();
+    }
+
+    /** Tells an enlisted player where they should stand in their block (shown as a ring), or that they have no spot. */
+    public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z));
+    }
+
+    /** Server → client: where the player should stand in their block, if anywhere. */
+    public record BattleSpot(boolean has, double x, double y, double z) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeBoolean(has);
+            buf.writeDouble(x);
+            buf.writeDouble(y);
+            buf.writeDouble(z);
+        }
+
+        static BattleSpot read(FriendlyByteBuf buf) {
+            return new BattleSpot(buf.readBoolean(), buf.readDouble(), buf.readDouble(), buf.readDouble());
+        }
+    }
+
+    private static void handleBattleSpot(BattleSpot msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z()));
     }
 
     /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */

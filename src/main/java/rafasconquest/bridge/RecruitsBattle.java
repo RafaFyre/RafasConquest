@@ -7,6 +7,11 @@ import com.talhanation.recruits.entities.BowmanEntity;
 import com.talhanation.recruits.init.ModEntityTypes;
 import com.talhanation.recruits.util.FormationUtils;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
+import rafasconquest.character.Rank;
+import rafasconquest.data.Ranks;
 import rafasconquest.character.GameCharacter;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager.DiplomacyStatus;
 import net.minecraft.core.BlockPos;
@@ -120,6 +125,8 @@ public final class RecruitsBattle {
     private static final int PREDICT_UP_TO_BLOCKS = 200;
     /** A general sounds the horn at most this often, this loud (a goat horn at 16 carries 256 blocks). */
     private static final int HORN_SECONDS = 5;
+    /** How long an enlisted player's latest order stays above their hotbar. */
+    private static final int ORDER_SHOWN_SECONDS = 6;
     /** A front-row soldier goes after enemies this close to its place, and returns to it when there are none. */
     private static final double FRONT_ROW_REACH = 6;
     private static final float HORN_VOLUME = 16;
@@ -176,6 +183,9 @@ public final class RecruitsBattle {
     private final List<String> lines = new ArrayList<>();
     /** Each side's named groups of blocks, by block id, chosen on the battle map. */
     private final List<Map<String, List<Integer>>> groups = List.of(new LinkedHashMap<>(), new LinkedHashMap<>());
+    /** Players enlisted in the battle, by id, and the entity ids of the soldiers given them to command. */
+    private final Map<UUID, Enlisted> enlisted = new LinkedHashMap<>();
+    private final Set<Integer> commanded = new HashSet<>();
     private final TickTimes whole = new TickTimes();
     private final TickTimes window = new TickTimes();
     private long tickStart;
@@ -188,7 +198,39 @@ public final class RecruitsBattle {
     private long snapshotNanos;
 
     /** What each side fights as: its faction, Recruits team and colours. */
-    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn, GameCharacter general) {
+    private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn, GameCharacter general,
+                        String[] marshals) {
+    }
+
+    /**
+     * A player enlisted in the battle: their side and rank, their block (the first to charge) and the blocks beside it
+     * whose soldiers they command (as many as their rank leads, up to a Captain's), and the orders last given them.
+     */
+    private static final class Enlisted {
+        final UUID player;
+        final int side;
+        final Rank rank;
+        final FieldBlock home;
+        final List<FieldBlock> blocks;
+        final int quota;
+        final Set<Integer> given = new HashSet<>();
+        String order = "";
+        int orderSince;
+        @Nullable
+        Duty lastDuty;
+        @Nullable
+        FieldBlock lastStrike;
+        boolean toldHold;
+        boolean toldKill;
+
+        Enlisted(UUID player, int side, Rank rank, FieldBlock home, List<FieldBlock> blocks, int quota) {
+            this.player = player;
+            this.side = side;
+            this.rank = rank;
+            this.home = home;
+            this.blocks = blocks;
+            this.quota = quota;
+        }
     }
 
     /** A block that is real soldiers now: soldier i stands for the block's soldier i. */
@@ -298,9 +340,9 @@ public final class RecruitsBattle {
         java.util.Random characters = new java.util.Random(level.random.nextLong());
         Side[] sides = {
                 new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first),
-                        GameCharacter.general(first.doctrines(), characters)),
+                        GameCharacter.general(first.doctrines(), characters), marshals(characters)),
                 new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second),
-                        GameCharacter.general(second.doctrines(), characters))};
+                        GameCharacter.general(second.doctrines(), characters), marshals(characters))};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
         FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
@@ -317,8 +359,14 @@ public final class RecruitsBattle {
                 Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
         for (Side side : sides) {
-            battle.broadcast(String.format(Locale.ROOT, "  %s is led by General %s (%s)", side.faction.name(), side.general.name(),
+            FieldArmy army = battle.field.army(side == sides[0] ? 0 : 1);
+            String title = army.started() >= Rank.GRAND_MARSHAL.leads() ? "Grand Marshal" : "General";
+            battle.broadcast(String.format(Locale.ROOT, "  %s is led by %s %s (%s)", side.faction.name(), title, side.general.name(),
                     side.general.plan().describe()));
+            if (army.winged()) {
+                battle.broadcast(String.format(Locale.ROOT, "    Marshals: left wing %s, centre %s, right wing %s", side.marshals[0],
+                        side.marshals[1], side.marshals[2]));
+            }
         }
         return line;
     }
@@ -361,6 +409,11 @@ public final class RecruitsBattle {
         return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
     }
 
+    /** The Marshals of an army's left wing, centre and right wing. */
+    private static String[] marshals(java.util.Random characters) {
+        return new String[]{GameCharacter.name(characters), GameCharacter.name(characters), GameCharacter.name(characters)};
+    }
+
     /** The faction's horn: one of Minecraft's eight goat horn calls, always the same for the faction. */
     private static int horn(Faction faction) {
         return Math.floorMod(faction.id().hashCode(), SoundEvents.GOAT_HORN_SOUND_VARIANTS.size());
@@ -386,6 +439,7 @@ public final class RecruitsBattle {
         }
         battle.live.clear();
         battle.clearSnapshots();
+        battle.dismissEnlisted();
         battle.releaseChunks();
         battle.restoreRelations();
         return "Cleared the battle (" + removed + " soldiers removed)";
@@ -647,6 +701,7 @@ public final class RecruitsBattle {
     private void passOnOrders(Live l) {
         FieldBlock block = l.block;
         List<AbstractRecruitEntity> living = l.living();
+        living.removeIf(s -> commanded.contains(s.getId())); // a player commands these
         if (living.isEmpty()) {
             return;
         }
@@ -753,6 +808,7 @@ public final class RecruitsBattle {
     private void frontRowFights(Live l) {
         FieldBlock block = l.block;
         List<AbstractRecruitEntity> living = l.living();
+        living.removeIf(s -> commanded.contains(s.getId()));
         FieldBlock foe = block.contactFoe();
         Live enemy = foe == null ? null : live.get(foe);
         boolean fighting = enemy != null && block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty());
@@ -791,6 +847,10 @@ public final class RecruitsBattle {
             if (target == null || !target.isAlive() || target.distanceToSqr(place) > reachSqr) {
                 target = foes.stream().filter(f -> f.distanceToSqr(place) <= reachSqr)
                         .min(Comparator.comparingDouble(f -> f.distanceToSqr(s))).orElse(null);
+                LivingEntity player = nearestEnemyPlayer(block.side(), place, reachSqr, s);
+                if (player != null && (target == null || player.distanceToSqr(s) < target.distanceToSqr(s))) {
+                    target = player;
+                }
                 s.setTarget(target);
             }
             s.holdFormation = target == null;
@@ -1018,6 +1078,9 @@ public final class RecruitsBattle {
         fieldNanos += System.nanoTime() - t;
         for (FieldBattle.Order order : field.takeCalls()) {
             soundHorn(order.side());
+            if (order.call() == FieldBattle.Call.ADVANCE) {
+                announce(order.side(), "ALL TROOPS CHARGE!");
+            }
         }
         for (FieldBattle.Event event : field.takeEvents()) {
             Side side = sides[event.side()];
@@ -1033,6 +1096,7 @@ public final class RecruitsBattle {
                 slowSpentHorses(l);
             }
         }
+        updateEnlisted();
         t = System.nanoTime();
         switchLive();
         switchNanos += System.nanoTime() - t;
@@ -1068,6 +1132,7 @@ public final class RecruitsBattle {
         if (battle.started) {
             return "The battle has already begun";
         }
+        battle.enlist();
         battle.started = true;
         battle.broadcast("[battle] The battle begins");
         return "The battle begins";
@@ -1113,6 +1178,206 @@ public final class RecruitsBattle {
     /** A side's named groups of blocks, by block id. */
     public Map<String, List<Integer>> groups(int side) {
         return groups.get(side);
+    }
+
+    // ---- enlisted players ----
+
+    /**
+     * At the start, each player on one of the battle's teams (by /team join) is enlisted with that side: they are put
+     * in the front block nearest the middle of the line (the first to charge), teleported to its front, and given the
+     * soldiers of their block and the blocks beside it to command, as many as their rank leads (a Captain's 100 at
+     * most; officers' commands come later), following them.
+     */
+    private void enlist() {
+        Set<FieldBlock> taken = new HashSet<>();
+        Ranks ranks = Ranks.get(level.getServer());
+        for (ServerPlayer player : level.players()) {
+            if (player.getTeam() == null) {
+                continue;
+            }
+            for (int side = 0; side < 2; side++) {
+                if (!player.getTeam().getName().equals(sides[side].team.getName())) {
+                    continue;
+                }
+                FieldArmy army = field.army(side);
+                List<FieldBlock> front = new ArrayList<>();
+                for (FieldBlock b : army.blocks()) {
+                    if (b.duty() == Duty.FRONT && b.alive() > 0 && !taken.contains(b)) {
+                        front.add(b);
+                    }
+                }
+                if (front.isEmpty()) {
+                    continue;
+                }
+                front.sort(Comparator.comparingDouble(b -> Math.abs(BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line()).x())));
+                FieldBlock home = front.get(0);
+                Rank rank = ranks.of(player.getUUID());
+                int leads = Math.min(rank.leads(), Rank.CAPTAIN.leads());
+                List<FieldBlock> blocks = new ArrayList<>(List.of(home));
+                List<FieldBlock> beside = new ArrayList<>(front.subList(1, front.size()));
+                beside.sort(Comparator.comparingDouble(b -> b.pos().distanceTo(home.pos())));
+                for (FieldBlock b : beside) {
+                    if (blocks.size() * BattlePlan.SOLDIERS_PER_FORMATION >= leads) {
+                        break;
+                    }
+                    blocks.add(b);
+                }
+                taken.addAll(blocks);
+                Enlisted e = new Enlisted(player.getUUID(), side, rank, home, blocks, leads - 1);
+                enlisted.put(player.getUUID(), e);
+                Point spot = home.line();
+                player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
+                        yawOf(new Point(army.facingX(), army.facingZ())), 0);
+                player.sendSystemMessage(Component.literal(String.format(Locale.ROOT,
+                        "You fight for %s as a %s, in the first block to charge, leading %d. Keep to your ring.",
+                        sides[side].faction.name(), rank.title(), leads)).withStyle(style -> style.withColor(color(e.side))));
+            }
+        }
+    }
+
+    /** Each second: enlisted players get their soldiers as they become real, their ring, and their orders. */
+    private void updateEnlisted() {
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null) {
+                continue;
+            }
+            giveSoldiers(e);
+            FieldBlock home = e.home;
+            if (home.alive() > 0) {
+                Point spot = home.line();
+                ConquestNetwork.sendBattleSpot(player, true, spot.x(), groundY(home, spot.x(), spot.z()), spot.z());
+            } else {
+                ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
+            }
+            ordersFor(e, player);
+        }
+    }
+
+    /** The player's soldiers, from their block and those beside it as they become real: owned by them, following. */
+    private void giveSoldiers(Enlisted e) {
+        for (FieldBlock b : e.blocks) {
+            Live l = live.get(b);
+            if (l == null) {
+                continue;
+            }
+            for (AbstractRecruitEntity s : l.living()) {
+                if (e.given.size() >= e.quota) {
+                    return;
+                }
+                if (commanded.add(s.getId())) {
+                    e.given.add(s.getId());
+                    s.setOwnerUUID(Optional.of(e.player));
+                    s.setIsOwned(true);
+                    s.setFollowState(1); // follows the player
+                    s.setAggroState(0);
+                    s.holdFormation = false;
+                    s.isInFormation = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * An enlisted player's orders: above the hotbar, in their faction's colour, what their block is doing (Charge!,
+     * Pullback!, Rotate!, Retreat!); in the middle of the screen, what their Marshal or general orders (hold the wing,
+     * target a block, kill an officer).
+     */
+    private void ordersFor(Enlisted e, ServerPlayer player) {
+        FieldBlock b = e.home;
+        String now = null;
+        if (b.duty() == Duty.ROUTED) {
+            now = "Retreat!";
+        } else if (b.duty() == Duty.WITHDRAWING) {
+            now = "Pullback!";
+        } else if (e.lastDuty == Duty.FRONT && b.duty() != Duty.FRONT) {
+            now = "Rotate!";
+        } else if (b.duty() == Duty.FRONT && b.fighting()) {
+            now = "Charge!";
+        }
+        e.lastDuty = b.duty();
+        if (now != null && !now.equals(e.order)) {
+            e.order = now;
+            e.orderSince = field.seconds();
+        }
+        if (!e.order.isEmpty() && field.seconds() - e.orderSince < ORDER_SHOWN_SECONDS) {
+            player.displayClientMessage(Component.literal(e.order).withStyle(style -> style.withColor(color(e.side)).withBold(true)), true);
+        }
+        FieldArmy army = field.army(e.side);
+        if (!e.toldHold && army.holding(b.wing())) {
+            e.toldHold = true;
+            title(player, e.side, "Hold the " + wingTitle(b.wing(), army.winged()) + "!");
+        }
+        FieldBlock strike = b.strikeAt();
+        if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
+            title(player, e.side, "Target " + sides[1 - e.side].faction.name() + "'s " + wingTitle(strike.wing(), field.army(1 - e.side).winged())
+                    + " block!");
+        }
+        e.lastStrike = strike;
+        FieldBlock prey = b.prey();
+        if (!e.toldKill && prey != null && prey.duty() == Duty.GENERAL && (b.charged() || b.approaching())) {
+            e.toldKill = true;
+            title(player, e.side, "Kill General " + sides[1 - e.side].general.name() + "!");
+        }
+    }
+
+    /** A Marshal's or general's order, in big letters in the middle of the screen of every player enlisted with a side. */
+    private void announce(int side, String text) {
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = e.side == side ? level.getServer().getPlayerList().getPlayer(e.player) : null;
+            if (player != null) {
+                title(player, side, text);
+            }
+        }
+    }
+
+    private void title(ServerPlayer player, int side, String text) {
+        player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 50, 15));
+        player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(text).withStyle(style -> style.withColor(color(side)))));
+    }
+
+    private static String wingTitle(int wing, boolean winged) {
+        if (!winged) {
+            return "line";
+        }
+        return wing == FieldArmy.LEFT ? "left wing" : wing == FieldArmy.RIGHT ? "right wing" : "centre";
+    }
+
+    /** A side's colour for its orders: its faction's main colour. */
+    private TextColor color(int side) {
+        return TextColor.fromRgb(mainColor(sides[side].faction));
+    }
+
+    /** The nearest player enlisted against {@code side}, within reach of a soldier's place, or null. */
+    @Nullable
+    private LivingEntity nearestEnemyPlayer(int side, Vec3 place, double reachSqr, AbstractRecruitEntity soldier) {
+        LivingEntity best = null;
+        for (Enlisted e : enlisted.values()) {
+            if (e.side == side) {
+                continue;
+            }
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null || !player.isAlive() || player.isSpectator() || player.isCreative() || player.level() != level
+                    || player.distanceToSqr(place) > reachSqr) {
+                continue;
+            }
+            if (best == null || player.distanceToSqr(soldier) < best.distanceToSqr(soldier)) {
+                best = player;
+            }
+        }
+        return best;
+    }
+
+    /** The battle is over or cleared: enlisted players lose their ring. */
+    private void dismissEnlisted() {
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player != null) {
+                ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
+            }
+        }
+        enlisted.clear();
+        commanded.clear();
     }
 
     /** A real block's soldiers report to the numbers: where the block stands and each soldier's health. */

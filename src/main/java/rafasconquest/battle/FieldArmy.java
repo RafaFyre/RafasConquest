@@ -173,6 +173,11 @@ public final class FieldArmy {
         return !any && infantryEngaged();
     }
 
+    /** Whether a wing is holding its ground while its bait draws the enemy in. */
+    public boolean holding(int wing) {
+        return baitSprung[wing];
+    }
+
     /** Whether the army fights in wings; a block's wing is {@link FieldBlock#wing()}. */
     public boolean winged() {
         return winged;
