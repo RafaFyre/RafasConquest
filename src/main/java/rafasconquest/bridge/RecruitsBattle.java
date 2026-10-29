@@ -7,6 +7,11 @@ import com.talhanation.recruits.entities.BowmanEntity;
 import com.talhanation.recruits.init.ModEntityTypes;
 import com.talhanation.recruits.util.FormationUtils;
 import com.talhanation.recruits.world.RecruitsDiplomacyManager;
+import com.talhanation.recruits.CommandEvents;
+import com.talhanation.recruits.RecruitEvents;
+import com.talhanation.recruits.world.RecruitsGroup;
+import net.minecraftforge.common.ToolActions;
+import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
@@ -113,9 +118,10 @@ public final class RecruitsBattle {
      * At most this many real soldiers at once, nearest the players first. A rider counts as two: the horse is an
      * entity too.
      */
-    public static final int MAX_LIVE_SOLDIERS = 400;
-    /** The cap in force (changeable for testing, e.g. how many real soldiers a faster server can carry). */
-    private static int liveCap = MAX_LIVE_SOLDIERS;
+    public static final int MAX_LIVE_SOLDIERS = 300;
+    /** The cap in force: {@code /pve debug battle livecap}, kept in {@link #LIVE_CAP_FILE} across restarts. */
+    private static int liveCap = loadLiveCap();
+    private static final String LIVE_CAP_FILE = "livecap.txt";
     /** At most this many blocks become real each second, so a crowd doesn't appear in one tick. */
     private static final int SPAWNS_PER_SECOND = 8;
     /**
@@ -128,8 +134,16 @@ public final class RecruitsBattle {
     /** How long an enlisted player's latest order stays above their hotbar. */
     private static final int ORDER_SHOWN_SECONDS = 6;
     /** A front-row soldier goes after enemies this close to its place, and returns to it when there are none. */
-    private static final double FRONT_ROW_REACH = 6;
+    private static final double FRONT_ROW_REACH = 12;
     private static final float HORN_VOLUME = 16;
+    /** A charged soldier with no foe goes after the nearest real enemy this close. */
+    private static final double HUNT_REACH = 80;
+    /** Shield-bearers raise their shields within this reach of enemy archers (Recruits bowmen shoot out to 44). */
+    private static final double ARROW_REACH = 50;
+    /** ...and within this reach of any enemy, unless they're the ones striking. */
+    private static final double MELEE_SHIELD_REACH = 12;
+    /** Recruits' square formation, for the command screen. */
+    private static final int SQUARE_FORMATION = 2;
     /** The slowing put on a spent charge's horses. */
     private static final UUID SPENT_HORSE = UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f");
     /** A charged soldier this close to its target is taken to be striking it (for calibration, and for momentum). */
@@ -222,6 +236,14 @@ public final class RecruitsBattle {
         FieldBlock lastStrike;
         boolean toldHold;
         boolean toldKill;
+        /** The Recruits group the soldiers join, so they show in the player's command screen. */
+        @Nullable
+        UUID group;
+        /** Where each soldier was put in the square; once the player orders them otherwise, they're the player's. */
+        final Map<Integer, Vec3> squarePlace = new HashMap<>();
+        @Nullable
+        Point squareAt;
+        boolean takenOver;
 
         Enlisted(UUID player, int side, Rank rank, FieldBlock home, List<FieldBlock> blocks, int quota) {
             this.player = player;
@@ -371,10 +393,33 @@ public final class RecruitsBattle {
         return line;
     }
 
-    /** Sets how many soldiers may be real at once (riders counting two), for testing. */
+    /** Sets how many soldiers may be real at once (riders counting two), and keeps it for later sessions. */
     public static String setLiveCap(int cap) {
         liveCap = cap;
+        try {
+            java.nio.file.Path file = liveCapFile();
+            java.nio.file.Files.createDirectories(file.getParent());
+            java.nio.file.Files.writeString(file, Integer.toString(cap));
+        } catch (java.io.IOException | RuntimeException e) {
+            return "At most " + cap + " real battle soldiers at once (not saved: " + e.getMessage() + ")";
+        }
         return "At most " + cap + " real battle soldiers at once";
+    }
+
+    public static int liveCap() {
+        return liveCap;
+    }
+
+    private static java.nio.file.Path liveCapFile() {
+        return FMLPaths.CONFIGDIR.get().resolve("rafasconquest").resolve(LIVE_CAP_FILE);
+    }
+
+    private static int loadLiveCap() {
+        try {
+            return Math.max(0, Integer.parseInt(java.nio.file.Files.readString(liveCapFile()).trim()));
+        } catch (Exception e) {
+            return MAX_LIVE_SOLDIERS;
+        }
     }
 
     /** Treats a spot like a player standing there (for testing the live area), or with null clears all such spots. */
@@ -965,7 +1010,7 @@ public final class RecruitsBattle {
             return;
         }
         Optional<AbstractRecruitEntity> foe = nearestTo(soldier, foes);
-        if (foe.isPresent() && foe.get().distanceTo(soldier) < 40) {
+        if (foe.isPresent() && foe.get().distanceTo(soldier) < HUNT_REACH) {
             soldier.setTarget(foe.get());
             soldier.getNavigation().moveTo(foe.get(), 1.0);
         } else {
@@ -1091,6 +1136,7 @@ public final class RecruitsBattle {
             dealDamage(l);
             passOnOrders(l);
             frontRowFights(l);
+            raiseShields(l);
             if (l.block.arm() == Arm.CAVALRY) {
                 armourHorses(l);
                 slowSpentHorses(l);
@@ -1224,6 +1270,12 @@ public final class RecruitsBattle {
                 }
                 taken.addAll(blocks);
                 Enlisted e = new Enlisted(player.getUUID(), side, rank, home, blocks, leads - 1);
+                if (RecruitEvents.recruitsGroupsManager != null) {
+                    RecruitsGroup group = new RecruitsGroup(home.arm() == Arm.SHIELDWALL ? "Shields" : "Battle line", player, 0);
+                    RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
+                    e.group = group.getUUID();
+                }
+                CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
                 Point spot = home.line();
                 player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
@@ -1242,7 +1294,10 @@ public final class RecruitsBattle {
             if (player == null) {
                 continue;
             }
-            giveSoldiers(e);
+            if (giveSoldiers(e) && RecruitEvents.recruitsGroupsManager != null) {
+                RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
+            }
+            keepSquare(e);
             FieldBlock home = e.home;
             if (home.alive() > 0) {
                 Point spot = home.line();
@@ -1254,8 +1309,12 @@ public final class RecruitsBattle {
         }
     }
 
-    /** The player's soldiers, from their block and those beside it as they become real: owned by them, following. */
-    private void giveSoldiers(Enlisted e) {
+    /**
+     * The player's soldiers, from their block and those beside it as they become real: owned by them and in a group
+     * of theirs, so Recruits' command screen lists them. Returns whether any were given.
+     */
+    private boolean giveSoldiers(Enlisted e) {
+        boolean any = false;
         for (FieldBlock b : e.blocks) {
             Live l = live.get(b);
             if (l == null) {
@@ -1263,19 +1322,149 @@ public final class RecruitsBattle {
             }
             for (AbstractRecruitEntity s : l.living()) {
                 if (e.given.size() >= e.quota) {
-                    return;
+                    return any;
                 }
                 if (commanded.add(s.getId())) {
                     e.given.add(s.getId());
+                    any = true;
                     s.setOwnerUUID(Optional.of(e.player));
                     s.setIsOwned(true);
-                    s.setFollowState(1); // follows the player
                     s.setAggroState(0);
-                    s.holdFormation = false;
-                    s.isInFormation = false;
+                    s.setTarget(null);
+                    if (e.group != null) {
+                        s.setGroupUUID(e.group);
+                        RecruitEvents.recruitsGroupsManager.addMember(e.group, s.getUUID(), level);
+                    }
                 }
             }
         }
+        return any;
+    }
+
+    /** The player's soldiers that are still alive. */
+    private List<AbstractRecruitEntity> soldiersOf(Enlisted e) {
+        List<AbstractRecruitEntity> soldiers = new ArrayList<>();
+        for (FieldBlock b : e.blocks) {
+            Live l = live.get(b);
+            if (l != null) {
+                for (AbstractRecruitEntity s : l.living()) {
+                    if (e.given.contains(s.getId())) {
+                        soldiers.add(s);
+                    }
+                }
+            }
+        }
+        return soldiers;
+    }
+
+    /**
+     * Until the player gives their soldiers orders of their own (from Recruits' command screen), they stand in a square
+     * behind the player's ring, facing the enemy, and move with it as the block advances. A soldier found off its place
+     * in the square, or no longer holding, means the player has taken them over.
+     */
+    private void keepSquare(Enlisted e) {
+        if (e.takenOver || e.home.alive() == 0) {
+            return;
+        }
+        List<AbstractRecruitEntity> soldiers = soldiersOf(e);
+        for (AbstractRecruitEntity s : soldiers) {
+            Vec3 placed = e.squarePlace.get(s.getId());
+            Vec3 hold = s.getHoldPos();
+            if (placed != null && (s.getFollowState() != 3 || hold == null || hold.distanceToSqr(placed) > 1)) {
+                e.takenOver = true;
+                return;
+            }
+        }
+        Point spot = e.home.line();
+        boolean newcomers = soldiers.stream().anyMatch(s -> !e.squarePlace.containsKey(s.getId()));
+        if (soldiers.isEmpty() || (!newcomers && e.squarePlace.size() == soldiers.size() && e.squareAt != null
+                && Math.hypot(e.squareAt.x() - spot.x(), e.squareAt.z() - spot.z()) < 2)) {
+            return;
+        }
+        e.squareAt = spot;
+        e.squarePlace.clear();
+        double fx = e.home.facingX();
+        double fz = e.home.facingZ();
+        int cols = (int) Math.ceil(Math.sqrt(soldiers.size()));
+        double sp = BattlePlan.SPACING;
+        for (int i = 0; i < soldiers.size(); i++) {
+            int row = i / cols;
+            int col = i % cols;
+            double right = (col - (cols - 1) / 2.0) * sp;
+            double back = (row + 1) * sp;
+            double x = spot.x() - fx * back - fz * right;
+            double z = spot.z() - fz * back + fx * right;
+            Vec3 place = new Vec3(x, groundY(e.home, x, z), z);
+            AbstractRecruitEntity s = soldiers.get(i);
+            s.setHoldPos(place);
+            s.setFollowState(3);
+            s.isInFormation = true;
+            s.holdFormation = false; // free to fight what comes near, then back to its place
+            s.formationPos = i;
+            e.squarePlace.put(s.getId(), place);
+        }
+    }
+
+    /**
+     * Soldiers with shields raise them within reach of enemy archers, or near enemies they aren't themselves striking,
+     * so long as they're near their place (a soldier with its shield up walks at half pace or less). A soldier
+     * striking, charging or in a passive duty lowers it, leaving Recruits' own blocking between blows. Soldiers whose
+     * player has taken them over are left alone.
+     */
+    private void raiseShields(Live l) {
+        FieldBlock block = l.block;
+        boolean archers = false;
+        for (FieldBlock enemy : field.army(1 - block.side()).blocks()) {
+            if (enemy.arm() == Arm.ARCHERS && enemy.alive() > 0 && enemy.pos().distanceTo(block.pos()) < ARROW_REACH) {
+                archers = true;
+                break;
+            }
+        }
+        for (AbstractRecruitEntity s : l.living()) {
+            if (!s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) || takenOver(s)) {
+                continue;
+            }
+            LivingEntity target = s.getTarget();
+            boolean striking = target != null && target.isAlive() && target.distanceToSqr(s) < 9;
+            Vec3 hold = s.getHoldPos();
+            boolean inPlace = hold == null || hold.distanceToSqr(s.position()) < 9;
+            boolean threatened = archers || enemyWithin(block, s, MELEE_SHIELD_REACH);
+            boolean raise = threatened && inPlace && !striking && !block.charged() && !passive(block.duty());
+            if (raise != s.getShouldBlock()) {
+                s.setShouldBlock(raise);
+            }
+        }
+    }
+
+    private boolean takenOver(AbstractRecruitEntity s) {
+        if (!commanded.contains(s.getId())) {
+            return false;
+        }
+        for (Enlisted e : enlisted.values()) {
+            if (e.given.contains(s.getId())) {
+                return e.takenOver;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a real enemy soldier stands within reach of a soldier (looking only at its block's foe and nearby blocks). */
+    private boolean enemyWithin(FieldBlock block, AbstractRecruitEntity s, double reach) {
+        FieldBlock foe = block.contactFoe();
+        if (foe == null) {
+            return false;
+        }
+        Live enemy = live.get(foe);
+        if (enemy == null) {
+            return false;
+        }
+        double sq = reach * reach;
+        for (AbstractRecruitEntity f : enemy.living()) {
+            if (f.distanceToSqr(s) < sq) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1374,6 +1563,12 @@ public final class RecruitsBattle {
             ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
             if (player != null) {
                 ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
+            }
+            if (e.group != null && RecruitEvents.recruitsGroupsManager != null) {
+                RecruitEvents.recruitsGroupsManager.removeGroup(e.group);
+                if (player != null) {
+                    RecruitEvents.recruitsGroupsManager.broadCastGroupsToPlayer(player);
+                }
             }
         }
         enlisted.clear();

@@ -84,7 +84,7 @@ first. The old relation is restored when the battle ends.
 - **Real soldiers only near players** (`bridge/RecruitsBattle`): the whole battle is fought as numbers
   (`battle/FieldBattle`, below), and blocks within 96 blocks of a player become real Recruits soldiers, standing
   where the block stands, each with the health they have left; beyond 128 they go back to numbers, keeping each
-  soldier's health. At most 400 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
+  soldier's health. At most 300 soldiers are real at once (a rider counts as two), the nearest first, and at most 8
   blocks become real each second. Players see real soldiers only within about 67 blocks, so they never see a block
   switch.
   - While a block is real, its soldiers walk and fight as Recruits soldiers; each second they report where they stand
@@ -103,9 +103,10 @@ first. The old relation is restored when the battle ends.
     for drawing blocks that are only numbers is asked of the world generator once per chunk, at most 40 a second
     (a block keeps its last height meanwhile), since those lookups had cost up to 280 ms a second. Reports break the
     battle's share down into the numbers, switching blocks between real and numbers, and snapshots.
-  - `/pve debug battle livecap <soldiers>` changes the cap until the server restarts. With a player connected (client
+  - `/pve debug battle livecap <soldiers>` changes the cap (kept in `config/rafasconquest/livecap.txt`); without a
+    number it shows it. With a player connected (client
     and server on one 8-core machine), about 1200 real soldiers ran at 10 to 15 TPS, and even about 450 at 13 to 16
-    TPS once fighting began, so the cap is 400.
+    TPS once fighting began, so the cap was 400; it is now 300.
   - **TickWeave** (an experimental mod that ticks entities on several threads; optional, not a dependency) was tried on
     a regular Forge server (it can't run in the dev setup: its mixins don't survive the dev remapping). With nobody
     connected and 1500 real soldiers it held 20 TPS at 33 to 47 ms a tick, against 56 to 98 ms without it; with a
@@ -136,12 +137,17 @@ first. The old relation is restored when the battle ends.
 - **Enlisted players:** a player who has joined one side's team (`/team join`) when the battle starts is enlisted
   with it. They are teleported to the front of the front block nearest the middle of the line (the first to charge)
   and given that block's soldiers, then the blocks beside it, as many as their rank leads (a Captain's 100 at most),
-  following them; the battle gives those soldiers no orders. A white ring on the ground marks their place in the
+  in a group of theirs in Recruits' command screen; the battle gives those soldiers no orders. Until the player orders
+  them otherwise they stand in a square behind the player's ring, facing the enemy, moving with it as the block
+  advances; the command screen's formation is set to square. A white ring on the ground marks their place in the
   block, shown when they are more than 5 blocks from it. The other side's front rows go for them as for any foe.
   Above the hotbar, in the faction's colour, they're told what their block is doing: **Charge!**, **Pullback!**,
   **Rotate!**, **Retreat!**. In the middle of the screen come the Marshals' and general's orders: **ALL TROOPS
   CHARGE!** when the army advances, **Hold the left wing!** when their wing holds for a bait, **Target ...!** when
   their block is sent at an enemy block, **Kill General ...!** when it goes for the enemy general.
+- **Shields:** a soldier with a shield raises it within 50 blocks of enemy archers, or with an enemy within 12 blocks
+  that it isn't striking itself, so long as it is near its place (a raised shield slows it to half pace or less). A
+  charged or passive soldier lowers it. Charged soldiers go after real enemies within 80 blocks (was 40).
 - **Facing the enemy:** real soldiers spawn facing their block's enemy (the block it fights, else the nearest), and
   those standing in their places with nobody to fight turn to face it each second.
 - **Battle soldiers can't be hired:** right-clicking a battle soldier, or its horse, does nothing (Recruits would
@@ -155,7 +161,7 @@ first. The old relation is restored when the battle ends.
   ahead of it, else toward that enemy, so a line that has broken through turns on what is left instead of walking
   off the field.
 - **Front rows fight:** where two blocks of real soldiers meet, only the front row of each fights (to spare the
-  server): the 10 soldiers nearest the enemy (5 in a wall) each go after the nearest enemy within 6 blocks of their
+  server): the 10 soldiers nearest the enemy (5 in a wall) each go after the nearest enemy within 12 blocks of their
   place, breaking ranks to reach them, and return to it when there is none. The ranks behind hold their places,
   passive, until the front row thins and they become it. The numbers leave these fights to Recruits; the reports
   count the blocks fighting front to front. For the battle the two factions are enemies in Recruits' diplomacy; when

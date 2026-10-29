@@ -101,6 +101,11 @@ public final class PveCommands {
                                     return 1;
                                 }))
                                 .then(Commands.literal("livecap")
+                                        .executes(ctx -> {
+                                            ctx.getSource().sendSuccess(() -> Component.literal("At most " + RecruitsBattle.liveCap()
+                                                    + " real battle soldiers at once"), false);
+                                            return 1;
+                                        })
                                         .then(Commands.argument("soldiers", IntegerArgumentType.integer(0, 10_000))
                                                 .executes(ctx -> {
                                                     String line = RecruitsBattle.setLiveCap(IntegerArgumentType.getInteger(ctx, "soldiers"));
