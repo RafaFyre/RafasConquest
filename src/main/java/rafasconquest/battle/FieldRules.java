@@ -137,6 +137,12 @@ public final class FieldRules {
     public static final double WING_REACH = 80;
     /** A player's unit with a task (flank, kill) looks for targets this far off. */
     public static final double TASK_REACH = 200;
+    /** A block is back where it was sent once this close (blocks). */
+    public static final double ARRIVED = 6;
+    /** A beaten army running from a pursuit makes for a point this far further back each second. */
+    public static final double FLEE_STEP = 30;
+    /** A beaten army runs this much faster than its pursuers march, so foot can outrun foot; horse still rides it down. */
+    public static final double FLEE_SPEED = 1.25;
     /** A block with fewer than this share of its soldiers left is losing, for a support unit. */
     public static final double LOSING_SHARE = 0.6;
     /** Cavalry riding its backline goes this far each way of its post. */

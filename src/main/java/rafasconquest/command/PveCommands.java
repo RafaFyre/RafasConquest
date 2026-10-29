@@ -60,6 +60,17 @@ public final class PveCommands {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        // The war council's choices, clicked in chat: open to every player, not only operators.
+        dispatcher.register(Commands.literal("council")
+                .then(Commands.argument("topic", com.mojang.brigadier.arguments.StringArgumentType.word())
+                        .executes(ctx -> {
+                            String line = RecruitsBattle.councilTopic(ctx.getSource().getPlayerOrException(),
+                                    com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "topic"));
+                            if (!line.isEmpty()) {
+                                ctx.getSource().sendFailure(Component.literal(line));
+                            }
+                            return 1;
+                        })));
         dispatcher.register(Commands.literal("pve")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("faction")
@@ -104,6 +115,11 @@ public final class PveCommands {
                                     ctx.getSource().sendSuccess(() -> Component.literal(line), true);
                                     return 1;
                                 }))
+                                .then(Commands.literal("end")
+                                        .then(Commands.literal("general").then(Commands.argument("side", IntegerArgumentType.integer(0, 1))
+                                                .executes(ctx -> battleEnd(ctx, "general"))))
+                                        .then(Commands.literal("surrender").then(Commands.argument("side", IntegerArgumentType.integer(0, 1))
+                                                .executes(ctx -> battleEnd(ctx, "surrender")))))
                                 .then(Commands.literal("livecap")
                                         .executes(ctx -> {
                                             ctx.getSource().sendSuccess(() -> Component.literal("At most " + RecruitsBattle.liveCap()
@@ -281,6 +297,12 @@ public final class PveCommands {
             }));
         }
         return role;
+    }
+
+    private static int battleEnd(CommandContext<CommandSourceStack> ctx, String how) {
+        String line = RecruitsBattle.debugEnd(how, IntegerArgumentType.getInteger(ctx, "side"));
+        ctx.getSource().sendSuccess(() -> Component.literal(line), true);
+        return 1;
     }
 
     /** Shows the player's own rank. */

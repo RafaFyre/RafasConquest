@@ -132,6 +132,39 @@ first. The old relation is restored when the battle ends.
   file takes its place at once. Its captain's fall shakes it, counting as a quarter more lost for a minute. The enemy
   blocks fighting a block that routs or loses its captain **rally**: their losses are forgotten and for 45 s they
   can't rout. The battle map outlines routed blocks purple and rallied ones green.
+- **Phases and days** (by Minecraft's clock): *deployment* (the armies form up before their camps; the war council
+  meets) → *battle* (from the charge until sunset, time 12000, at least a minute) → *evening pullback* (the fighting
+  stops; every block marches back 25 blocks, re-forming just short of its camp, before nightfall at 13000) →
+  *night* in camp, nobody fighting → at dawn (23000) the survivors regroup into fresh blocks of 20 (the wounded
+  recovered), and the armies deploy anew under the same generals and plans; 90 s later they charge. Day 1 waits
+  for the Start button (or `/pve debug battle start`). It repeats until the battle is won.
+- **War camps** (`bridge/WarCamp`): each army's camp is built of blocks 40 behind its rearmost block, facing the
+  enemy: a command tent 13 × 13 inside and 5 tall in the wool nearest the army's uniform colour, with a plank floor,
+  lanterns, the nation's banners on three walls inside and either side of the entrance, and a bedrock block in the
+  middle (the Battle Command Table, for now); behind it, rows of small ridge tents (one per 100 soldiers, 6 to 36)
+  with campfires. Ten heavy infantry (iron armour, axes, the nation's shields) stand guard at the entrance, five
+  either side of the way in. Everything a camp replaces is recorded and put back when it is struck.
+- **War council** (`bridge/WarCouncil`): while the armies deploy, the general and the Marshals of the left and right
+  wings stand around the command table. An officer of the army (rank 5 and up; others are turned away) right-clicks
+  the general to be briefed, a line every 2.5 s: the numbers on each side, the plan, how the troops stand, the enemy,
+  what the scouts say of them, a word from each wing's Marshal, and the player's own part. Then clickable choices
+  (`/council <topic>`, open to everyone): ask about the enemy general (their habits: leading their own charge, a
+  great wedge, baits, a shield wall, hunting generals), ask where they are weakest (a thin wing, few horse or
+  archers, no shield wall), and offers that depend on the officers' traits (bold, cautious, cunning, proud) and on
+  what was asked: join a bold Marshal's flank attack (flanker), back a cautious Marshal's wing (support), volunteer
+  as bait for a cunning general, hunt the enemy general once asked about them (if they lead their own charge, or the
+  general is bold), propose striking their weak side (a proud general won't have the plan questioned), or lead the
+  first charge (frontline). A choice sets the player's role for the charge.
+- **Victory:** if a general falls, their army retreats, and the winner may pursue it (a bold general, or one who
+  leads charges or hunts generals, does; a cautious one doesn't; else a coin toss): the winner's blocks make for the
+  nearest of the enemy as it runs back the way it came, for a day at most. Once none of the beaten army has been
+  harmed by the winner for 30 s, it fades away (a few soldiers a tick, in a puff) and its camp is struck. Without a
+  pursuit it simply runs, and fades 30 s after the last blow. An army worn down with its general alive surrenders:
+  the fighting stops where it stands, and after 30 s of milling about it fades and its camp is struck. The factions'
+  old relations come back then. The winner's army and camp stay until `/pve debug battle clear`.
+  A beaten army runs a quarter faster than its pursuers march, so foot outruns foot and only horse rides it down.
+  For testing, `/pve debug battle end general <side>` fells a side's general and `/pve debug battle end surrender
+  <side>` makes a side surrender. (Minecraft 1.20.1 has no `/tick` command to speed time up.)
 - **Ranks** (`character/Rank`, saved per player with the world in `data/Ranks`): Soldier (1, leads 1), Corporal (2,
   5), Serjeant (3, 20), Captain (4, 100), Major (5, 500), Colonel (6, 1000), Marshal (7, 3000), Grand Marshal (8,
   10,000). Ranks 1 to 4 are enlisted; 5 to 8 are officers, whose commands come later. `/pve rank` shows yours;

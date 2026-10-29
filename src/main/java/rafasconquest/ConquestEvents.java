@@ -115,6 +115,9 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
         if (RecruitsBattle.isOurs(event.getTarget())) {
+            if (event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND && event.getEntity() instanceof ServerPlayer player) {
+                RecruitsBattle.onInteract(player, event.getTarget()); // the war council hears officers out
+            }
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);
         }

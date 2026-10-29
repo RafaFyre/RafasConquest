@@ -55,6 +55,12 @@ public final class FieldBattle {
     private final List<Order> calls = new ArrayList<>();
     private final List<Event> events = new ArrayList<>();
     private final List<Volley> volleys = new ArrayList<>();
+    /** Pulled back to camp for the night: blocks only march. */
+    private boolean pulledBack;
+    /** The winner pursues the beaten army. */
+    private boolean pursuing;
+    /** When each side last took harm, in battle seconds (-1: never). */
+    private final int[] lastHurt = {-1, -1};
     private final boolean[] advanced = new boolean[2];
     @Nullable
     private Outcome outcome;
@@ -203,6 +209,9 @@ public final class FieldBattle {
                     army.baitFile[wing] = inWing.get(inWing.size() / 2);
                 }
             }
+        }
+        for (FieldBlock b : army.blocks) {
+            b.deployed = b.line;
         }
         army.started = army.blocks.stream().mapToInt(FieldBlock::started).sum();
         return army;
@@ -385,7 +394,19 @@ public final class FieldBattle {
     /** One second: each general gives orders, then blocks move, then everyone within reach fights. */
     public void second() {
         volleys.clear();
+        if (pulledBack) {
+            seconds++;
+            for (FieldArmy army : armies) {
+                move(army);
+            }
+            return;
+        }
+        if (over() && pursuing) {
+            pursueSecond();
+            return;
+        }
         if (over()) {
+            seconds++; // time goes on after the battle: the aftermath is timed in it
             for (FieldArmy army : armies) {
                 move(army);
             }
@@ -2003,6 +2024,9 @@ public final class FieldBattle {
             double dz = target.z() - block.pos.z();
             double distance = Math.hypot(dx, dz);
             double step = rates.speed(block.arm);
+            if (pursuing && block.duty == Duty.FLEEING) {
+                step *= FieldRules.FLEE_SPEED; // running for their lives, gear thrown down
+            }
             block.pos = distance <= step ? target : block.pos.plus(dx / distance * step, dz / distance * step);
         }
     }
@@ -2071,6 +2095,9 @@ public final class FieldBattle {
         for (int i = 0; i < targets.size(); i++) {
             FieldBlock target = targets.get(i);
             double damage = damages.get(i) * (resolute(target) ? FieldRules.RESOLVE_TAKES : 1);
+            if (damage > 0) {
+                lastHurt[target.side] = seconds;
+            }
             if (target.live) {
                 target.liveDamage += damage; // dealt to the real soldiers by the live battle
             } else if (target.takeDamage(damage, random) > 0) {
@@ -2186,6 +2213,138 @@ public final class FieldBattle {
         } else if (seconds >= BattlePlan.TIME_LIMIT_SECONDS) {
             outcome = new Outcome(-1, "draw (time limit)", seconds);
         }
+    }
+
+    /**
+     * Evening: the fighting stops and every block marches back to its army's camp, {@code back[side]} behind where it
+     * deployed, in its place, facing the enemy again. From now on the blocks only march.
+     */
+    public void pullBack(double[] back) {
+        pulledBack = true;
+        for (FieldArmy army : armies) {
+            for (FieldBlock b : army.blocks) {
+                stand(b);
+                b.line = b.deployed.plus(-army.facingX * back[army.side], -army.facingZ * back[army.side]);
+                b.facingX = army.facingX;
+                b.facingZ = army.facingZ;
+            }
+        }
+    }
+
+    public boolean pulledBack() {
+        return pulledBack;
+    }
+
+    /** Whether every block still standing is back where it was sent (a block's width out at most). */
+    public boolean arrived() {
+        for (FieldArmy army : armies) {
+            for (FieldBlock b : army.blocks) {
+                if (b.alive > 0 && b.pos.distanceTo(b.line) > FieldRules.ARRIVED) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * After a win, the winner pursues the beaten army as it runs: each of its blocks (the general, their guard and the
+     * standard aside) makes for the nearest of the enemy, and fights it when it catches it; the beaten army keeps running
+     * back the way it came.
+     */
+    public void pursue() {
+        if (outcome == null || outcome.winner() < 0) {
+            return;
+        }
+        pursuing = true;
+    }
+
+    public boolean pursuing() {
+        return pursuing;
+    }
+
+    private void pursueSecond() {
+        seconds++;
+        index();
+        FieldArmy winner = armies[outcome.winner()];
+        FieldArmy loser = armies[1 - outcome.winner()];
+        for (FieldBlock b : loser.blocks) {
+            if (b.alive > 0) {
+                b.line = b.pos.plus(-loser.facingX * FieldRules.FLEE_STEP, -loser.facingZ * FieldRules.FLEE_STEP);
+            }
+        }
+        for (FieldBlock b : winner.blocks) {
+            if (b.alive == 0 || b.duty == Duty.BEARER || b.duty == Duty.GENERAL || b.duty == Duty.GUARD) {
+                continue;
+            }
+            FieldBlock prey = nearestBlock(b, loser, null);
+            if (prey != null) {
+                b.line = prey.pos;
+                face(b, prey.pos);
+            }
+        }
+        for (FieldArmy army : armies) {
+            move(army);
+        }
+        index();
+        fight();
+    }
+
+    /**
+     * The fighting is over without a pursuit: the winner halts where it stands, and so does the loser if it {@code
+     * surrendered} (it mills about, no longer fighting); else it keeps running back the way it came.
+     */
+    public void standDown(boolean surrendered) {
+        if (outcome == null) {
+            return;
+        }
+        for (FieldArmy army : armies) {
+            boolean beaten = outcome.winner() >= 0 && army.side != outcome.winner();
+            if (beaten && !surrendered) {
+                continue;
+            }
+            for (FieldBlock b : army.blocks) {
+                stand(b);
+                b.line = b.pos;
+                if (beaten) {
+                    b.duty = Duty.FLEEING;
+                }
+            }
+        }
+    }
+
+    /** For testing: side {@code side} gives up the battle (surrenders, its general alive), as if worn down. */
+    public void concede(int side) {
+        if (outcome != null) {
+            return;
+        }
+        outcome = new Outcome(1 - side, "side " + side + " surrenders", seconds);
+        flee(armies[side]);
+    }
+
+    /** For testing: side {@code side}'s general falls. */
+    public void killGeneral(int side) {
+        FieldBlock general = armies[side].commander;
+        if (general != null) {
+            sync(general, general.pos, new float[general.health.length]);
+        }
+    }
+
+    /** A block stops whatever it was doing. */
+    private static void stand(FieldBlock b) {
+        b.charged = false;
+        b.braced = false;
+        b.engaged = false;
+        b.approaching = false;
+        b.waypoint = null;
+        b.prey = null;
+        b.strikeAt = null;
+        b.contactFoe = null;
+    }
+
+    /** When a side last took harm, in battle seconds; -1 if never. */
+    public int lastHurt(int side) {
+        return lastHurt[side];
     }
 
     /** The routed army stops fighting and runs back the way it came. */

@@ -16,6 +16,8 @@ import net.minecraft.network.chat.TextColor;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import rafasconquest.character.Rank;
+import rafasconquest.character.Trait;
+import rafasconquest.battle.Doctrine.Strategy;
 import rafasconquest.character.BattleRole;
 import rafasconquest.character.Job;
 import net.minecraft.nbt.CompoundTag;
@@ -163,6 +165,26 @@ public final class RecruitsBattle {
     private static final double MELEE_SHIELD_REACH = 12;
     /** Recruits' square formation, for the command screen. */
     private static final int SQUARE_FORMATION = 2;
+    /** Sunset begins (the battle stops and the armies pull back), night falls, and dawn, in the time of day. */
+    private static final long EVENING = 12000;
+    private static final long NIGHTFALL = 13000;
+    private static final long DAWN = 23000;
+    /** A day's battle lasts at least this long, even if begun late in the day. */
+    private static final int MIN_BATTLE_SECONDS = 60;
+    /** After the first day, the armies charge this long after they deploy. */
+    private static final int DEPLOY_SECONDS = 90;
+    /** A camp's command tent stands this far behind its army's rearmost block. */
+    private static final double CAMP_GAP = 40;
+    /** In the evening the armies re-form this far short of their camps. */
+    private static final double PULLBACK_SHORT_OF_CAMP = 15;
+    private static final int SOLDIERS_PER_TENT = 100;
+    private static final int MIN_TENTS = 6;
+    private static final int MAX_TENTS = 36;
+    /** A beaten army leaves the field once the winner hasn't harmed it for this long. */
+    private static final int QUIET_SECONDS = 30;
+    /** A pursuit lasts a day at most (a Minecraft day is 20 minutes). */
+    private static final int PURSUIT_SECONDS = 1200;
+    private static final int FADE_PER_TICK = 6;
     /** A horse this fast (blocks a tick; a Recruits horse gallops at about 0.3) is charging. */
     private static final double GALLOP = 0.15;
     /** Marks the kit a player is given for a battle, to take back after. */
@@ -177,7 +199,30 @@ public final class RecruitsBattle {
     private static final Calibration SESSION_CALIBRATION = new Calibration();
 
     private final ServerLevel level;
-    private final FieldBattle field;
+    private FieldBattle field;
+    /** Where the battle is fought, for each morning's deployment. */
+    private Point centre = new Point(0, 0);
+    private double axisX = 1;
+    private double axisZ;
+    private Phase phase = Phase.DEPLOYMENT;
+    /** Seconds since the battle was set up, and when the phase began. */
+    private int clock;
+    private int phaseSince;
+    private int day = 1;
+    /** The winner, once decided (-1 before, or for a draw). */
+    private int winner = -1;
+    private boolean surrendered;
+    /** When the beaten army was beaten, and when its real soldiers were last hurt, in battle seconds. */
+    private int aftermathSince;
+    private final int[] lastRealHurt = {-1, -1};
+    /** Sides whose army has left the field, and the soldiers still fading away. */
+    private final boolean[] faded = new boolean[2];
+    private final List<UUID> fading = new ArrayList<>();
+    private final WarCamp[] camps = new WarCamp[2];
+    /** Each camp's guards, by side; the war council in the tents, with their side. */
+    private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
+    private final Map<UUID, Integer> councillors = new HashMap<>();
+    private final WarCouncil council = new WarCouncil();
     private final Side[] sides;
     /** The blocks that are real soldiers now, and their soldiers. */
     private final Map<FieldBlock, Live> live = new LinkedHashMap<>();
@@ -237,7 +282,7 @@ public final class RecruitsBattle {
 
     /** What each side fights as: its faction, Recruits team and colours. */
     private record Side(Faction faction, PlayerTeam team, int uniform, int mark, ItemStack banner, int horn, GameCharacter general,
-                        String[] marshals) {
+                        String[] marshals, Trait[] traits) {
     }
 
     /**
@@ -405,15 +450,20 @@ public final class RecruitsBattle {
         java.util.Random characters = new java.util.Random(level.random.nextLong());
         Side[] sides = {
                 new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first),
-                        GameCharacter.general(first.doctrines(), characters), marshals(characters)),
+                        GameCharacter.general(first.doctrines(), characters), marshals(characters), traits(characters)),
                 new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second),
-                        GameCharacter.general(second.doctrines(), characters), marshals(characters))};
+                        GameCharacter.general(second.doctrines(), characters), marshals(characters), traits(characters))};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
         FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
                 sides[0].general.plan(), sides[1].general.plan());
         String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
+        battle.centre = centre;
+        battle.axisX = axisX;
+        battle.axisZ = axisZ;
+        battle.buildCamps();
+        battle.spawnCouncil();
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
@@ -497,6 +547,11 @@ public final class RecruitsBattle {
         return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
     }
 
+    /** The traits of an army's general and its Marshals of the left wing, centre and right wing. */
+    private static Trait[] traits(java.util.Random characters) {
+        return new Trait[]{Trait.random(characters), Trait.random(characters), Trait.random(characters), Trait.random(characters)};
+    }
+
     /** The Marshals of an army's left wing, centre and right wing. */
     private static String[] marshals(java.util.Random characters) {
         return new String[]{GameCharacter.name(characters), GameCharacter.name(characters), GameCharacter.name(characters)};
@@ -528,6 +583,20 @@ public final class RecruitsBattle {
         battle.live.clear();
         battle.clearSnapshots();
         battle.dismissEnlisted();
+        battle.dismissCouncil();
+        for (int side = 0; side < 2; side++) {
+            battle.strikeCamp(side);
+        }
+        for (UUID id : battle.fading) {
+            Entity e = battle.level.getEntity(id);
+            if (e != null) {
+                if (e.getVehicle() != null) {
+                    e.getVehicle().discard();
+                }
+                e.discard();
+            }
+        }
+        battle.fading.clear();
         battle.releaseChunks();
         battle.restoreRelations();
         return "Cleared the battle (" + removed + " soldiers removed)";
@@ -680,6 +749,9 @@ public final class RecruitsBattle {
         }
         List<Candidate> wanted = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
+            if (faded[side]) {
+                continue;
+            }
             for (FieldBlock block : field.army(side).blocks()) {
                 if (block.alive() == 0) {
                     continue;
@@ -901,7 +973,17 @@ public final class RecruitsBattle {
         if (living.isEmpty()) {
             return;
         }
-        if (block.duty() != l.appliedDuty) {
+        if (!mayFight(block.side())) {
+            // Pulled back, resting, or the fighting over: nobody fights, whatever their duty.
+            for (AbstractRecruitEntity s : living) {
+                s.setTarget(null);
+                if (s.getState() != 3) {
+                    s.setAggroState(3);
+                }
+            }
+            l.appliedDuty = null;
+        }
+        if (block.duty() != l.appliedDuty && mayFight(block.side())) {
             boolean passive = passive(block.duty());
             for (AbstractRecruitEntity s : living) {
                 if (passive) {
@@ -1020,7 +1102,7 @@ public final class RecruitsBattle {
         List<AbstractRecruitEntity> foes = new ArrayList<>();
         FieldBlock toward = foe != null && live.containsKey(foe) ? foe : null;
         double nearestBlock = Double.MAX_VALUE;
-        if (block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty())) {
+        if (block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty()) && mayFight(block.side())) {
             for (Live e : live.values()) {
                 if (e.block.side() == block.side()) {
                     continue;
@@ -1294,6 +1376,8 @@ public final class RecruitsBattle {
         if (++battle.ticks % 20 == 0) {
             battle.second();
         }
+        battle.council.tick(battle.level.getServer(), battle.level.getGameTime());
+        battle.fadeSome();
         if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
             battle.holdChunks();
             long t = System.nanoTime();
@@ -1314,9 +1398,30 @@ public final class RecruitsBattle {
      * between real and numbers as players move.
      */
     private void second() {
-        if (!started) {
-            prepare();
-            return;
+        clock++;
+        switch (phase) {
+            case DEPLOYMENT -> {
+                deployment();
+                return;
+            }
+            case PULLBACK, NIGHT -> {
+                night();
+                return;
+            }
+            case PURSUIT, AFTERMATH -> {
+                aftermath();
+                return;
+            }
+            case DONE -> {
+                for (Live l : new ArrayList<>(live.values())) {
+                    readBack(l);
+                    passOnOrders(l);
+                }
+                switchLive();
+                return;
+            }
+            default -> {
+            }
         }
         for (Live l : new ArrayList<>(live.values())) {
             readBack(l);
@@ -1367,6 +1472,8 @@ public final class RecruitsBattle {
             }
             if (field.over()) {
                 end();
+            } else if (evening() && clock - phaseSince >= MIN_BATTLE_SECONDS) {
+                beginPullback();
             }
         }
     }
@@ -1394,7 +1501,9 @@ public final class RecruitsBattle {
         }
         battle.enlist();
         battle.started = true;
-        battle.broadcast("[battle] The battle begins");
+        battle.dismissCouncil();
+        battle.setPhase(Phase.BATTLE);
+        battle.broadcast(String.format(Locale.ROOT, "[battle day %d] The battle begins", battle.day));
         return "The battle begins";
     }
 
@@ -2271,6 +2380,9 @@ public final class RecruitsBattle {
         }
         Live by = battle.byEntity.get(attacker.getId());
         Live of = battle.byEntity.get(rider.getId());
+        if (by != null && of != null && by.block.side() != of.block.side()) {
+            battle.lastRealHurt[of.block.side()] = battle.field.seconds();
+        }
         if (by == null || of == null || by.block.side() == of.block.side()) {
             return amount;
         }
@@ -2338,7 +2450,6 @@ public final class RecruitsBattle {
         for (Live l : live.values()) {
             l.living().forEach(s -> s.setTarget(null));
         }
-        restoreRelations();
         String result;
         if (outcome.winner() < 0) {
             result = outcome.result();
@@ -2358,7 +2469,494 @@ public final class RecruitsBattle {
                     army.generalAlive() ? "survived" : "fell", army.standardAlive() ? "still flies" : "fell"));
         }
         reportCalibration();
-        broadcast("Use /pve debug battle clear to remove the survivors");
+        victory(outcome);
+    }
+
+    // ---- the phases of a battle: deployment, battle, evening pullback, night, then victory ----
+
+    /**
+     * Where a battle is in its day: deployment (the armies form up before their camps, and the war council meets),
+     * the battle, the evening pullback to the camps, the night in camp, and once it is won the pursuit or the aftermath
+     * (the fighting over, the beaten army about to leave the field), then done.
+     */
+    public enum Phase {
+        DEPLOYMENT, BATTLE, PULLBACK, NIGHT, PURSUIT, AFTERMATH, DONE
+    }
+
+    public Phase phase() {
+        return phase;
+    }
+
+    public int day() {
+        return day;
+    }
+
+    private void setPhase(Phase next) {
+        phase = next;
+        phaseSince = clock;
+    }
+
+    /** The time of day, 0 (sunrise) to 23999. */
+    private long dayTime() {
+        return level.getDayTime() % 24000;
+    }
+
+    /** Evening: sunset has begun. */
+    private boolean evening() {
+        long t = dayTime();
+        return t >= EVENING && t < DAWN;
+    }
+
+    private boolean nightfall() {
+        long t = dayTime();
+        return t >= NIGHTFALL && t < DAWN;
+    }
+
+    private boolean morning() {
+        return !evening();
+    }
+
+    /** Whether a side's soldiers may fight now: anyone in battle, and the winner in a pursuit. */
+    private boolean mayFight(int side) {
+        return phase == Phase.BATTLE || phase == Phase.PURSUIT && side == winner;
+    }
+
+    /**
+     * Each army's camp behind its side of the field: its command tent {@link #CAMP_GAP} behind the rearmost of its
+     * blocks, with tents for its size behind that, in the colour nearest its uniform.
+     */
+    private void buildCamps() {
+        for (int side = 0; side < 2; side++) {
+            FieldArmy army = field.army(side);
+            double rear = 0;
+            for (FieldBlock b : army.blocks()) {
+                rear = Math.max(rear, BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line()).z());
+            }
+            double back = rear + CAMP_GAP;
+            Point at = army.origin().plus(-army.facingX() * back, -army.facingZ() * back);
+            int tents = Math.max(MIN_TENTS, Math.min(MAX_TENTS, army.started() / SOLDIERS_PER_TENT));
+            loadGround(at);
+            camps[side] = WarCamp.build(level, at, army.facingX(), army.facingZ(), tents, nearestDye(sides[side].uniform),
+                    sides[side].banner);
+            spawnGuards(side);
+        }
+    }
+
+    /** The dye colour nearest an RGB colour, for a camp's wool. */
+    private static DyeColor nearestDye(int rgb) {
+        DyeColor best = DyeColor.WHITE;
+        double bestDistance = Double.MAX_VALUE;
+        for (DyeColor d : DyeColor.values()) {
+            int c = d.getFireworkColor();
+            double dr = (c >> 16 & 255) - (rgb >> 16 & 255);
+            double dg = (c >> 8 & 255) - (rgb >> 8 & 255);
+            double db = (c & 255) - (rgb & 255);
+            double distance = dr * dr + dg * dg + db * db;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = d;
+            }
+        }
+        return best;
+    }
+
+    /** Ten heavy infantry stand guard at the command tent's entrance, facing out, as long as the camp stands. */
+    private void spawnGuards(int side) {
+        WarCamp camp = camps[side];
+        for (Vec3 at : camp.guardSpots()) {
+            AbstractRecruitEntity guard = campFigure(ModEntityTypes.RECRUIT_SHIELDMAN.get(), side, Role.SOLDIER, at, camp.yaw(0),
+                    null);
+            if (guard != null) {
+                equip(guard, EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+                equip(guard, EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                equip(guard, EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+                equip(guard, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+                equip(guard, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+                equip(guard, EquipmentSlot.OFFHAND, bannerShield(sides[side]));
+                campFolk.computeIfAbsent(side, s -> new ArrayList<>()).add(guard.getUUID());
+            }
+        }
+    }
+
+    /**
+     * The war council stands in each command tent while the armies deploy: the general behind the command table,
+     * the Marshals of the left and right wings either side of it, facing it.
+     */
+    private void spawnCouncil() {
+        dismissCouncil();
+        for (int side = 0; side < 2; side++) {
+            WarCamp camp = camps[side];
+            if (camp == null) {
+                continue;
+            }
+            Side s = sides[side];
+            AbstractRecruitEntity general = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GENERAL, camp.generalSpot(),
+                    camp.yaw(0), "General " + s.general.name());
+            AbstractRecruitEntity left = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GUARD, camp.leftMarshalSpot(),
+                    camp.yaw(1), "Marshal " + s.marshals[0]);
+            AbstractRecruitEntity right = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GUARD, camp.rightMarshalSpot(),
+                    camp.yaw(3), "Marshal " + s.marshals[2]);
+            for (AbstractRecruitEntity member : new AbstractRecruitEntity[]{general, left, right}) {
+                if (member != null) {
+                    councillors.put(member.getUUID(), side);
+                }
+            }
+        }
+    }
+
+    private void dismissCouncil() {
+        for (UUID id : councillors.keySet()) {
+            Entity e = level.getEntity(id);
+            if (e != null) {
+                e.discard();
+            }
+        }
+        councillors.clear();
+        council.adjourn();
+    }
+
+    /**
+     * Someone of the camp, standing still where put: not a battle soldier, never hurt, kept out of the numbers.
+     * {@code name}, if given, shows above them.
+     */
+    @Nullable
+    private AbstractRecruitEntity campFigure(EntityType<? extends AbstractRecruitEntity> type, int side, Role role, Vec3 at, float yaw,
+                                            @Nullable String name) {
+        AbstractRecruitEntity figure = spawn(type, sides[side], role, new Point(at.x, at.z), yaw);
+        if (figure == null) {
+            return null;
+        }
+        figure.teleportTo(at.x, at.y, at.z);
+        figure.setYRot(yaw);
+        figure.setYBodyRot(yaw);
+        figure.setYHeadRot(yaw);
+        figure.setNoAi(true);
+        figure.setInvulnerable(true);
+        figure.setAggroState(3);
+        if (name != null) {
+            figure.setCustomName(Component.literal(name).withStyle(style -> style.withColor(color(side))));
+            figure.setCustomNameVisible(true);
+        }
+        return figure;
+    }
+
+    /** What the war council of {@code side} knows: its officers, its plan, and the enemy and their weaknesses. */
+    private WarCouncil.Facts councilFacts(int side) {
+        Side s = sides[side];
+        Side e = sides[1 - side];
+        FieldArmy enemy = field.army(1 - side);
+        return new WarCouncil.Facts(side, color(side),
+                new WarCouncil.Officer("General", s.general.name(), s.traits[0]),
+                new WarCouncil.Officer("Marshal", s.marshals[0], s.traits[1]),
+                new WarCouncil.Officer("Marshal", s.marshals[2], s.traits[3]),
+                s.general.plan(), field.army(side).alive(), e.faction.name(), e.general.name(), e.general.plan(), enemy.alive(),
+                weaknesses(enemy, e.general.plan()), day);
+    }
+
+    /** What the scouts make of the enemy: a thin wing, few horse or archers, no shield wall. */
+    private static List<String> weaknesses(FieldArmy enemy, rafasconquest.battle.WarPlan plan) {
+        int all = 0;
+        int cavalry = 0;
+        int archers = 0;
+        int[] wing = new int[3];
+        for (FieldBlock b : enemy.blocks()) {
+            if (b.alive() == 0 || b.duty() == Duty.GENERAL || b.duty() == Duty.GUARD || b.duty() == Duty.BEARER) {
+                continue;
+            }
+            all += b.alive();
+            if (b.arm() == Arm.CAVALRY) {
+                cavalry += b.alive();
+            } else if (b.arm() == Arm.ARCHERS) {
+                archers += b.alive();
+            } else {
+                wing[b.wing()] += b.alive();
+            }
+        }
+        List<String> lines = new ArrayList<>();
+        int infantry = wing[0] + wing[1] + wing[2];
+        if (enemy.winged() && infantry > 0) {
+            int thin = wing[FieldArmy.LEFT] <= wing[FieldArmy.RIGHT] ? FieldArmy.LEFT : FieldArmy.RIGHT;
+            if (wing[thin] < infantry * 0.28) {
+                String name = thin == FieldArmy.LEFT ? "left" : "right";
+                lines.add(String.format(Locale.ROOT, "their %s wing is thin: barely %d foot. Hit it hard and it folds.", name, wing[thin]));
+            }
+        }
+        if (all > 0 && cavalry < all * 0.1) {
+            lines.add("they have few horse. Our cavalry can ride where it likes.");
+        }
+        if (all > 0 && archers < all * 0.1) {
+            lines.add("they have few archers. Close in without fear of the arrows.");
+        }
+        if (!plan.has(rafasconquest.battle.Doctrine.Formation.GREAT_SHIELD)) {
+            lines.add("they stand no shield wall. A good charge will break their line.");
+        }
+        List<String> capitalised = new ArrayList<>();
+        for (String l : lines) {
+            capitalised.add(Character.toUpperCase(l.charAt(0)) + l.substring(1));
+        }
+        return capitalised;
+    }
+
+    /**
+     * For testing, ends the day's battle at once: {@code general}: that side's general falls (its army retreats);
+     * {@code surrender}: that side surrenders.
+     */
+    public static String debugEnd(String how, int side) {
+        RecruitsBattle battle = current;
+        if (battle == null || battle.phase != Phase.BATTLE) {
+            return "No battle being fought";
+        }
+        if (how.equals("general")) {
+            battle.field.killGeneral(side);
+            return battle.sides[side].faction.name() + "'s general falls";
+        }
+        battle.field.concede(side);
+        return battle.sides[side].faction.name() + " gives up";
+    }
+
+    /** A player right-clicked one of the battle's people: a council member hears them out. */
+    public static void onInteract(ServerPlayer player, Entity target) {
+        RecruitsBattle battle = current;
+        if (battle == null || battle.phase != Phase.DEPLOYMENT) {
+            return;
+        }
+        Integer side = battle.councillors.get(target.getUUID());
+        if (side == null) {
+            return;
+        }
+        boolean sameArmy = player.getTeam() != null && player.getTeam().getName().equals(battle.sides[side].team.getName());
+        battle.council.approach(player, battle.councilFacts(side), sameArmy, battle.level.getGameTime());
+    }
+
+    /** A player chose something at the war council ({@code /council <topic>}). */
+    public static String councilTopic(ServerPlayer player, String topic) {
+        RecruitsBattle battle = current;
+        if (battle == null || battle.phase != Phase.DEPLOYMENT) {
+            return "The war council meets only while the armies deploy";
+        }
+        for (int side = 0; side < 2; side++) {
+            if (player.getTeam() != null && player.getTeam().getName().equals(battle.sides[side].team.getName())) {
+                battle.council.topic(player, battle.councilFacts(side), topic, battle.level.getGameTime());
+                return "";
+            }
+        }
+        return "You're in neither army";
+    }
+
+    /** Deployment: the armies stand in formation before their camps; after the first day, they charge on their own. */
+    private void deployment() {
+        prepare();
+        if (day > 1 && clock - phaseSince >= DEPLOY_SECONDS && morning()) {
+            startFighting();
+        }
+    }
+
+    /** Evening: the fighting stops, and both armies march back to their camps before nightfall. */
+    private void beginPullback() {
+        setPhase(Phase.PULLBACK);
+        // Each block marches back by the same distance, so the army re-forms just short of its camp.
+        double back = CAMP_GAP - PULLBACK_SHORT_OF_CAMP;
+        field.pullBack(new double[]{back, back});
+        for (Live l : live.values()) {
+            l.living().forEach(s -> s.setTarget(null));
+        }
+        broadcast(String.format(Locale.ROOT, "[battle day %d] Evening: both armies pull back to their camps", day));
+        announce(0, "Pull back to camp!");
+        announce(1, "Pull back to camp!");
+    }
+
+    /** The pullback and the night: the blocks march to their camps, then rest there until dawn. */
+    private void night() {
+        for (Live l : new ArrayList<>(live.values())) {
+            readBack(l);
+        }
+        field.second();
+        for (Live l : new ArrayList<>(live.values())) {
+            passOnOrders(l);
+        }
+        updateEnlisted();
+        switchLive();
+        if (phase == Phase.PULLBACK && (field.arrived() || nightfall())) {
+            setPhase(Phase.NIGHT);
+            broadcast(String.format(Locale.ROOT, "[battle day %d] Night falls; the armies rest in their camps", day));
+        }
+        if (phase == Phase.NIGHT && morning()) {
+            regroup();
+        }
+    }
+
+    /**
+     * Dawn: each army's survivors regroup into fresh blocks (the wounded recovered overnight), and both deploy anew from
+     * what is left, under the same generals and plans. The war council meets again.
+     */
+    private void regroup() {
+        int[] survivors = new int[2];
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock b : field.army(side).blocks()) {
+                // The general, their guard and the standard come back as they are; the rest are regrouped.
+                Duty home = b.homeDuty();
+                if (home != Duty.GENERAL && home != Duty.GUARD && home != Duty.BEARER) {
+                    survivors[side] += b.alive();
+                }
+            }
+        }
+        for (Live l : live.values()) {
+            discard(l);
+        }
+        live.clear();
+        lastHealth.clear();
+        lastCentre.clear();
+        everReal.clear();
+        dismissEnlisted();
+        field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
+                level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
+        started = false;
+        day++;
+        setPhase(Phase.DEPLOYMENT);
+        broadcast(String.format(Locale.ROOT, "[battle day %d] Dawn: %s musters %d, %s %d; the armies deploy", day,
+                sides[0].faction.name(), field.army(0).started(), sides[1].faction.name(), field.army(1).started()));
+        spawnCouncil();
+    }
+
+    /**
+     * After the numbers decide the battle: a general's fall makes their army retreat, and the winner may pursue it
+     * for up to a day (a bold or hard-charging general does; a cautious one doesn't; else it is a coin toss). An army
+     * worn down with its general alive surrenders instead: the fighting stops where it stands.
+     */
+    private void victory(FieldBattle.Outcome outcome) {
+        winner = outcome.winner();
+        if (winner < 0) {
+            setPhase(Phase.DONE);
+            restoreRelations();
+            broadcast("Use /pve debug battle clear to remove the survivors and the camps");
+            return;
+        }
+        int loser = 1 - winner;
+        Side w = sides[winner];
+        if (!field.army(loser).generalAlive()) {
+            Trait trait = w.traits[0];
+            boolean pursue = trait == Trait.BOLD || trait != Trait.CAUTIOUS && (w.general.plan().has(Strategy.UNRELENTING_CHARGE)
+                    || w.general.plan().has(Strategy.DECAPITATE) || level.random.nextBoolean());
+            if (pursue) {
+                field.pursue();
+                setPhase(Phase.PURSUIT);
+                broadcast(String.format(Locale.ROOT, "[battle] General %s pursues %s's retreating army", w.general.name(),
+                        sides[loser].faction.name()));
+                announce(winner, "Pursue them!");
+            } else {
+                field.standDown(false);
+                setPhase(Phase.AFTERMATH);
+                broadcast(String.format(Locale.ROOT, "[battle] General %s lets %s's army go", w.general.name(),
+                        sides[loser].faction.name()));
+            }
+        } else {
+            surrendered = true;
+            field.standDown(true);
+            setPhase(Phase.AFTERMATH);
+            broadcast(String.format(Locale.ROOT, "[battle] %s surrenders; the fighting stops", sides[loser].faction.name()));
+            announce(winner, "They surrender! Hold!");
+            announce(loser, "We surrender. Lay down arms.");
+        }
+        aftermathSince = field.seconds();
+        for (Live l : live.values()) {
+            l.appliedDuty = null;
+        }
+    }
+
+    /**
+     * The pursuit or the aftermath: the beaten army runs (or mills about, surrendered) until none of it has been
+     * harmed by the winner for {@link #QUIET_SECONDS}, or a pursuit has lasted a day; then it fades away, with its camp.
+     */
+    private void aftermath() {
+        for (Live l : new ArrayList<>(live.values())) {
+            readBack(l);
+        }
+        field.second();
+        for (Live l : new ArrayList<>(live.values())) {
+            dealDamage(l);
+            passOnOrders(l);
+            frontRowFights(l);
+        }
+        updateEnlisted();
+        switchLive();
+        int loser = 1 - winner;
+        int seconds = field.seconds();
+        int hurt = Math.max(field.lastHurt(loser), lastRealHurt[loser]);
+        boolean quiet = seconds - Math.max(hurt, aftermathSince) >= QUIET_SECONDS;
+        boolean dayGone = phase == Phase.PURSUIT && seconds - aftermathSince >= PURSUIT_SECONDS;
+        if (quiet || dayGone) {
+            fadeOut(loser);
+        }
+    }
+
+    /**
+     * The beaten army leaves the field: its soldiers fade away a few at a time, its figures are gone from the field,
+     * and its camp is struck. The factions' old relations come back.
+     */
+    private void fadeOut(int side) {
+        faded[side] = true;
+        for (Live l : new ArrayList<>(live.values())) {
+            if (l.block.side() == side) {
+                for (AbstractRecruitEntity s : l.living()) {
+                    fading.add(s.getUUID());
+                }
+                for (int i = 0; i < l.soldiers.length; i++) {
+                    if (l.soldiers[i] != null) {
+                        byEntity.remove(l.soldiers[i].getId());
+                        l.soldiers[i] = null;
+                    }
+                }
+                l.block.setReal(0);
+                live.remove(l.block);
+            }
+        }
+        strikeCamp(side);
+        restoreRelations();
+        setPhase(Phase.DONE);
+        broadcast(String.format(Locale.ROOT, "[battle] %s's army %s the field", sides[side].faction.name(),
+                surrendered ? "lays down its arms and leaves" : "has fled"));
+        broadcast("Use /pve debug battle clear to remove the survivors and the camps");
+    }
+
+    /** A camp is struck: its guards and council go, and its tents come down. */
+    private void strikeCamp(int side) {
+        for (UUID id : campFolk.getOrDefault(side, List.of())) {
+            Entity e = level.getEntity(id);
+            if (e != null) {
+                e.discard();
+            }
+        }
+        campFolk.remove(side);
+        for (Map.Entry<UUID, Integer> c : new ArrayList<>(councillors.entrySet())) {
+            if (c.getValue() == side) {
+                Entity e = level.getEntity(c.getKey());
+                if (e != null) {
+                    e.discard();
+                }
+                councillors.remove(c.getKey());
+            }
+        }
+        if (camps[side] != null) {
+            camps[side].restore();
+            camps[side] = null;
+        }
+    }
+
+    /** Each tick: a few of a fading army's soldiers vanish in a puff, with their horses. */
+    private void fadeSome() {
+        for (int n = 0; n < FADE_PER_TICK && !fading.isEmpty(); n++) {
+            UUID id = fading.remove(fading.size() - 1);
+            Entity e = level.getEntity(id);
+            if (e == null) {
+                continue;
+            }
+            Entity horse = e.getVehicle();
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF, e.getX(), e.getY() + 1, e.getZ(), 6, 0.3, 0.5, 0.3, 0.02);
+            if (horse != null) {
+                horse.discard();
+            }
+            e.discard();
+        }
     }
 
     // ---- measuring real soldiers fighting real soldiers, to calibrate the numbers ----
@@ -2638,6 +3236,9 @@ public final class RecruitsBattle {
         groundLookups = 0;
         List<FormationSnapshot> all = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
+            if (faded[side]) {
+                continue;
+            }
             FieldArmy army = field.army(side);
             Side s = sides[side];
             for (FieldBlock block : army.blocks()) {

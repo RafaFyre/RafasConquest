@@ -263,6 +263,67 @@ class FieldBattleTest {
     }
 
     @Test
+    void inTheEveningEveryBlockMarchesBackToCampWithoutFighting() {
+        FieldBattle battle = battle(60, 60, 3);
+        for (int i = 0; i < 120; i++) {
+            battle.second();
+        }
+        int[] alive = {battle.army(0).alive(), battle.army(1).alive()};
+        battle.pullBack(new double[]{25, 25});
+        for (int i = 0; i < 400 && !battle.arrived(); i++) {
+            battle.second();
+        }
+        assertTrue(battle.arrived(), "never got back");
+        assertEquals(alive[0], battle.army(0).alive(), "nobody fights while pulled back");
+        assertEquals(alive[1], battle.army(1).alive());
+    }
+
+    /** Side 1's general falls, so side 0 wins and side 1 retreats. */
+    private static FieldBattle generalFalls() {
+        FieldBattle battle = battle(40, 40, 3);
+        battle.second();
+        FieldBlock general = battle.army(1).commander();
+        battle.sync(general, general.pos(), new float[general.health().length]);
+        battle.second();
+        assertNotNull(battle.outcome());
+        assertEquals(0, battle.outcome().winner());
+        return battle;
+    }
+
+    @Test
+    void aPursuedArmyKeepsRunningAndThePursuersFollow() {
+        FieldBattle battle = generalFalls();
+        battle.pursue();
+        assertTrue(battle.pursuing());
+        Point start = battle.army(1).front[0].pos();
+        Point chaser = battle.army(0).front[0].pos();
+        double gap = chaser.distanceTo(start);
+        for (int i = 0; i < 60; i++) {
+            battle.second();
+        }
+        assertTrue(battle.army(1).front[0].pos().distanceTo(start) > 40, "the beaten army runs");
+        assertTrue(battle.army(0).front[0].pos().distanceTo(chaser) > 10, "the winner follows");
+        int quiet = 0;
+        for (int i = 0; i < 600 && quiet < 30; i++) {
+            battle.second();
+            quiet = battle.seconds() - Math.max(0, battle.lastHurt(1));
+        }
+        assertTrue(quiet >= 30 || battle.army(1).alive() == 0, "the pursuit ends: they get away, or are cut down");
+    }
+
+    @Test
+    void aSurrenderedArmyStaysWhereItStands() {
+        FieldBattle battle = generalFalls();
+        battle.standDown(true);
+        Point at = battle.army(1).front[0].pos();
+        for (int i = 0; i < 30; i++) {
+            battle.second();
+        }
+        assertEquals(0, battle.army(1).front[0].pos().distanceTo(at), 1e-6);
+        assertEquals(FieldBlock.Duty.FLEEING, battle.army(1).front[0].duty());
+    }
+
+    @Test
     void soldiersStillNumbersInAPartRealBlockFightOn() {
         FieldBattle battle = battle(1, 1, 6);
         FieldBlock a = battle.army(0).front[0];

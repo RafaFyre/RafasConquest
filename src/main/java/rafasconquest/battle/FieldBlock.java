@@ -51,6 +51,8 @@ public final class FieldBlock {
     final boolean champion;
     Point pos;
     Point line;
+    /** Where it stood when the armies deployed, for marching back to camp in the evening. */
+    Point deployed;
     double facingX;
     double facingZ;
     Duty duty;
@@ -172,6 +174,11 @@ public final class FieldBlock {
     /** What a player's unit does in a battle ({@link FieldBattle#assign}). */
     public enum Task {
         NONE, BAIT, SUPPORT, FLANK, KILL
+    }
+
+    /** The duty it was deployed to: its general's, the guard's, the standard's, or a soldier's. */
+    public Duty homeDuty() {
+        return homeDuty;
     }
 
     public Task task() {
