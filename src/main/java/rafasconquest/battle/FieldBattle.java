@@ -40,6 +40,10 @@ public final class FieldBattle {
     public record Event(int side, String text) {
     }
 
+    /** Arrows loosed in the last second by an archer block, at a block: drawn by clients as arrows in flight. */
+    public record Volley(FieldBlock archers, FieldBlock target, int shots) {
+    }
+
     private final FieldArmy[] armies;
     private final Random random;
     private final FieldRules.Rates rates;
@@ -50,6 +54,7 @@ public final class FieldBattle {
     /** The calls made this second, for the live battle to sound, and what the strategies did. */
     private final List<Order> calls = new ArrayList<>();
     private final List<Event> events = new ArrayList<>();
+    private final List<Volley> volleys = new ArrayList<>();
     private final boolean[] advanced = new boolean[2];
     @Nullable
     private Outcome outcome;
@@ -324,6 +329,11 @@ public final class FieldBattle {
         return taken;
     }
 
+    /** The volleys of the last second, from archers shooting as numbers. */
+    public List<Volley> volleys() {
+        return java.util.Collections.unmodifiableList(volleys);
+    }
+
     /** What the generals' strategies did since last asked, oldest first; taking them clears them. */
     public List<Event> takeEvents() {
         List<Event> taken = List.copyOf(events);
@@ -374,6 +384,7 @@ public final class FieldBattle {
 
     /** One second: each general gives orders, then blocks move, then everyone within reach fights. */
     public void second() {
+        volleys.clear();
         if (over()) {
             for (FieldArmy army : armies) {
                 move(army);
@@ -2026,6 +2037,9 @@ public final class FieldBattle {
         }
         int shots = (int) Math.min(archers.arrows, Math.ceil(archers.alive * FieldRules.ARROWS_PER_SECOND));
         archers.arrows -= shots;
+        if (shots > 0) {
+            volleys.add(new Volley(archers, foe, shots));
+        }
         targets.add(foe);
         damages.add(shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm));
     }

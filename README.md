@@ -351,6 +351,13 @@ first. The old relation is restored when the battle ends.
   when the real soldier gives way to its figure. Further out, the client lays the soldiers out in ranks across the
   formation's space (scattered a little once it is fighting) and glides each formation to its newest place over the
   next second.
+- **Arrows in flight:** archers that are only figures shoot arrows you can see. Each second the server tells clients
+  which formation shot at which and how many arrows (only the figures' share of a block that is part real; its real
+  archers shoot real arrows). Up to 24 arrows of each volley leave the archers' figures over the second, arc up to
+  18 % of the distance (at most 25 blocks) and come down across the target formation, at 30 blocks a second
+  (`client/ArrowVolleys`). They're drawn as streaks of head, shaft and fletching along their flight, at least about
+  1.5 % of their distance long so volleys show from far off, and pulled in like the figures beyond what the camera
+  sees.
 - **The handover:** with Distant Horizons, the game's world fades into its terrain near the render distance, and it
   would fade real soldiers with it (from 1.5 times its near clip distance plus a chunk; about 45 blocks at 6 chunks).
   So real soldiers hand over to figures where that fade starts, if it is nearer than 67 blocks, and past the handover

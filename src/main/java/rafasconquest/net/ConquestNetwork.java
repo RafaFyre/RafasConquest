@@ -76,6 +76,11 @@ public final class ConquestNetwork {
                 .decoder(BattleSpot::read)
                 .consumerMainThread(ConquestNetwork::handleBattleSpot)
                 .add();
+        CHANNEL.messageBuilder(Volleys.class, 7, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(Volleys::write)
+                .decoder(Volleys::read)
+                .consumerMainThread(ConquestNetwork::handleVolleys)
+                .add();
     }
 
     /** Tells an enlisted player where they should stand in their block (shown as a ring), or that they have no spot. */
@@ -99,6 +104,30 @@ public final class ConquestNetwork {
 
     private static void handleBattleSpot(BattleSpot msg, Supplier<NetworkEvent.Context> context) {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z()));
+    }
+
+    /** Tells players of the arrows archers loosed as numbers this second, for drawing in flight. */
+    public static void sendVolleys(List<ServerPlayer> players, Volleys volleys) {
+        for (ServerPlayer player : players) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), volleys);
+        }
+    }
+
+    /** Server → client: volleys, each from formation {@code from[i]} at formation {@code to[i]}, {@code shots[i]} arrows. */
+    public record Volleys(int[] from, int[] to, int[] shots) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarIntArray(from);
+            buf.writeVarIntArray(to);
+            buf.writeVarIntArray(shots);
+        }
+
+        static Volleys read(FriendlyByteBuf buf) {
+            return new Volleys(buf.readVarIntArray(), buf.readVarIntArray(), buf.readVarIntArray());
+        }
+    }
+
+    private static void handleVolleys(Volleys msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ArrowVolleys.receive(msg.from(), msg.to(), msg.shots()));
     }
 
     /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */

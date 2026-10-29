@@ -53,6 +53,7 @@ public final class ClientEvents {
         DistantArmies.clear();
         BattleSounds.clear();
         BattleSpotRing.clear();
+        ArrowVolleys.clear();
     }
 
     /**
@@ -67,6 +68,7 @@ public final class ClientEvents {
             DistantHorizonsLink.update();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
+            ArrowVolleys.render(event.getPoseStack(), event.getCamera());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera());
         }
     }

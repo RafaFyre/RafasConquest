@@ -1268,6 +1268,7 @@ public final class RecruitsBattle {
         long t = System.nanoTime();
         field.second();
         fieldNanos += System.nanoTime() - t;
+        sendVolleys();
         for (FieldBattle.Order order : field.takeCalls()) {
             soundHorn(order.side());
             if (order.call() == FieldBattle.Call.ADVANCE) {
@@ -1781,6 +1782,36 @@ public final class RecruitsBattle {
         block.setReal(n);
         if (lost) {
             dematerialise(l);
+        }
+    }
+
+    /**
+     * The arrows archers loosed as numbers this second, for clients to draw in flight. A block part real shoots real
+     * arrows from its real archers; only its figures' share is drawn.
+     */
+    private void sendVolleys() {
+        List<FieldBattle.Volley> volleys = field.volleys();
+        if (volleys.isEmpty() || level.players().isEmpty()) {
+            return;
+        }
+        int[] from = new int[volleys.size()];
+        int[] to = new int[volleys.size()];
+        int[] shots = new int[volleys.size()];
+        int n = 0;
+        for (FieldBattle.Volley v : volleys) {
+            FieldBlock archers = v.archers();
+            int figures = archers.alive() - (archers.live() ? archers.real() : 0);
+            int drawn = archers.alive() == 0 ? 0 : (int) Math.round(v.shots() * (double) figures / archers.alive());
+            if (drawn > 0) {
+                from[n] = archers.id();
+                to[n] = v.target().id();
+                shots[n] = drawn;
+                n++;
+            }
+        }
+        if (n > 0) {
+            ConquestNetwork.sendVolleys(level.players(), new ConquestNetwork.Volleys(java.util.Arrays.copyOf(from, n),
+                    java.util.Arrays.copyOf(to, n), java.util.Arrays.copyOf(shots, n)));
         }
     }
 
