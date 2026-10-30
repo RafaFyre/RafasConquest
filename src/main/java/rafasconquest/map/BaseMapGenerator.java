@@ -36,6 +36,8 @@ public final class BaseMapGenerator {
     /** An unowned seat is a ruin (a lone empty house) this often, and nothing at all this often; otherwise people still live there. */
     static final double UNOWNED_RUIN = 0.6;
     static final double UNOWNED_EMPTY = 0.25;
+    /** A sword sanctum's city, districts a side. */
+    static final int SANCTUM_DISTRICTS = 4;
     /** Heights are sampled every this many pixels; they change slowly and each sample is costly. */
     static final int HEIGHT_STEP = 4;
 
@@ -137,9 +139,17 @@ public final class BaseMapGenerator {
         List<BaseMap.Nation> nations = new java.util.ArrayList<>();
         for (Nations.Nation nation : plan.nations()) {
             OriginRoller.Roll roll = OriginRoller.roll(level.getSeed(), nation.x(), nation.z(), settings);
-            String name = nation.tier() == TitleMap.Tier.EMPIRE ? roll.name() + " Empire" : roll.name();
+            String name = nation.sanctum() ? "Sword Sanctum of " + roll.name()
+                    : nation.tier() == TitleMap.Tier.EMPIRE ? roll.name() + " Empire" : roll.name();
             nations.add(new BaseMap.Nation(roll.id(), name, roll.strength(), roll.radiusSteps(), nation.tier(), nation.title(),
-                    nation.seat(), nation.x(), nation.z()));
+                    nation.seat(), nation.x(), nation.z(), nation.sanctum()));
+        }
+        // A sword sanctum's city is 4 × 4 districts, in place of its seat's own (a new one, if its seat had none).
+        java.util.Map<Integer, Nations.Nation> sanctumAt = new java.util.HashMap<>();
+        for (Nations.Nation nation : plan.nations()) {
+            if (nation.sanctum()) {
+                sanctumAt.put(nation.seat(), nation);
+            }
         }
         // The seats no nation holds: mostly a ruin (one empty house where the city would have stood), sometimes nothing
         // at all, sometimes still lived in (with no owner).
@@ -147,6 +157,10 @@ public final class BaseMapGenerator {
         List<SeatCities.City> cities = new java.util.ArrayList<>();
         List<Countryside.Settlement> settlements = new java.util.ArrayList<>(countryside.settlements());
         for (SeatCities.City c : countryside.cities()) {
+            if (sanctumAt.remove(c.province()) != null) {
+                cities.add(new SeatCities.City(c.x(), c.z(), SANCTUM_DISTRICTS, c.tier(), c.province()));
+                continue;
+            }
             if (plan.holder()[c.province()] >= 0) {
                 cities.add(c);
                 continue;
@@ -157,6 +171,9 @@ public final class BaseMapGenerator {
             } else if (roll >= UNOWNED_RUIN + UNOWNED_EMPTY) {
                 cities.add(c);
             }
+        }
+        for (Nations.Nation sanctum : sanctumAt.values()) {
+            cities.add(new SeatCities.City(sanctum.x(), sanctum.z(), SANCTUM_DISTRICTS, TitleMap.Tier.KINGDOM, sanctum.seat()));
         }
         int[] ground = new int[n];
         for (int i = 0; i < n; i++) {
@@ -171,7 +188,7 @@ public final class BaseMapGenerator {
     private static rafasconquest.people.Realm realm(long seed, TitleMap titles, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
                                                     List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] holder) {
         List<rafasconquest.people.RealmPlanner.Seat> seats = nations.stream()
-                .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z())).toList();
+                .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
         rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder);
         long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
         rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",

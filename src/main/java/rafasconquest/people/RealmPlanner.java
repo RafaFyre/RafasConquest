@@ -28,8 +28,8 @@ import java.util.Set;
  * </ul>
  */
 public final class RealmPlanner {
-    /** A nation: its rank (a title tier's ordinal), its seat province, and where its seat stands. */
-    public record Seat(int tier, int province, int x, int z) {
+    /** A nation: its rank (a title tier's ordinal), its seat province, where its seat stands, and whether it is a sword sanctum. */
+    public record Seat(int tier, int province, int x, int z, boolean sanctum) {
     }
 
     static final int CULTS = 4;
@@ -39,6 +39,8 @@ public final class RealmPlanner {
     /** A character is superhuman in prowess this often; each step further up, this likely to go on. */
     static final double SUPERHUMAN = 0.05;
     static final double SUPERHUMAN_STEP = 0.85;
+    /** A sanctum's Sword God is away from it this often. */
+    static final double SANCTUM_AWAY = 0.3;
     static final int TRAITS = 3;
     /** Bonds are looked for among this many nearest holders and those serving the same liege. */
     private static final int NEIGHBOURS = 6;
@@ -134,7 +136,8 @@ public final class RealmPlanner {
         for (int i = 0; i < holds.size(); i++) {
             holdOf[holds.get(i).province()] = i;
         }
-        int[] peak = {0};
+        // The sanctums' Sword Gods are counted first, so the rest of the world never has more than seven in all.
+        int[] gods = {(int) nations.stream().filter(Seat::sanctum).count()};
         List<Person> people = new ArrayList<>();
         for (Person.Hold hold : holds) {
             int p = hold.province();
@@ -143,7 +146,8 @@ public final class RealmPlanner {
             int culture = nation >= 0 ? nationCulture[nation] : empire;
             int faith = faithOf(random, nation >= 0 ? nationFaith[nation] : empireFaith[empire],
                     nation >= 0 ? nationPiety[nation] : 0.5f, empire, faiths, cultHome);
-            people.add(person(random, cultures.get(culture), culture, faith, hold, nation, peak));
+            boolean sanctum = nation >= 0 && nations.get(nation).sanctum() && nations.get(nation).province() == p;
+            people.add(person(random, cultures.get(culture), culture, faith, hold, nation, sanctum, gods));
         }
         // Lieges: the next higher seat above them in the same nation, else the ruler.
         int[] ruler = new int[nations.size()];
@@ -179,7 +183,8 @@ public final class RealmPlanner {
     }
 
     /** A holder: name of their culture, skills from their schooling and traits, prowess now and then superhuman. */
-    private static Person person(Random random, Culture culture, int cultureId, int faith, Person.Hold hold, int nation, int[] peak) {
+    private static Person person(Random random, Culture culture, int cultureId, int faith, Person.Hold hold, int nation,
+                                 boolean sanctum, int[] gods) {
         boolean female = random.nextDouble() < 0.25;
         int age = 18 + random.nextInt(53);
         List<Personality> traits = new ArrayList<>();
@@ -206,13 +211,19 @@ public final class RealmPlanner {
             while (prowess < Stat.PROWESS.max() && random.nextDouble() < SUPERHUMAN_STEP) {
                 prowess++;
             }
-            if (prowess == Stat.PROWESS.max() && peak[0]++ >= Stat.PEAK_HOLDERS) {
-                prowess--; // no more than three at the peak
+            if (prowess >= Stat.SWORD_GOD && gods[0]++ >= Stat.MAX_SWORD_GODS) {
+                prowess = Stat.SWORD_GOD - 1; // no more than seven Sword Gods
             }
             stats[Stat.PROWESS.ordinal()] = prowess;
         }
+        boolean away = false;
+        if (sanctum) {
+            // A sanctum is held by a Sword God, now and then away from it.
+            stats[Stat.PROWESS.ordinal()] = Stat.SWORD_GOD + random.nextInt(Stat.PROWESS.max() - Stat.SWORD_GOD + 1);
+            away = random.nextDouble() < SANCTUM_AWAY;
+        }
         return new Person(culture.givenName(female, random), culture.familyName(random), female, age, cultureId, faith, stats,
-                List.copyOf(traits), hold, -1, nation);
+                List.copyOf(traits), hold, -1, nation, away);
     }
 
     /** A character's faith: their nation's (or lands') mostly; otherwise a cult (one from their lands, if any) or another faith. */
@@ -298,7 +309,7 @@ public final class RealmPlanner {
 
     private static Person withLiege(Person p, int liege) {
         return new Person(p.given(), p.family(), p.female(), p.age(), p.culture(), p.faith(), p.stats(), p.traits(), p.hold(), liege,
-                p.nation());
+                p.nation(), p.away());
     }
 
     /** A province's highest seat as a number: -1 none, 0 county ... 3 empire. */

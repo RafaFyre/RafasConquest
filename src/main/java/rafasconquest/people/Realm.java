@@ -157,6 +157,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             out.writeInt(p.hold().z());
             out.writeShort(p.liege());
             out.writeShort(p.nation());
+            out.writeBoolean(p.away());
         }
         out.writeInt(bonds.size());
         for (Bond b : bonds) {
@@ -202,7 +203,8 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
                 traits.add(Personality.values()[in.readUnsignedByte()]);
             }
             Person.Hold hold = new Person.Hold(Person.Kind.values()[in.readUnsignedByte()], in.readShort(), in.readInt(), in.readInt());
-            people.add(new Person(given, family, female, age, culture, faith, stats, List.copyOf(traits), hold, in.readShort(), in.readShort()));
+            people.add(new Person(given, family, female, age, culture, faith, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
+                    in.readBoolean()));
         }
         int bondCount = in.readInt();
         List<Bond> bonds = new ArrayList<>(bondCount);

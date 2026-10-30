@@ -51,10 +51,19 @@ public class CharacterScreen extends Screen {
         this.index = index;
     }
 
-    /** What a character is called with their hold: "Duke Aldric Valcourt of Shukai". */
+    /**
+     * What a character is called with their hold: "Duke Aldric Valcourt of Shukai", with their sword title after it if
+     * their prowess earns one ("..., Sword Saint"). A sanctum's ruler is styled by their sword title alone.
+     */
     public static String styled(BaseMap base, Person p) {
-        int tier = p.nation() >= 0 ? base.nations().get(p.nation()).tier().ordinal() : 0;
-        return Realm.title(p, tier) + " " + p.name() + " of " + base.names().get(p.hold().province());
+        BaseMap.Nation nation = p.nation() >= 0 ? base.nations().get(p.nation()) : null;
+        String sword = Stat.superhumanTier(p.stat(Stat.PROWESS));
+        String where = " of " + base.names().get(p.hold().province());
+        if (nation != null && nation.sanctum() && nation.seat() == p.hold().province() && !sword.isEmpty()) {
+            return sword + " " + p.name() + where;
+        }
+        String title = Realm.title(p, nation == null ? 0 : nation.tier().ordinal()) + " " + p.name() + where;
+        return sword.isEmpty() ? title : title + ", " + sword;
     }
 
     @Override
@@ -103,6 +112,15 @@ public class CharacterScreen extends Screen {
         String nation = p.nation() >= 0 ? base.nations().get(p.nation()).name() : "no nation (independent)";
         g.drawString(font, (p.female() ? "Woman" : "Man") + ", " + p.age() + ", " + hold(p) + " — " + nation, x, y, MUTED, false);
         y += 12;
+        String sword = Stat.superhumanTier(p.stat(Stat.PROWESS));
+        if (!sword.isEmpty()) {
+            g.drawString(font, sword + ": " + Stat.superhumanMeaning(p.stat(Stat.PROWESS)), x, y, GOLD, false);
+            y += 12;
+        }
+        if (p.away()) {
+            g.drawString(font, "Away from " + base.names().get(p.hold().province()), x, y, BAD, false);
+            y += 12;
+        }
         g.drawString(font, "Culture: " + realm.cultures().get(p.culture()).name()
                 + "    Faith: " + realm.faiths().get(p.faith()).name(), x, y, TEXT, false);
         if (p.nation() >= 0 && realm.nationFaith()[p.nation()] != p.faith()) {

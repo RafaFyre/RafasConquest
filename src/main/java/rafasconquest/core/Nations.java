@@ -28,8 +28,17 @@ public final class Nations {
     static final int KINGDOMS_PER_MINI_EYE = 4;
     private static final long SALT = 0x4E4154494F4E5321L;
 
-    /** A nation: the title it holds (tier and index), its seat province, and where its seat city stands. */
-    public record Nation(TitleMap.Tier tier, int title, int seat, int x, int z) {
+    /** How many sword sanctums a world has. */
+    public static final int SANCTUMS = 3;
+
+    /**
+     * A nation: the title it holds (tier and index), its seat province, where its seat city stands, and whether it is a
+     * sword sanctum (a City-state of a Sword God's).
+     */
+    public record Nation(TitleMap.Tier tier, int title, int seat, int x, int z, boolean sanctum) {
+        public Nation(TitleMap.Tier tier, int title, int seat, int x, int z) {
+            this(tier, title, seat, x, z, false);
+        }
     }
 
     /** The nations, which nation (index) holds each province (-1: nobody), and the mini-eyes' centres. */
@@ -62,6 +71,7 @@ public final class Nations {
         }
         java.util.Collections.shuffle(outer, random);
         int wanted = outer.size() / KINGDOMS_PER_MINI_EYE;
+        List<Integer> eyeKingdoms = new ArrayList<>();
         for (int k : outer) {
             if (miniEyes.size() >= wanted) {
                 break;
@@ -71,6 +81,33 @@ public final class Nations {
                     && distance(at) > warZoneEdge + eyeRadius;
             if (clear) {
                 miniEyes.add(at);
+                eyeKingdoms.add(k);
+            }
+        }
+
+        // The sword sanctums: in the mini-eyes' hearts (a kingdom's seat), else, if there are too few, at other kingdoms'
+        // seats of the outer world; each a City-state holding the county round its seat, calm or not.
+        List<Integer> sanctums = new ArrayList<>(eyeKingdoms);
+        for (int k : outer) {
+            if (sanctums.size() >= SANCTUMS) {
+                break;
+            }
+            int[] at = seats.at(t.kingdomSeat()[k]);
+            if (!sanctums.contains(k) && distance(at) > warZoneEdge + eyeRadius
+                    && sanctums.stream().allMatch(s -> far(seats.at(t.kingdomSeat()[s]), at, 4.0 * eyeRadius))) {
+                sanctums.add(k);
+            }
+        }
+        for (int k : sanctums.subList(0, Math.min(SANCTUMS, sanctums.size()))) {
+            int seat = t.kingdomSeat()[k];
+            int county = t.county()[seat];
+            int[] at = seats.at(seat);
+            int index = nations.size();
+            nations.add(new Nation(TitleMap.Tier.COUNTY, county, seat, at[0], at[1], true));
+            for (int p = 0; p < provinces; p++) {
+                if (t.county()[p] == county) {
+                    holder[p] = index;
+                }
             }
         }
 
@@ -144,6 +181,10 @@ public final class Nations {
             }
         }
         return false;
+    }
+
+    private static boolean far(int[] a, int[] b, double apart) {
+        return Math.hypot(a[0] - b[0], a[1] - b[1]) > apart;
     }
 
     private static double distance(int[] at) {

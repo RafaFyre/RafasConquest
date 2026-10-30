@@ -34,7 +34,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
                       int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 13;
+    private static final int FORMAT = 14;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {
@@ -48,7 +48,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
      * the title (tier and index), and its seat: province and where its seat city stands.
      */
     public record Nation(java.util.UUID id, String name, int strength, int radiusSteps, TitleMap.Tier tier, int title, int seat,
-                         int x, int z) {
+                         int x, int z, boolean sanctum) {
     }
 
     /** The nation holding a province, or null if nobody does. */
@@ -151,6 +151,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeShort(n.seat());
                 out.writeInt(n.x());
                 out.writeInt(n.z());
+                out.writeBoolean(n.sanctum());
             }
             writeShorts(out, holders);
             for (int g : ground) {
@@ -250,7 +251,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             List<Nation> nations = new ArrayList<>(nationCount);
             for (int i = 0; i < nationCount; i++) {
                 nations.add(new Nation(new java.util.UUID(in.readLong(), in.readLong()), in.readUTF(), in.readInt(), in.readByte(),
-                        TitleMap.Tier.values()[in.readByte()], in.readShort(), in.readShort(), in.readInt(), in.readInt()));
+                        TitleMap.Tier.values()[in.readByte()], in.readShort(), in.readShort(), in.readInt(), in.readInt(), in.readBoolean()));
             }
             int[] holders = readShorts(in);
             int[] ground = new int[width * height];

@@ -57,7 +57,7 @@ class RealmPlannerTest {
         List<SeatCities.City> cities = SeatCities.plan(seed, grid, titles);
         Countryside.Plan country = Countryside.plan(seed, grid, titles, cities);
         Nations.Plan nations = Nations.plan(seed, titles, p -> new int[]{centres.get(p).x(), centres.get(p).z()}, 1000, 8000);
-        List<RealmPlanner.Seat> seats = nations.nations().stream().map(n -> new RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z())).toList();
+        List<RealmPlanner.Seat> seats = nations.nations().stream().map(n -> new RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
         Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder());
         return new World(titles, country.cities(), country, nations, realm);
     }
@@ -125,7 +125,7 @@ class RealmPlannerTest {
                     assertTrue(p.stat(s) >= 0 && p.stat(s) <= s.max(), s + " " + p.stat(s));
                 }
                 superhuman += p.stat(Stat.PROWESS) >= Stat.SUPERHUMAN ? 1 : 0;
-                peakHere += p.stat(Stat.PROWESS) == Stat.PROWESS.max() ? 1 : 0;
+                peakHere += p.stat(Stat.PROWESS) >= Stat.SWORD_GOD ? 1 : 0;
                 assertEquals(RealmPlanner.TRAITS, p.traits().size());
                 for (Personality t : p.traits()) {
                     assertFalse(p.has(t.opposite()), "both " + t + " and its opposite");
@@ -134,10 +134,31 @@ class RealmPlannerTest {
                     assertEquals(realm.nationCulture()[p.nation()], p.culture(), "a character not of the nation's culture");
                 }
             }
-            assertTrue(peakHere <= Stat.PEAK_HOLDERS, peakHere + " at the peak of prowess");
+            assertTrue(peakHere <= Stat.MAX_SWORD_GODS, peakHere + " Sword Gods");
             peak += peakHere;
         }
         assertTrue(superhuman > 0 && superhuman < people / 5, superhuman + " superhuman of " + people);
+    }
+
+    @Test
+    void everySanctumIsHeldByASwordGod() {
+        int sanctums = 0;
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            for (int n = 0; n < w.nations().nations().size(); n++) {
+                rafasconquest.core.Nations.Nation nation = w.nations().nations().get(n);
+                if (!nation.sanctum()) {
+                    continue;
+                }
+                sanctums++;
+                assertEquals(TitleMap.Tier.COUNTY, nation.tier(), "a sanctum that isn't a City-state");
+                Person holder = w.realm().people().get(w.realm().holderOf(nation.seat()));
+                assertTrue(holder.stat(Stat.PROWESS) >= Stat.SWORD_GOD, "a sanctum held by prowess " + holder.stat(Stat.PROWESS));
+            }
+            assertTrue(w.nations().nations().stream().filter(rafasconquest.core.Nations.Nation::sanctum).count()
+                    <= rafasconquest.core.Nations.SANCTUMS);
+        }
+        assertTrue(sanctums > 0, "no sanctums at all");
     }
 
     @Test

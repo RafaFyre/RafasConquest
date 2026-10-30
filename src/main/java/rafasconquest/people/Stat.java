@@ -12,9 +12,11 @@ public enum Stat {
     LEARNING("Learning", 20),
     PROWESS("Prowess", 45);
 
-    /** Where the superhuman begins, and the peak no more than {@link #PEAK_HOLDERS} may stand at at once. */
+    /** Where the superhuman begins (a Sword Saint), a Sword King, and a Sword God, of whom no more than seven live at once. */
     public static final int SUPERHUMAN = 21;
-    public static final int PEAK_HOLDERS = 3;
+    public static final int SWORD_KING = 30;
+    public static final int SWORD_GOD = 40;
+    public static final int MAX_SWORD_GODS = 7;
 
     private final String title;
     private final int max;
@@ -32,8 +34,15 @@ public enum Stat {
         return max;
     }
 
-    /** What a prowess this high is called: "" for ordinary people, else Champion, Legend or Mythic. */
+    /** The title a prowess this high grants: "" for ordinary people, else Sword Saint, Sword King or Sword God. */
     public static String superhumanTier(int prowess) {
-        return prowess >= 40 ? "Mythic" : prowess >= 30 ? "Legend" : prowess >= SUPERHUMAN ? "Champion" : "";
+        return prowess >= SWORD_GOD ? "Sword God" : prowess >= SWORD_KING ? "Sword King" : prowess >= SUPERHUMAN ? "Sword Saint" : "";
+    }
+
+    /** What that title means. */
+    public static String superhumanMeaning(int prowess) {
+        return prowess >= SWORD_GOD ? "their sword's power is biblical"
+                : prowess >= SWORD_KING ? "their sword possesses the might of a nation"
+                : prowess >= SUPERHUMAN ? "they have achieved a miracle in their prowess" : "";
     }
 }

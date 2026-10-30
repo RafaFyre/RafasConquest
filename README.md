@@ -696,8 +696,9 @@ Every hold (a capital, city, town or castle) has a **holder**, planned with the 
   a city's a Duke, a town's a Count, a castle's a Lord (Duchess, Countess and Lady for women).
 - **Skills** (`people/Stat`): Diplomacy, Martial, Stewardship, Intrigue and Learning, 0 to 20, around 6 with one they
   were schooled in higher. **Prowess** runs 0 to 45: ordinary people stay within 20, but about one in twenty is
-  superhuman (21 and up: Champion; 30 and up: Legend; 40 and up: Mythic), each step rarer, and no more than three stand
-  at 45.
+  superhuman, each step rarer, and their prowess grants a title: 21, **Sword Saint** (they have achieved a miracle
+  in their prowess); 30, **Sword King** (their sword possesses the might of a nation); 40, **Sword God** (their sword's
+  power is biblical). No more than seven Sword Gods live at once.
 - **Traits** (`people/Personality`): three personality traits, from opposed pairs (Brave or Craven, Calm or Wrathful,
   Content or Ambitious, Honest or Deceitful, Zealous or Cynical, and so on; never both of a pair). Each bends a few
   skills.
@@ -708,6 +709,11 @@ Every hold (a capital, city, town or castle) has a **holder**, planned with the 
 - **Opinion** of one character for another, -100 to 100: shared traits please and opposed ones grate; a shared faith
   pleases (a Zealous character doubly, a Cynical one not at all) and another faith grates; so, less, with culture; a
   vassal thinks well of their liege; friends and rivals most of all.
+
+**Sword sanctums:** three in each world, in the hearts of the mini-eyes (a kingdom's seat), or at other kingdoms' seats
+in the outer world where there are too few eyes. Each is a City-state, the "Sword Sanctum of ...", holding the county
+round it, calm or not; its city is 4 × 4 districts; and it is held by a Sword God, styled by that title, who is away
+from it about one time in three.
 
 **Cultures:** one for the lands of each empire title, with its own name and the sounds its names are made of. A nation
 has the culture of its seat's lands, and every one of its characters has it; a hold no nation keeps has its lands'.

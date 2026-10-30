@@ -48,8 +48,8 @@ class NationsTest {
         for (long seed = 0; seed < 5; seed++) {
             World w = world(seed);
             for (int p = 0; p < w.plan().holder().length; p++) {
-                if (w.plan().holder()[p] < 0) {
-                    continue;
+                if (w.plan().holder()[p] < 0 || w.plan().nations().get(w.plan().holder()[p]).sanctum()) {
+                    continue; // a sword sanctum holds its county in a mini-eye's heart
                 }
                 int[] at = w.at(p);
                 assertTrue(Math.hypot(at[0], at[1]) > EYE, "a held province in the eye");
@@ -87,6 +87,9 @@ class NationsTest {
             List<Nations.Nation> nations = w.plan().nations();
             for (int i = 0; i < nations.size(); i++) {
                 Nations.Nation n = nations.get(i);
+                if (n.sanctum()) {
+                    continue; // a sword sanctum stands where it likes; tested on its own
+                }
                 // A City-state lies in the zone of its kingdom's seat.
                 int[] zoneAt = n.tier() == TitleMap.Tier.COUNTY
                         ? w.at(w.titles().kingdomSeat()[w.titles().kingdom()[w.titles().duchy()[n.title()]]]) : new int[]{n.x(), n.z()};
