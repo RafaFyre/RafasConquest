@@ -14,6 +14,7 @@ import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.ProvinceNames;
 import rafasconquest.core.Countryside;
 import rafasconquest.core.Dojos;
+import rafasconquest.core.Roads;
 import rafasconquest.core.WorldFeatures;
 import rafasconquest.core.Nations;
 import rafasconquest.core.OriginRoller;
@@ -79,6 +80,7 @@ public final class BaseMapGenerator {
         int[] biomeIds = new int[n];
         boolean[] rough = new boolean[n];
         boolean[] wet = new boolean[n];
+        byte[] hard = new byte[n];
         IntStream.range(0, size).parallel().forEach(pz -> {
             for (int px = 0; px < size; px++) {
                 int index = pz * size + px;
@@ -96,6 +98,8 @@ public final class BaseMapGenerator {
                 water[index] = BiomePalette.isSea(biome);
                 wet[index] = water[index] || biome.is(net.minecraft.tags.BiomeTags.IS_RIVER);
                 rough[index] = BiomePalette.isRough(biome);
+                hard[index] = (byte) (biome.is(net.minecraft.tags.BiomeTags.IS_JUNGLE) ? 1
+                        : biome.is(net.minecraft.tags.BiomeTags.IS_MOUNTAIN) || biome.is(net.minecraftforge.common.Tags.Biomes.IS_PEAK) ? 2 : 0);
                 int color = BiomePalette.color(biome, (int) h, sea);
                 if (!water[index] && h >= sea) {
                     // Light from the north-west, measured across a full height-sample step so the smoothing between
@@ -184,9 +188,45 @@ public final class BaseMapGenerator {
         List<Dojos.Dojo> dojos = WorldFeatures.mantraSchools()
                 ? dojos(level.getSeed(), minX, minZ, bpp, size, visibleRadius, settings.eyeRadius(), provinces, wet, cities, nations)
                 : List.of();
+        Roads.Plan roads = roads(new Roads.Land(minX, minZ, bpp, size, size, ground, wet, water, hard, sea), titles, names, cities,
+                settlements, dojos);
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
                 cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
-                        plan.holder()), dojos);
+                        plan.holder()), dojos, roads);
+    }
+
+    /**
+     * The roads ({@link Roads}): the seat cities' network, then spurs to the castles (city-grade), villages (dirt paths)
+     * and known dojos (cobblestone, from the nearest fork).
+     */
+    private static Roads.Plan roads(Roads.Land land, TitleMap titles, List<String> names, List<SeatCities.City> cities,
+                                    List<Countryside.Settlement> settlements, List<Dojos.Dojo> dojos) {
+        long started = System.nanoTime();
+        List<Roads.Spur> spurs = new java.util.ArrayList<>();
+        for (Countryside.Settlement s : settlements) {
+            if (s.kind() == Countryside.Kind.CASTLE) {
+                spurs.add(new Roads.Spur(Roads.Grade.CITY, new Roads.Place("Castle of " + names.get(s.province()), s.x(), s.z(), 0, 0), false));
+            } else if (s.kind() == Countryside.Kind.VILLAGE) {
+                spurs.add(new Roads.Spur(Roads.Grade.TOWN, new Roads.Place("Village of " + names.get(s.province()), s.x(), s.z(), 0, 0), false));
+            }
+        }
+        for (Dojos.Dojo d : dojos) {
+            if (!d.school().hidden()) {
+                spurs.add(new Roads.Spur(Roads.Grade.DOJO, new Roads.Place("Dojo of the " + d.school().title() + " school", d.x(), d.z(), 0, 0),
+                        true));
+            }
+        }
+        Roads.Plan plan = Roads.plan(land, Roads.links(cities, titles, names), spurs,
+                cities.stream().map(c -> Roads.place(c, names.get(c.province()))).toList());
+        long length = 0;
+        for (Roads.Road r : plan.roads()) {
+            for (int i = 1; i < r.points(); i++) {
+                length += (long) Math.hypot(r.xs()[i] - r.xs()[i - 1], r.zs()[i] - r.zs()[i - 1]);
+            }
+        }
+        rafasconquest.RafasConquest.LOGGER.info("[world] {} roads, {} blocks long, {} forks, planned in {} ms", plan.roads().size(), length,
+                plan.junctions().size(), (System.nanoTime() - started) / 1_000_000);
+        return plan;
     }
 
     /** How far a dojo keeps from the edge of any city. */

@@ -33,9 +33,9 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
                       List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
                       int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm,
-                      List<rafasconquest.core.Dojos.Dojo> dojos) {
+                      List<rafasconquest.core.Dojos.Dojo> dojos, rafasconquest.core.Roads.Plan roads) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 15;
+    private static final int FORMAT = 16;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {
@@ -168,10 +168,70 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeInt(d.x());
                 out.writeInt(d.z());
             }
+            writeRoads(out, roads);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
         return bytes.toByteArray();
+    }
+
+    /** The roads: each its grade, ends' names, and points as steps from the last; then the forks. */
+    private static void writeRoads(DataOutputStream out, rafasconquest.core.Roads.Plan plan) throws IOException {
+        out.writeInt(plan.roads().size());
+        for (rafasconquest.core.Roads.Road r : plan.roads()) {
+            out.writeByte(r.grade().ordinal());
+            out.writeUTF(r.from());
+            out.writeUTF(r.to());
+            out.writeInt(r.points());
+            out.writeInt(r.xs()[0]);
+            out.writeInt(r.zs()[0]);
+            for (int i = 1; i < r.points(); i++) {
+                out.writeShort(r.xs()[i] - r.xs()[i - 1]);
+                out.writeShort(r.zs()[i] - r.zs()[i - 1]);
+            }
+        }
+        out.writeInt(plan.junctions().size());
+        for (rafasconquest.core.Roads.Junction j : plan.junctions()) {
+            out.writeInt(j.x());
+            out.writeInt(j.z());
+            out.writeByte(j.leadsTo().size());
+            for (String name : j.leadsTo()) {
+                out.writeUTF(name);
+            }
+        }
+    }
+
+    private static rafasconquest.core.Roads.Plan readRoads(DataInputStream in) throws IOException {
+        int count = in.readInt();
+        List<rafasconquest.core.Roads.Road> roads = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            rafasconquest.core.Roads.Grade grade = rafasconquest.core.Roads.Grade.values()[in.readUnsignedByte()];
+            String from = in.readUTF();
+            String to = in.readUTF();
+            int n = in.readInt();
+            int[] xs = new int[n];
+            int[] zs = new int[n];
+            xs[0] = in.readInt();
+            zs[0] = in.readInt();
+            for (int p = 1; p < n; p++) {
+                xs[p] = xs[p - 1] + in.readShort();
+                zs[p] = zs[p - 1] + in.readShort();
+            }
+            roads.add(new rafasconquest.core.Roads.Road(grade, xs, zs, from, to));
+        }
+        int forks = in.readInt();
+        List<rafasconquest.core.Roads.Junction> junctions = new ArrayList<>(forks);
+        for (int i = 0; i < forks; i++) {
+            int x = in.readInt();
+            int z = in.readInt();
+            int names = in.readUnsignedByte();
+            List<String> leadsTo = new ArrayList<>(names);
+            for (int k = 0; k < names; k++) {
+                leadsTo.add(in.readUTF());
+            }
+            junctions.add(new rafasconquest.core.Roads.Junction(x, z, List.copyOf(leadsTo)));
+        }
+        return new rafasconquest.core.Roads.Plan(roads, junctions);
     }
 
     private static void writeShorts(DataOutputStream out, int[] values) throws IOException {
@@ -276,7 +336,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 dojos.add(new rafasconquest.core.Dojos.Dojo(rafasconquest.core.Dojos.School.values()[in.readUnsignedByte()], in.readInt(), in.readInt()));
             }
             return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities,
-                    settlements, nations, holders, ground, wet, realm, dojos);
+                    settlements, nations, holders, ground, wet, realm, dojos, readRoads(in));
         }
     }
 }
