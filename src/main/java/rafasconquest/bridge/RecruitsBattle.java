@@ -58,6 +58,9 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
+import rafasconquest.battle.BattleSite;
+import rafasconquest.map.BaseMap;
+import rafasconquest.worldgen.ConquestRuntime;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.Point;
@@ -542,8 +545,18 @@ public final class RecruitsBattle {
                         GameCharacter.general(second.doctrines(), characters), marshals(characters), traits(characters))};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
-        FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
-                sides[0].general.plan(), sides[1].general.plan());
+        long seed = level.random.nextLong();
+        FieldBattle laidOut = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
+        // Moved over the land, by the world map, so no part of an army is cut off by a river or the sea.
+        BaseMap map = ConquestRuntime.map();
+        Point shift = map == null ? new Point(0, 0) : BattleSite.shift(siteParts(laidOut), mapWater(map));
+        Point site = centre.plus(shift.x(), shift.z());
+        FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
+                : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
+        if (field != laidOut) {
+            RafasConquest.LOGGER.info("[battle] moved {} blocks ({}, {}) so no army is cut off by water",
+                    Math.round(Math.hypot(shift.x(), shift.z())), Math.round(shift.x()), Math.round(shift.z()));
+        }
         Terrain terrain = new Terrain(level, Terrain.stepFor(firstSoldiers + secondSoldiers));
         preparing = true;
         terrain.surveyInBackground(GroundPlan.area(field)).whenCompleteAsync((surveyed, error) -> {
@@ -554,7 +567,7 @@ public final class RecruitsBattle {
                 return;
             }
             try {
-                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, centre, axisX, axisZ));
+                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ));
             } catch (RuntimeException e) {
                 RafasConquest.LOGGER.error("[battle] couldn't begin the battle", e);
                 failed.accept("Couldn't begin the battle: " + e.getMessage());
@@ -3293,31 +3306,82 @@ public final class RecruitsBattle {
      * Each army's camp behind its side of the field: its command tent {@link #CAMP_GAP} behind the rearmost of its
      * blocks, with tents for its size behind that, in the colour nearest its uniform.
      */
+    /** Where a wing's camp stands (the army's, if it has no wings): behind its rearmost block, across from its middle. */
+    @Nullable
+    private static Point campAt(FieldArmy army, int wing) {
+        double rear = 0;
+        double right = 0;
+        int n = 0;
+        for (FieldBlock b : army.blocks()) {
+            if (army.winged() && b.wing() != wing) {
+                continue;
+            }
+            Point at = BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line());
+            rear = Math.max(rear, at.z());
+            right += at.x();
+            n++;
+        }
+        return n == 0 ? null : BattlePlan.place(army.origin(), army.facingX(), army.facingZ(), right / n, rear + CAMP_GAP);
+    }
+
+    /**
+     * The battle's parts for choosing its site ({@link BattleSite}): each army's wings (or the whole army, if it has
+     * none), each with its blocks' places and its camp.
+     */
+    private static List<BattleSite.Part> siteParts(FieldBattle field) {
+        List<BattleSite.Part> parts = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            FieldArmy army = field.army(side);
+            int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
+            for (int wing : wings) {
+                List<Point> places = new ArrayList<>();
+                for (FieldBlock b : army.blocks()) {
+                    if (!army.winged() || b.wing() == wing) {
+                        places.add(b.line());
+                    }
+                }
+                Point camp = campAt(army, wing);
+                if (camp != null) {
+                    places.add(camp);
+                    parts.add(new BattleSite.Part(side, places));
+                }
+            }
+        }
+        return parts;
+    }
+
+    /** The world map's water (sea and river), in its pixels, for choosing a battle's site; off the map counts as water. */
+    private static BattleSite.Water mapWater(BaseMap map) {
+        int bpp = map.blocksPerPixel();
+        return new BattleSite.Water() {
+            @Override
+            public int cell() {
+                return bpp;
+            }
+
+            @Override
+            public boolean wet(int cellX, int cellZ) {
+                int i = map.pixelAt(cellX * bpp + bpp / 2.0, cellZ * bpp + bpp / 2.0);
+                return i < 0 || map.wet()[i];
+            }
+        };
+    }
+
     private void buildCamps() {
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
-                // Behind the wing's rearmost block, across from its middle.
-                double rear = 0;
-                double right = 0;
-                int n = 0;
-                int soldiers = 0;
-                for (FieldBlock b : army.blocks()) {
-                    if (army.winged() && b.wing() != wing) {
-                        continue;
-                    }
-                    Point at = BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line());
-                    rear = Math.max(rear, at.z());
-                    right += at.x();
-                    n++;
-                    soldiers += b.started();
-                }
-                if (n == 0) {
+                Point at = campAt(army, wing);
+                if (at == null) {
                     continue;
                 }
-                double back = rear + CAMP_GAP;
-                Point at = BattlePlan.place(army.origin(), army.facingX(), army.facingZ(), right / n, back);
+                int soldiers = 0;
+                for (FieldBlock b : army.blocks()) {
+                    if (!army.winged() || b.wing() == wing) {
+                        soldiers += b.started();
+                    }
+                }
                 int tents = Math.max(MIN_TENTS, Math.min(MAX_TENTS, soldiers / SOLDIERS_PER_TENT));
                 loadGround(at);
                 WarCamp camp = WarCamp.build(level, at, army.facingX(), army.facingZ(), tents, nearestDye(sides[side].uniform),
