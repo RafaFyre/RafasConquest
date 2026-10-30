@@ -792,10 +792,34 @@ facing the road to the west, with a bedrock counter inside.
   with the world, still, and unhurtable.
 - **Talking to the recruiter** (right-click) opens a dialogue (`client/RecruiterScreen`) offering to join their nation
   and enlist in its army. Accepting (`npc/Recruitment`) leaves any other faction and joins theirs the way Recruits adds a
-  member, and enlists the player at rank 1, **Soldier**; a player of **noble title** starts at rank 5, **Major**. A
-  player already of higher rank keeps it; one already serving the nation is only greeted.
-- **Noble title**: no player holds a land title yet, so for now a player counts as noble who leads a Recruits faction,
-  or was granted it with `/pve noble <player> true` (`false` takes it away).
+  member, and enlists the player at rank 1, **Soldier**; a player of **noble title** (Knight or Count, see below) starts
+  at rank 5, **Major**. A player already of higher rank keeps it; one already serving the nation is only greeted.
+- A **quest board** stands inside, and the hold's **noble** stands at the back of the room (a castle's lord stands in
+  the middle of the keep instead).
+
+## Peerage and quests
+
+Players climb two ladders (`peerage/`), kept with the world (`Peerage`, SavedData): the **military** one by renown
+earned from officers, and the **noble** one by renown, acquaintance and merit with the realm's nobles.
+
+- **The quest board** (`content/QuestBoardBlock`, craftable, also placed in every post) lists the day's quests
+  (`Quests.board`): the post's officer's (military), the city noble's and up to two nearby castle lords' (noble), and
+  two general ones anyone may take. **Reading** a quest is remembered; the player then goes to its giver, who offers it
+  as a new line of dialogue. General quests are taken at the board.
+- **Gating**: officers' and nobles' quests need the player enlisted in the giver's nation; nobles won't otherwise deal
+  with them at all.
+- **Kinds**: **Deliver** to another hold of the nation (done on arrival), **Scout** a ruin, dojo or foreign city
+  (reach it, then report), **Clear** 8 hostiles about a hamlet or village (then report). Rewards are renown and
+  emeralds (the mod's own currency is to come); doing a quest makes its giver know the player.
+- **Military ladder** (`Advancement`): renown 20, 60, 120, 200, 300, 450, 650 promotes through the eight ranks.
+- **Knighthood**: noble renown 40 makes the player a **Knight**.
+- **Land** (`LandGrants`): winning a battle on the nation's side earns a **merit** (`bridge/RecruitsBattle`). A noble who
+  isn't Craven grants land to a merited, landless player if they fought in that battle, already know the player, or hold
+  land within 3000 blocks of it ("kneel", then "land" in their dialogue). The grant is one of seven ways: one of the
+  noble's own counties; a spare county under them, as their vassal; a disliked vassal's county, as their vassal; an
+  empty county; a ruin to restore; or a recently dead vassal's county, sworn to the noble or free. The player becomes a
+  **Count**; the map and character pages show the player as the holder, and the displaced noble as died or dismissed.
+- `/pve noble <player> true|false` makes a player a Knight or takes it away (a landed Count keeps the title).
 
 ## Townsfolk
 

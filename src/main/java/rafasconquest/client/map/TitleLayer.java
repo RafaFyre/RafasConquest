@@ -111,7 +111,10 @@ public class TitleLayer implements MapLayer {
         if (hovered != null) {
             List<Component> lines = new ArrayList<>(List.of(Component.literal(hovered)));
             int holder = hoveredProvince < 0 ? -1 : map.base.realm().holderOf(hoveredProvince);
-            if (holder >= 0) {
+            String player = hoveredProvince < 0 ? null : rafasconquest.client.ClientPeerage.holder(hoveredProvince);
+            if (player != null) {
+                lines.add(Component.literal("Held by " + player).withStyle(net.minecraft.ChatFormatting.GOLD));
+            } else if (holder >= 0) {
                 lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(map.base,
                         map.base.realm().people().get(holder)) + " (double-click)").withStyle(net.minecraft.ChatFormatting.GRAY));
             }

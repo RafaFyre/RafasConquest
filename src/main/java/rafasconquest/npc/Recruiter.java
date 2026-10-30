@@ -16,14 +16,14 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
-import rafasconquest.net.ConquestNetwork;
 
 import java.util.UUID;
 
 /**
- * A recruitment post's recruiter: stands behind the counter facing the door, and offers whoever speaks to them
- * (right-click) a place in their nation and its army ({@link Recruitment}). Kept with the world; never moves, can't be
- * hurt or pushed.
+ * Someone to talk to (right-click: {@link rafasconquest.peerage.Talk}): a recruitment post's recruiter, behind the
+ * counter facing the door, the nation's officer there, who enlists players ({@link Recruitment}) and gives military
+ * quests; or a hold's noble ({@code person}, a character of the world's realm), at their city's post or in their castle's
+ * keep, who gives noble quests, knighthood and land. Kept with the world; never moves, can't be hurt or pushed.
  */
 public class Recruiter extends Mob {
     private static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(Recruiter.class, EntityDataSerializers.INT);
@@ -31,6 +31,8 @@ public class Recruiter extends Mob {
     /** The nation they recruit for (its faction's id). */
     @Nullable
     private UUID nation;
+    /** The character this is (an index into the realm's people), or -1 for a recruiter. */
+    private int person = -1;
 
     public Recruiter(EntityType<? extends Recruiter> type, Level level) {
         super(type, level);
@@ -54,6 +56,17 @@ public class Recruiter extends Mob {
         setCustomNameVisible(true);
     }
 
+    /** Sets them at their hold as its noble: character {@code person}, styled {@code name}. */
+    public void noble(int person, String name, UUID nation, double x, double y, double z, float yaw, int skin) {
+        post(nation, "", x, y, z, yaw, skin);
+        this.person = person;
+        setCustomName(Component.literal(name));
+    }
+
+    public int person() {
+        return person;
+    }
+
     @Nullable
     public UUID nation() {
         return nation;
@@ -75,7 +88,7 @@ public class Recruiter extends Mob {
             return InteractionResult.PASS;
         }
         if (player instanceof ServerPlayer server) {
-            ConquestNetwork.sendRecruiterOffer(server, Recruitment.offer(server, this));
+            rafasconquest.peerage.Talk.open(server, this);
         }
         return InteractionResult.sidedSuccess(level().isClientSide);
     }
@@ -87,6 +100,7 @@ public class Recruiter extends Mob {
             tag.putUUID("nation", nation);
         }
         tag.putInt("skin", skin());
+        tag.putInt("person", person);
     }
 
     @Override
@@ -94,6 +108,7 @@ public class Recruiter extends Mob {
         super.readAdditionalSaveData(tag);
         nation = tag.hasUUID("nation") ? tag.getUUID("nation") : null;
         entityData.set(SKIN, tag.getInt("skin"));
+        person = tag.contains("person") ? tag.getInt("person") : -1;
     }
 
     @Override

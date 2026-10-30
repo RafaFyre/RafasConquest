@@ -106,65 +106,159 @@ public final class ConquestNetwork {
                 .decoder(WorldStretch::read)
                 .consumerMainThread(ConquestNetwork::handleWorldStretch)
                 .add();
-        CHANNEL.messageBuilder(RecruiterOffer.class, 13, NetworkDirection.PLAY_TO_CLIENT)
-                .encoder(RecruiterOffer::write)
-                .decoder(RecruiterOffer::read)
-                .consumerMainThread(ConquestNetwork::handleRecruiterOffer)
+        CHANNEL.messageBuilder(TalkView.class, 13, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(TalkView::write)
+                .decoder(TalkView::read)
+                .consumerMainThread(ConquestNetwork::handleTalkView)
                 .add();
-        CHANNEL.messageBuilder(RecruiterAccept.class, 14, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(RecruiterAccept::write)
-                .decoder(RecruiterAccept::read)
-                .consumerMainThread(ConquestNetwork::handleRecruiterAccept)
+        CHANNEL.messageBuilder(TalkChoice.class, 14, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(TalkChoice::write)
+                .decoder(TalkChoice::read)
+                .consumerMainThread(ConquestNetwork::handleTalkChoice)
+                .add();
+        CHANNEL.messageBuilder(BoardView.class, 15, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(BoardView::write)
+                .decoder(BoardView::read)
+                .consumerMainThread(ConquestNetwork::handleBoardView)
+                .add();
+        CHANNEL.messageBuilder(BoardAction.class, 16, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(BoardAction::write)
+                .decoder(BoardAction::read)
+                .consumerMainThread(ConquestNetwork::handleBoardAction)
+                .add();
+        CHANNEL.messageBuilder(PeerageView.class, 17, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(PeerageView::write)
+                .decoder(PeerageView::read)
+                .consumerMainThread(ConquestNetwork::handlePeerageView)
                 .add();
     }
 
-    // ---- recruitment posts ----
+    // ---- talking, quest boards, and the players' land ----
 
-    /** Server → client: a recruiter's offer, for the dialogue. */
-    public record RecruiterOffer(rafasconquest.npc.Recruitment.Offer offer) {
+    /** Server → client: what someone says, and the player's choices ({@link rafasconquest.peerage.Talk}). */
+    public record TalkView(rafasconquest.peerage.Talk.View view) {
         void write(FriendlyByteBuf buf) {
-            buf.writeVarInt(offer.recruiter());
-            buf.writeUtf(offer.recruiterName());
-            buf.writeUtf(offer.nation());
-            buf.writeBoolean(offer.member());
-            buf.writeBoolean(offer.noble());
-            buf.writeUtf(offer.startRank());
+            buf.writeVarInt(view.entity());
+            buf.writeUtf(view.speaker());
+            buf.writeCollection(view.lines(), FriendlyByteBuf::writeUtf);
+            buf.writeCollection(view.options(), (b, o) -> {
+                b.writeUtf(o.key());
+                b.writeUtf(o.label());
+            });
         }
 
-        static RecruiterOffer read(FriendlyByteBuf buf) {
-            return new RecruiterOffer(new rafasconquest.npc.Recruitment.Offer(buf.readVarInt(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
-                    buf.readBoolean(), buf.readUtf()));
+        static TalkView read(FriendlyByteBuf buf) {
+            return new TalkView(new rafasconquest.peerage.Talk.View(buf.readVarInt(), buf.readUtf(), buf.readList(FriendlyByteBuf::readUtf),
+                    buf.readList(b -> new rafasconquest.peerage.Talk.Option(b.readUtf(), b.readUtf()))));
         }
     }
 
-    public static void sendRecruiterOffer(ServerPlayer player, rafasconquest.npc.Recruitment.Offer offer) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new RecruiterOffer(offer));
+    public static void sendTalk(ServerPlayer player, rafasconquest.peerage.Talk.View view) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new TalkView(view));
     }
 
-    private static void handleRecruiterOffer(RecruiterOffer msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openRecruiter(msg.offer()));
+    private static void handleTalkView(TalkView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openTalk(msg.view()));
     }
 
-    /** Client → server: the player takes a recruiter's offer. */
-    public record RecruiterAccept(int recruiter) {
+    /** Client → server: the player's choice in a conversation. */
+    public record TalkChoice(int entity, String key) {
         void write(FriendlyByteBuf buf) {
-            buf.writeVarInt(recruiter);
+            buf.writeVarInt(entity);
+            buf.writeUtf(key);
         }
 
-        static RecruiterAccept read(FriendlyByteBuf buf) {
-            return new RecruiterAccept(buf.readVarInt());
+        static TalkChoice read(FriendlyByteBuf buf) {
+            return new TalkChoice(buf.readVarInt(), buf.readUtf());
         }
     }
 
-    public static void acceptRecruiter(int recruiter) {
-        CHANNEL.sendToServer(new RecruiterAccept(recruiter));
+    public static void choose(int entity, String key) {
+        CHANNEL.sendToServer(new TalkChoice(entity, key));
     }
 
-    private static void handleRecruiterAccept(RecruiterAccept msg, Supplier<NetworkEvent.Context> context) {
+    private static void handleTalkChoice(TalkChoice msg, Supplier<NetworkEvent.Context> context) {
         ServerPlayer player = context.get().getSender();
         if (player != null) {
-            rafasconquest.npc.Recruitment.accept(player, msg.recruiter());
+            rafasconquest.peerage.Talk.choose(player, msg.entity(), msg.key());
         }
+    }
+
+    /** Server → client: a quest board's quests, as the player sees them ({@link rafasconquest.peerage.Boards}). */
+    public record BoardView(rafasconquest.peerage.Boards.View view) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeBlockPos(view.board());
+            buf.writeUtf(view.place());
+            buf.writeCollection(view.entries(), (b, e) -> {
+                b.writeLong(e.id());
+                b.writeUtf(e.title());
+                b.writeUtf(e.giver());
+                b.writeInt(e.giverX());
+                b.writeInt(e.giverZ());
+                b.writeUtf(e.reward());
+                b.writeUtf(e.state());
+                b.writeBoolean(e.general());
+            });
+        }
+
+        static BoardView read(FriendlyByteBuf buf) {
+            return new BoardView(new rafasconquest.peerage.Boards.View(buf.readBlockPos(), buf.readUtf(), buf.readList(b ->
+                    new rafasconquest.peerage.Boards.Entry(b.readLong(), b.readUtf(), b.readUtf(), b.readInt(), b.readInt(), b.readUtf(),
+                            b.readUtf(), b.readBoolean()))));
+        }
+    }
+
+    public static void sendBoard(ServerPlayer player, rafasconquest.peerage.Boards.View view) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BoardView(view));
+    }
+
+    private static void handleBoardView(BoardView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openBoard(msg.view()));
+    }
+
+    /** Client → server: reading a quest on a board, or taking or reporting a general one there. */
+    public record BoardAction(net.minecraft.core.BlockPos board, long quest, String action) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeBlockPos(board);
+            buf.writeLong(quest);
+            buf.writeUtf(action);
+        }
+
+        static BoardAction read(FriendlyByteBuf buf) {
+            return new BoardAction(buf.readBlockPos(), buf.readLong(), buf.readUtf());
+        }
+    }
+
+    public static void boardAction(net.minecraft.core.BlockPos board, long quest, String action) {
+        CHANNEL.sendToServer(new BoardAction(board, quest, action));
+    }
+
+    private static void handleBoardAction(BoardAction msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            rafasconquest.peerage.Boards.act(player, msg.board(), msg.quest(), msg.action());
+        }
+    }
+
+    /** Server → client: the counties players hold (seat province → "Count Steve"), and what befell those they replaced. */
+    public record PeerageView(java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeMap(holders, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeUtf);
+            buf.writeMap(fates, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeUtf);
+        }
+
+        static PeerageView read(FriendlyByteBuf buf) {
+            return new PeerageView(buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readUtf),
+                    buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readUtf));
+        }
+    }
+
+    public static void sendPeerage(ServerPlayer player, java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new PeerageView(holders, fates));
+    }
+
+    private static void handlePeerageView(PeerageView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates()));
     }
 
     /** Server → client: how far the world is stretched (1: not at all), for the client's far-terrain quality. */

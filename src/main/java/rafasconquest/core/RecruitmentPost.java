@@ -40,6 +40,16 @@ public record RecruitmentPost(int plotX, int plotZ) {
         return new int[]{plotX + 7, plotZ + 6};
     }
 
+    /** The hold's noble, receiving petitioners at the post: at the back of the room, facing it (south). */
+    public int[] noble() {
+        return new int[]{plotX + 6, plotZ + 3};
+    }
+
+    /** The quest board, just inside the door. */
+    public int[] board() {
+        return new int[]{plotX + 2, plotZ + 4};
+    }
+
     /** The five guards: two beside the door outside, three inside along the walls. */
     public List<int[]> guards() {
         return List.of(new int[]{plotX, plotZ + 5}, new int[]{plotX, plotZ + 7},

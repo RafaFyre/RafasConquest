@@ -1,6 +1,5 @@
 package rafasconquest.npc;
 
-import com.talhanation.recruits.FactionEvents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -17,8 +16,6 @@ import rafasconquest.sim.ConquestServer;
 public final class Recruitment {
     /** How near the recruiter a player must stand to take the offer. */
     static final double REACH = 8;
-    /** A player's noble title, until players can hold land titles: kept on the player, granted by command. */
-    public static final String NOBLE_TAG = "rafasconquest_noble";
 
     /** The offer, as the dialogue shows it. */
     public record Offer(int recruiter, String recruiterName, String nation, boolean member, boolean noble, String startRank) {
@@ -36,12 +33,9 @@ public final class Recruitment {
         return new Offer(recruiter.getId(), recruiter.getName().getString(), name, member, noble, startRank(noble).title());
     }
 
-    /**
-     * Whether a player holds a noble title. No player holds a land title yet, so for now: the leader of a Recruits
-     * faction, or a player granted one ({@code /pve debug noble}).
-     */
+    /** Whether a player holds a noble title: knighted, or granted land ({@link rafasconquest.peerage.Peerage}). */
     public static boolean noble(ServerPlayer player) {
-        return player.getPersistentData().getBoolean(NOBLE_TAG) || FactionEvents.isPlayerAlreadyAFactionLeader(player);
+        return rafasconquest.peerage.Peerage.get(player.server).of(player.getUUID()).title.noble();
     }
 
     public static Rank startRank(boolean noble) {

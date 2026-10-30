@@ -56,14 +56,7 @@ public class CharacterScreen extends Screen {
      * their prowess earns one ("..., Sword Saint"). A sanctum's ruler is styled by their sword title alone.
      */
     public static String styled(BaseMap base, Person p) {
-        BaseMap.Nation nation = p.nation() >= 0 ? base.nations().get(p.nation()) : null;
-        String sword = Stat.superhumanTier(p.stat(Stat.PROWESS));
-        String where = " of " + base.names().get(p.hold().province());
-        if (nation != null && nation.sanctum() && nation.seat() == p.hold().province() && !sword.isEmpty()) {
-            return sword + " " + p.name() + where;
-        }
-        String title = Realm.title(p, nation == null ? 0 : nation.tier().ordinal()) + " " + p.name() + where;
-        return sword.isEmpty() ? title : title + ", " + sword;
+        return rafasconquest.peerage.Names.styled(base, p);
     }
 
     @Override
@@ -115,6 +108,13 @@ public class CharacterScreen extends Screen {
         String sword = Stat.superhumanTier(p.stat(Stat.PROWESS));
         if (!sword.isEmpty()) {
             g.drawString(font, sword + ": " + Stat.superhumanMeaning(p.stat(Stat.PROWESS)), x, y, GOLD, false);
+            y += 12;
+        }
+        String fate = ClientPeerage.fate(p.hold().province());
+        String successor = ClientPeerage.holder(p.hold().province());
+        if (fate != null || successor != null) {
+            String gone = "died".equals(fate) ? "Died" : "dismissed".equals(fate) ? "Dismissed" : "No longer holds it";
+            g.drawString(font, gone + (successor != null ? "; it is now held by " + successor : ""), x, y, BAD, false);
             y += 12;
         }
         if (p.away()) {

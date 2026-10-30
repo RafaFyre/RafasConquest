@@ -75,6 +75,7 @@ public final class ConquestEvents {
     public static void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
+            rafasconquest.peerage.PeerageSync.to(player);
         }
     }
 
@@ -111,6 +112,7 @@ public final class ConquestEvents {
             RecruitsBattle.onServerTickEnd();
             BattleMap.tick();
             rafasconquest.npc.Townsfolk.tick(event.getServer());
+            rafasconquest.peerage.QuestProgress.tick(event.getServer());
         }
     }
 
@@ -125,6 +127,9 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
         RecruitsBattle.onDeath(event.getEntity());
+        if (event.getSource().getEntity() instanceof ServerPlayer killer) {
+            rafasconquest.peerage.QuestProgress.killed(killer, event.getEntity());
+        }
     }
 
     /** Cavalry momentum and braced walls change how hard battle soldiers hit each other. */

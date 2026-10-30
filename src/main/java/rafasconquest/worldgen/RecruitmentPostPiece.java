@@ -92,6 +92,9 @@ public class RecruitmentPostPiece extends StructurePiece {
                 .setValue(DoorBlock.FACING, Direction.WEST).setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
         int[] counter = post.counter();
         set(level, chunk, counter[0], floor + 1, counter[1], Blocks.BEDROCK.defaultBlockState());
+        int[] board = post.board();
+        set(level, chunk, board[0], floor + 1, board[1], rafasconquest.content.ConquestContent.QUEST_BOARD.get().defaultBlockState()
+                .setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.EAST));
         // Lanterns hung from the ceiling, either side of the counter.
         BlockState lantern = Blocks.LANTERN.defaultBlockState().setValue(LanternBlock.HANGING, true);
         set(level, chunk, counter[0], floor + WALL_HEIGHT, counter[1] - 3, lantern);

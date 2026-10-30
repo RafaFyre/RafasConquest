@@ -33,6 +33,11 @@ public final class ConquestContent {
             () -> new net.minecraft.world.level.block.SlabBlock(BlockBehaviour.Properties.copy(Blocks.DIRT_PATH)));
     public static final RegistryObject<Item> DIRT_PATH_SLAB_ITEM = ITEMS.register("dirt_path_slab",
             () -> new BlockItem(DIRT_PATH_SLAB.get(), new Item.Properties()));
+    /** A quest board, in every recruitment post: the city's quests. */
+    public static final RegistryObject<Block> QUEST_BOARD = BLOCKS.register("quest_board",
+            () -> new QuestBoardBlock(BlockBehaviour.Properties.copy(Blocks.CARTOGRAPHY_TABLE)));
+    public static final RegistryObject<Item> QUEST_BOARD_ITEM = ITEMS.register("quest_board",
+            () -> new BlockItem(QUEST_BOARD.get(), new Item.Properties()));
     public static final RegistryObject<Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -42,6 +47,7 @@ public final class ConquestContent {
             .displayItems((parameters, output) -> {
                 output.accept(COMMAND_TABLE_ITEM.get());
                 output.accept(WORLD_MAP.get());
+                output.accept(QUEST_BOARD_ITEM.get());
                 output.accept(GRAVEL_SLAB_ITEM.get());
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
             })

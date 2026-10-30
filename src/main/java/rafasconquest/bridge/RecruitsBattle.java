@@ -3321,7 +3321,34 @@ public final class RecruitsBattle {
                     army.generalAlive() ? "survived" : "fell", army.standardAlive() ? "still flies" : "fell"));
         }
         reportCalibration();
+        merits(outcome);
         victory(outcome);
+    }
+
+    /**
+     * Each enlisted player on the winning side, still alive, earns a merit: this battle, where, for which nation, and
+     * which of its nobles commanded in it (its general and Marshals). A noble can reward it with land
+     * ({@link rafasconquest.peerage.LandGrants}).
+     */
+    private void merits(FieldBattle.Outcome outcome) {
+        if (outcome.winner() < 0) {
+            return;
+        }
+        Side won = sides[outcome.winner()];
+        List<String> officers = new ArrayList<>(List.of(won.general.name()));
+        officers.addAll(List.of(won.marshals));
+        rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(level.getServer());
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (e.side != outcome.winner() || player == null || !player.isAlive()) {
+                continue;
+            }
+            peerage.of(e.player).merits.add(new rafasconquest.peerage.Peerage.Merit(name, (int) Math.round(centre.x()), (int) Math.round(centre.z()),
+                    won.faction.id().toString(), List.copyOf(officers)));
+            peerage.changed();
+            player.sendSystemMessage(Component.literal("Your part in " + name + " is remembered. A noble of " + won.faction.name()
+                    + " may reward it."));
+        }
     }
 
     // ---- the phases of a battle: deployment, battle, evening pullback, night, then victory ----

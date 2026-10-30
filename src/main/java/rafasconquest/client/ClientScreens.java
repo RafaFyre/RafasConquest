@@ -19,9 +19,14 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new FactionMainScreen(player));
     }
 
-    /** A recruiter's dialogue. */
-    public static void openRecruiter(rafasconquest.npc.Recruitment.Offer offer) {
-        Minecraft.getInstance().setScreen(new RecruiterScreen(offer));
+    /** A conversation with a recruiter or a noble. */
+    public static void openTalk(rafasconquest.peerage.Talk.View view) {
+        Minecraft.getInstance().setScreen(new RecruiterScreen(view));
+    }
+
+    /** A quest board's notices. */
+    public static void openBoard(rafasconquest.peerage.Boards.View view) {
+        Minecraft.getInstance().setScreen(new BoardScreen(view));
     }
 
     /** The world map, opened from the World Map item; closing it goes back to the game. */

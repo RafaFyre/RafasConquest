@@ -331,11 +331,16 @@ public final class PveCommands {
     }
 
     /**
-     * Grants or takes a player's noble title, until players can hold land titles: a noble enlists at a recruitment post
-     * as a Major (rank 5).
+     * Knights a player (or takes their knighthood) without their earning it, for testing: a noble enlists at a
+     * recruitment post as a Major (rank 5). A landed player keeps their county.
      */
     private static int nobleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, boolean noble) {
-        player.getPersistentData().putBoolean(rafasconquest.npc.Recruitment.NOBLE_TAG, noble);
+        rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(ctx.getSource().getServer());
+        rafasconquest.peerage.Peerage.Peer peer = peerage.of(player.getUUID());
+        if (peer.hold < 0) {
+            peer.title = noble ? rafasconquest.peerage.NobleTitle.KNIGHT : rafasconquest.peerage.NobleTitle.NONE;
+            peerage.changed();
+        }
         ctx.getSource().sendSuccess(() -> Component.literal(player.getName().getString() + (noble ? " now holds" : " no longer holds")
                 + " a noble title"), true);
         return 1;

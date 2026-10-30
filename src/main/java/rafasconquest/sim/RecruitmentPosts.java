@@ -64,8 +64,83 @@ final class RecruitmentPosts {
                 }
             }
         }
+        return placed + nobles(level, chunk, data, precomputer);
+    }
+
+    /**
+     * The holds' nobles, at their places once (as long as no player has taken the hold): a city's at its recruitment
+     * post, at the back of the room facing it; a castle's lord in the middle of the keep's ground floor.
+     */
+    private static int nobles(ServerLevel level, LevelChunk chunk, ConquestSavedData data, PoiPrecomputer precomputer) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            return 0;
+        }
+        rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(level.getServer());
+        int minX = chunk.getPos().getMinBlockX();
+        int minZ = chunk.getPos().getMinBlockZ();
+        int placed = 0;
+        for (int i = 0; i < map.realm().people().size(); i++) {
+            rafasconquest.people.Person p = map.realm().people().get(i);
+            rafasconquest.people.Person.Hold hold = p.hold();
+            if (p.nation() < 0 || peerage.replaced(hold.province())) {
+                continue;
+            }
+            int[] spot;
+            float yaw;
+            if (hold.kind() == rafasconquest.people.Person.Kind.CASTLE) {
+                spot = new int[]{hold.x(), hold.z()};
+                yaw = 0;
+            } else {
+                CityLayout.Site site = new CityLayout.Site(hold.x(), hold.z(), false, cityCells(map, hold));
+                spot = RecruitmentPost.of(site).noble();
+                yaw = 0; // south, into the room
+            }
+            if (spot[0] >> 4 != chunk.getPos().x || spot[1] >> 4 != chunk.getPos().z) {
+                continue;
+            }
+            BlockPos at = floor(chunk, spot[0], spot[1]);
+            if (at == null || data.guardSpawned(at)) {
+                continue;
+            }
+            Recruiter noble = ConquestEntities.RECRUITER.get().create(level);
+            if (noble == null) {
+                continue;
+            }
+            noble.noble(i, rafasconquest.peerage.Names.styled(map, p), map.nations().get(p.nation()).id(), at.getX() + 0.5, at.getY(),
+                    at.getZ() + 0.5, yaw, Math.floorMod(hold.x() * 17 + hold.z() * 3, 20));
+            level.addFreshEntity(noble);
+            data.markGuardSpawned(at);
+            placed++;
+        }
         return placed;
     }
+
+    /** A city hold's size, in districts a side (from the map's cities). */
+    private static int cityCells(rafasconquest.map.BaseMap map, rafasconquest.people.Person.Hold hold) {
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (c.province() == hold.province()) {
+                return c.districts();
+            }
+        }
+        return CityLayout.CELLS_PER_SIDE;
+    }
+
+    /** The lowest standing room under the top of a column (within {@link #FLOOR_SCAN} blocks): a building's ground floor. */
+    private static BlockPos floor(LevelChunk chunk, int x, int z) {
+        int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
+        BlockPos found = null;
+        for (int y = top; y > top - FLOOR_SCAN; y--) {
+            BlockState below = chunk.getBlockState(new BlockPos(x, y - 1, z));
+            if (chunk.getBlockState(new BlockPos(x, y, z)).isAir() && chunk.getBlockState(new BlockPos(x, y + 1, z)).isAir()
+                    && !below.isAir() && below.getFluidState().isEmpty()) {
+                found = new BlockPos(x, y, z);
+            }
+        }
+        return found;
+    }
+
+    private static final int FLOOR_SCAN = 18;
 
     /**
      * Where someone stands at (x, z), if that column is in the chunk: on the floor under the post's roof, or on the
