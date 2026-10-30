@@ -169,6 +169,27 @@ first. The old relation is restored when the battle ends.
   the nation's banners) and that wing's own rows of tents. A camp is put on the nearest dry, fairly level ground
   within 48 blocks of where it should be (never on water or over a drop), and a tent is pitched only on dry ground
   within 6 blocks of its command tent's floor in height. Players sleep in their wing's camp.
+- **Battle names:** a battle is named after the province its middle lies in (provinces are named the way factions
+  are, from their centre and the world seed) and the land there, from the biome: "The Battle of Shukai Plains" (Plains,
+  Woods, Pines, Hills, Mountains, Desert, Savanna, Jungle, Marsh, Snows, Meadows, River, Shore, Coast, Badlands). Off
+  the map or before it is drawn: "The Battle of the Plains". The name opens the battle, heads the deployment
+  countdown, and closes it.
+- **Orders to save breaking blocks:** once a second in the battle, a player with no such order (and none for the last
+  45 s) is sent to a block of their army within 150 blocks that is 60 % of the way to routing (by its losses over the
+  last minute and a fallen captain's shock), not one of their own. An enlisted player is told to support that block;
+  an officer is told by the wing's Marshal to save the wing's line there: that block and those within 60 of it about
+  to break too. The order stands until they steady ("The line holds. Well done."), break ("Too late: they broke."),
+  or 2 minutes pass.
+- **Beacons:** a beacon beam shows an enlisted player the way to where an order sends them: their place while the
+  armies deploy (whenever they are more than 10 blocks from it), the blocks they were sent to save, the block their
+  own is sent against ("Target ...!"), and their tent in the evening pullback. For an order, the beacon shows if they
+  are more than 10 blocks off when it is given, goes once they get there, and shows again if they wander more than 45
+  blocks away while it stands. The ring stays at their place (or tent).
+- **Easing the camp's ground:** a camp's site is chosen for flatness across the whole camp, tents included (each block
+  of rise and fall costing as much as 6 blocks further away), with its floor at the ground's middle height under the
+  command tent. For the battle the command tent's ground (and 2 blocks around) and a patch under each small tent are
+  levelled to that floor, cut down or filled with dirt under grass, and cleared of plants and trees above; all of it is
+  put back when the camp is struck.
 - **War council** (`bridge/WarCouncil`): while the armies deploy, the general and the Marshals of the left and right
   wings stand around the command table. An officer of the army (rank 5 and up; others are turned away) right-clicks
   the general to be briefed, a line every 2.5 s: the numbers on each side, the plan, how the troops stand, the enemy,

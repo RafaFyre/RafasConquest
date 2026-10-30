@@ -1790,6 +1790,24 @@ public final class FieldBattle {
         }
     }
 
+    /**
+     * How near a block is to breaking, from 0 (steady) to 1 (it routs at its next loss): its losses over the last
+     * {@link FieldRules#ROUT_WINDOW}, and the shock of a fallen captain, against {@link FieldRules#ROUT_LOSS}. A rallied,
+     * broken or beaten block is 0.
+     */
+    public double routRisk(FieldBlock block) {
+        if (block.history == null || block.alive == 0 || block.rallied(seconds) || block.duty == Duty.ROUTED
+                || block.duty == Duty.FLEEING || block.duty == Duty.WITHDRAWING || !block.arm.infantry()) {
+            return 0;
+        }
+        int before = block.history[(seconds + 1) % FieldRules.ROUT_WINDOW];
+        double lost = before == 0 ? 0 : (double) (before - block.alive) / before;
+        if (seconds < block.shakenUntil) {
+            lost += FieldRules.CAPTAIN_SHOCK;
+        }
+        return Math.max(0, Math.min(1, lost / FieldRules.ROUT_LOSS));
+    }
+
     /** The enemy blocks fighting a block that just broke, or lost its captain, rally. */
     private void rallyAgainst(FieldArmy enemy, FieldBlock broken) {
         for (FieldBlock e : enemy.blocks) {

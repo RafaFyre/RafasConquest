@@ -47,6 +47,11 @@ final class WarCamp {
     private static final int SITE_SEARCH = 48;
     private static final int SITE_STEP = 4;
     private static final int SITE_ROUGHNESS = 3;
+    /** What a block of rise and fall across the camp costs a site, against a block further from where it should be. */
+    private static final double SITE_ROUGH_COST = 6;
+    /** The ground is levelled this far around the command tent, and clear of plants and trees this high above the floor. */
+    private static final int EASE_MARGIN = 2;
+    private static final int TENT_CLEAR = 4;
     /** A small tent is pitched only on dry ground this near the command tent's floor in height. */
     private static final int TENT_RISE = 6;
     private static final int TENTS_PER_ROW = 6;
@@ -91,8 +96,9 @@ final class WarCamp {
     static WarCamp build(ServerLevel level, Point at, double facingX, double facingZ, int tents, DyeColor colour, ItemStack banner,
                          boolean council) {
         Direction front = Direction.getNearest(facingX, 0, facingZ);
-        BlockPos site = site(level, at, council ? GENERAL_HALF : MARSHAL_HALF);
+        BlockPos site = site(level, at, council ? GENERAL_HALF : MARSHAL_HALF, tents, front);
         WarCamp camp = new WarCamp(level, site, front, council);
+        camp.easeCommandTent();
         camp.commandTent(colour, banner);
         camp.tents(tents, colour);
         return camp;
@@ -229,6 +235,14 @@ final class WarCamp {
             if (Math.abs(y - middle.getY()) > TENT_RISE || wet(base)) {
                 continue; // no tents in the water, nor up a cliff or down a drop
             }
+            // Its patch levelled to the camp's floor, for the battle.
+            for (int dr = -2; dr <= 2; dr++) {
+                for (int along = -3; along <= 3; along++) {
+                    BlockPos p = base.relative(right, dr).relative(front, along);
+                    ease(p.getX(), p.getZ(), middle.getY(), TENT_CLEAR);
+                }
+            }
+            base = new BlockPos(base.getX(), middle.getY(), base.getZ());
             // A ridge tent along the line of battle's depth: two sloping sides and the ridge, open at both ends.
             for (int along = -2; along <= 1; along++) {
                 BlockPos p = base.relative(front, along);
@@ -260,32 +274,47 @@ final class WarCamp {
      * stand on dry ground no rougher than {@link #SITE_ROUGHNESS}; failing that the least rough dry one; failing that,
      * {@code at}. Its floor is the ground there.
      */
-    private static BlockPos site(ServerLevel level, Point at, int half) {
+    private static BlockPos site(ServerLevel level, Point at, int half, int tents, Direction front) {
+        Direction right = front.getClockWise();
+        int rows = (tents + TENTS_PER_ROW - 1) / TENTS_PER_ROW;
+        int back = half + 6 + rows * ROW_SPACING;
+        int side = Math.max(half, (TENTS_PER_ROW / 2) * TENT_SPACING + 2);
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         for (int dx = -SITE_SEARCH; dx <= SITE_SEARCH; dx += SITE_STEP) {
             for (int dz = -SITE_SEARCH; dz <= SITE_SEARCH; dz += SITE_STEP) {
                 int x = (int) Math.floor(at.x()) + dx;
                 int z = (int) Math.floor(at.z()) + dz;
+                // The command tent's ground for its floor, and the whole camp's (the tents behind too) for flatness.
                 int low = Integer.MAX_VALUE;
                 int high = Integer.MIN_VALUE;
+                double tentSum = 0;
+                int tentCount = 0;
                 boolean wet = false;
-                for (int sx = -half; sx <= half; sx += half) {
-                    for (int sz = -half; sz <= half; sz += half) {
-                        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + sx, z + sz);
+                for (int f = -back; f <= half; f += SITE_STEP * 2) {
+                    for (int r = -side; r <= side; r += SITE_STEP * 2) {
+                        int px = x + right.getStepX() * r + front.getStepX() * f;
+                        int pz = z + right.getStepZ() * r + front.getStepZ() * f;
+                        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, px, pz);
                         low = Math.min(low, y);
                         high = Math.max(high, y);
-                        wet |= !level.getFluidState(new BlockPos(x + sx, y - 1, z + sz)).isEmpty();
+                        if (Math.abs(r) <= half && Math.abs(f) <= half) {
+                            tentSum += y;
+                            tentCount++;
+                            wet |= !level.getFluidState(new BlockPos(px, y - 1, pz)).isEmpty();
+                        }
                     }
                 }
                 if (wet) {
                     continue;
                 }
                 int rough = high - low;
-                double score = Math.hypot(dx, dz) + (rough <= SITE_ROUGHNESS ? 0 : 1000 + rough * 10);
+                double score = Math.hypot(dx, dz) + rough * SITE_ROUGH_COST + (rough <= SITE_ROUGHNESS ? 0 : 200);
                 if (score < bestScore) {
                     bestScore = score;
-                    best = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+                    int floor = tentCount == 0 ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+                            : (int) Math.round(tentSum / tentCount);
+                    best = new BlockPos(x, floor, z);
                 }
             }
         }
@@ -295,6 +324,38 @@ final class WarCamp {
             best = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
         }
         return best;
+    }
+
+    /** The command tent's ground, and a little around it, levelled to its floor and cleared above it, for the battle. */
+    private void easeCommandTent() {
+        for (int r = -half - EASE_MARGIN; r <= half + EASE_MARGIN; r++) {
+            for (int f = -half - EASE_MARGIN; f <= half + EASE_MARGIN; f++) {
+                BlockPos p = local(r, f, 0);
+                ease(p.getX(), p.getZ(), middle.getY(), height + 4);
+            }
+        }
+    }
+
+    /**
+     * Levels one column of ground to {@code floor} (its top block is the one below it): cut down where it is higher,
+     * filled with dirt under grass where it is lower, and cleared of plants and trees {@code clear} blocks above. Every
+     * block changed is kept, to put back when the camp is struck.
+     */
+    private void ease(int x, int z, int floor, int clear) {
+        int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        for (int y = Math.min(top, floor); y < floor; y++) {
+            set(new BlockPos(x, y, z), Blocks.DIRT.defaultBlockState());
+        }
+        for (int y = floor; y < Math.max(top, floor) + clear; y++) {
+            BlockPos p = new BlockPos(x, y, z);
+            if (!level.getBlockState(p).isAir()) {
+                set(p, Blocks.AIR.defaultBlockState());
+            }
+        }
+        BlockPos surface = new BlockPos(x, floor - 1, z);
+        if (!level.getBlockState(surface).is(Blocks.GRASS_BLOCK)) {
+            set(surface, Blocks.GRASS_BLOCK.defaultBlockState());
+        }
     }
 
     /** Whether the ground at a point is under water (or lava). */

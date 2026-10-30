@@ -189,6 +189,17 @@ public final class RecruitsBattle {
     /** A winner outnumbered by this much by the beaten army doesn't pursue it. */
     private static final double PURSUE_ONLY_UNDER = 0.8;
     private static final int FADE_PER_TICK = 6;
+    /** A beacon shows where an order sends a player farther than this, goes once they're nearer, and shows again past the far reach. */
+    private static final double BEACON_NEAR = 10;
+    private static final double BEACON_FAR = 45;
+    private static final Object TENT_ORDER = new Object();
+    /** Orders to save breaking blocks: how near breaking, how near the player, how long, and the rest between them. */
+    private static final double SUPPORT_RISK = 0.6;
+    private static final double SUPPORT_SAFE = 0.3;
+    private static final double SUPPORT_REACH = 150;
+    private static final double SAVE_REACH = 60;
+    private static final int SUPPORT_SECONDS = 120;
+    private static final int SUPPORT_REST = 45;
     /** A unit in a line stands this many files wide. */
     private static final int LINE_FILES = 10;
     /** Units following their player stand this far apart, and their front this far behind the player. */
@@ -231,6 +242,8 @@ public final class RecruitsBattle {
 
     private final ServerLevel level;
     private FieldBattle field;
+    /** The battle's name: of the province it is fought in, and the land at its middle. */
+    private String name = "The Battle";
     /** Where the battle is fought, for each morning's deployment. */
     private Point centre = new Point(0, 0);
     private double axisX = 1;
@@ -360,6 +373,16 @@ public final class RecruitsBattle {
         float formYaw;
         long lastCombat = Long.MIN_VALUE / 2;
         long lastTrample;
+        /** The blocks an order has sent them to save, since when, and when the last such order ended. */
+        final List<FieldBlock> support = new ArrayList<>();
+        @Nullable
+        Object supportKey;
+        int supportSince;
+        int supportEnded = -1000;
+        /** The order the beacon shows the way to, and whether it shows now. */
+        @Nullable
+        Object beaconKey;
+        boolean beaconShown;
         /** Their tent in camp (an index into that camp's tents), or -1. */
         int tent = -1;
         @Nullable
@@ -528,10 +551,12 @@ public final class RecruitsBattle {
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
         diplomacy.setRelation(teamB.getName(), teamA.getName(), DiplomacyStatus.ENEMY, level, false);
         current = battle;
-        String line = String.format(Locale.ROOT, "Battle: %s, %d soldiers, against %s, %d soldiers, at %d, %d",
+        battle.name = battleName(level, centre);
+        String line = String.format(Locale.ROOT, "%s: %s, %d soldiers, against %s, %d soldiers, at %d, %d", battle.name,
                 battle.describe(0), field.army(0).started(), battle.describe(1), field.army(1).started(),
                 Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
+        battle.broadcast("[battle] " + battle.name);
         for (Side side : sides) {
             FieldArmy army = battle.field.army(side == sides[0] ? 0 : 1);
             String title = army.started() >= Rank.GRAND_MARSHAL.leads() ? "Grand Marshal" : "General";
@@ -604,6 +629,47 @@ public final class RecruitsBattle {
     private static int rgb(DyeColor dye) {
         float[] c = dye.getTextureDiffuseColors();
         return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
+    }
+
+    /**
+     * A battle's name, from the province its middle lies in (named as {@link ProvinceNames} names provinces) and the
+     * land there: "The Battle of Shukai Plains". Off the map, at sea or before the map is drawn: "The Battle of the
+     * Plains".
+     */
+    static String battleName(ServerLevel level, Point centre) {
+        int x = Mth.floor(centre.x());
+        int z = Mth.floor(centre.z());
+        String province = null;
+        rafasconquest.sim.ConquestServer server = rafasconquest.sim.ConquestServer.get();
+        rafasconquest.map.BaseMap map = server == null ? null : server.mapStore().map();
+        if (map != null) {
+            rafasconquest.core.ProvinceMap.Centre c = map.provinceAt(x, z);
+            if (c != null) {
+                province = rafasconquest.core.ProvinceNames.name(level.getSeed(), c.x(), c.z());
+            }
+        }
+        int y = level.getChunkSource().getGenerator().getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level,
+                level.getChunkSource().randomState());
+        String land = landName(level.getBiome(new BlockPos(x, y, z)));
+        return province != null ? "The Battle of " + province + " " + land : "The Battle of the " + land;
+    }
+
+    /** What a battle's land is called, from the biome at its middle. */
+    private static String landName(Holder<net.minecraft.world.level.biome.Biome> biome) {
+        String id = biome.unwrapKey().map(k -> k.location().getPath()).orElse("plains");
+        String[][] names = {
+                {"river", "River"}, {"beach", "Shore"}, {"shore", "Shore"}, {"ocean", "Coast"}, {"desert", "Desert"},
+                {"badlands", "Badlands"}, {"savanna", "Savanna"}, {"jungle", "Jungle"}, {"swamp", "Marsh"},
+                {"taiga", "Pines"}, {"grove", "Pines"}, {"meadow", "Meadows"}, {"cherry", "Blossoms"},
+                {"peaks", "Mountains"}, {"slopes", "Mountains"}, {"windswept", "Hills"}, {"hills", "Hills"},
+                {"snowy", "Snows"}, {"ice", "Snows"}, {"frozen", "Snows"}, {"forest", "Woods"}, {"birch", "Woods"},
+                {"dark", "Woods"}, {"plains", "Plains"}, {"mushroom", "Fields"}};
+        for (String[] n : names) {
+            if (id.contains(n[0])) {
+                return n[1];
+            }
+        }
+        return "Plains";
     }
 
     /** The traits of an army's general and its Marshals of the left wing, centre and right wing. */
@@ -1527,6 +1593,7 @@ public final class RecruitsBattle {
                 slowSpentHorses(l);
             }
         }
+        supportOrders();
         updateEnlisted();
         t = System.nanoTime();
         switchLive();
@@ -2069,17 +2136,7 @@ public final class RecruitsBattle {
             if (e.job == Job.CAVALRY) {
                 cavalryMomentum(e, player);
             }
-            FieldBlock home = e.home;
-            WarCamp camp = e.tentCamp;
-            if ((phase == Phase.PULLBACK || phase == Phase.NIGHT) && camp != null && e.tent >= 0) {
-                Vec3 door = camp.tentDoor(e.tent); // to bed
-                ConquestNetwork.sendBattleSpot(player, true, door.x, door.y, door.z);
-            } else if (home.alive() > 0) {
-                Point spot = home.line();
-                ConquestNetwork.sendBattleSpot(player, true, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(), phase == Phase.DEPLOYMENT);
-            } else {
-                ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0);
-            }
+            markers(e, player);
             ordersFor(e, player);
         }
     }
@@ -2775,6 +2832,147 @@ public final class RecruitsBattle {
         battle.field.strikeFigure(f.block(), f.index(), damage);
     }
 
+    /**
+     * An enlisted player's ring and beacon. The ring is their place: in their block, or in the evening and at night
+     * their tent. The beacon shows the way to where an order sends them: their place while the armies deploy (whenever
+     * they are more than {@link #BEACON_NEAR} from it); their tent in the pullback; the blocks they were sent to save, or
+     * the block their own is sent against, in the battle. For an order, the beacon shows if the player is more than
+     * {@link #BEACON_NEAR} away when it is given, goes once they get there, and shows again if they wander more than
+     * {@link #BEACON_FAR} away while the order stands.
+     */
+    private void markers(Enlisted e, ServerPlayer player) {
+        FieldBlock home = e.home;
+        Vec3 ring = null;
+        Vec3 beaconAt = null;
+        Object key = null;
+        boolean always = false;
+        if ((phase == Phase.PULLBACK || phase == Phase.NIGHT) && e.tentCamp != null && e.tent >= 0) {
+            ring = e.tentCamp.tentDoor(e.tent);
+            if (phase == Phase.PULLBACK) {
+                beaconAt = ring;
+                key = TENT_ORDER;
+            }
+        } else if (home.alive() > 0) {
+            Point spot = home.line();
+            ring = new Vec3(spot.x(), groundY(home, spot.x(), spot.z()), spot.z());
+            if (phase == Phase.DEPLOYMENT) {
+                beaconAt = ring;
+                always = true;
+            } else if (phase == Phase.BATTLE && !e.support.isEmpty()) {
+                Point at = middle(e.support);
+                beaconAt = new Vec3(at.x(), groundY(e.support.get(0), at.x(), at.z()), at.z());
+                key = e.supportKey;
+            } else if (phase == Phase.BATTLE && home.strikeAt() != null && home.strikeAt().alive() > 0) {
+                FieldBlock target = home.strikeAt();
+                beaconAt = new Vec3(target.pos().x(), groundY(target, target.pos().x(), target.pos().z()), target.pos().z());
+                key = target;
+            }
+        }
+        boolean show = false;
+        if (beaconAt != null) {
+            double away = Math.hypot(player.getX() - beaconAt.x, player.getZ() - beaconAt.z);
+            if (always) {
+                show = away > BEACON_NEAR;
+            } else {
+                if (key != e.beaconKey) {
+                    e.beaconKey = key;
+                    e.beaconShown = away > BEACON_NEAR; // a new order: a beacon if they're not there already
+                } else if (e.beaconShown && away <= BEACON_NEAR) {
+                    e.beaconShown = false; // they got there
+                } else if (!e.beaconShown && away > BEACON_FAR) {
+                    e.beaconShown = true; // they wandered off
+                }
+                show = e.beaconShown;
+            }
+        } else {
+            e.beaconKey = null;
+        }
+        if (ring == null) {
+            ConquestNetwork.sendBattleSpot(player, false, 0, 0, 0, show, show ? beaconAt.x : 0, show ? beaconAt.y : 0, show ? beaconAt.z : 0);
+        } else {
+            ConquestNetwork.sendBattleSpot(player, true, ring.x, ring.y, ring.z, show, show ? beaconAt.x : 0, show ? beaconAt.y : 0,
+                    show ? beaconAt.z : 0);
+        }
+    }
+
+    /** The middle of some blocks, where they stand. */
+    private static Point middle(List<FieldBlock> blocks) {
+        double x = 0;
+        double z = 0;
+        for (FieldBlock b : blocks) {
+            x += b.pos().x();
+            z += b.pos().z();
+        }
+        return new Point(x / blocks.size(), z / blocks.size());
+    }
+
+    /**
+     * Orders to save blocks about to break: once a second in the battle, a player with no such order (and none for the
+     * last {@link #SUPPORT_REST} seconds) is sent to a block of their army within {@link #SUPPORT_REACH} that is
+     * {@link #SUPPORT_RISK} of the way to routing, not one of their own. An enlisted player is told to support that
+     * block; an officer is told by the wing's Marshal to save the wing's line there: that block and those beside it
+     * about to break too. The order stands until the blocks steady (under {@link #SUPPORT_SAFE}), break, or
+     * {@link #SUPPORT_SECONDS} pass.
+     */
+    private void supportOrders() {
+        for (Enlisted e : enlisted.values()) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(e.player);
+            if (player == null) {
+                continue;
+            }
+            if (!e.support.isEmpty()) {
+                boolean broke = e.support.stream().allMatch(b -> b.alive() == 0 || b.duty() == Duty.ROUTED || b.duty() == Duty.FLEEING);
+                double worst = e.support.stream().mapToDouble(field::routRisk).max().orElse(0);
+                if (broke) {
+                    player.sendSystemMessage(Component.literal("Too late: they broke.").withStyle(style -> style.withColor(color(e.side))));
+                } else if (worst < SUPPORT_SAFE) {
+                    player.sendSystemMessage(Component.literal("The line holds. Well done.").withStyle(style -> style.withColor(color(e.side))));
+                } else if (clock - e.supportSince <= SUPPORT_SECONDS) {
+                    continue;
+                }
+                e.support.clear();
+                e.supportEnded = clock;
+                continue;
+            }
+            if (clock - e.supportEnded < SUPPORT_REST) {
+                continue;
+            }
+            Point at = new Point(player.getX(), player.getZ());
+            List<FieldBlock> risky = new ArrayList<>();
+            for (FieldBlock b : field.army(e.side).blocks()) {
+                if (!e.blocks.contains(b) && b.alive() > 0 && b.pos().distanceTo(at) <= SUPPORT_REACH && field.routRisk(b) >= SUPPORT_RISK) {
+                    risky.add(b);
+                }
+            }
+            if (risky.isEmpty()) {
+                continue;
+            }
+            risky.sort(Comparator.comparingDouble(b -> b.pos().distanceTo(at)));
+            FieldBlock first = risky.get(0);
+            boolean winged = field.army(e.side).winged();
+            String where = wingTitle(first.wing(), winged);
+            if (e.rank.officer()) {
+                for (FieldBlock b : risky) {
+                    if (b.wing() == first.wing() && b.pos().distanceTo(first.pos()) <= SAVE_REACH) {
+                        e.support.add(b);
+                    }
+                }
+                String marshal = sides[e.side].marshals[Math.max(0, Math.min(2, first.wing()))];
+                title(e, "Save the " + where + "!");
+                player.sendSystemMessage(Component.literal("Marshal " + marshal + ": ").withStyle(style -> style.withColor(color(e.side)))
+                        .append(Component.literal(String.format(Locale.ROOT, "%s, %d of our blocks on the %s are about to break. "
+                                + "Bring your men and hold them!", e.rank.title(), e.support.size(), where)).withStyle(net.minecraft.ChatFormatting.WHITE)));
+            } else {
+                e.support.add(first);
+                title(e, "Support the block on the " + where + "!");
+                player.sendSystemMessage(Component.literal("A block on the " + where + " is about to break. Go to them!")
+                        .withStyle(style -> style.withColor(color(e.side))));
+            }
+            e.supportKey = new Object();
+            e.supportSince = clock;
+        }
+    }
+
     /** The battle is over or cleared: enlisted players lose their ring. */
     private void dismissEnlisted() {
         for (Enlisted e : enlisted.values()) {
@@ -2996,7 +3194,7 @@ public final class RecruitsBattle {
         } else {
             result = describe(outcome.winner()) + " wins; " + describe(1 - outcome.winner()) + " routs";
         }
-        broadcast(String.format(Locale.ROOT, "[battle over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
+        broadcast(String.format(Locale.ROOT, "[" + name + " is over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
                 outcome.seconds(), result, sides[0].faction.name(), field.army(0).alive(), field.army(0).started(),
                 sides[1].faction.name(), field.army(1).alive(), field.army(1).started(), whole.describe()));
         for (int side = 0; side < 2; side++) {
@@ -3355,7 +3553,7 @@ public final class RecruitsBattle {
                         : new ServerBossEvent(Component.empty(), BossEvent.BossBarColor.WHITE, BossEvent.BossBarOverlay.PROGRESS);
                 deploymentBars[side] = bar;
             }
-            String text = (side < 2 ? sides[side].faction.name() + " deploys" : "The armies deploy") + " (day " + day + "): " + time;
+            String text = name + ", day " + day + ": " + (side < 2 ? sides[side].faction.name() + " deploys" : "the armies deploy") + ", " + time;
             int s = side;
             bar.setName(side < 2 ? Component.literal(text).withStyle(style -> style.withColor(color(s))) : Component.literal(text));
             bar.setProgress((float) left / total);

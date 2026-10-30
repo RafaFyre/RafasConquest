@@ -22,7 +22,6 @@ import org.joml.Matrix4f;
  */
 public final class BattleSpotRing {
     private static final double HIDE_WITHIN = 5;
-    private static final double BEACON_BEYOND = 10;
     private static final ResourceLocation BEAM = new ResourceLocation("textures/entity/beacon_beam.png");
     private static final float[] WHITE = {1, 1, 1};
     private static final float OUTER = 0.55f;
@@ -30,8 +29,11 @@ public final class BattleSpotRing {
     private static final int SEGMENTS = 32;
 
     private static boolean has;
-    /** While the armies deploy: a beacon beam over the spot, for a player more than {@link #BEACON_BEYOND} from it. */
+    /** A beacon beam where an order sends the player (the server says when it shows), at (bx, by, bz). */
     private static boolean beacon;
+    private static double bx;
+    private static double by;
+    private static double bz;
     private static double x;
     private static double y;
     private static double z;
@@ -39,8 +41,11 @@ public final class BattleSpotRing {
     private BattleSpotRing() {
     }
 
-    public static void set(boolean has, double x, double y, double z, boolean beacon) {
+    public static void set(boolean has, double x, double y, double z, boolean beacon, double bx, double by, double bz) {
         BattleSpotRing.beacon = beacon;
+        BattleSpotRing.bx = bx;
+        BattleSpotRing.by = by;
+        BattleSpotRing.bz = bz;
         BattleSpotRing.has = has;
         BattleSpotRing.x = x;
         BattleSpotRing.y = y;
@@ -53,20 +58,19 @@ public final class BattleSpotRing {
 
     public static void render(PoseStack pose, Camera camera, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
-        if (!has || mc.player == null || mc.level == null) {
+        if (mc.player == null || mc.level == null) {
             return;
         }
-        double away = mc.player.position().distanceTo(new Vec3(x, mc.player.getY(), z));
         Vec3 cam = camera.getPosition();
-        if (beacon && away > BEACON_BEYOND) {
+        if (beacon) {
             pose.pushPose();
-            pose.translate(Math.floor(x) - cam.x, y - cam.y, Math.floor(z) - cam.z);
+            pose.translate(Math.floor(bx) - cam.x, by - cam.y, Math.floor(bz) - cam.z);
             MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
             BeaconRenderer.renderBeaconBeam(pose, buffers, BEAM, partialTick, 1, mc.level.getGameTime(), 0, BeaconRenderer.MAX_RENDER_Y, WHITE, 0.2F, 0.25F);
             buffers.endBatch();
             pose.popPose();
         }
-        if (away <= HIDE_WITHIN) {
+        if (!has || mc.player.position().distanceTo(new Vec3(x, mc.player.getY(), z)) <= HIDE_WITHIN) {
             return;
         }
         pose.pushPose();

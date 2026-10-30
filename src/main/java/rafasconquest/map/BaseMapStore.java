@@ -39,6 +39,8 @@ public class BaseMapStore {
     private final List<UUID> waiting = new ArrayList<>();
     @Nullable
     private volatile byte[] encoded;
+    /** The map once drawn, for looking up provinces (null until then). */
+    private volatile BaseMap map;
     @Nullable
     private CompletableFuture<Ready> drawing;
 
@@ -73,6 +75,7 @@ public class BaseMapStore {
             }
             byte[] bytes = ready.encoded();
             encoded = bytes;
+            map = ready.map();
             onReady.accept(ready.map());
             for (UUID id : waiting) {
                 ServerPlayer player = server.getPlayerList().getPlayer(id);
@@ -82,6 +85,12 @@ public class BaseMapStore {
             }
             waiting.clear();
         }));
+    }
+
+    /** The map, once drawn; null before. */
+    @org.jetbrains.annotations.Nullable
+    public BaseMap map() {
+        return map;
     }
 
     /** Sends the map to a player now if it is ready, or once it is. */

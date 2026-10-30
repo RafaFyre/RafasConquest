@@ -239,31 +239,36 @@ public final class ConquestNetwork {
 
     /** Tells an enlisted player where they should stand in their block (shown as a ring), or that they have no spot. */
     public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z) {
-        sendBattleSpot(player, has, x, y, z, false);
+        sendBattleSpot(player, has, x, y, z, false, 0, 0, 0);
     }
 
-    /** The same, with a beacon over the spot (while the armies deploy) for a player far from it. */
-    public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z, boolean beacon) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z, beacon));
+    /** The same, with a beacon beam at ({@code bx}, {@code by}, {@code bz}): where an order sends the player. */
+    public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z, boolean beacon, double bx,
+                                      double by, double bz) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z, beacon, bx, by, bz));
     }
 
     /** Server → client: where the player should stand in their block, if anywhere. */
-    public record BattleSpot(boolean has, double x, double y, double z, boolean beacon) {
+    public record BattleSpot(boolean has, double x, double y, double z, boolean beacon, double bx, double by, double bz) {
         void write(FriendlyByteBuf buf) {
             buf.writeBoolean(has);
             buf.writeDouble(x);
             buf.writeDouble(y);
             buf.writeDouble(z);
             buf.writeBoolean(beacon);
+            buf.writeDouble(bx);
+            buf.writeDouble(by);
+            buf.writeDouble(bz);
         }
 
         static BattleSpot read(FriendlyByteBuf buf) {
-            return new BattleSpot(buf.readBoolean(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readBoolean());
+            return new BattleSpot(buf.readBoolean(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readBoolean(),
+                    buf.readDouble(), buf.readDouble(), buf.readDouble());
         }
     }
 
     private static void handleBattleSpot(BattleSpot msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z(), msg.beacon()));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z(), msg.beacon(), msg.bx(), msg.by(), msg.bz()));
     }
 
     /** Tells players of the arrows archers loosed as numbers this second, for drawing in flight. */
