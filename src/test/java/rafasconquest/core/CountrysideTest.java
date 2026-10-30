@@ -14,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CountrysideTest {
     private static final int BPP = 16;
-    private static final int CELL = 48;
+    private static final int CELL = 96;
     private static final int CELLS = 20;
 
     private record World(SeatCities.Grid grid, TitleMap titles, List<SeatCities.City> cities, Countryside.Plan plan) {
     }
 
-    /** A land of square provinces 768 blocks a side, the sea along the west. */
+    /** A land of square provinces 1536 blocks a side, the sea along the west. */
     private static World world(long seed) {
         int width = CELLS * CELL;
         int[] provinces = new int[width * width];

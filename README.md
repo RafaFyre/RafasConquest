@@ -48,6 +48,10 @@ scale. It is off by default when a mod it doesn't suit is installed (`Horizontal
 Terralith), and the options say so. A dedicated server's new world takes the defaults. The log says how many climate
 noises were stretched, or that none were found.
 
+The same screen has a **province size** slider: 1, provinces 768 blocks apart and the world map out to four times the
+storm wall (16,000 blocks by default); 2 (the default), provinces 1,536 blocks apart and the map out to eight times
+(32,000 blocks), a pixel every 64 blocks. It is kept with the stretch in the world's properties file.
+
 With Distant Horizons, a stretched world (`client/DistantHorizonsQuality`) builds its far terrain from generated chunks
 only (generator plan `CHUNKS_ONLY`): Distant Horizons' quick rough-surface pass came out coarse, wrongly coloured and
 treeless there. Its horizontal quality is raised to HIGH (no higher: EXTREME over the whole horizon kept the machine
@@ -553,7 +557,7 @@ first. The old relation is restored when the battle ends.
 ## World map
 
 Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). It is a
-political map in the style of Crusader Kings 3, out to four times the storm wall's radius (16,000 blocks at default settings, a pixel every 32 blocks),
+political map in the style of Crusader Kings 3, out to four or eight times the storm wall's radius by province size (16,000 or 32,000 blocks at default settings, a pixel every 32 or 64 blocks),
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
 
@@ -578,13 +582,13 @@ It is drawn as layers, bottom to top, each its own class, listed in order in `Fa
 Each layer adds its own rows to the legend.
 
 **Provinces** (`core/ProvinceMap`) split the land like CK3's counties:
-- **Centres:** they sit on a seeded, jittered grid every 768 blocks. Deserts, badlands, snow and peaks drop half of
+- **Centres:** they sit on a seeded, jittered grid every 768 or 1,536 blocks (province size 1 or 2). Deserts, badlands, snow and peaks drop half of
   theirs, so provinces are larger there. Every city (City-state home or Empire capital) is a centre itself.
 - **Shapes:** each land pixel joins the centre that is cheapest to reach in a straight line. The sea costs a lot (coasts
   become borders, and islands get their own provinces). A ridge rising above both ends of the path costs (mountain
   ranges become borders). Crossing a biome edge costs a little (borders lean onto rivers and biome edges).
 - **Smoothing:** two passes give each pixel the province most of its neighbours have, which clears ragged edges.
-- **Tiles:** everything a pixel looks at is within 2,304 blocks of it, so any area computed with that margin matches
+- **Tiles:** everything a pixel looks at is within three times that, so any area computed with that margin matches
   the whole map. That allows tiled provinces beyond the map later.
 
 **Who holds a province** (`map/PoliticalMap`) is the nation that took up its title on the base map (see **Nations**

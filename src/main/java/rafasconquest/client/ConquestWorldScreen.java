@@ -13,13 +13,15 @@ import java.util.List;
 
 /**
  * RafasConquest's options for a world being created, opened from the world creation screen: the horizontal stretch,
- * on or off, and how far (1 to 4 times wider each way). Off by default if a mod it doesn't suit is installed. The
- * choice is kept for the world when it is made.
+ * on or off, and how far (1 to 4 times wider each way; off by default if a mod it doesn't suit is installed), and the
+ * province size (1: provinces 768 blocks apart, the map out to 16,000 blocks; 2: twice both). The choices are kept for
+ * the world when it is made.
  */
 public final class ConquestWorldScreen extends Screen {
     private final Screen parent;
     private boolean on;
     private int factor;
+    private int provinceSize;
     private AbstractSliderButton slider;
 
     public ConquestWorldScreen(Screen parent) {
@@ -28,6 +30,7 @@ public final class ConquestWorldScreen extends Screen {
         Choice choice = HorizontalStretch.pending() != null ? HorizontalStretch.pending() : HorizontalStretch.defaultChoice();
         this.on = choice.on();
         this.factor = choice.factor();
+        this.provinceSize = choice.provinceSize();
     }
 
     @Override
@@ -60,7 +63,26 @@ public final class ConquestWorldScreen extends Screen {
         };
         slider.active = on;
         addRenderableWidget(slider);
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 60, 200, 20).build());
+        int sizes = HorizontalStretch.MAX_PROVINCE_SIZE - HorizontalStretch.MIN_PROVINCE_SIZE;
+        addRenderableWidget(new AbstractSliderButton(x, y + 52, 200, 20, Component.empty(),
+                (double) (provinceSize - HorizontalStretch.MIN_PROVINCE_SIZE) / sizes) {
+            {
+                updateMessage();
+            }
+
+            @Override
+            protected void updateMessage() {
+                setMessage(Component.literal("Province size: " + provinceSize));
+            }
+
+            @Override
+            protected void applyValue() {
+                provinceSize = HorizontalStretch.MIN_PROVINCE_SIZE + (int) Math.round(value * sizes);
+                value = (double) (provinceSize - HorizontalStretch.MIN_PROVINCE_SIZE) / sizes; // whole steps only
+                keep();
+            }
+        });
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 86, 200, 20).build());
     }
 
     private Component toggleLabel() {
@@ -68,7 +90,7 @@ public final class ConquestWorldScreen extends Screen {
     }
 
     private void keep() {
-        HorizontalStretch.setPending(new Choice(on, factor));
+        HorizontalStretch.setPending(new Choice(on, factor, provinceSize));
     }
 
     @Override

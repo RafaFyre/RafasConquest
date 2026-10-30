@@ -1,5 +1,7 @@
 package rafasconquest.core;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,6 +18,17 @@ class SeatCitiesTest {
     private static final int CELLS = 16;
 
     private record World(SeatCities.Grid grid, TitleMap titles) {
+    }
+
+    /** Provinces this small are a size-1 world's; its cities look for room no further than its provinces reach. */
+    @BeforeEach
+    void provinceSizeOne() {
+        ProvinceMap.setSize(1);
+    }
+
+    @AfterEach
+    void provinceSizeBack() {
+        ProvinceMap.setSize(2);
     }
 
     private static World world(long seed) {

@@ -161,7 +161,7 @@ public final class SeatCities {
         ProvinceMap.Centre centre = g.centres().get(province);
         City probe = new City(centre.x(), centre.z(), districts, tier, province);
         int reach = probe.reach() + g.bpp();
-        int search = Math.max(ProvinceMap.SPACING, probe.reach());
+        int search = Math.max(ProvinceMap.spacing(), probe.reach());
         City best = null;
         double bestDistance = Double.MAX_VALUE;
         for (int dz = -search; dz <= search; dz += g.bpp()) {

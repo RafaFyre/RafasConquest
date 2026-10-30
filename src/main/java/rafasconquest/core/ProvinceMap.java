@@ -9,7 +9,7 @@ import java.util.stream.IntStream;
  * Splits the land into provinces, like the counties of a strategy-game map. Pure, so it can be tested and drawn
  * without the game.
  * <ul>
- *   <li><b>Centres</b> sit on a seeded, jittered grid every {@link #SPACING} blocks, so provinces come out of roughly
+ *   <li><b>Centres</b> sit on a seeded, jittered grid every {@link #spacing()} blocks, so provinces come out of roughly
  *       even size. Rough land (deserts, snow, peaks) drops some centres, so provinces there are larger. Every city
  *       (City-state home or Empire capital) is a centre itself and replaces the grid centres right next to it.</li>
  *   <li><b>Shape</b>: each land pixel joins the centre that is cheapest to reach in a straight line, not the nearest.
@@ -17,16 +17,37 @@ import java.util.stream.IntStream;
  *       costs (ridges become borders), and crossing from one biome into another costs a little (borders lean onto
  *       biome edges).</li>
  * </ul>
- * Everything a pixel looks at lies within {@link #SEARCH} blocks of it, and centres come from a global grid, so any
+ * Everything a pixel looks at lies within {@link #search()} blocks of it, and centres come from a global grid, so any
  * part of the world can be computed on its own and still meet its neighbours seamlessly.
  */
 public final class ProvinceMap {
+    /** Blocks between province centres on ordinary land, at province size 1; each size step doubles it. */
+    public static final int BASE_SPACING = 768;
+    /** The world's province size (1 or 2), chosen when it was made; set when its server starts, before its map is drawn. */
+    private static volatile int size = 2;
+
+    public static int size() {
+        return size;
+    }
+
+    public static void setSize(int chosen) {
+        size = Math.max(1, chosen);
+    }
+
     /** Blocks between province centres on ordinary land. */
-    public static final int SPACING = 768;
+    public static int spacing() {
+        return BASE_SPACING << (size - 1);
+    }
+
     /** How far a pixel looks for centres. Covers the gaps rough land leaves. */
-    public static final int SEARCH = 3 * SPACING;
+    public static int search() {
+        return 3 * spacing();
+    }
+
     /** Grid centres closer than this to a city give way to it. */
-    static final int ANCHOR_CLEARANCE = (int) (SPACING * 0.6);
+    static int anchorClearance() {
+        return (int) (spacing() * 0.6);
+    }
     /** Chance that rough land drops a grid centre. */
     static final double ROUGH_DROP = 0.5;
 
@@ -80,15 +101,15 @@ public final class ProvinceMap {
                 centres.add(new Centre(city[0], city[1], true));
             }
         }
-        int x0 = Math.floorDiv(t.minX(), SPACING);
-        int z0 = Math.floorDiv(t.minZ(), SPACING);
-        int x1 = Math.floorDiv(t.minX() + t.width() * t.blocksPerPixel(), SPACING);
-        int z1 = Math.floorDiv(t.minZ() + t.height() * t.blocksPerPixel(), SPACING);
+        int x0 = Math.floorDiv(t.minX(), spacing());
+        int z0 = Math.floorDiv(t.minZ(), spacing());
+        int x1 = Math.floorDiv(t.minX() + t.width() * t.blocksPerPixel(), spacing());
+        int z1 = Math.floorDiv(t.minZ() + t.height() * t.blocksPerPixel(), spacing());
         for (int cx = x0; cx <= x1; cx++) {
             for (int cz = z0; cz <= z1; cz++) {
                 long h = SeedHash.hash(seed, SeedHash.SALT_PROVINCE, cx, cz);
-                int x = cx * SPACING + (int) (SPACING * (0.15 + 0.7 * SeedHash.unit(h)));
-                int z = cz * SPACING + (int) (SPACING * (0.15 + 0.7 * SeedHash.unit(SeedHash.mix(h))));
+                int x = cx * spacing() + (int) (spacing() * (0.15 + 0.7 * SeedHash.unit(h)));
+                int z = cz * spacing() + (int) (spacing() * (0.15 + 0.7 * SeedHash.unit(SeedHash.mix(h))));
                 int px = t.pixelX(x);
                 int pz = t.pixelZ(z);
                 if (!t.inside(px, pz) || t.water()[t.index(px, pz)]) {
@@ -99,7 +120,7 @@ public final class ProvinceMap {
                 }
                 boolean nearCity = false;
                 for (int[] city : cities) {
-                    if (Math.abs(city[0] - x) < ANCHOR_CLEARANCE && Math.abs(city[1] - z) < ANCHOR_CLEARANCE) {
+                    if (Math.abs(city[0] - x) < anchorClearance() && Math.abs(city[1] - z) < anchorClearance()) {
                         nearCity = true;
                         break;
                     }
@@ -115,11 +136,11 @@ public final class ProvinceMap {
     /** The province (index into {@code centres}) of every pixel; {@link #WATER} for water, {@link #NONE} if unreached. */
     public static int[] assign(Terrain t, List<Centre> centres) {
         // Bucket the centres by grid cell, so each pixel only looks at the ones in range.
-        int cell = SPACING;
-        int gx0 = Math.floorDiv(t.minX() - SEARCH, cell);
-        int gz0 = Math.floorDiv(t.minZ() - SEARCH, cell);
-        int gw = Math.floorDiv(t.minX() + t.width() * t.blocksPerPixel() + SEARCH, cell) - gx0 + 1;
-        int gh = Math.floorDiv(t.minZ() + t.height() * t.blocksPerPixel() + SEARCH, cell) - gz0 + 1;
+        int cell = spacing();
+        int gx0 = Math.floorDiv(t.minX() - search(), cell);
+        int gz0 = Math.floorDiv(t.minZ() - search(), cell);
+        int gw = Math.floorDiv(t.minX() + t.width() * t.blocksPerPixel() + search(), cell) - gx0 + 1;
+        int gh = Math.floorDiv(t.minZ() + t.height() * t.blocksPerPixel() + search(), cell) - gz0 + 1;
         List<List<Integer>> buckets = new ArrayList<>(gw * gh);
         for (int i = 0; i < gw * gh; i++) {
             buckets.add(new ArrayList<>(2));
@@ -132,7 +153,7 @@ public final class ProvinceMap {
                 buckets.get(bz * gw + bx).add(i);
             }
         }
-        int reach = SEARCH / cell + 1;
+        int reach = search() / cell + 1;
         int[] provinces = new int[t.width() * t.height()];
         IntStream.range(0, t.height()).parallel().forEach(pz -> {
             double[] dist = new double[64];
@@ -158,7 +179,7 @@ public final class ProvinceMap {
                         for (int ci : buckets.get(qz * gw + qx)) {
                             Centre c = centres.get(ci);
                             double d = Math.hypot(c.x() - x, c.z() - z);
-                            if (d <= SEARCH) {
+                            if (d <= search()) {
                                 if (n == near.length) {
                                     near = Arrays.copyOf(near, n * 2);
                                     dist = Arrays.copyOf(dist, n * 2);

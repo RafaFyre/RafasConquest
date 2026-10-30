@@ -101,8 +101,8 @@ public final class Countryside {
         for (int p : order) {
             if (kind[p] == Kind.VILLAGE) {
                 villages.add(p);
-            } else {
-                hamlets++;
+            } else if (kind[p] == Kind.HAMLET) {
+                hamlets++; // not the watchtowers
             }
         }
         while (!villages.isEmpty() && hamlets < 2 * villages.size()) {
@@ -157,7 +157,7 @@ public final class Countryside {
      */
     private static int[] site(SeatCities.Grid g, int province, int reach, List<SeatCities.City> cities) {
         ProvinceMap.Centre c = g.centres().get(province);
-        int search = ProvinceMap.SPACING / 2;
+        int search = ProvinceMap.spacing() / 2;
         int[] best = null;
         double bestDistance = Double.MAX_VALUE;
         for (int dz = -search; dz <= search; dz += g.bpp()) {

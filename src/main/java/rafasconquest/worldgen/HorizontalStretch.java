@@ -19,6 +19,7 @@ import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
+import rafasconquest.core.ProvinceMap;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -50,10 +51,16 @@ public final class HorizontalStretch {
     private static final Set<String> CLIMATE = Set.of("temperature", "vegetation", "continentalness", "erosion", "ridge");
     private static final String FILE = "rafasconquest_world.properties";
 
-    /** A world's choice: whether the stretch is on, and how far. */
-    public record Choice(boolean on, int factor) {
+    /** Province sizes a world can be made with: 1, provinces 768 blocks apart; 2, twice that and a map twice as far. */
+    public static final int MIN_PROVINCE_SIZE = 1;
+    public static final int MAX_PROVINCE_SIZE = 2;
+    public static final int DEFAULT_PROVINCE_SIZE = 2;
+
+    /** A world's choices: whether the stretch is on, how far, and how big its provinces are. */
+    public record Choice(boolean on, int factor, int provinceSize) {
         public Choice {
             factor = Math.max(MIN, Math.min(MAX, factor));
+            provinceSize = Math.max(MIN_PROVINCE_SIZE, Math.min(MAX_PROVINCE_SIZE, provinceSize));
         }
     }
 
@@ -82,7 +89,7 @@ public final class HorizontalStretch {
 
     /** On, 3× wider, unless an incompatible mod is installed. */
     public static Choice defaultChoice() {
-        return new Choice(incompatibleInstalled().isEmpty(), DEFAULT_FACTOR);
+        return new Choice(incompatibleInstalled().isEmpty(), DEFAULT_FACTOR, DEFAULT_PROVINCE_SIZE);
     }
 
     /** The names of the installed mods the stretch doesn't suit. */
@@ -106,12 +113,14 @@ public final class HorizontalStretch {
         if (choice == null) {
             boolean made = hasChunks(root.resolve("region"));
             Choice wanted = pending;
-            choice = made ? new Choice(false, MIN) : wanted != null ? wanted : defaultChoice();
+            choice = made ? new Choice(false, MIN, MIN_PROVINCE_SIZE) : wanted != null ? wanted : defaultChoice();
             write(file, choice);
         }
         pending = null;
         current = MIN;
-        pending = null;
+        // The province size first: the map, drawn when the overworld loads, is laid out with it.
+        ProvinceMap.setSize(choice.provinceSize());
+        RafasConquest.LOGGER.info("[world] province size {}: provinces {} blocks apart", choice.provinceSize(), ProvinceMap.spacing());
         if (!choice.on() || choice.factor() == MIN) {
             RafasConquest.LOGGER.info("[world] horizontal stretch off");
             return;
@@ -294,7 +303,8 @@ public final class HorizontalStretch {
         try (Reader in = Files.newBufferedReader(file)) {
             p.load(in);
             return new Choice(Boolean.parseBoolean(p.getProperty("horizontalStretch", "false")),
-                    Integer.parseInt(p.getProperty("horizontalStretchFactor", "1").trim()));
+                    Integer.parseInt(p.getProperty("horizontalStretchFactor", "1").trim()),
+                    Integer.parseInt(p.getProperty("provinceSize", "1").trim()));
         } catch (IOException | RuntimeException e) {
             return null;
         }
@@ -304,6 +314,7 @@ public final class HorizontalStretch {
         Properties p = new Properties();
         p.setProperty("horizontalStretch", Boolean.toString(choice.on()));
         p.setProperty("horizontalStretchFactor", Integer.toString(choice.factor()));
+        p.setProperty("provinceSize", Integer.toString(choice.provinceSize()));
         try {
             Files.createDirectories(file.getParent());
             try (Writer out = Files.newBufferedWriter(file)) {

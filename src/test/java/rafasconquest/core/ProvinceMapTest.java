@@ -55,12 +55,12 @@ class ProvinceMapTest {
         assertTrue(centres.contains(new ProvinceMap.Centre(2048, 2048, true)));
         for (ProvinceMap.Centre c : centres) {
             if (!c.city()) {
-                assertFalse(Math.abs(c.x() - 2048) < ProvinceMap.ANCHOR_CLEARANCE && Math.abs(c.z() - 2048) < ProvinceMap.ANCHOR_CLEARANCE);
+                assertFalse(Math.abs(c.x() - 2048) < ProvinceMap.anchorClearance() && Math.abs(c.z() - 2048) < ProvinceMap.anchorClearance());
             }
         }
         assertEquals(centres, ProvinceMap.centres(7L, t, List.<int[]>of(city)), "same seed, same centres");
         // Roughly one centre per SPACING square of land.
-        int expected = (256 * BPP / ProvinceMap.SPACING) * (256 * BPP / ProvinceMap.SPACING);
+        int expected = (int) Math.round(Math.pow(256.0 * BPP / ProvinceMap.spacing(), 2));
         assertTrue(Math.abs(centres.size() - expected) <= expected / 5, centres.size() + " centres, expected about " + expected);
     }
 
@@ -81,7 +81,7 @@ class ProvinceMapTest {
         int[] all = ProvinceMap.assign(whole, centres);
 
         // A 40-pixel tile in the middle, computed from just itself plus SEARCH blocks of margin.
-        int margin = ProvinceMap.SEARCH / BPP + 1;
+        int margin = ProvinceMap.search() / BPP + 1;
         int from = 300 - margin;
         int span = 40 + 2 * margin;
         boolean[] w2 = new boolean[span * span];
