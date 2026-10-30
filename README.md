@@ -774,8 +774,8 @@ list what it is:
 - its culture, with the shares of the cultures among its people;
 - the race most of its people are, with the shares of the races.
 
-Across the lower half stands its **peerage** as a pyramid of figures on plinths, each in the Recruits skin of their
-culture's land: the ruler at the top; the three most powerful nobles under them (by their hold, a city's over a town's
+Across the lower half stands its **peerage** as a pyramid of character models, drawn as the inventory draws the player
+(following the mouse), each in the Recruits skin of their culture's land: the ruler at the top; the three most powerful nobles under them (by their hold, a city's over a town's
 over a castle's, then by how many answer to them, then by their skills); the lesser nobles in two wide rows below, the
 second set between the first's. Nobles beyond those rows are counted in the corner. Hovering over a figure names them;
 a click opens their character page.

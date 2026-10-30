@@ -48,8 +48,6 @@ public class NationScreen extends Screen {
     private static final int GOLD = 0xFFE0C060;
     private static final int DIAMOND = 0xFF3CC26A;
     private static final int DIAMOND_EDGE = 0xFFE8F8EC;
-    private static final int PLINTH = 0xFF4A4B4D;
-    private static final int PLINTH_HOVER = 0xFF6A6B6E;
     /** The greatest nobles, in the row under the ruler. */
     private static final int GREAT = 3;
     /** Shares below this are not named. */
@@ -69,14 +67,10 @@ public class NationScreen extends Screen {
     /** Nobles who found no room on the screen. */
     private int unseen;
 
-    /** A character standing on a plinth: their index, where their feet are, how big they are drawn, and their figure. */
+    /** A character's model, as the inventory shows the player: their index, where their feet are, how big, and the model. */
     private record Figure(int person, int x, int feet, int scale, @Nullable AbstractRecruitEntity entity) {
-        int halfWidth() {
-            return scale * 3 / 4;
-        }
-
         boolean contains(double mx, double my) {
-            return mx >= x - halfWidth() && mx <= x + halfWidth() && my >= feet - scale * 2 && my <= feet + scale / 3;
+            return Math.abs(mx - x) <= scale / 2.0 && my >= feet - scale * 2 && my <= feet;
         }
     }
 
@@ -243,8 +237,6 @@ public class NationScreen extends Screen {
             }
         }
         for (Figure f : figures) {
-            int half = f.halfWidth();
-            g.fill(f.x() - half, f.feet() - f.scale() / 3, f.x() + half, f.feet() + f.scale() / 3, f == hovered ? PLINTH_HOVER : PLINTH);
             if (f.entity() != null) {
                 InventoryScreen.renderEntityInInventoryFollowsMouse(g, f.x(), f.feet(), f.scale(), f.x() - mouseX,
                         f.feet() - f.scale() * 1.6F - mouseY, f.entity());
