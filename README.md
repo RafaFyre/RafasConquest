@@ -698,7 +698,9 @@ Every hold (a capital, city, town or castle) has a **holder**, planned with the 
   were schooled in higher. **Prowess** runs 0 to 45: ordinary people stay within 20, but about one in twenty is
   superhuman, each step rarer, and their prowess grants a title: 21, **Sword Saint** (they have achieved a miracle
   in their prowess); 30, **Sword King** (their sword possesses the might of a nation); 40, **Sword God** (their sword's
-  power is biblical). No more than seven Sword Gods live at once.
+  power is biblical). These are martial titles, and the world has only so many of each: seven Sword Gods, three
+  times as many Sword Kings (21) and three times as many again Sword Saints (63). Someone rising into a full title
+  stays at the top of the one below.
 - **Traits** (`people/Personality`): three personality traits, from opposed pairs (Brave or Craven, Calm or Wrathful,
   Content or Ambitious, Honest or Deceitful, Zealous or Cynical, and so on; never both of a pair). Each bends a few
   skills.

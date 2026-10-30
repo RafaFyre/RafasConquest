@@ -135,6 +135,12 @@ class RealmPlannerTest {
                 }
             }
             assertTrue(peakHere <= Stat.MAX_SWORD_GODS, peakHere + " Sword Gods");
+            for (int i = 0; i < Stat.TITLE_FLOORS.length; i++) {
+                int floor = Stat.TITLE_FLOORS[i];
+                int ceiling = i == 0 ? Integer.MAX_VALUE : Stat.TITLE_FLOORS[i - 1];
+                long holders = realm.people().stream().filter(p -> p.stat(Stat.PROWESS) >= floor && p.stat(Stat.PROWESS) < ceiling).count();
+                assertTrue(holders <= Stat.TITLE_LIMITS[i], holders + " " + Stat.superhumanTier(floor) + "s");
+            }
             peak += peakHere;
         }
         assertTrue(superhuman > 0 && superhuman < people / 5, superhuman + " superhuman of " + people);

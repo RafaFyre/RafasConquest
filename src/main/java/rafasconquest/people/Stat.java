@@ -12,11 +12,18 @@ public enum Stat {
     LEARNING("Learning", 20),
     PROWESS("Prowess", 45);
 
-    /** Where the superhuman begins (a Sword Saint), a Sword King, and a Sword God, of whom no more than seven live at once. */
+    /** Where the superhuman begins (a Sword Saint), a Sword King, and a Sword God. */
     public static final int SUPERHUMAN = 21;
     public static final int SWORD_KING = 30;
     public static final int SWORD_GOD = 40;
+    /** How many of each martial title the world has: seven Sword Gods, and three times as many at each title below. */
     public static final int MAX_SWORD_GODS = 7;
+    public static final int MAX_SWORD_KINGS = 3 * MAX_SWORD_GODS;
+    public static final int MAX_SWORD_SAINTS = 3 * MAX_SWORD_KINGS;
+
+    /** The martial titles from the highest down: where each begins, and how many the world has. */
+    public static final int[] TITLE_FLOORS = {SWORD_GOD, SWORD_KING, SUPERHUMAN};
+    public static final int[] TITLE_LIMITS = {MAX_SWORD_GODS, MAX_SWORD_KINGS, MAX_SWORD_SAINTS};
 
     private final String title;
     private final int max;

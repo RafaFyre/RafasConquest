@@ -136,8 +136,8 @@ public final class RealmPlanner {
         for (int i = 0; i < holds.size(); i++) {
             holdOf[holds.get(i).province()] = i;
         }
-        // The sanctums' Sword Gods are counted first, so the rest of the world never has more than seven in all.
-        int[] gods = {(int) nations.stream().filter(Seat::sanctum).count()};
+        // How many of each martial title are taken (Sword Gods, Kings, Saints); the sanctums' Sword Gods first.
+        int[] titles = {(int) nations.stream().filter(Seat::sanctum).count(), 0, 0};
         List<Person> people = new ArrayList<>();
         for (Person.Hold hold : holds) {
             int p = hold.province();
@@ -147,7 +147,7 @@ public final class RealmPlanner {
             int faith = faithOf(random, nation >= 0 ? nationFaith[nation] : empireFaith[empire],
                     nation >= 0 ? nationPiety[nation] : 0.5f, empire, faiths, cultHome);
             boolean sanctum = nation >= 0 && nations.get(nation).sanctum() && nations.get(nation).province() == p;
-            people.add(person(random, cultures.get(culture), culture, faith, hold, nation, sanctum, gods));
+            people.add(person(random, cultures.get(culture), culture, faith, hold, nation, sanctum, titles));
         }
         // Lieges: the next higher seat above them in the same nation, else the ruler.
         int[] ruler = new int[nations.size()];
@@ -184,7 +184,7 @@ public final class RealmPlanner {
 
     /** A holder: name of their culture, skills from their schooling and traits, prowess now and then superhuman. */
     private static Person person(Random random, Culture culture, int cultureId, int faith, Person.Hold hold, int nation,
-                                 boolean sanctum, int[] gods) {
+                                 boolean sanctum, int[] titles) {
         boolean female = random.nextDouble() < 0.25;
         int age = 18 + random.nextInt(53);
         List<Personality> traits = new ArrayList<>();
@@ -206,13 +206,20 @@ public final class RealmPlanner {
             }
             stats[s.ordinal()] = Math.max(0, Math.min(20, (int) Math.round(base)));
         }
-        if (random.nextDouble() < SUPERHUMAN) {
+        if (!sanctum && random.nextDouble() < SUPERHUMAN) {
             int prowess = Stat.SUPERHUMAN;
             while (prowess < Stat.PROWESS.max() && random.nextDouble() < SUPERHUMAN_STEP) {
                 prowess++;
             }
-            if (prowess >= Stat.SWORD_GOD && gods[0]++ >= Stat.MAX_SWORD_GODS) {
-                prowess = Stat.SWORD_GOD - 1; // no more than seven Sword Gods
+            // Each martial title has only so many holders: where it is full, the top of the title below it.
+            for (int i = 0; i < Stat.TITLE_FLOORS.length; i++) {
+                if (prowess >= Stat.TITLE_FLOORS[i]) {
+                    if (titles[i] < Stat.TITLE_LIMITS[i]) {
+                        titles[i]++;
+                        break;
+                    }
+                    prowess = Stat.TITLE_FLOORS[i] - 1;
+                }
             }
             stats[Stat.PROWESS.ordinal()] = prowess;
         }
