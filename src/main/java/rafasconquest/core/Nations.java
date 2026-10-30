@@ -55,6 +55,11 @@ public final class Nations {
     }
 
     public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge) {
+        return plan(seed, t, seats, eyeRadius, warZoneEdge, SANCTUMS);
+    }
+
+    /** The same, with this many sword sanctums (none where the world has no martial titles). */
+    public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int sanctumCount) {
         Random random = new Random(seed ^ SALT);
         int provinces = t.county().length;
         int[] holder = new int[provinces];
@@ -89,7 +94,7 @@ public final class Nations {
         // seats of the outer world; each a City-state holding the county round its seat, calm or not.
         List<Integer> sanctums = new ArrayList<>(eyeKingdoms);
         for (int k : outer) {
-            if (sanctums.size() >= SANCTUMS) {
+            if (sanctums.size() >= sanctumCount) {
                 break;
             }
             int[] at = seats.at(t.kingdomSeat()[k]);
@@ -98,7 +103,7 @@ public final class Nations {
                 sanctums.add(k);
             }
         }
-        for (int k : sanctums.subList(0, Math.min(SANCTUMS, sanctums.size()))) {
+        for (int k : sanctums.subList(0, Math.min(sanctumCount, sanctums.size()))) {
             int seat = t.kingdomSeat()[k];
             int county = t.county()[seat];
             int[] at = seats.at(seat);

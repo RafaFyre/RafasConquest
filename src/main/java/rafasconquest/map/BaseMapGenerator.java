@@ -13,6 +13,8 @@ import rafasconquest.core.CityLayout;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.ProvinceNames;
 import rafasconquest.core.Countryside;
+import rafasconquest.core.Dojos;
+import rafasconquest.core.WorldFeatures;
 import rafasconquest.core.Nations;
 import rafasconquest.core.OriginRoller;
 import rafasconquest.core.SeatCities;
@@ -135,7 +137,7 @@ public final class BaseMapGenerator {
         }
         Nations.Plan plan = Nations.plan(level.getSeed(), titles,
                 p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()}),
-                settings.eyeRadius(), settings.warZoneOuterEdge());
+                settings.eyeRadius(), settings.warZoneOuterEdge(), WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0);
         List<BaseMap.Nation> nations = new java.util.ArrayList<>();
         for (Nations.Nation nation : plan.nations()) {
             OriginRoller.Roll roll = OriginRoller.roll(level.getSeed(), nation.x(), nation.z(), settings);
@@ -179,9 +181,41 @@ public final class BaseMapGenerator {
         for (int i = 0; i < n; i++) {
             ground[i] = Math.round(heights[i]);
         }
+        List<Dojos.Dojo> dojos = WorldFeatures.mantraSchools()
+                ? dojos(level.getSeed(), minX, minZ, bpp, size, visibleRadius, settings.eyeRadius(), provinces, wet, cities, nations)
+                : List.of();
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
                 cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
-                        plan.holder()));
+                        plan.holder()), dojos);
+    }
+
+    /** How far a dojo keeps from the edge of any city. */
+    static final int DOJO_CITY_CLEARANCE = 200;
+
+    /**
+     * The mantra schools' dojos ({@link Dojos}): on dry land of a province, clear of every city, apart from each other
+     * and from the sword sanctums.
+     */
+    private static List<Dojos.Dojo> dojos(long seed, int minX, int minZ, int bpp, int size, int radius, int eyeRadius, int[] provinces,
+                                          boolean[] wet, List<SeatCities.City> cities, List<BaseMap.Nation> nations) {
+        List<int[]> sanctums = nations.stream().filter(BaseMap.Nation::sanctum).map(n -> new int[]{n.x(), n.z()}).toList();
+        List<Dojos.Dojo> dojos = Dojos.plan(seed, radius, eyeRadius, sanctums, (x, z) -> {
+            int px = Math.floorDiv(x - minX, bpp);
+            int pz = Math.floorDiv(z - minZ, bpp);
+            if (px < 0 || pz < 0 || px >= size || pz >= size || provinces[pz * size + px] < 0 || wet[pz * size + px]) {
+                return false;
+            }
+            for (SeatCities.City c : cities) {
+                if (Math.abs(c.x() - x) < c.size() / 2 + DOJO_CITY_CLEARANCE && Math.abs(c.z() - z) < c.size() / 2 + DOJO_CITY_CLEARANCE) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        rafasconquest.RafasConquest.LOGGER.info("[world] {} dojos of the mantra schools: {}", dojos.size(),
+                dojos.stream().map(d -> d.school().title() + (d.school().hidden() ? " (hidden)" : "") + " at " + d.x() + ", " + d.z())
+                        .collect(java.util.stream.Collectors.joining("; ")));
+        return dojos;
     }
 
     /** The world's people, planned on the finished map: its holds' holders, their cultures, faiths and bonds. */
@@ -189,7 +223,8 @@ public final class BaseMapGenerator {
                                                     List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] holder) {
         List<rafasconquest.people.RealmPlanner.Seat> seats = nations.stream()
                 .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
-        rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder);
+        rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder,
+                WorldFeatures.martialTitles());
         long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
         rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",
                 realm.people().size(), superhuman, realm.cultures().size(), realm.faiths().size(), realm.bonds().size());

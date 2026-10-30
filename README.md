@@ -51,6 +51,9 @@ noises were stretched, or that none were found.
 The same screen has a **province size** slider: 1, provinces 768 blocks apart and the world map out to four times the
 storm wall (16,000 blocks by default); 2 (the default), provinces 1,536 blocks apart and the map out to eight times
 (32,000 blocks), a pixel every 64 blocks. It is kept with the stretch in the world's properties file.
+And two switches: **Enable Martial Titles** (Sword Gods, Sword Kings, Sword Saints, and the sword sanctums; off,
+no one passes prowess 20 and there are no sanctums) and **Enable Mantra Schools** (an offensive magic system of ten
+schools, each with a dojo; off, no dojos). Both are on by default.
 
 With Distant Horizons, a stretched world (`client/DistantHorizonsQuality`) builds its far terrain from generated chunks
 only (generator plan `CHUNKS_ONLY`): Distant Horizons' quick rough-surface pass came out coarse, wrongly coloured and
@@ -716,6 +719,13 @@ Every hold (a capital, city, town or castle) has a **holder**, planned with the 
 in the outer world where there are too few eyes. Each is a City-state, the "Sword Sanctum of ...", holding the county
 round it, calm or not; its city is 4 × 4 districts; and it is held by a Sword God, styled by that title, who is away
 from it about one time in three.
+
+**Mantra schools and their dojos** (`core/Dojos`): ten schools of an offensive magic system, each with one dojo,
+placed with the world map on dry land clear of the cities and the eye of spawn, at least 7,000 blocks from each other
+and from the sword sanctums. Seven are known (Fire, Water, Wind, Lightning, Ice, Stone, Iron): their dojos stand on
+the surface (a pillager outpost's buildings, without pillagers, for now) and are marked on the world map. Three are
+hidden (Blood, Shadow, Light): their dojos are underground (a stronghold, for now) and on no map. A world too small
+for all ten loses hidden dojos before known ones. The schools teach nothing yet.
 
 **Cultures:** one for the lands of each empire title, with its own name and the sounds its names are made of. A nation
 has the culture of its seat's lands, and every one of its characters has it; a hold no nation keeps has its lands'.

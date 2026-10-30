@@ -25,6 +25,7 @@ public final class ConquestWorldgen {
     public static final RegistryObject<StructurePlacementType<CountryPlacement>> COUNTRY_PLACEMENT = PLACEMENT_TYPES.register("countryside_sites", () -> () -> CountryPlacement.CODEC);
     public static final RegistryObject<StructurePieceType> COUNTRY_PIECE = PIECE_TYPES.register("countryside", () -> (context, tag) -> new CountryPiece(tag));
     public static final RegistryObject<StructurePlacementType<FarmPlacement>> FARM_PLACEMENT = PLACEMENT_TYPES.register("farm_spread", () -> () -> FarmPlacement.CODEC);
+    public static final RegistryObject<StructurePlacementType<DojoPlacement>> DOJO_PLACEMENT = PLACEMENT_TYPES.register("dojo_sites", () -> () -> DojoPlacement.CODEC);
     public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_PLACEMENT = PLACEMENT_TYPES.register("city_sites", () -> () -> CityPlacement.CENTER_CODEC);
     public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_DISTRICT_PLACEMENT = PLACEMENT_TYPES.register("city_district_sites", () -> () -> CityPlacement.DISTRICT_CODEC);
 

@@ -54,6 +54,12 @@ public final class RealmPlanner {
 
     public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
                              List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder) {
+        return plan(seed, t, centres, cities, settlements, nations, holder, true);
+    }
+
+    /** The same, with the martial titles or (where the world has none) with no one past ordinary prowess. */
+    public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
+                             List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder, boolean martialTitles) {
         Random random = new Random(seed ^ SALT);
         int empires = t.empires();
 
@@ -137,7 +143,8 @@ public final class RealmPlanner {
             holdOf[holds.get(i).province()] = i;
         }
         // How many of each martial title are taken (Sword Gods, Kings, Saints); the sanctums' Sword Gods first.
-        int[] titles = {(int) nations.stream().filter(Seat::sanctum).count(), 0, 0};
+        int[] titles = martialTitles ? new int[]{(int) nations.stream().filter(Seat::sanctum).count(), 0, 0}
+                : Stat.TITLE_LIMITS.clone(); // no martial titles: every one already full, so no one rises past 20
         List<Person> people = new ArrayList<>();
         for (Person.Hold hold : holds) {
             int p = hold.province();

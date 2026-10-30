@@ -4,6 +4,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import rafasconquest.worldgen.HorizontalStretch;
@@ -22,6 +23,8 @@ public final class ConquestWorldScreen extends Screen {
     private boolean on;
     private int factor;
     private int provinceSize;
+    private boolean martialTitles;
+    private boolean mantraSchools;
     private AbstractSliderButton slider;
 
     public ConquestWorldScreen(Screen parent) {
@@ -31,6 +34,8 @@ public final class ConquestWorldScreen extends Screen {
         this.on = choice.on();
         this.factor = choice.factor();
         this.provinceSize = choice.provinceSize();
+        this.martialTitles = choice.martialTitles();
+        this.mantraSchools = choice.mantraSchools();
     }
 
     @Override
@@ -82,15 +87,31 @@ public final class ConquestWorldScreen extends Screen {
                 keep();
             }
         });
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 86, 200, 20).build());
+        addRenderableWidget(Button.builder(yesNo("Enable Martial Titles", martialTitles), b -> {
+            martialTitles = !martialTitles;
+            b.setMessage(yesNo("Enable Martial Titles", martialTitles));
+            keep();
+        }).bounds(x, y + 78, 200, 20).tooltip(Tooltip.create(Component.literal("Sword Gods, Sword Kings, Sword Saints, and the sword sanctums")))
+                .build());
+        addRenderableWidget(Button.builder(yesNo("Enable Mantra Schools", mantraSchools), b -> {
+            mantraSchools = !mantraSchools;
+            b.setMessage(yesNo("Enable Mantra Schools", mantraSchools));
+            keep();
+        }).bounds(x, y + 104, 200, 20).tooltip(Tooltip.create(Component.literal("Offensive magic system; 10 schools, each with a dojo")))
+                .build());
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 138, 200, 20).build());
     }
 
     private Component toggleLabel() {
         return Component.literal("Horizontal stretch: " + (on ? "On" : "Off"));
     }
 
+    private static Component yesNo(String label, boolean on) {
+        return Component.literal(label + ": " + (on ? "Y" : "N"));
+    }
+
     private void keep() {
-        HorizontalStretch.setPending(new Choice(on, factor, provinceSize));
+        HorizontalStretch.setPending(new Choice(on, factor, provinceSize, martialTitles, mantraSchools));
     }
 
     @Override

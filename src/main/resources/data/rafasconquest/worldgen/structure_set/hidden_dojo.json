@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "rafasconquest:hidden_dojo",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "rafasconquest:dojo_sites",
+    "salt": 1212761679,
+    "hidden": true
+  }
+}

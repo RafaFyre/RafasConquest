@@ -20,6 +20,7 @@ import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.WorldFeatures;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -56,8 +57,11 @@ public final class HorizontalStretch {
     public static final int MAX_PROVINCE_SIZE = 2;
     public static final int DEFAULT_PROVINCE_SIZE = 2;
 
-    /** A world's choices: whether the stretch is on, how far, and how big its provinces are. */
-    public record Choice(boolean on, int factor, int provinceSize) {
+    /**
+     * A world's choices: whether the stretch is on, how far, how big its provinces are, and whether it has the martial
+     * titles (Sword Gods, Sword Kings, Sword Saints) and the mantra schools (an offensive magic system of ten schools).
+     */
+    public record Choice(boolean on, int factor, int provinceSize, boolean martialTitles, boolean mantraSchools) {
         public Choice {
             factor = Math.max(MIN, Math.min(MAX, factor));
             provinceSize = Math.max(MIN_PROVINCE_SIZE, Math.min(MAX_PROVINCE_SIZE, provinceSize));
@@ -89,7 +93,7 @@ public final class HorizontalStretch {
 
     /** On, 3× wider, unless an incompatible mod is installed. */
     public static Choice defaultChoice() {
-        return new Choice(incompatibleInstalled().isEmpty(), DEFAULT_FACTOR, DEFAULT_PROVINCE_SIZE);
+        return new Choice(incompatibleInstalled().isEmpty(), DEFAULT_FACTOR, DEFAULT_PROVINCE_SIZE, true, true);
     }
 
     /** The names of the installed mods the stretch doesn't suit. */
@@ -113,13 +117,14 @@ public final class HorizontalStretch {
         if (choice == null) {
             boolean made = hasChunks(root.resolve("region"));
             Choice wanted = pending;
-            choice = made ? new Choice(false, MIN, MIN_PROVINCE_SIZE) : wanted != null ? wanted : defaultChoice();
+            choice = made ? new Choice(false, MIN, MIN_PROVINCE_SIZE, true, true) : wanted != null ? wanted : defaultChoice();
             write(file, choice);
         }
         pending = null;
         current = MIN;
         // The province size first: the map, drawn when the overworld loads, is laid out with it.
         ProvinceMap.setSize(choice.provinceSize());
+        WorldFeatures.set(choice.martialTitles(), choice.mantraSchools());
         RafasConquest.LOGGER.info("[world] province size {}: provinces {} blocks apart", choice.provinceSize(), ProvinceMap.spacing());
         if (!choice.on() || choice.factor() == MIN) {
             RafasConquest.LOGGER.info("[world] horizontal stretch off");
@@ -304,7 +309,9 @@ public final class HorizontalStretch {
             p.load(in);
             return new Choice(Boolean.parseBoolean(p.getProperty("horizontalStretch", "false")),
                     Integer.parseInt(p.getProperty("horizontalStretchFactor", "1").trim()),
-                    Integer.parseInt(p.getProperty("provinceSize", "1").trim()));
+                    Integer.parseInt(p.getProperty("provinceSize", "1").trim()),
+                    Boolean.parseBoolean(p.getProperty("martialTitles", "true")),
+                    Boolean.parseBoolean(p.getProperty("mantraSchools", "true")));
         } catch (IOException | RuntimeException e) {
             return null;
         }
@@ -315,6 +322,8 @@ public final class HorizontalStretch {
         p.setProperty("horizontalStretch", Boolean.toString(choice.on()));
         p.setProperty("horizontalStretchFactor", Integer.toString(choice.factor()));
         p.setProperty("provinceSize", Integer.toString(choice.provinceSize()));
+        p.setProperty("martialTitles", Boolean.toString(choice.martialTitles()));
+        p.setProperty("mantraSchools", Boolean.toString(choice.mantraSchools()));
         try {
             Files.createDirectories(file.getParent());
             try (Writer out = Files.newBufferedWriter(file)) {

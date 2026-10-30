@@ -67,6 +67,26 @@ public class TitleLayer implements MapLayer {
                 }
             }
         }
+        // The known schools' dojos (the hidden ones are not on any map): a dark diamond with a pale heart.
+        for (rafasconquest.core.Dojos.Dojo dojo : map.base.dojos()) {
+            if (dojo.school().hidden()) {
+                continue;
+            }
+            int x = (int) view.screenX(dojo.x());
+            int y = (int) view.screenY(dojo.z());
+            if (!view.near(x, y, 8)) {
+                continue;
+            }
+            for (int d = 0; d <= 4; d++) {
+                g.fill(x - (4 - d), y - d, x + (4 - d) + 1, y - d + 1, OUTLINE);
+                g.fill(x - (4 - d), y + d, x + (4 - d) + 1, y + d + 1, OUTLINE);
+            }
+            g.fill(x - 1, y - 1, x + 2, y + 2, 0xFFE8D8B0);
+            if (Math.abs(mouseX - x) <= 5 && Math.abs(mouseY - y) <= 5) {
+                hovered = "Dojo of the " + dojo.school().title() + " school";
+                hoveredProvince = -1;
+            }
+        }
         for (int p = 0; p < tiers.length; p++) {
             int tier = tiers[p];
             if (tier < 0) {
