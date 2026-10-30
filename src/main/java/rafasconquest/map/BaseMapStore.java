@@ -122,6 +122,26 @@ public class BaseMapStore {
         start();
     }
 
+    /**
+     * Runs the drawing on half the CPU's threads, at most, instead of all of them: its parallel steps run in this pool,
+     * not the shared one, so drawing a new world's map never holds the whole machine at full load (some PCs can't hold
+     * that for long).
+     */
+    private static BaseMap drawGently(java.util.function.Supplier<BaseMap> draw) {
+        int threads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+        java.util.concurrent.ForkJoinPool pool = new java.util.concurrent.ForkJoinPool(threads);
+        try {
+            return pool.submit(draw::get).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while drawing the world map", e);
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw e.getCause() instanceof RuntimeException r ? r : new IllegalStateException(e.getCause());
+        } finally {
+            pool.shutdown();
+        }
+    }
+
     private Ready loadOrDraw() {
         try {
             if (Files.exists(file)) {
@@ -135,7 +155,7 @@ public class BaseMapStore {
             RafasConquest.LOGGER.warn("Redrawing the world map: the saved one could not be read ({})", e.getMessage());
         }
         long start = System.nanoTime();
-        BaseMap map = BaseMapGenerator.generate(level, settings, visibleRadius, settings.warZoneOuterEdge());
+        BaseMap map = drawGently(() -> BaseMapGenerator.generate(level, settings, visibleRadius, settings.warZoneOuterEdge()));
         byte[] bytes = map.encode();
         RafasConquest.LOGGER.info("Drew the world map: {} x {} pixels of {} blocks out to {} blocks, {} provinces in {} counties, {} duchies,"
                         + " {} kingdoms and {} empires, {} seat cities, {} settlements, in {} ms ({} KB)",
