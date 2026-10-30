@@ -19,8 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * needs it (so every chunk agrees where the road runs, and no seams show):
  * <ul>
  *   <li>The ground is read every {@link #STEP} blocks along the road.</li>
- *   <li>Where water stands over it (a river), or it falls {@link #RAVINE_DEPTH} or more below the land about it (a
- *       ravine), the road is a <b>bridge</b>: its deck flat across, above the water or level with the far banks.</li>
+ *   <li>Where water stands over it (a river), or it falls {@link #RAVINE_DEPTH} or more below the ground on both sides of
+ *       it, close by (a ravine), the road is a <b>bridge</b>: its deck flat across, above the water or level with the far banks.</li>
  *   <li>The road's height is the ground's (or the deck's) smoothed over {@link #SMOOTH} samples each way, so it rises
  *       and falls gently: half a block at a time, which the slabs make.</li>
  * </ul>
@@ -29,9 +29,10 @@ public final class RoadNetwork {
     /** Blocks between the ground's readings along a road. */
     public static final int STEP = 4;
     static final int SMOOTH = 3;
-    /** The land about a spot: the ground averaged this many samples each way. */
-    static final int AROUND = 12;
+    /** A ravine: ground this much lower than ground on both sides of it, within this many samples each way (a span of up
+     * to about 2 × 6 × 4 = 48 blocks). */
     static final int RAVINE_DEPTH = 8;
+    static final int RAVINE_WIDTH = 6;
     /** A bridge's deck stands this far above the water. */
     static final int ABOVE_WATER = 2;
 
@@ -139,7 +140,7 @@ public final class RoadNetwork {
         // Rivers and ravines: spans to bridge, each with its deck's height.
         boolean[] bridge = new boolean[n];
         for (int i = 0; i < n; i++) {
-            bridge[i] = water[i] > ground[i] || ground[i] < average(ground, i, AROUND) - RAVINE_DEPTH;
+            bridge[i] = water[i] > ground[i] || ravine(ground, i);
         }
         float[] target = ground.clone();
         for (int i = 0; i < n; ) {
@@ -171,6 +172,23 @@ public final class RoadNetwork {
             height[i] = bridge[i] ? target[i] : average(target, i, SMOOTH);
         }
         return new Profile(height, bridge);
+    }
+
+    /**
+     * Whether the ground at sample {@code i} lies in a ravine: {@link #RAVINE_DEPTH} or more below ground on <i>both</i>
+     * sides of it, within {@link #RAVINE_WIDTH} samples each way. A slope has higher ground on one side only, so a road
+     * down a hillside is never taken for one.
+     */
+    private static boolean ravine(float[] ground, int i) {
+        float before = Float.NEGATIVE_INFINITY;
+        float after = Float.NEGATIVE_INFINITY;
+        for (int j = Math.max(0, i - RAVINE_WIDTH); j < i; j++) {
+            before = Math.max(before, ground[j]);
+        }
+        for (int j = i + 1; j <= Math.min(ground.length - 1, i + RAVINE_WIDTH); j++) {
+            after = Math.max(after, ground[j]);
+        }
+        return Math.min(before, after) - ground[i] >= RAVINE_DEPTH;
     }
 
     private static float average(float[] values, int i, int reach) {
