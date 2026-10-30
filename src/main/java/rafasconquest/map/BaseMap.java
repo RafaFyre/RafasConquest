@@ -25,14 +25,23 @@ import java.util.zip.InflaterInputStream;
  * {@code names} names each province; {@code titles} groups them into counties, duchies, kingdoms and empires, and
  * {@code cities} are their seat cities ({@link SeatCities}), {@code settlements} the hamlets, villages, watchtowers and
  * castles of the countryside ({@link Countryside}); {@code nations} the nations that took up titles ({@link Nations}), and
- * {@code holders} which of them (index) holds each province, -1 for nobody.
+ * {@code holders} which of them (index) holds each province, -1 for nobody. {@code ground} is each pixel's ground height
+ * (the sea floor under water), as the generator gives it, and {@code wet} whether it lies in sea or river, for reading
+ * the lie of the land without generating it.
  */
 public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius, int stormWallRadius,
                       int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
                       List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
-                      int[] holders) {
+                      int[] holders, int[] ground, boolean[] wet) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 11;
+    private static final int FORMAT = 12;
+
+    /** The pixel (index) at world (x, z), or -1 off the map. */
+    public int pixelAt(double x, double z) {
+        int px = (int) Math.floor((x - minX) / blocksPerPixel);
+        int pz = (int) Math.floor((z - minZ) / blocksPerPixel);
+        return px < 0 || pz < 0 || px >= width || pz >= height ? -1 : pz * width + px;
+    }
 
     /**
      * A nation holding a title: its faction's id and name ("... Empire" with an empire title), strength and radius,
@@ -144,6 +153,12 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeInt(n.z());
             }
             writeShorts(out, holders);
+            for (int g : ground) {
+                out.writeShort(g);
+            }
+            for (boolean w : wet) {
+                out.writeBoolean(w);
+            }
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -237,8 +252,16 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                         TitleMap.Tier.values()[in.readByte()], in.readShort(), in.readShort(), in.readInt(), in.readInt()));
             }
             int[] holders = readShorts(in);
+            int[] ground = new int[width * height];
+            for (int i = 0; i < ground.length; i++) {
+                ground[i] = in.readShort();
+            }
+            boolean[] wet = new boolean[width * height];
+            for (int i = 0; i < wet.length; i++) {
+                wet[i] = in.readBoolean();
+            }
             return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities,
-                    settlements, nations, holders);
+                    settlements, nations, holders, ground, wet);
         }
     }
 }

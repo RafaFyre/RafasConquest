@@ -51,6 +51,7 @@ public final class ConquestEvents {
             ConquestServer.attach(level, data);
             // The map, and so the titles and their seat cities, before the first chunk is made.
             rafasconquest.map.BaseMap map = ConquestServer.get().mapStore().loadOrDrawNow();
+            ConquestRuntime.publishMap(map);
             ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(map.cities()));
             ConquestRuntime.publishCountryside(new rafasconquest.worldgen.CountryIndex(map.settlements()));
             rafasconquest.core.CityLayout.publishBuilt((min, max) -> ConquestRuntime.cities().inBox(min[0], min[1], max[0], max[1]));
@@ -63,6 +64,7 @@ public final class ConquestEvents {
             ConquestServer.detach();
             ConquestRuntime.publish(null);
             ConquestRuntime.publishCities(null);
+            ConquestRuntime.publishMap(null);
             ConquestRuntime.publishCountryside(null);
             CapitalLayout.setLand(0, null);
         }

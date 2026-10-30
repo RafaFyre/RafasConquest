@@ -75,6 +75,7 @@ import rafasconquest.faction.FactionBannerNbt;
 import rafasconquest.net.ConquestNetwork;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -238,6 +239,8 @@ public final class RecruitsBattle {
 
     @Nullable
     private static RecruitsBattle current;
+    /** A battle's ground is being surveyed, before it begins. */
+    private static boolean preparing;
     private static final Calibration SESSION_CALIBRATION = new Calibration();
 
     private final ServerLevel level;
@@ -510,11 +513,18 @@ public final class RecruitsBattle {
      * Sets up both armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit
      * vector from {@code first}'s side toward {@code second}'s), and starts the battle. Each army is
      * {@code firstSoldiers} or {@code secondSoldiers} strong, in whole blocks of 20 ({@link BattlePlan#blocks}), plus its general and standard-bearer. Nobody is
-     * spawned yet: blocks near players become real soldiers over the next seconds. Returns a line for the caller, or
-     * throws if Recruits isn't ready.
+     * spawned yet: blocks near players become real soldiers over the next seconds. Throws if Recruits isn't ready, or a
+     * battle is already being set up.
+     * <p>
+     * The ground is surveyed first, off the server thread (reading unloaded land from the world generator is slow, and
+     * needs nothing of the world), so the server keeps running meanwhile; the armies are then deployed and the battle
+     * begun back on it, and {@code ready} gets a line for the caller (or {@code failed} why not).
      */
-    public static String start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
-                               Point centre, double axisX, double axisZ) {
+    public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                             Point centre, double axisX, double axisZ, Consumer<String> ready, Consumer<String> failed) {
+        if (preparing) {
+            throw new IllegalStateException("A battle is already being set up");
+        }
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
@@ -535,16 +545,40 @@ public final class RecruitsBattle {
         FieldBattle field = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, level.random.nextLong(),
                 sides[0].general.plan(), sides[1].general.plan());
         Terrain terrain = new Terrain(level, Terrain.stepFor(firstSoldiers + secondSoldiers));
+        preparing = true;
+        terrain.surveyInBackground(GroundPlan.area(field)).whenCompleteAsync((surveyed, error) -> {
+            preparing = false;
+            if (error != null) {
+                RafasConquest.LOGGER.error("[battle] couldn't survey the ground", error);
+                failed.accept("Couldn't survey the ground: " + error.getMessage());
+                return;
+            }
+            try {
+                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, centre, axisX, axisZ));
+            } catch (RuntimeException e) {
+                RafasConquest.LOGGER.error("[battle] couldn't begin the battle", e);
+                failed.accept("Couldn't begin the battle: " + e.getMessage());
+            }
+        }, level.getServer());
+    }
+
+    /** The rest of {@link #start}, once the ground is surveyed: deploys the armies, pitches the camps, and begins. */
+    private static String begin(ServerLevel level, FieldBattle field, Side[] sides, Terrain terrain, PlayerTeam teamA,
+                                PlayerTeam teamB, RecruitsDiplomacyManager diplomacy, int blocksA, int blocksB, Point centre,
+                                double axisX, double axisZ) {
         int hidden = GroundPlan.deploy(field, terrain);
         String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.terrain = terrain;
-        RafasConquest.LOGGER.info("[battle] deployed to the ground; {} blocks hide in ambush", hidden);
+        RafasConquest.LOGGER.info("[battle] deployed to the ground; {} blocks hide in ambush, {} of {} stand wet by the survey",
+                hidden, GroundPlan.wetBlocks(field, terrain), blocksA + blocksB);
         battle.centre = centre;
         battle.axisX = axisX;
         battle.axisZ = axisZ;
+        long campsStarted = System.nanoTime();
         battle.buildCamps();
         battle.spawnCouncil();
+        RafasConquest.LOGGER.info("[battle] camps pitched in {} ms", (System.nanoTime() - campsStarted) / 1_000_000);
         battle.enlist(); // players already on a side take their places for the deployment
         battle.oldRelations[0] = diplomacy.getRelation(teamA.getName(), teamB.getName());
         battle.oldRelations[1] = diplomacy.getRelation(teamB.getName(), teamA.getName());

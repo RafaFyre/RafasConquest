@@ -26,10 +26,23 @@ public final class GroundPlan {
         boolean water(double x, double z);
 
         boolean forest(double x, double z);
+
+        /**
+         * Reads the whole area the deployment may look at, at once, before any block chooses: the search then only
+         * looks things up. Ground that is costly to read (worked out from the world generator) reads faster all
+         * together than spot by spot.
+         */
+        default void survey(double minX, double minZ, double maxX, double maxZ) {
+        }
     }
+
+    /** How far past the blocks' places the deployment may look: a follower's file shift and reach, its own size, an ambush. */
+    private static final double SURVEY_MARGIN = 110;
 
     /** How far a block may move from its place in the template, and how finely the ground is searched. */
     public static final double REACH = 40;
+    /** Where all within reach is water, a block looks twice as far, and again, up to this far. */
+    private static final double MAX_REACH = 160;
     private static final double STEP = 5;
     /** The blocks behind the front search this far about the place their file's front gives them. */
     private static final double REACH_BEHIND = 20;
@@ -51,8 +64,35 @@ public final class GroundPlan {
     private GroundPlan() {
     }
 
+    /**
+     * The area a deployment may look at, as {minX, minZ, maxX, maxZ}: every block's place, and {@link #SURVEY_MARGIN}
+     * around. Surveyed before deploying ({@link Ground#survey}), so the search only looks things up.
+     */
+    public static double[] area(FieldBattle field) {
+        double minX = Double.MAX_VALUE;
+        double minZ = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxZ = -Double.MAX_VALUE;
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock b : field.army(side).blocks) {
+                minX = Math.min(minX, b.line.x());
+                minZ = Math.min(minZ, b.line.z());
+                maxX = Math.max(maxX, b.line.x());
+                maxZ = Math.max(maxZ, b.line.z());
+            }
+        }
+        if (minX > maxX) {
+            return new double[]{0, 0, -1, -1};
+        }
+        return new double[]{minX - SURVEY_MARGIN, minZ - SURVEY_MARGIN, maxX + SURVEY_MARGIN, maxZ + SURVEY_MARGIN};
+    }
+
     /** Deploys both armies to the ground, and hides ambushes in the woods. Returns how many blocks hide in ambush. */
     public static int deploy(FieldBattle field, Ground ground) {
+        double[] area = area(field);
+        if (area[0] <= area[2]) {
+            ground.survey(area[0], area[1], area[2], area[3]); // nothing left to read if it was surveyed already
+        }
         int ambushers = 0;
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
@@ -117,13 +157,29 @@ public final class GroundPlan {
         return best;
     }
 
-    /** The best ground for a block within {@code reach} of {@code template}; the template itself if all is water. */
+    /**
+     * The best ground for a block within {@code reach} of {@code template}; if all of that is water (a stretched world's
+     * lakes and rivers are wide), within twice as far, and so on up to {@link #MAX_REACH}; the template itself if even
+     * that is all water.
+     */
     private static Point best(FieldArmy army, FieldBlock b, Point template, double reach, double ref, List<Point> taken, Ground ground) {
+        for (double r = reach; r <= MAX_REACH; r *= 2) {
+            Point best = bestWithin(army, b, template, r, r > reach ? Math.max(STEP, r / 16) : STEP, ref, taken, ground);
+            if (best != null) {
+                return best;
+            }
+        }
+        return template;
+    }
+
+    /** The best dry ground for a block within {@code reach} of {@code template}, looked at every {@code step}; null if none. */
+    private static Point bestWithin(FieldArmy army, FieldBlock b, Point template, double reach, double step, double ref,
+                                    List<Point> taken, Ground ground) {
         double weight = b.arm == Arm.ARCHERS ? ARCHER_HEIGHT : b.arm == Arm.CAVALRY ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
         Point best = null;
         double bestScore = -Double.MAX_VALUE;
-        for (double dx = -reach; dx <= reach; dx += STEP) {
-            for (double dz = -reach; dz <= reach; dz += STEP) {
+        for (double dx = -reach; dx <= reach; dx += step) {
+            for (double dz = -reach; dz <= reach; dz += step) {
                 double d = Math.hypot(dx, dz);
                 if (d > reach) {
                     continue;
@@ -148,7 +204,21 @@ public final class GroundPlan {
                 }
             }
         }
-        return best != null ? best : template;
+        return best;
+    }
+
+    /** How many blocks stand wet where they were deployed, by the ground's own reading: none, if deploying went well. */
+    public static int wetBlocks(FieldBattle field, Ground ground) {
+        int wet = 0;
+        for (int side = 0; side < 2; side++) {
+            FieldArmy army = field.army(side);
+            for (FieldBlock b : army.blocks) {
+                if (wet(ground, army, b, b.deployed)) {
+                    wet++;
+                }
+            }
+        }
+        return wet;
     }
 
     /** Whether any of a block's front, from end to end, or its middle, stands in water. */

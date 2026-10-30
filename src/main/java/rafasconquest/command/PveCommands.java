@@ -204,13 +204,16 @@ public final class PveCommands {
         double lookX = -Math.sin(Math.toRadians(yaw));
         double lookZ = Math.cos(Math.toRadians(yaw));
         BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
+        CommandSourceStack source = ctx.getSource();
         try {
-            String line = RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX);
-            String url = BattleMap.open(server.overworld().getServer());
-            ctx.getSource().sendSuccess(() -> Component.literal(line + ". The armies are deploying: place them on the battle map, then start. ")
-                    .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA).withUnderlined(true)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
-                    .append(Component.literal(" or /pve debug battle start")), true);
+            RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX, line -> {
+                String url = BattleMap.open(server.overworld().getServer());
+                source.sendSuccess(() -> Component.literal(line + ". The armies are deploying: place them on the battle map, then start. ")
+                        .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA).withUnderlined(true)
+                                .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
+                        .append(Component.literal(" or /pve debug battle start")), true);
+            }, why -> source.sendFailure(Component.literal(why)));
+            source.sendSuccess(() -> Component.literal("The armies are surveying the ground..."), false);
         } catch (IllegalStateException e) {
             throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
         }

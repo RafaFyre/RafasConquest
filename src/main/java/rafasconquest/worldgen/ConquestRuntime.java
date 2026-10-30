@@ -14,6 +14,8 @@ public final class ConquestRuntime {
     private static volatile CountryIndex countryside = CountryIndex.EMPTY;
     /** The world's seat cities, from its map (empty until it is loaded or drawn). */
     private static volatile CityIndex cities = CityIndex.EMPTY;
+    @Nullable
+    private static volatile rafasconquest.map.BaseMap map;
 
     private ConquestRuntime() {
     }
@@ -41,5 +43,15 @@ public final class ConquestRuntime {
 
     public static void publishCities(@Nullable CityIndex index) {
         cities = index == null ? CityIndex.EMPTY : index;
+    }
+
+    /** The world's map, once loaded or drawn; null before. */
+    @Nullable
+    public static rafasconquest.map.BaseMap map() {
+        return map;
+    }
+
+    public static void publishMap(@Nullable rafasconquest.map.BaseMap drawn) {
+        map = drawn;
     }
 }

@@ -74,6 +74,7 @@ public final class BaseMapGenerator {
         float[] heights = new float[n];
         int[] biomeIds = new int[n];
         boolean[] rough = new boolean[n];
+        boolean[] wet = new boolean[n];
         IntStream.range(0, size).parallel().forEach(pz -> {
             for (int px = 0; px < size; px++) {
                 int index = pz * size + px;
@@ -89,6 +90,7 @@ public final class BaseMapGenerator {
                         QuartPos.fromBlock(z), sampler);
                 biomeIds[index] = System.identityHashCode(biome.value());
                 water[index] = BiomePalette.isSea(biome);
+                wet[index] = water[index] || biome.is(net.minecraft.tags.BiomeTags.IS_RIVER);
                 rough[index] = BiomePalette.isRough(biome);
                 int color = BiomePalette.color(biome, (int) h, sea);
                 if (!water[index] && h >= sea) {
@@ -156,8 +158,12 @@ public final class BaseMapGenerator {
                 cities.add(c);
             }
         }
+        int[] ground = new int[n];
+        for (int i = 0; i < n; i++) {
+            ground[i] = Math.round(heights[i]);
+        }
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
-                cities, settlements, nations, plan.holder());
+                cities, settlements, nations, plan.holder(), ground, wet);
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

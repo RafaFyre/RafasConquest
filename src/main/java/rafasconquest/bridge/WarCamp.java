@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -43,14 +44,10 @@ final class WarCamp {
     /** A wing's Marshal's tent: 9 by 9 inside, 4 tall. */
     private static final int MARSHAL_HALF = 5;
     private static final int MARSHAL_HEIGHT = 4;
-    /** A camp's site is looked for this far about where it should be, for dry ground this level at most. */
-    private static final int SITE_SEARCH = 48;
-    private static final int SITE_STEP = 4;
-    private static final int SITE_ROUGHNESS = 3;
-    /** What a block of rise and fall across the camp costs a site, against a block further from where it should be. */
-    private static final double SITE_ROUGH_COST = 6;
     /** The ground is levelled this far around the command tent, and clear of plants and trees this high above the floor. */
     private static final int EASE_MARGIN = 2;
+    /** Past that, the levelled ground is blended into the land over this many blocks. */
+    private static final int BLEND = 6;
     private static final int TENT_CLEAR = 4;
     /** A small tent is pitched only on dry ground this near the command tent's floor in height. */
     private static final int TENT_RISE = 6;
@@ -88,15 +85,15 @@ final class WarCamp {
     }
 
     /**
-     * Builds a camp near {@code at} (on the nearest dry, fairly level ground: never on water or hanging over a drop),
-     * facing ({@code facingX}, {@code facingZ}) toward the enemy (squared to the nearest compass direction), with
-     * {@code tents} small tents behind it. The general's camp has the command tent where the war council meets; a
-     * wing's has its Marshal's smaller tent.
+     * Builds a camp at {@code at}, whatever the ground there: the command tent's ground is made to suit it (levelled,
+     * water filled in, the edges blended into the land around), facing ({@code facingX}, {@code facingZ}) toward the
+     * enemy (squared to the nearest compass direction), with {@code tents} small tents behind it. The general's camp has
+     * the command tent where the war council meets; a wing's has its Marshal's smaller tent.
      */
     static WarCamp build(ServerLevel level, Point at, double facingX, double facingZ, int tents, DyeColor colour, ItemStack banner,
                          boolean council) {
         Direction front = Direction.getNearest(facingX, 0, facingZ);
-        BlockPos site = site(level, at, council ? GENERAL_HALF : MARSHAL_HALF, tents, front);
+        BlockPos site = site(level, at, council ? GENERAL_HALF : MARSHAL_HALF);
         WarCamp camp = new WarCamp(level, site, front, council);
         camp.easeCommandTent();
         camp.commandTent(colour, banner);
@@ -270,68 +267,49 @@ final class WarCamp {
     }
 
     /**
-     * Where to put a camp wanted at {@code at}: the nearest point within {@link #SITE_SEARCH} whose command tent would
-     * stand on dry ground no rougher than {@link #SITE_ROUGHNESS}; failing that the least rough dry one; failing that,
-     * {@code at}. Its floor is the ground there.
+     * The camp's middle at {@code at}, no searching: its floor is the command tent's ground on average, raised to the top
+     * of any water under it (so the filled ground keeps the water out). Reads only the ground the tent stands on.
      */
-    private static BlockPos site(ServerLevel level, Point at, int half, int tents, Direction front) {
-        Direction right = front.getClockWise();
-        int rows = (tents + TENTS_PER_ROW - 1) / TENTS_PER_ROW;
-        int back = half + 6 + rows * ROW_SPACING;
-        int side = Math.max(half, (TENTS_PER_ROW / 2) * TENT_SPACING + 2);
-        BlockPos best = null;
-        double bestScore = Double.MAX_VALUE;
-        for (int dx = -SITE_SEARCH; dx <= SITE_SEARCH; dx += SITE_STEP) {
-            for (int dz = -SITE_SEARCH; dz <= SITE_SEARCH; dz += SITE_STEP) {
-                int x = (int) Math.floor(at.x()) + dx;
-                int z = (int) Math.floor(at.z()) + dz;
-                // The command tent's ground for its floor, and the whole camp's (the tents behind too) for flatness.
-                int low = Integer.MAX_VALUE;
-                int high = Integer.MIN_VALUE;
-                double tentSum = 0;
-                int tentCount = 0;
-                boolean wet = false;
-                for (int f = -back; f <= half; f += SITE_STEP * 2) {
-                    for (int r = -side; r <= side; r += SITE_STEP * 2) {
-                        int px = x + right.getStepX() * r + front.getStepX() * f;
-                        int pz = z + right.getStepZ() * r + front.getStepZ() * f;
-                        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, px, pz);
-                        low = Math.min(low, y);
-                        high = Math.max(high, y);
-                        if (Math.abs(r) <= half && Math.abs(f) <= half) {
-                            tentSum += y;
-                            tentCount++;
-                            wet |= !level.getFluidState(new BlockPos(px, y - 1, pz)).isEmpty();
-                        }
-                    }
-                }
-                if (wet) {
-                    continue;
-                }
-                int rough = high - low;
-                double score = Math.hypot(dx, dz) + rough * SITE_ROUGH_COST + (rough <= SITE_ROUGHNESS ? 0 : 200);
-                if (score < bestScore) {
-                    bestScore = score;
-                    int floor = tentCount == 0 ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
-                            : (int) Math.round(tentSum / tentCount);
-                    best = new BlockPos(x, floor, z);
+    private static BlockPos site(ServerLevel level, Point at, int half) {
+        int x = (int) Math.floor(at.x());
+        int z = (int) Math.floor(at.z());
+        long sum = 0;
+        int n = 0;
+        int waterTop = Integer.MIN_VALUE;
+        for (int dx = -half; dx <= half; dx++) {
+            for (int dz = -half; dz <= half; dz++) {
+                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + dx, z + dz);
+                sum += y;
+                n++;
+                if (!level.getFluidState(new BlockPos(x + dx, y - 1, z + dz)).isEmpty()) {
+                    waterTop = Math.max(waterTop, y);
                 }
             }
         }
-        if (best == null) {
-            int x = (int) Math.floor(at.x());
-            int z = (int) Math.floor(at.z());
-            best = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
-        }
-        return best;
+        return new BlockPos(x, Math.max((int) Math.round((double) sum / n), waterTop), z);
     }
 
-    /** The command tent's ground, and a little around it, levelled to its floor and cleared above it, for the battle. */
+    /**
+     * The command tent's ground made to suit it: levelled to its floor a little around it, and past that blended into the
+     * land over {@link #BLEND} blocks, each ring allowed one block more of rise or fall, so the camp sits in the land on a
+     * hill or out over a lake alike.
+     */
     private void easeCommandTent() {
-        for (int r = -half - EASE_MARGIN; r <= half + EASE_MARGIN; r++) {
-            for (int f = -half - EASE_MARGIN; f <= half + EASE_MARGIN; f++) {
+        int flat = half + EASE_MARGIN;
+        for (int r = -flat - BLEND; r <= flat + BLEND; r++) {
+            for (int f = -flat - BLEND; f <= flat + BLEND; f++) {
                 BlockPos p = local(r, f, 0);
-                ease(p.getX(), p.getZ(), middle.getY(), height + 4);
+                int ring = Math.max(Math.abs(r), Math.abs(f)) - flat;
+                if (ring <= 0) {
+                    ease(p.getX(), p.getZ(), middle.getY(), height + 4);
+                    continue;
+                }
+                int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ());
+                boolean wet = !level.getFluidState(new BlockPos(p.getX(), top - 1, p.getZ())).isEmpty();
+                int target = middle.getY() + Mth.clamp(top - middle.getY(), -ring, ring);
+                if (target != top || wet) {
+                    ease(p.getX(), p.getZ(), Math.max(target, wet ? top : target), TENT_CLEAR);
+                }
             }
         }
     }
