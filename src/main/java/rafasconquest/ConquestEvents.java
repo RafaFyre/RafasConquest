@@ -191,7 +191,9 @@ public final class ConquestEvents {
             return;
         }
         WorldSettings settings = ConquestRuntime.settings();
-        if (settings != null && settings.citiesEnabled() && CityLayout.chunkTouchesWall(level.getSeed(), settings, chunk.getPos().x, chunk.getPos().z)) {
+        // Walls (banners, guards), and the inside of cities and castles' keeps (the posts' and churches' people, lords).
+        if (settings != null && settings.citiesEnabled() && CityLayout.chunkInCity(level.getSeed(), settings, chunk.getPos().x, chunk.getPos().z)
+                || rafasconquest.sim.RecruitmentPosts.holdInChunk(chunk.getPos().x, chunk.getPos().z)) {
             ConquestServer.queueBannerChunk(chunk.getPos());
         }
         for (Structure structure : chunk.getAllStarts().keySet()) {

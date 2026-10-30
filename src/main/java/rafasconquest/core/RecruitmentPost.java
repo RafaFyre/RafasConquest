@@ -40,9 +40,18 @@ public record RecruitmentPost(int plotX, int plotZ) {
         return new int[]{plotX + 7, plotZ + 6};
     }
 
-    /** The hold's noble, receiving petitioners at the post: at the back of the room, facing it (south). */
+    /**
+     * The gold church on the plot just south of the post, where the hold's lord receives petitioners (with the city's
+     * own lord, in a duchy's or a nation's capital): its plot's north-west corner.
+     */
+    public int[] church() {
+        return new int[]{plotX, plotZ + CityLayout.PLOT_SIZE + 1};
+    }
+
+    /** Roughly where the hold's nobles stand: the middle of the church's plot. */
     public int[] noble() {
-        return new int[]{plotX + 6, plotZ + 3};
+        int[] c = church();
+        return new int[]{c[0] + CityLayout.PLOT_SIZE / 2, c[1] + CityLayout.PLOT_SIZE / 2};
     }
 
     /** The quest board, just inside the door. */

@@ -817,7 +817,8 @@ Hamlets and hidden dojos have none.
 - **Routes** are found over the map's pixels, cheapest first: steep and high ground, jungles and mountains cost more,
   water a lot (a river is crossed where narrow) and the sea most of all; cities are gone round. A road already laid
   costs less, so roads share their way and meet at forks. Roads leave and enter cities by the gate facing their way,
-  just outside the walls. The pixel steps are rounded into curves. The world map draws them (the high roads from
+  running straight out of it for 48 blocks before they turn (so they meet the gate head on), right up to the wall. The
+  pixel steps are rounded into curves. The world map draws them (the high roads from
   further out).
 - **Height:** each road's ground is read from the world generator every 4 blocks along it, the first time a chunk
   needs it, and smoothed over 12 blocks each way, so every chunk agrees and the road rises and falls gently. Each
@@ -846,8 +847,16 @@ facing the road to the west, with a bedrock counter inside.
   and enlist in its army. Accepting (`npc/Recruitment`) leaves any other faction and joins theirs the way Recruits adds a
   member, and enlists the player at rank 1, **Soldier**; a player of **noble title** (Knight or Count, see below) starts
   at rank 5, **Major**. A player already of higher rank keeps it; one already serving the nation is only greeted.
-- A **quest board** stands inside, and the hold's **noble** stands at the back of the room (a castle's lord stands in
-  the middle of the keep instead).
+- A **quest board** stands inside.
+- **The gold church** (`worldgen/GoldChurch`, `GoldChurchPiece`) stands on the plot just south of the post: vanilla's
+  plains temple turned to face the road, its cobblestone made gold blocks (stairs and slabs smooth sandstone). The
+  city's **ruler** stands inside facing the door; in a duchy's or a nation's capital, the city's own **lord** (a
+  character of their own, sworn to the ruler) stands beside them. A castle's lord stands in the middle of the keep.
+- Every nation's seat that has neither a city nor a castle gets a castle, so its ruler has a hold to stand in.
+- The posts', churches' and keeps' people are set when their chunks first load: every chunk inside a city (and each
+  keep's), not only the wall chunks as before.
+- Vanilla's grass and ferns, which grow after the cities are built, are pulled up inside city walls by the roads
+  feature (a later step).
 
 ## Peerage and quests
 

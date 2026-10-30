@@ -293,6 +293,23 @@ public final class CityLayout {
         return false;
     }
 
+    /** True if any block of the chunk lies inside some city's square (its walls included). Cheap; safe on any thread. */
+    public static boolean chunkInCity(long seed, WorldSettings s, int chunkX, int chunkZ) {
+        int minX = chunkX << 4;
+        int minZ = chunkZ << 4;
+        int r = MAX_HALF_EXTENT + WALL_OUTSET + 1;
+        for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
+            int lx0 = minX - city.originX();
+            int lz0 = minZ - city.originZ();
+            int lo = -WALL_OUTSET;
+            int hi = city.size() + WALL_OUTSET;
+            if (lx0 + 15 >= lo && lz0 + 15 >= lo && lx0 < hi && lz0 < hi) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static Optional<Site> gridSite(long seed, WorldSettings s, int cellX, int cellZ) {
         if (!s.citiesEnabled()) {
             return Optional.empty();

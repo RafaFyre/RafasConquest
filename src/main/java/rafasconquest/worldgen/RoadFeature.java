@@ -12,6 +12,7 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import rafasconquest.content.ConquestContent;
+import rafasconquest.core.CityLayout;
 import rafasconquest.core.Countryside;
 import rafasconquest.core.Dojos;
 import rafasconquest.core.Roads;
@@ -42,7 +43,7 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
     private static final int POST_EVERY = 6;
     private static final int POST_DEPTH = 40;
     /** Roads keep this far from a city's walls, a settlement, and a dojo's middle. */
-    private static final int CITY_MARGIN = 3;
+    private static final int CITY_MARGIN = rafasconquest.core.CityLayout.WALL_OUTSET;
     private static final int SETTLEMENT_MARGIN = 2;
     private static final int DOJO_CLEAR = 14;
 
@@ -59,6 +60,7 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
         WorldGenLevel level = context.level();
         int x0 = context.origin().getX() & ~15;
         int z0 = context.origin().getZ() & ~15;
+        weedCities(level, x0, z0);
         RoadNetwork network = RoadNetwork.of(map);
         List<int[]> stretches = network.inChunk(x0 >> 4, z0 >> 4);
         if (stretches.isEmpty()) {
@@ -246,6 +248,29 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
             }
             if (y <= base + CLEAR || here.is(BlockTags.LOGS) || here.is(BlockTags.LEAVES)) {
                 level.setBlock(p, Blocks.AIR.defaultBlockState(), 2);
+            }
+        }
+    }
+
+    /**
+     * Pulls up the grass and ferns vanilla's vegetation scattered over a city after it was built (that step runs after
+     * the structures, so the city's own clearing can't stop it).
+     */
+    private static void weedCities(WorldGenLevel level, int x0, int z0) {
+        for (SeatCities.City c : ConquestRuntime.cities().inBox(x0, z0, x0 + 15, z0 + 15)) {
+            int half = c.size() / 2 + CityLayout.WALL_OUTSET;
+            for (int x = Math.max(x0, c.x() - half); x <= Math.min(x0 + 15, c.x() + half); x++) {
+                for (int z = Math.max(z0, c.z() - half); z <= Math.min(z0 + 15, c.z() + half); z++) {
+                    int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
+                    for (int y = top - 1; y >= top - 2; y--) {
+                        BlockPos pos = new BlockPos(x, y, z);
+                        BlockState state = level.getBlockState(pos);
+                        if (state.is(Blocks.GRASS) || state.is(Blocks.TALL_GRASS) || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
+                                || state.is(Blocks.DEAD_BUSH)) {
+                            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                        }
+                    }
+                }
             }
         }
     }

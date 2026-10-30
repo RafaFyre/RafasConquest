@@ -183,6 +183,14 @@ public final class BaseMapGenerator {
         for (Nations.Nation sanctum : sanctumAt.values()) {
             cities.add(new SeatCities.City(sanctum.x(), sanctum.z(), SANCTUM_DISTRICTS, TitleMap.Tier.KINGDOM, sanctum.seat()));
         }
+        // A nation's seat with neither a city nor a castle gets a castle, so its ruler has somewhere to stand.
+        for (Nations.Nation nation : plan.nations()) {
+            boolean built = cities.stream().anyMatch(c -> c.province() == nation.seat())
+                    || settlements.stream().anyMatch(s -> s.kind() == Countryside.Kind.CASTLE && s.province() == nation.seat());
+            if (!built) {
+                settlements.add(new Countryside.Settlement(nation.x(), nation.z(), Countryside.Kind.CASTLE, nation.seat(), 0));
+            }
+        }
         int[] ground = new int[n];
         for (int i = 0; i < n; i++) {
             ground[i] = Math.round(heights[i]);

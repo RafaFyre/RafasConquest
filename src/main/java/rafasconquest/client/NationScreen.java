@@ -81,7 +81,7 @@ public class NationScreen extends Screen {
             case CAPITAL -> 4;
             case CITY -> 3;
             case TOWN -> 2;
-            case CASTLE -> 1;
+            case CASTLE, LORD -> 1;
         };
         int skills = 0;
         for (Stat s : Stat.values()) {

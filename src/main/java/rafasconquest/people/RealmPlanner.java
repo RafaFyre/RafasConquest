@@ -216,6 +216,24 @@ public final class RealmPlanner {
             }
             people.set(i, withLiege(p, liege));
         }
+        // A duchy's or a nation's capital city has a lord of its own besides its ruler, sworn to them (after everyone
+        // else, so a province's holder is still its ruler).
+        int rulers = people.size();
+        for (SeatCities.City c : cities) {
+            int p = c.province();
+            int nation = p < holder.length ? holder[p] : -1;
+            int city = holdOf[p];
+            if (nation < 0 || city < 0 || city >= rulers || nations.get(nation).sanctum() && nations.get(nation).province() == p
+                    || c.tier() == TitleMap.Tier.COUNTY && !seatProvinces.contains(p)) {
+                continue;
+            }
+            int culture = nationCulture[nation];
+            int faith = faithOf(random, nationFaith[nation], nationPiety[nation], empireOf(t, p), faiths, cultHome);
+            int race = raceOf(races, homeland[p], demographics.get(nation));
+            Person lord = person(random, cultures.get(culture), culture, faith, race, new Person.Hold(Person.Kind.LORD, p, c.x(), c.z()),
+                    nation, false, titles);
+            people.add(withLiege(lord, city));
+        }
 
         return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
                 demographics);

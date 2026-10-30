@@ -20,7 +20,7 @@ import rafasconquest.worldgen.CityGridBuilder;
  * guards of the city's owner, and the recruiter behind the counter, all facing the door (west). Each place is filled
  * once (and remembered), like the city walls' guards.
  */
-final class RecruitmentPosts {
+public final class RecruitmentPosts {
     /** West: toward the door and the road beyond it. */
     private static final float FACING = 90.0F;
 
@@ -67,9 +67,33 @@ final class RecruitmentPosts {
         return placed + nobles(level, chunk, data, precomputer);
     }
 
+    /** The chunks holding a castle's keep (its lord's place), for the map they were worked out for. */
+    private static volatile java.util.Set<Long> keepChunks = java.util.Set.of();
+    private static volatile rafasconquest.map.BaseMap keepsOf;
+
+    /** Whether a castle hold's lord stands in this chunk. Cheap; safe on any thread. */
+    public static boolean holdInChunk(int chunkX, int chunkZ) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            return false;
+        }
+        if (keepsOf != map) {
+            java.util.Set<Long> keeps = new java.util.HashSet<>();
+            for (rafasconquest.people.Person p : map.realm().people()) {
+                if (cityCells(map, p.hold()) < 0) {
+                    keeps.add(ConquestSavedData.xzKey(p.hold().x() >> 4, p.hold().z() >> 4));
+                }
+            }
+            keepChunks = keeps;
+            keepsOf = map;
+        }
+        return keepChunks.contains(ConquestSavedData.xzKey(chunkX, chunkZ));
+    }
+
     /**
-     * The holds' nobles, at their places once (as long as no player has taken the hold): a city's at its recruitment
-     * post, at the back of the room facing it; a castle's lord in the middle of the keep's ground floor.
+     * The holds' nobles, at their places once (as long as no player has taken the hold): a city's ruler in its gold
+     * church facing the door, with the city's own lord beside them in a duchy's or a nation's capital; a castle's lord
+     * in the middle of the keep's ground floor.
      */
     private static int nobles(ServerLevel level, LevelChunk chunk, ConquestSavedData data, PoiPrecomputer precomputer) {
         rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
@@ -77,24 +101,33 @@ final class RecruitmentPosts {
             return 0;
         }
         rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(level.getServer());
-        int minX = chunk.getPos().getMinBlockX();
-        int minZ = chunk.getPos().getMinBlockZ();
         int placed = 0;
         for (int i = 0; i < map.realm().people().size(); i++) {
             rafasconquest.people.Person p = map.realm().people().get(i);
             rafasconquest.people.Person.Hold hold = p.hold();
-            if (p.nation() < 0 || peerage.replaced(hold.province())) {
+            if (p.nation() < 0 || peerage.replaced(hold.province()) && hold.kind() != rafasconquest.people.Person.Kind.LORD) {
                 continue;
             }
             int[] spot;
             float yaw;
-            if (hold.kind() == rafasconquest.people.Person.Kind.CASTLE) {
+            int cells = cityCells(map, hold);
+            if (cells < 0) {
                 spot = new int[]{hold.x(), hold.z()};
                 yaw = 0;
             } else {
-                CityLayout.Site site = new CityLayout.Site(hold.x(), hold.z(), false, cityCells(map, hold));
-                spot = RecruitmentPost.of(site).noble();
-                yaw = 0; // south, into the room
+                CityLayout.Site site = new CityLayout.Site(hold.x(), hold.z(), false, cells);
+                int[] plot = RecruitmentPost.of(site).church();
+                if (Math.abs((plot[0] >> 4) - chunk.getPos().x) > 1 || Math.abs((plot[1] >> 4) - chunk.getPos().z) > 1) {
+                    continue; // the church lies in other chunks
+                }
+                // Only where it stands across the plot matters here; the floor is found in the column below.
+                java.util.Optional<rafasconquest.worldgen.GoldChurch.Layout> church = rafasconquest.worldgen.GoldChurch.layout(
+                        level.getStructureManager(), plot[0], plot[1], 0);
+                if (church.isEmpty()) {
+                    continue;
+                }
+                spot = hold.kind() == rafasconquest.people.Person.Kind.LORD ? church.get().lord() : church.get().ruler();
+                yaw = FACING; // toward the door
             }
             if (spot[0] >> 4 != chunk.getPos().x || spot[1] >> 4 != chunk.getPos().z) {
                 continue;
@@ -116,14 +149,14 @@ final class RecruitmentPosts {
         return placed;
     }
 
-    /** A city hold's size, in districts a side (from the map's cities). */
+    /** A hold's city's size, in districts a side (from the map's cities); -1 if it stands in no city (a castle). */
     private static int cityCells(rafasconquest.map.BaseMap map, rafasconquest.people.Person.Hold hold) {
         for (rafasconquest.core.SeatCities.City c : map.cities()) {
-            if (c.province() == hold.province()) {
+            if (c.province() == hold.province() && c.x() == hold.x() && c.z() == hold.z()) {
                 return c.districts();
             }
         }
-        return CityLayout.CELLS_PER_SIDE;
+        return -1;
     }
 
     /** The lowest standing room under the top of a column (within {@link #FLOOR_SCAN} blocks): a building's ground floor. */

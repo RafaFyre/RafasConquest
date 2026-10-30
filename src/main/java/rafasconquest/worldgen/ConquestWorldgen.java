@@ -40,6 +40,8 @@ public final class ConquestWorldgen {
     public static final RegistryObject<StructurePieceType> CITY_TERRAIN_PIECE = PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
     public static final RegistryObject<StructurePieceType> RECRUITMENT_POST_PIECE = PIECE_TYPES.register("recruitment_post",
             () -> (context, tag) -> new RecruitmentPostPiece(tag));
+    public static final RegistryObject<StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",
+            () -> (context, tag) -> new GoldChurchPiece(tag));
 
     public static final ResourceKey<Structure> FARM = key("farm");
     public static final ResourceKey<Structure> CITY = key("city");

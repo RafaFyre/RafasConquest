@@ -81,7 +81,9 @@ public final class Roads {
     /** A spur looks this many pixels about for a road (or a fork) to join. */
     static final int SPUR_REACH = 40;
     /** How far past a city's walls a road begins. */
-    static final int GATE_OUT = 6;
+    static final int GATE_OUT = 4;
+    /** How far a road runs straight out from a city's gate before turning toward where it goes. */
+    static final int GATE_STUB = 48;
     private static final double WATER_COST = 25;
     private static final double SEA_COST = 300;
     private static final double CITY_COST = 200;
@@ -183,9 +185,12 @@ public final class Roads {
         for (Link link : ordered) {
             int[] a = gate(link.a(), link.b());
             int[] b = gate(link.b(), link.a());
-            List<Integer> path = router.route(land.pixel(a[0], a[1]), land.pixel(b[0], b[1]), false);
+            // Straight out of each gate first, so the road meets the gate head on rather than running along the wall.
+            int[] sa = outside(link.a(), link.b());
+            int[] sb = outside(link.b(), link.a());
+            List<Integer> path = router.route(land.pixel(sa[0], sa[1]), land.pixel(sb[0], sb[1]), false);
             if (path != null) {
-                roads.add(router.lay(link.grade(), path, a, b, link.a().name(), link.b().name()));
+                roads.add(router.lay(link.grade(), path, a, sa, sb, b, link.a().name(), link.b().name()));
             }
         }
         for (Spur spur : spurs) {
@@ -194,7 +199,7 @@ public final class Roads {
             if (path != null && path.size() > 1) {
                 int end = path.get(path.size() - 1);
                 int[] at = land.centre(end);
-                roads.add(router.lay(spur.grade(), path, new int[]{spur.place().x(), spur.place().z()}, at, spur.place().name(),
+                roads.add(router.lay(spur.grade(), path, new int[]{spur.place().x(), spur.place().z()}, null, null, at, spur.place().name(),
                         router.nameAt(end)));
             }
         }
@@ -224,6 +229,19 @@ public final class Roads {
         return Math.abs(dx) >= Math.abs(dz)
                 ? new int[]{place.x() + Integer.signum(dx) * out, place.z() + along}
                 : new int[]{place.x() + along, place.z() + Integer.signum(dz) * out};
+    }
+
+    /** {@link #GATE_STUB} blocks straight out from the gate a road to {@code toward} leaves by (the place, for a point). */
+    static int[] outside(Place place, Place toward) {
+        int[] g = gate(place, toward);
+        if (place.half() <= 0) {
+            return g;
+        }
+        int dx = toward.x() - place.x();
+        int dz = toward.z() - place.z();
+        return Math.abs(dx) >= Math.abs(dz)
+                ? new int[]{g[0] + Integer.signum(dx) * GATE_STUB, g[1]}
+                : new int[]{g[0], g[1] + Integer.signum(dz) * GATE_STUB};
     }
 
     /** The pixel under (x, z), clamped onto the map. */
@@ -363,7 +381,7 @@ public final class Roads {
         }
 
         /** Lays a road along a found path: marks its pixels (and its forks), and smooths it into points. */
-        Road lay(Grade grade, List<Integer> path, int[] a, int[] b, String fromName, String toName) {
+        Road lay(Grade grade, List<Integer> path, int[] a, int[] stubA, int[] stubB, int[] b, String fromName, String toName) {
             byte r = (byte) (rank(grade) + 1);
             boolean wasOn = false;
             for (int i = 0; i < path.size(); i++) {
@@ -383,9 +401,15 @@ public final class Roads {
             // From the exact ends through the pixel centres, smoothed and spaced out.
             List<double[]> line = new ArrayList<>();
             line.add(new double[]{a[0], a[1]});
+            if (stubA != null) {
+                line.add(new double[]{stubA[0], stubA[1]});
+            }
             for (int i = 1; i < path.size() - 1; i++) {
                 int[] c = land.centre(path.get(i));
                 line.add(new double[]{c[0], c[1]});
+            }
+            if (stubB != null) {
+                line.add(new double[]{stubB[0], stubB[1]});
             }
             line.add(new double[]{b[0], b[1]});
             for (int pass = 0; pass < 3; pass++) {

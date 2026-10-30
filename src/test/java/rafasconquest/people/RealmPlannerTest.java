@@ -73,6 +73,14 @@ class RealmPlannerTest {
         World w = world(5);
         Set<Integer> holds = new HashSet<>();
         for (Person p : w.realm().people()) {
+            if (p.hold().kind() == Person.Kind.LORD) {
+                // A capital city's own lord, sworn to the ruler who holds it.
+                Person liege = w.realm().people().get(p.liege());
+                assertTrue(liege.hold().province() == p.hold().province() && liege.hold().kind() != Person.Kind.LORD,
+                        "a city's lord not sworn to its ruler");
+                assertTrue(w.realm().holderOf(p.hold().province()) == p.liege(), "a city's lord taken for its holder");
+                continue;
+            }
             assertTrue(holds.add(p.hold().province()), "two holders of one hold");
         }
         for (SeatCities.City c : w.cities()) {

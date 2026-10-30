@@ -174,6 +174,12 @@ public final class CityGridBuilder {
                                 pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
                                 continue; // the recruitment post has this plot
                             }
+                            if (qx == 0 && qz == 1 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
+                                    && heldByANation(site)) {
+                                int[] church = RecruitmentPost.of(site).church();
+                                pieces.addPiece(new GoldChurchPiece(church[0], church[1], plate));
+                                continue; // and the gold church, the one beside it
+                            }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
                             int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
                             house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
