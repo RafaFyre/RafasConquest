@@ -139,7 +139,12 @@ public final class HorizontalStretch {
         // A climate noise is a "shifted_noise" over one of the climate noises, flat (no y scale). It is edited through the
         // game's own codec (out to JSON, its xz_scale divided, back again), as its class is closed to mods.
         DensityFunction.Visitor visitor = f -> {
-            ResourceLocation type = BuiltInRegistries.DENSITY_FUNCTION_TYPE.getKey(f.codec().codec());
+            ResourceLocation type;
+            try {
+                type = BuiltInRegistries.DENSITY_FUNCTION_TYPE.getKey(f.codec().codec());
+            } catch (UnsupportedOperationException e) {
+                return f; // a holder link (its codec throws); mapAll has already visited what it holds
+            }
             if (type == null || !type.getPath().equals("shifted_noise")) {
                 return f;
             }
