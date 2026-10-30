@@ -35,6 +35,7 @@ public class FactionMapScreen extends Screen {
     private final List<MapLayer> layers = List.of(
             new BaseMapLayer(),     // 1. terrain (from the server) and the storm wall
             new TerritoryLayer(),   // 2. see-through faction territory
+            new TitleLayer(),       // 3. the land's titles: county to empire borders and seats
             new PoiIconLayer(),     // 3. capitals, City-states, farms
             new RoadLayer(),        // 4. paths and roads (none yet)
             new UnitLayer(),        // 5. players, later armies

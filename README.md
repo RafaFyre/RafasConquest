@@ -613,6 +613,29 @@ generated or loaded:
 The client builds the political layers from it and the faction data. `gradlew mapPreview -Pworld=run/<world>
 -Pout=<png>` renders the same political map for a dev world, without the game.
 
+## Land titles
+
+The land is divided into titles once, when the world map is drawn, from its provinces alone (`core/TitleMap`); nations
+take them up afterwards, not the other way round. Provinces group into **counties** (2 to 6 neighbouring provinces),
+counties into **duchies** (3 to 6), duchies into **kingdoms** (2 to 4) and kingdoms into **empires** (3 to 6). Each group
+grows from a random start through its neighbours to a size drawn in its range; a group left too small joins its
+smallest neighbour, and one with no neighbour (an island) stands alone. Every title has a **seat**: a county's is one of
+its provinces, a duchy's one of its counties' seats, a kingdom's one of its duchies', an empire's one of its kingdoms',
+so an empire's seat is also the seat of its kingdom, duchy and county. Seats are drawn at random, provinces on the
+shore three times as likely. A title is named after its seat ("Duchy of Shukai"); provinces are named from their centre
+and the world seed in the style of the factions' names (`core/ProvinceNames`). The titles and names are saved and sent
+with the world map (`map/BaseMap`).
+
+On the world map (`client/map/TitleLayer`, `map/TitleStyle`) a faint line runs between counties, a darker one between
+duchies, a heavy double line between kingdoms and a dark red one between empires. Each seat is marked, larger and
+brighter the higher its title (county seats once zoomed in); hovering over one names every title seated there.
+
+**Vanilla villages are off:** the mod overrides vanilla's village placement (`data/minecraft/worldgen/structure_set/
+villages.json`) with no structures in it; the mod's own settlements will take their place.
+
+Still to come: seat cities sized by title, hamlets and villages in every other province, and nations taking up the
+titles by zone.
+
 ## Cities (City-states and Empire capitals)
 
 A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state

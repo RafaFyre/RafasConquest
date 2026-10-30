@@ -37,6 +37,10 @@
   "gui.rafasconquest.map.legend.capital": "Empire capital",
   "gui.rafasconquest.map.legend.city_state": "City-state",
   "gui.rafasconquest.map.legend.farm": "Farm (zoom in)",
+  "gui.rafasconquest.map.legend.county": "County seat (zoom in); faint line between counties",
+  "gui.rafasconquest.map.legend.duchy": "Duchy seat; darker line between duchies",
+  "gui.rafasconquest.map.legend.kingdom": "Kingdom seat; heavy line between kingdoms",
+  "gui.rafasconquest.map.legend.empire": "Empire seat; red line between empires",
   "gui.rafasconquest.map.legend.you": "You",
   "gui.rafasconquest.map.legend.name": "Faction name (double-click for info)"
 }

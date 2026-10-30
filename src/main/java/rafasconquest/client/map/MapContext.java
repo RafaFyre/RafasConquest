@@ -26,6 +26,7 @@ import java.util.UUID;
 public final class MapContext implements AutoCloseable {
     public static final ResourceLocation BASE_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/base");
     public static final ResourceLocation TERRITORY_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/territory");
+    public static final ResourceLocation TITLES_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/titles");
 
     public final BaseMap base;
     public final List<FactionInfo> factions;
@@ -50,6 +51,7 @@ public final class MapContext implements AutoCloseable {
         }
         upload(BASE_TEXTURE, image(political.parchment()));
         upload(TERRITORY_TEXTURE, image(political.territory()));
+        upload(TITLES_TEXTURE, image(rafasconquest.map.TitleStyle.borders(base)));
     }
 
     /** Where a realm's name goes, or null if it holds no land on the map. */
@@ -96,5 +98,6 @@ public final class MapContext implements AutoCloseable {
     public void close() {
         Minecraft.getInstance().getTextureManager().release(BASE_TEXTURE);
         Minecraft.getInstance().getTextureManager().release(TERRITORY_TEXTURE);
+        Minecraft.getInstance().getTextureManager().release(TITLES_TEXTURE);
     }
 }

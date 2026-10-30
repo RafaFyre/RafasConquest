@@ -11,6 +11,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.ProvinceNames;
+import rafasconquest.core.TitleMap;
 import rafasconquest.core.WorldSettings;
 
 import java.util.List;
@@ -101,7 +103,15 @@ public final class BaseMapGenerator {
                 .stream().map(s -> new int[]{s.x(), s.z()}).toList();
         List<ProvinceMap.Centre> centres = ProvinceMap.centres(level.getSeed(), terrain, cities);
         int[] provinces = ProvinceMap.assign(terrain, centres);
-        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres);
+        // The titles: provinces into counties, duchies, kingdoms and empires, telling the shore by the sea beside it
+        // (the sea within the known world; beyond it is no shore).
+        boolean[] ocean = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            ocean[i] = provinces[i] == ProvinceMap.WATER && pixels[i] != 0;
+        }
+        TitleMap titles = TitleMap.build(level.getSeed(), size, size, provinces, centres.size(), ocean);
+        List<String> names = centres.stream().map(c -> ProvinceNames.name(level.getSeed(), c.x(), c.z())).toList();
+        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles);
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */
