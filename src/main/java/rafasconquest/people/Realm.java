@@ -161,6 +161,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             out.writeByte(p.age());
             out.writeShort(p.culture());
             out.writeShort(p.faith());
+            out.writeByte(p.race());
             for (int s : p.stats()) {
                 out.writeByte(s);
             }
@@ -218,6 +219,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             int age = in.readUnsignedByte();
             int culture = in.readShort();
             int faith = in.readShort();
+            int race = in.readUnsignedByte();
             int[] stats = new int[Stat.values().length];
             for (int s = 0; s < stats.length; s++) {
                 stats[s] = in.readUnsignedByte();
@@ -228,7 +230,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
                 traits.add(Personality.values()[in.readUnsignedByte()]);
             }
             Person.Hold hold = new Person.Hold(Person.Kind.values()[in.readUnsignedByte()], in.readShort(), in.readInt(), in.readInt());
-            people.add(new Person(given, family, female, age, culture, faith, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
+            people.add(new Person(given, family, female, age, culture, faith, race, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
                     in.readBoolean()));
         }
         int bondCount = in.readInt();

@@ -314,4 +314,47 @@ class RealmPlannerTest {
             previous = mean;
         }
     }
+
+    @Test
+    void holdersAreMostlyOfTheirLandsRace() {
+        int native_ = 0;
+        int all = 0;
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            for (Person p : w.realm().people()) {
+                assertTrue(p.race() >= 0 && p.race() < Race.values().length, "race " + p.race());
+                all++;
+                native_ += p.race() == w.homeland()[p.hold().province()] ? 1 : 0;
+                if (p.nation() >= 0 && p.race() != w.homeland()[p.hold().province()]) {
+                    assertTrue(w.realm().demographics(p.nation()).races()[p.race()] > 0, "a holder of a race their nation has none of");
+                }
+            }
+        }
+        assertTrue(native_ >= all * RealmPlanner.NATIVE_HOLDER * 0.9, native_ + " of " + all + " of their land's race");
+    }
+
+    @Test
+    void titlesFollowTheSeatAndFeatsTheSkills() {
+        World w = world(2);
+        int checked = 0;
+        for (int i = 0; i < w.realm().people().size(); i++) {
+            Person p = w.realm().people().get(i);
+            TitleMap.Tier seat = w.titles().seatOf(p.hold().province());
+            List<Honours.Honour> titles = Honours.titles(p, seat, "Here", p.nation() >= 0 ? "Somewhere" : null,
+                    p.nation() >= 0 && w.realm().ruler(p.nation()) == i);
+            int land = (int) titles.stream().filter(h -> h.name().endsWith(" of Here") && !h.name().startsWith("Lordship")).count();
+            assertEquals(seat == null ? 0 : seat.ordinal() + 1, land, "land titles of a " + seat + " seat");
+            boolean sword = !Stat.superhumanTier(p.stat(Stat.PROWESS)).isEmpty();
+            assertEquals(sword, titles.stream().anyMatch(h -> h.name().startsWith("Sword ")));
+            long feats = Honours.feats(p).size();
+            long expected = java.util.Arrays.stream(Stat.values())
+                    .filter(s -> p.stat(s) >= Honours.FEAT_SKILL && !(s == Stat.PROWESS && sword)).count() + (p.age() >= Honours.FEAT_AGE ? 1 : 0);
+            assertEquals(expected, feats);
+            checked++;
+        }
+        assertTrue(checked > 0);
+        for (Personality t : Personality.values()) {
+            assertFalse(t.description().isBlank(), t + " has no description");
+        }
+    }
 }

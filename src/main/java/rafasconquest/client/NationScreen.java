@@ -1,28 +1,14 @@
 package rafasconquest.client;
 
-import com.mojang.blaze3d.platform.Lighting;
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.talhanation.recruits.entities.AbstractRecruitEntity;
-import com.talhanation.recruits.init.ModEntityTypes;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.blockentity.BannerRenderer;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import org.jetbrains.annotations.Nullable;
-import rafasconquest.core.TitleMap;
-import rafasconquest.faction.FactionBanner;
-import rafasconquest.faction.FactionBannerNbt;
 import rafasconquest.map.BaseMap;
 import rafasconquest.people.Demographics;
-import rafasconquest.people.Homeland;
 import rafasconquest.people.Person;
 import rafasconquest.people.Race;
 import rafasconquest.people.Realm;
@@ -40,12 +26,11 @@ import java.util.stream.Collectors;
  * that character's page; Esc goes back.
  */
 public class NationScreen extends Screen {
-    private static final int BACKGROUND = 0xFF202226;
-    private static final int BOX = 0xFF0E0F10;
-    private static final int BOX_EDGE = 0xFF3C3E42;
-    private static final int TEXT = 0xFFF0EEE8;
-    private static final int MUTED = 0xFFA8A49C;
-    private static final int GOLD = 0xFFE0C060;
+    private static final int BACKGROUND = Portraits.BACKGROUND;
+    private static final int BOX = Portraits.BOX;
+    private static final int BOX_EDGE = Portraits.BOX_EDGE;
+    private static final int TEXT = Portraits.TEXT;
+    private static final int MUTED = Portraits.MUTED;
     private static final int DIAMOND = 0xFF3CC26A;
     private static final int DIAMOND_EDGE = 0xFFE8F8EC;
     /** The greatest nobles, in the row under the ruler. */
@@ -61,9 +46,7 @@ public class NationScreen extends Screen {
     private final List<Integer> nobles;
     private final List<Figure> figures = new ArrayList<>();
     @Nullable
-    private ModelPart flag;
-    private List<com.mojang.datafixers.util.Pair<net.minecraft.core.Holder<net.minecraft.world.level.block.entity.BannerPattern>,
-            net.minecraft.world.item.DyeColor>> banner = List.of();
+    private Portraits.Banner banner;
     /** Nobles who found no room on the screen. */
     private int unseen;
 
@@ -92,7 +75,7 @@ public class NationScreen extends Screen {
     }
 
     /** How powerful a noble is: the rank of their hold first, then how many answer to them, then their skills. */
-    private static int power(Realm realm, int i) {
+    static int power(Realm realm, int i) {
         Person p = realm.people().get(i);
         int rank = switch (p.hold().kind()) {
             case CAPITAL -> 4;
@@ -109,12 +92,8 @@ public class NationScreen extends Screen {
 
     @Override
     protected void init() {
-        addRenderableWidget(Button.builder(Component.literal("✕"), b -> onClose()).bounds(width - 26, 6, 20, 20).build());
-        if (minecraft.level != null) {
-            FactionBanner design = FactionBanner.of(base.nations().get(nation).id());
-            banner = BannerBlockEntity.createPatterns(FactionBannerNbt.baseColor(design), FactionBannerNbt.patterns(minecraft.level.registryAccess(), design));
-            flag = minecraft.getEntityModels().bakeLayer(ModelLayers.BANNER).getChild("flag");
-        }
+        Portraits.buttons(this, width, this::onClose, this::addRenderableWidget);
+        banner = new Portraits.Banner(minecraft, base.nations().get(nation).id());
         layOut();
     }
 
@@ -154,25 +133,9 @@ public class NationScreen extends Screen {
         unseen = nobles.size() - next;
     }
 
-    /** A figure for a character, of their culture's land (the Recruits skin for its villagers). */
+    /** A figure for a character, in the skin of their race's land. */
     private Figure figure(int person, int x, int feet, int scale) {
-        AbstractRecruitEntity entity = null;
-        if (minecraft.level != null) {
-            entity = ModEntityTypes.RECRUIT.get().create(minecraft.level);
-            if (entity != null) {
-                Person p = base.realm().people().get(person);
-                Homeland land = base.realm().cultures().get(p.culture()).homeland();
-                int[] skins = switch (land) {
-                    case DESERT, JUNGLE, SAVANNA -> new int[]{15, 19};
-                    case SNOW -> new int[]{5, 10};
-                    case SWAMP, TAIGA -> new int[]{5, 14};
-                    case PLAINS -> new int[]{0, 14};
-                };
-                entity.setBiome((byte) land.ordinal());
-                entity.setVariant(skins[0] + Math.floorMod(p.name().hashCode(), skins[1] - skins[0]));
-            }
-        }
-        return new Figure(person, x, feet, scale, entity);
+        return new Figure(person, x, feet, scale, Portraits.model(minecraft, base.realm().people().get(person)));
     }
 
     @Override
@@ -186,8 +149,10 @@ public class NationScreen extends Screen {
         int bannerWidth = Math.max(30, Math.min(64, (int) (width * 0.075)));
         int bannerHeight = Math.min((int) (height * 0.4), bannerWidth * 27 / 10);
         int leftBanner = (int) (width * 0.07);
-        drawBanner(g, leftBanner, 8, bannerWidth, bannerHeight);
-        drawBanner(g, width - leftBanner - bannerWidth, 8, bannerWidth, bannerHeight);
+        if (banner != null) {
+            banner.draw(g, leftBanner, 8, bannerWidth, bannerHeight);
+            banner.draw(g, width - leftBanner - bannerWidth, 8, bannerWidth, bannerHeight);
+        }
 
         // The title, with the nation's people beside it.
         int boxX = leftBanner + bannerWidth + 4;
@@ -219,7 +184,7 @@ public class NationScreen extends Screen {
         g.renderOutline(boxX, listTop, listWidth, listHeight, BOX_EDGE);
         int y = listTop + 6;
         for (String[] b : bullets) {
-            diamond(g, boxX + 10, y + 4);
+            Portraits.diamond(g, boxX + 10, y + 4, 4, DIAMOND, DIAMOND_EDGE);
             g.drawString(font, b[0], boxX + 20, y, TEXT, false);
             y += 11;
             if (b.length > 1) {
@@ -334,39 +299,6 @@ public class NationScreen extends Screen {
             case INTRIGUE -> "Nation of Whispers";
             default -> "Nation of Scholars";
         };
-    }
-
-    /** A green diamond bullet centred on (x, y). */
-    private static void diamond(GuiGraphics g, int x, int y) {
-        for (int d = 0; d <= 4; d++) {
-            g.fill(x - (4 - d), y - d, x + (4 - d) + 1, y - d + 1, DIAMOND_EDGE);
-            g.fill(x - (4 - d), y + d, x + (4 - d) + 1, y + d + 1, DIAMOND_EDGE);
-        }
-        for (int d = 0; d <= 3; d++) {
-            g.fill(x - (3 - d), y - d, x + (3 - d) + 1, y - d + 1, DIAMOND);
-            g.fill(x - (3 - d), y + d, x + (3 - d) + 1, y + d + 1, DIAMOND);
-        }
-    }
-
-    /** The nation's banner, filling the box at (x, y), as a loom shows one. */
-    private void drawBanner(GuiGraphics g, int x, int y, int w, int h) {
-        if (flag == null) {
-            g.fill(x, y, x + w, y + h, 0xFFB01010);
-            return;
-        }
-        Lighting.setupForFlatItems();
-        PoseStack pose = g.pose();
-        pose.pushPose();
-        // The flag is 20 by 40 model pixels, its top edge at the origin; stretched to fill the box.
-        pose.translate(x + w / 2F, y, 100);
-        pose.scale(w / 1.25F, h / 2.5F, -1);
-        flag.xRot = 0;
-        flag.y = 0;
-        BannerRenderer.renderPatterns(pose, g.bufferSource(), LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, flag, ModelBakery.BANNER_BASE,
-                true, banner);
-        pose.popPose();
-        g.flush();
-        Lighting.setupFor3DItems();
     }
 
     @Override

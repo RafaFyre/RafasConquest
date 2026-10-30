@@ -740,9 +740,28 @@ characters mostly share it, between 70 % (worldly) and 95 % (devout) of them; th
 if there is one) or another faith.
 
 **On the world map**, hovering over a seat or a castle names its holder; a double-click opens their **character page**
-(`client/CharacterScreen`): their skills (prowess with its rank), traits, culture and faith (marked if not the
-nation's), and their liege, vassals, friends and rivals, each with what this character thinks of them. Any of those
-names opens that character's page.
+(`client/CharacterScreen`), laid out on a dark ground:
+- **At the top**, their title, given name and hold ("EMPRESS CALANTHE OF ULDARESH"), and under it, each by a coloured
+  diamond: their culture, faith, race, marriage (no one is married yet) and sex and age. Hovering over one says more
+  (a faith not the nation's is named as such).
+- **On the left**, their model, large, drawn as the inventory draws the player and following the mouse, in the
+  Recruits skin of their race's land; **on the right**, their nation's banner.
+- **Traits, titles and feats** as icons (blank boxes and circles for now); hovering over one shows its name and what
+  it means, until the mouse leaves it. Traits say what they do to the skills (`people/Personality`). **Titles**
+  (`people/Honours`): ruler of their nation, every land title seated at their hold, a castle's lordship, and their
+  sword title. **Feats**: for now, each skill of 15 or more (Silver Tongue, Battle-Proven, Master of Coin, Spymaster,
+  Sage, Famed Blade) and a life past 60 (Long-Lived).
+- **The description**: what they hold and whom they serve, a sword title's meaning, being away or gone; then their
+  liege, friends and rivals as names to click, each with what this character thinks of them.
+- **The stats**: each skill with its diamond, its value and a bar (gold for a superhuman prowess).
+- **The retainers** (their vassals, most powerful first) as models along the bottom; hovering names them, a click
+  opens their page.
+
+The arrow at the very top left goes back a page; the cross at the very top right closes every page. The nation page
+has the same two buttons.
+
+**Races of characters:** a holder is of the race of the land their hold stands in three times in four; otherwise of
+one of their nation's peoples, as many of each as it has.
 
 **In battle**, an army's general and its three Marshals are its nation's own holders, the best Martial commanding and
 the next three leading the wings, each officer's war-council trait from their personality (Deceitful or Paranoid:

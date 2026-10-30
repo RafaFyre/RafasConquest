@@ -35,7 +35,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm,
                       List<rafasconquest.core.Dojos.Dojo> dojos, rafasconquest.core.Roads.Plan roads) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 17;
+    private static final int FORMAT = 18;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {

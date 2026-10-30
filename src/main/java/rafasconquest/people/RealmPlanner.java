@@ -26,7 +26,8 @@ import java.util.Set;
  *       mostly share it, the more devout the nation the more so, the rest keeping a cult or another faith.</li>
  *   <li><b>Holders</b>: one for each capital, city, town and castle, with skills, traits, an age and a liege: the holder
  *       of the next higher seat above them in the same nation (a county's town under its duchy's city, and so on up),
- *       else the nation's ruler. Holds no nation keeps answer to no one.</li>
+ *       else the nation's ruler. Holds no nation keeps answer to no one. A holder is mostly of the race of the land
+ *       their hold stands in, otherwise of one of their nation's peoples.</li>
  *   <li><b>Bonds</b>: friends and rivals among neighbours and those serving the same liege, likelier where their
  *       personalities agree (friends) or clash (rivals).</li>
  * </ul>
@@ -66,6 +67,8 @@ public final class RealmPlanner {
     /** How much of its people a nation has made of its own culture: at least this, and up to this much more. */
     static final double ASSIMILATED = 0.35;
     static final double ASSIMILATED_MORE = 0.5;
+    /** A holder is of the race of the land their hold stands in this often; else of any of their nation's peoples. */
+    static final double NATIVE_HOLDER = 0.75;
 
     private RealmPlanner() {
     }
@@ -169,6 +172,9 @@ public final class RealmPlanner {
         // How many of each martial title are taken (Sword Gods, Kings, Saints); the sanctums' Sword Gods first.
         int[] titles = martialTitles ? new int[]{(int) nations.stream().filter(Seat::sanctum).count(), 0, 0}
                 : Stat.TITLE_LIMITS.clone(); // no martial titles: every one already full, so no one rises past 20
+        // Their peoples first, so each holder can be of one of them.
+        List<Demographics> demographics = demographics(seed, cities, settlements, nations.size(), holder, homeland, nationCulture);
+        Random races = new Random(seed ^ PEOPLE_SALT ^ 0x52414345L);
         List<Person> people = new ArrayList<>();
         for (Person.Hold hold : holds) {
             int p = hold.province();
@@ -178,7 +184,8 @@ public final class RealmPlanner {
             int faith = faithOf(random, nation >= 0 ? nationFaith[nation] : empireFaith[empire],
                     nation >= 0 ? nationPiety[nation] : 0.5f, empire, faiths, cultHome);
             boolean sanctum = nation >= 0 && nations.get(nation).sanctum() && nations.get(nation).province() == p;
-            people.add(person(random, cultures.get(culture), culture, faith, hold, nation, sanctum, titles));
+            int race = raceOf(races, homeland[p], nation >= 0 ? demographics.get(nation) : null);
+            people.add(person(random, cultures.get(culture), culture, faith, race, hold, nation, sanctum, titles));
         }
         // Lieges: the next higher seat above them in the same nation, else the ruler.
         int[] ruler = new int[nations.size()];
@@ -211,7 +218,25 @@ public final class RealmPlanner {
         }
 
         return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
-                demographics(seed, cities, settlements, nations.size(), holder, homeland, nationCulture));
+                demographics);
+    }
+
+    /**
+     * A holder's race: mostly that of the land their hold stands in; otherwise one of their nation's peoples, as many of
+     * each as it has (the land's again, where they hold none).
+     */
+    static int raceOf(Random random, int land, Demographics people) {
+        if (people == null || random.nextDouble() < NATIVE_HOLDER) {
+            return land;
+        }
+        double roll = random.nextDouble();
+        for (int h = 0; h < people.races().length; h++) {
+            roll -= people.races()[h];
+            if (roll < 0) {
+                return h;
+            }
+        }
+        return land;
     }
 
     /**
@@ -283,7 +308,7 @@ public final class RealmPlanner {
     }
 
     /** A holder: name of their culture, skills from their schooling and traits, prowess now and then superhuman. */
-    private static Person person(Random random, Culture culture, int cultureId, int faith, Person.Hold hold, int nation,
+    private static Person person(Random random, Culture culture, int cultureId, int faith, int race, Person.Hold hold, int nation,
                                  boolean sanctum, int[] titles) {
         boolean female = random.nextDouble() < 0.25;
         int age = 18 + random.nextInt(53);
@@ -329,7 +354,7 @@ public final class RealmPlanner {
             stats[Stat.PROWESS.ordinal()] = Stat.SWORD_GOD + random.nextInt(Stat.PROWESS.max() - Stat.SWORD_GOD + 1);
             away = random.nextDouble() < SANCTUM_AWAY;
         }
-        return new Person(culture.givenName(female, random), culture.familyName(random), female, age, cultureId, faith, stats,
+        return new Person(culture.givenName(female, random), culture.familyName(random), female, age, cultureId, faith, race, stats,
                 List.copyOf(traits), hold, -1, nation, away);
     }
 
@@ -415,7 +440,7 @@ public final class RealmPlanner {
     }
 
     private static Person withLiege(Person p, int liege) {
-        return new Person(p.given(), p.family(), p.female(), p.age(), p.culture(), p.faith(), p.stats(), p.traits(), p.hold(), liege,
+        return new Person(p.given(), p.family(), p.female(), p.age(), p.culture(), p.faith(), p.race(), p.stats(), p.traits(), p.hold(), liege,
                 p.nation(), p.away());
     }
 
