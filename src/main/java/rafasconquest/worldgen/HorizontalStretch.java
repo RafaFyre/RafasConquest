@@ -1,16 +1,16 @@
 package rafasconquest.worldgen;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
@@ -127,60 +127,145 @@ public final class HorizontalStretch {
         }
     }
 
-    /** Rescales every climate noise of the overworld's noise router; returns how many were. */
+    /**
+     * Rescales every climate noise of the overworld's generator; returns how many were. Everything is edited as JSON
+     * through the game's own codecs (its classes are closed to mods), where a named density function stays a name:
+     * the generator's settings for the climate noises written in place, and the named functions (vanilla's
+     * {@code overworld/continents} and the like) for the rest, each rebound in place so every reference to it sees the
+     * change. Nothing is inlined, so the noise router keeps its size; the game rebuilds a copy of it for every height
+     * lookup and every chunk, and an inlined router makes those many times slower.
+     */
     private static int apply(MinecraftServer server, int factor) {
         LevelStem stem = server.registryAccess().registryOrThrow(Registries.LEVEL_STEM).get(LevelStem.OVERWORLD);
         if (stem == null || !(stem.generator() instanceof NoiseBasedChunkGenerator generator)) {
             return 0;
         }
-        NoiseGeneratorSettings settings = generator.generatorSettings().value();
-        int[] count = {0};
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, server.registryAccess());
-        // A climate noise is a "shifted_noise" over one of the climate noises, flat (no y scale). It is edited through the
-        // game's own codec (out to JSON, its xz_scale divided, back again), as its class is closed to mods.
-        DensityFunction.Visitor visitor = f -> {
-            ResourceLocation type;
-            try {
-                type = BuiltInRegistries.DENSITY_FUNCTION_TYPE.getKey(f.codec().codec());
-            } catch (UnsupportedOperationException e) {
-                return f; // a holder link (its codec throws); mapAll has already visited what it holds
-            }
-            if (type == null || !type.getPath().equals("shifted_noise")) {
-                return f;
-            }
-            JsonElement json = DensityFunction.DIRECT_CODEC.encodeStart(ops, f).result().orElse(null);
-            if (json == null || !json.isJsonObject()) {
-                return f;
-            }
-            JsonObject o = json.getAsJsonObject();
-            if (!o.has("noise") || !o.get("noise").isJsonPrimitive() || !isClimate(o.get("noise").getAsString())
-                    || o.has("y_scale") && o.get("y_scale").getAsDouble() != 0) {
-                return f;
-            }
-            o.addProperty("xz_scale", o.get("xz_scale").getAsDouble() / factor);
-            DensityFunction stretched = DensityFunction.DIRECT_CODEC.parse(ops, o).result().orElse(null);
-            if (stretched == null) {
-                return f;
-            }
-            count[0]++;
-            return stretched;
-        };
-        NoiseRouter router = settings.noiseRouter().mapAll(visitor);
-        if (count[0] == 0) {
-            return 0;
-        }
-        NoiseGeneratorSettings stretched = new NoiseGeneratorSettings(settings.noiseSettings(), settings.defaultBlock(),
-                settings.defaultFluid(), router, settings.surfaceRule(), settings.spawnTarget(), settings.seaLevel(),
-                settings.disableMobGeneration(), settings.isAquifersEnabled(), settings.oreVeinsEnabled(),
-                settings.useLegacyRandomSource());
+        int count = 0;
         try {
-            Field field = ObfuscationReflectionHelper.findField(NoiseBasedChunkGenerator.class, "f_64318_");
-            field.set(generator, Holder.direct(stretched));
+            // The named functions, rebound in place.
+            Field value = referenceValue();
+            Registry<DensityFunction> functions = server.registryAccess().registryOrThrow(Registries.DENSITY_FUNCTION);
+            for (Holder.Reference<DensityFunction> ref : functions.holders().toList()) {
+                JsonElement json;
+                try {
+                    json = DensityFunction.DIRECT_CODEC.encodeStart(ops, ref.value()).result().orElse(null);
+                } catch (UnsupportedOperationException e) {
+                    continue; // a bare link to another named function: that one is edited itself
+                }
+                int edited = json == null ? 0 : stretch(json, factor);
+                if (edited == 0) {
+                    continue;
+                }
+                DensityFunction stretched = DensityFunction.DIRECT_CODEC.parse(ops, json).result().orElse(null);
+                if (stretched != null) {
+                    value.set(ref, stretched);
+                    count += edited;
+                }
+            }
+            // The router's own climate noises, written in the settings rather than named (vanilla's temperature and
+            // vegetation): each field that is one is replaced, and every other field kept as it is. The settings are
+            // never sent through the codec whole, which would write every named function out in full.
+            NoiseGeneratorSettings settings = generator.generatorSettings().value();
+            NoiseRouter r = settings.noiseRouter();
+            int[] edited = {0};
+            // Every router field is a link: to a named function (edited above), or to its own function written in place.
+            java.util.function.UnaryOperator<DensityFunction> own = f -> {
+                if (!(f instanceof DensityFunctions.HolderHolder link) || link.function().unwrapKey().isPresent()) {
+                    return f;
+                }
+                DensityFunction inner = link.function().value();
+                if (!inner.getClass().getSimpleName().equals("ShiftedNoise")) {
+                    return f;
+                }
+                JsonElement json = DensityFunction.DIRECT_CODEC.encodeStart(ops, inner).result().orElse(null);
+                if (json == null || !json.isJsonObject() || !isClimateNoise(json.getAsJsonObject())) {
+                    return f;
+                }
+                stretch(json, factor);
+                DensityFunction stretched = DensityFunction.DIRECT_CODEC.parse(ops, json).result().orElse(null);
+                if (stretched == null) {
+                    return f;
+                }
+                edited[0]++;
+                return new DensityFunctions.HolderHolder(Holder.direct(stretched));
+            };
+            NoiseRouter router = new NoiseRouter(own.apply(r.barrierNoise()), own.apply(r.fluidLevelFloodednessNoise()),
+                    own.apply(r.fluidLevelSpreadNoise()), own.apply(r.lavaNoise()), own.apply(r.temperature()),
+                    own.apply(r.vegetation()), own.apply(r.continents()), own.apply(r.erosion()), own.apply(r.depth()),
+                    own.apply(r.ridges()), own.apply(r.initialDensityWithoutJaggedness()), own.apply(r.finalDensity()),
+                    own.apply(r.veinToggle()), own.apply(r.veinRidged()), own.apply(r.veinGap()));
+            if (edited[0] > 0) {
+                NoiseGeneratorSettings stretched = new NoiseGeneratorSettings(settings.noiseSettings(), settings.defaultBlock(),
+                        settings.defaultFluid(), router, settings.surfaceRule(), settings.spawnTarget(), settings.seaLevel(),
+                        settings.disableMobGeneration(), settings.isAquifersEnabled(), settings.oreVeinsEnabled(),
+                        settings.useLegacyRandomSource());
+                // Named settings (a world made from a preset) are rebound in place, so the world's save keeps naming them
+                // and the next load stretches the originals once more; only settings written into the save are replaced.
+                if (generator.generatorSettings() instanceof Holder.Reference<NoiseGeneratorSettings> named) {
+                    value.set(named, stretched);
+                } else {
+                    ObfuscationReflectionHelper.findField(NoiseBasedChunkGenerator.class, "f_64318_").set(generator, Holder.direct(stretched));
+                }
+                count += edited[0];
+            }
         } catch (ReflectiveOperationException | RuntimeException e) {
             RafasConquest.LOGGER.error("[world] couldn't stretch the overworld", e);
             return 0;
         }
-        return count[0];
+        return count;
+    }
+
+    /**
+     * Divides the xz_scale of every climate noise in a density function's JSON, in place; returns how many. A climate
+     * noise is a "shifted_noise" over one of the climate noises, flat (no y scale).
+     */
+    private static int stretch(JsonElement json, int factor) {
+        int count = 0;
+        if (json.isJsonArray()) {
+            for (JsonElement e : json.getAsJsonArray()) {
+                count += stretch(e, factor);
+            }
+        } else if (json.isJsonObject()) {
+            JsonObject o = json.getAsJsonObject();
+            if (isClimateNoise(o)) {
+                o.addProperty("xz_scale", o.get("xz_scale").getAsDouble() / factor);
+                // The shift that wiggles the noise's edges is added after the scale, so it is scaled down alike;
+                // otherwise it would be factor times stronger at the same fineness, and break biome edges into specks.
+                for (String shift : new String[]{"shift_x", "shift_z"}) {
+                    if (o.has(shift)) {
+                        JsonObject scaled = new JsonObject();
+                        scaled.addProperty("type", "minecraft:mul");
+                        scaled.add("argument1", o.get(shift));
+                        scaled.addProperty("argument2", 1.0 / factor);
+                        o.add(shift, scaled);
+                    }
+                }
+                return count + 1;
+            }
+            for (var entry : o.entrySet()) {
+                count += stretch(entry.getValue(), factor);
+            }
+        }
+        return count;
+    }
+
+    /** Whether a density function's JSON is a climate noise itself (not just holding one). */
+    private static boolean isClimateNoise(JsonObject o) {
+        return o.has("type") && o.get("type").isJsonPrimitive() && o.get("type").getAsString().endsWith("shifted_noise")
+                && o.has("noise") && o.get("noise").isJsonPrimitive() && isClimate(o.get("noise").getAsString())
+                && o.has("xz_scale") && !(o.has("y_scale") && o.get("y_scale").getAsDouble() != 0);
+    }
+
+    /** The field a registry entry's holder keeps its value in: the only one of type Object. */
+    private static Field referenceValue() throws NoSuchFieldException {
+        for (Field f : Holder.Reference.class.getDeclaredFields()) {
+            if (f.getType() == Object.class) {
+                f.setAccessible(true);
+                return f;
+            }
+        }
+        throw new NoSuchFieldException("Holder.Reference value");
     }
 
     /** Whether a noise (by its id) is one of the climate maps', vanilla's or a "large biomes" form. */
