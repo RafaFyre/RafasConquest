@@ -35,6 +35,16 @@ Debug commands (permission level 2): `/pve faction list`, `/pve faction info <na
 `/pve debug advance <days>`, `/pve debug recruits`, `/pve debug citystats [samples]`, `/pve debug cityterrain`,
 `/pve debug battle [first second]`, `/pve debug battle clear`.
 
+## Bigger world
+
+The mod stretches the overworld 3× each way: biomes (temperature and humidity) and the land itself (continents,
+erosion and ridges: mountains, coasts and oceans). It does so by overriding vanilla's world-generation data
+(`data/minecraft/worldgen/noise_settings/overworld.json`, the temperature and vegetation `xz_scale`, and
+`density_function/overworld/{continents,erosion,ridges}.json`), each scale 0.25 → 0.0833. It applies to every world
+with the mod; only chunks generated afterwards follow it, so start a new world (an old one would show seams where new
+chunks meet old ones). Everything that reads the world generator (the world map, provinces, cities, battlefield
+terrain) follows it.
+
 ## Recruits integration
 
 Every faction this mod creates is also registered as a Villager Recruits faction, so it appears in the Recruits faction
