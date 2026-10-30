@@ -559,10 +559,12 @@ public final class RecruitsBattle {
         }
         Terrain terrain = new Terrain(level, Terrain.stepFor(firstSoldiers + secondSoldiers));
         preparing = true;
+        DistantGeneration.pause(); // from the survey on, until the battle is over
         terrain.surveyInBackground(GroundPlan.area(field)).whenCompleteAsync((surveyed, error) -> {
             preparing = false;
             if (error != null) {
                 RafasConquest.LOGGER.error("[battle] couldn't survey the ground", error);
+                DistantGeneration.resume();
                 failed.accept("Couldn't survey the ground: " + error.getMessage());
                 return;
             }
@@ -570,6 +572,9 @@ public final class RecruitsBattle {
                 ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ));
             } catch (RuntimeException e) {
                 RafasConquest.LOGGER.error("[battle] couldn't begin the battle", e);
+                if (current == null) {
+                    DistantGeneration.resume();
+                }
                 failed.accept("Couldn't begin the battle: " + e.getMessage());
             }
         }, level.getServer());
@@ -748,6 +753,7 @@ public final class RecruitsBattle {
             battle.reportCalibration();
         }
         current = null;
+        DistantGeneration.resume();
         int removed = 0;
         for (Live l : battle.live.values()) {
             removed += battle.discard(l);
@@ -3227,6 +3233,7 @@ public final class RecruitsBattle {
 
     private void end() {
         over = true;
+        DistantGeneration.resume();
         FieldBattle.Outcome outcome = field.outcome();
         for (Live l : live.values()) {
             l.living().forEach(s -> s.setTarget(null));
