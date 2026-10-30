@@ -51,9 +51,6 @@ public class PoiPrecomputer {
     /** Both City-state homes and Empire capitals are cities. */
     @Nullable
     private final Structure city;
-    /** Sites whose structure can't generate (biome check failed). Deterministic, so safe to cache. */
-    private final Set<Long> rejectedCapitalSites = new HashSet<>();
-    private final Set<Long> rejectedCitySites = new HashSet<>();
     /** The world map's provinces, once drawn; Farms belong to whoever holds their province. */
     @Nullable
     private BaseMap provinces;
@@ -104,13 +101,6 @@ public class PoiPrecomputer {
         int maxX = minX + size - 1;
         int maxZ = minZ + size - 1;
 
-        for (CapitalLayout.Site site : CapitalLayout.sitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
-            ensureCapital(site);
-        }
-        for (CityLayout.Site site : CityLayout.cityStateSitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
-            ensureCity(site);
-        }
-
         int spacing = settings.farmSpacingChunks();
         for (int cellX = Math.floorDiv(minX >> 4, spacing); cellX <= Math.floorDiv(maxX >> 4, spacing); cellX++) {
             for (int cellZ = Math.floorDiv(minZ >> 4, spacing); cellZ <= Math.floorDiv(maxZ >> 4, spacing); cellZ++) {
@@ -148,97 +138,48 @@ public class PoiPrecomputer {
         RafasConquest.LOGGER.info("Farms now belong to whoever holds their province ({} changed hands)", changed);
     }
 
-    /**
-     * A Farm belongs to whoever holds its province: whoever holds the province's centre. Before the world map is
-     * ready, and off its edge, the Farm's own position stands in for the centre.
-     */
+    /** A Farm belongs to whoever holds its province. */
     @Nullable
     private UUID farmOwner(BlockPos pos) {
-        ProvinceMap.Centre centre = provinces == null ? null : provinces.provinceAt(pos.getX(), pos.getZ());
-        return centre != null ? holderAt(centre.x(), centre.z()) : holderAt(pos.getX(), pos.getZ());
+        return holderAt(pos.getX(), pos.getZ());
     }
 
-    /**
-     * Who holds (x, z), by the rule the world map draws: the City-state within {@link TerritoryMap#CITY_STATE_RADIUS}
-     * of its city, else the strongest Empire whose radius covers it (then the nearest Capital, then the seeded
-     * tie-break). Creates any faction in range on first sight. Null if no one holds it.
-     */
+    /** Who holds (x, z): the nation holding its province on the world map, if any. */
     @Nullable
-    UUID holderAt(int x, int z) {
-        List<TerritoryMap.Claim> claims = new ArrayList<>();
-        int r = TerritoryMap.CITY_STATE_RADIUS;
-        for (CityLayout.Site site : CityLayout.cityStateSitesInBox(seed, settings, x - r, z - r, x + r, z + r)) {
-            Faction f = ensureCity(site);
-            if (f != null && f.type() == FactionType.CITY_STATE) {
-                claims.add(claim(f));
-            }
-        }
-        int range = WorldSettings.CAPITAL_LOOKUP_RANGE;
-        for (CapitalLayout.Site site : CapitalLayout.sitesInBox(seed, settings, x - range, z - range, x + range, z + range)) {
-            Faction f = ensureCapital(site);
-            if (f != null && f.type() == FactionType.EMPIRE) {
-                claims.add(claim(f));
-            }
-        }
-        return TerritoryMap.holder(x, z, claims, TerritoryMap.empires(claims)).orElse(null);
-    }
-
-    private TerritoryMap.Claim claim(Faction f) {
-        int ox = f.origin().getX();
-        int oz = f.origin().getZ();
-        return new TerritoryMap.Claim(f.id(), ox, oz, f.type() == FactionType.CITY_STATE, f.radiusSteps(), f.strength(),
-                SeedHash.hash(seed, SeedHash.SALT_TIE, ox, oz));
-    }
-
-    /**
-     * The Empire at this Capital site, creating it on first sight. Its capital is a city centred on the site.
-     * Null if the city can't generate there.
-     */
-    @Nullable
-    private Faction ensureCapital(CapitalLayout.Site site) {
-        Faction existing = data.factionAtOrigin(site.x(), site.z());
-        long key = ConquestSavedData.xzKey(site.x(), site.z());
-        if (existing != null || rejectedCapitalSites.contains(key) || city == null) {
-            return existing;
-        }
-        Optional<BlockPos> pos = findValid(city, new ChunkPos(site.x() >> 4, site.z() >> 4));
-        if (pos.isEmpty()) {
-            rejectedCapitalSites.add(key);
+    public UUID holderAt(int x, int z) {
+        if (provinces == null) {
             return null;
         }
-        OriginRoller.Roll roll = OriginRoller.roll(seed, site.x(), site.z(), settings);
-        Faction faction = new Faction(roll.id(), roll.name(), FactionType.EMPIRE, pos.get(), roll.radiusSteps(), roll.strength());
-        data.addFaction(faction);
-        data.addPoi(new Poi(pos.get(), PoiType.CAPITAL, faction.id(), 0, false));
-        bridge.onFactionCreated(faction);
-        return faction;
+        BaseMap.Nation nation = provinces.holderOf(provinces.provinceIndexAt(x, z));
+        return nation == null ? null : nation.id();
     }
 
     /**
-     * The City-state at this city site, creating it on first sight. Its origin and POI sit on the site itself (which
-     * is always inside the start chunk), at the town centre's surface height.
+     * Creates the nations of the world map as factions, if not created already: each holding its title, its seat city
+     * its capital (a City-state's, its city). Called once the server has started, so Recruits can take them.
      */
-    @Nullable
-    private Faction ensureCity(CityLayout.Site site) {
-        Faction existing = data.factionAtOrigin(site.x(), site.z());
-        long key = ConquestSavedData.xzKey(site.x(), site.z());
-        if (existing != null || rejectedCitySites.contains(key) || city == null) {
-            return existing;
+    public void ensureNations() {
+        if (provinces == null) {
+            return;
         }
-        Optional<BlockPos> stub = findValid(city, new ChunkPos(site.x() >> 4, site.z() >> 4));
-        if (stub.isEmpty()) {
-            rejectedCitySites.add(key);
-            return null;
+        int created = 0;
+        for (BaseMap.Nation n : provinces.nations()) {
+            if (data.faction(n.id()) != null) {
+                continue;
+            }
+            boolean cityState = n.tier() == rafasconquest.core.TitleMap.Tier.COUNTY;
+            int y = level.getChunkSource().getGenerator().getBaseHeight(n.x(), n.z(),
+                    net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState());
+            BlockPos pos = new BlockPos(n.x(), y, n.z());
+            Faction faction = new Faction(n.id(), n.name(), cityState ? FactionType.CITY_STATE : FactionType.EMPIRE, pos,
+                    n.radiusSteps(), n.strength());
+            data.addFaction(faction);
+            data.addPoi(new Poi(pos, cityState ? PoiType.CITY : PoiType.CAPITAL, faction.id(),
+                    cityState ? settings.cityDailyOutput() : 0, false));
+            bridge.onFactionCreated(faction);
+            created++;
         }
-        BlockPos pos = new BlockPos(site.x(), stub.get().getY(), site.z());
-        OriginRoller.Roll roll = OriginRoller.roll(seed, site.x(), site.z(), settings);
-        int strength = SeedHash.intInRange(SeedHash.hash(seed, SeedHash.SALT_STRENGTH, site.x(), site.z()),
-                settings.cityStrengthMin(), settings.cityStrengthMax());
-        Faction faction = new Faction(roll.id(), roll.name(), FactionType.CITY_STATE, pos, 0, strength);
-        data.addFaction(faction);
-        data.addPoi(new Poi(pos, PoiType.CITY, faction.id(), settings.cityDailyOutput(), false));
-        bridge.onFactionCreated(faction);
-        return faction;
+        RafasConquest.LOGGER.info("Nations: {} on the world map, {} created now", provinces.nations().size(), created);
     }
 
     private Optional<BlockPos> findValid(Structure structure, ChunkPos chunk) {

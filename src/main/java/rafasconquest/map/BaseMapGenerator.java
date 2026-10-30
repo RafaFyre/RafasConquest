@@ -13,6 +13,8 @@ import rafasconquest.core.CityLayout;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.ProvinceNames;
 import rafasconquest.core.Countryside;
+import rafasconquest.core.Nations;
+import rafasconquest.core.OriginRoller;
 import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 import rafasconquest.core.WorldSettings;
@@ -31,6 +33,9 @@ public final class BaseMapGenerator {
     static final int MIN_BLOCKS_PER_PIXEL = 16;
     /** Largest map side in pixels; a bigger known world gets coarser pixels instead. */
     static final int MAX_SIZE = 1024;
+    /** An unowned seat lies in ruins this often, and is nothing at all this often; otherwise people still live there. */
+    static final double UNOWNED_RUIN = 0.6;
+    static final double UNOWNED_EMPTY = 0.25;
     /** Heights are sampled every this many pixels; they change slowly and each sample is costly. */
     static final int HEIGHT_STEP = 4;
 
@@ -114,8 +119,43 @@ public final class BaseMapGenerator {
         SeatCities.Grid grid = new SeatCities.Grid(minX, minZ, bpp, size, size, provinces, centres);
         List<SeatCities.City> planned = SeatCities.plan(level.getSeed(), grid, titles);
         Countryside.Plan countryside = Countryside.plan(level.getSeed(), grid, titles, planned);
+        // Where each seat stands: its city, its castle, or its province's centre.
+        java.util.Map<Integer, int[]> seatAt = new java.util.HashMap<>();
+        for (Countryside.Settlement s : countryside.settlements()) {
+            if (s.kind() == Countryside.Kind.CASTLE) {
+                seatAt.put(s.province(), new int[]{s.x(), s.z()});
+            }
+        }
+        for (SeatCities.City c : countryside.cities()) {
+            seatAt.put(c.province(), new int[]{c.x(), c.z()});
+        }
+        Nations.Plan plan = Nations.plan(level.getSeed(), titles,
+                p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()}),
+                settings.eyeRadius(), settings.warZoneOuterEdge());
+        List<BaseMap.Nation> nations = new java.util.ArrayList<>();
+        for (Nations.Nation nation : plan.nations()) {
+            OriginRoller.Roll roll = OriginRoller.roll(level.getSeed(), nation.x(), nation.z(), settings);
+            String name = nation.tier() == TitleMap.Tier.EMPIRE ? roll.name() + " Empire" : roll.name();
+            nations.add(new BaseMap.Nation(roll.id(), name, roll.strength(), roll.radiusSteps(), nation.tier(), nation.title(),
+                    nation.seat(), nation.x(), nation.z()));
+        }
+        // The seats no nation holds: mostly ruins, sometimes nothing at all, sometimes still lived in (with no owner).
+        java.util.Random fates = new java.util.Random(level.getSeed() ^ 0x4641544553L);
+        List<SeatCities.City> cities = new java.util.ArrayList<>();
+        for (SeatCities.City c : countryside.cities()) {
+            if (plan.holder()[c.province()] >= 0) {
+                cities.add(c);
+                continue;
+            }
+            double roll = fates.nextDouble();
+            if (roll < UNOWNED_RUIN) {
+                cities.add(c.ruined());
+            } else if (roll >= UNOWNED_RUIN + UNOWNED_EMPTY) {
+                cities.add(c);
+            }
+        }
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
-                countryside.cities(), countryside.settlements());
+                cities, countryside.settlements(), nations, plan.holder());
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

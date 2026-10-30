@@ -585,17 +585,13 @@ Each layer adds its own rows to the legend.
 - **Tiles:** everything a pixel looks at is within 1,152 blocks of it, so any area computed with that margin matches
   the whole map. That allows tiled provinces beyond the map later.
 
-**Who holds a province** (`map/PoliticalMap`) is whoever holds its centre:
-- the City-state, within 400 blocks of its city;
-- otherwise the Empire that would own a Farm there (`core/TerritoryMap`, using `OwnershipResolver`).
+**Who holds a province** (`map/PoliticalMap`) is the nation that took up its title on the base map (see **Nations**
+under **Land titles**).
 
 **Farms belong to their province's holder** (`PoiPrecomputer.farmOwner`), so the map and the economy always agree, and
 a City-state can hold Farms in its provinces:
-- **Before the map is ready** (the first ~20 s of a new world), and for Farms off the map's edge, the Farm's own
-  position stands in for its province's centre.
-- **Once the map is ready**, every Farm is re-judged by its province. On seed 12345, 14 of 317 Farms changed hands,
-  and none change after that.
-- `gradlew mapPreview` reports any Farm whose owner disagrees with the map (0 on seed 12345).
+- A Farm off the map's edge, or in a province nobody holds, has no owner.
+- `gradlew mapPreview` reports any Farm whose owner disagrees with the map.
 
 **Colours:** a realm's colour starts from its banner's main colour, softened to a map tone and varied a little per
 faction. Where two neighbouring realms would look alike, one takes a lighter, darker or hue-shifted shade instead
@@ -649,9 +645,9 @@ first time. Provinces are drawn from the land alone now, no longer centred on th
 **The seat cities are the cities built.** World generation builds each one where it was planned: N × N cells of 5 × 5
 city blocks, each cell its own structure start (the one holding the middle block has the town centre), every road,
 plot, lamp and wall segment, and the terrain (plate, carve, fill, valley) sized to the city. A city takes the style of
-its centre's biome, or the plains style where none matches; one whose box would touch ocean is not built. The old
-seeded City-state sites and Empire capitals still place their factions, but no city is built for them: until nations
-take up the titles, the seat cities stand unowned (no banners painted, no guards).
+its centre's biome, or the plains style where none matches; one whose box would touch ocean is not built. A city
+belongs to the nation holding its province (its banners painted in its colours, its walls guarded); one nobody holds
+stands unowned.
 
 **The countryside** (`core/Countryside`, built by `worldgen/CountryStructure` and `CountryPiece`, all in code): every
 province with no city on it has one settlement, planned with the cities and saved with the map. Most are a **hamlet**: a
@@ -666,7 +662,23 @@ floor; the land the Town would have spread over gets settlements of its own. Eac
 province's centre as it fits on land, clear of cities, and each building on ground levelled to its own height (filled
 up to 12 below, cleared above). On the world map, zoomed in, each has a mark, named on hover with its province.
 
-Still to come: nations taking up the titles by zone.
+**Nations** (`core/Nations`) take up the titles once they are drawn, by zone, judged from each title's seat:
+- **The eye** (within the eye radius of spawn): nobody's.
+- **The war zone** (out to its outer edge): a kingdom is held whole by a **small nation** 40 % of the time; otherwise
+  each of its counties is a **City-state** 35 % of the time, and the rest is nobody's.
+- **The outer world:** an empire is held whole by one great nation 35 % of the time, which takes "Empire" into its
+  name ("Branundun Empire"); otherwise each of its kingdoms is a **large nation** 70 % of the time.
+- **Mini-eyes:** about one outer kingdom in four is the centre of a calm as big as the eye, at least four eye radii from
+  the next and clear of the war zone, where nobody holds anything.
+
+A nation holds its title and every province under it, outside the calms; its capital is its title's seat city (a
+City-state's, its county's Town). The nations are planned and named with the map, saved in it (with which nation holds
+each province) and made factions when the server starts (`PoiPrecomputer.ensureNations`), replacing the old ring of
+Empire capitals and seeded City-state sites. Land, Farms and cities belong to their province's holder.
+
+**Unowned seats:** a seat city in a province nobody holds lies in **ruins** 60 % of the time (zombie village houses and
+town centre, about half its plots empty, a third of its wall fallen), is **not there at all** 25 % of the time, and
+otherwise still has people living in it, with no nation over them.
 
 ## Cities (City-states and Empire capitals)
 

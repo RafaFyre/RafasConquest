@@ -3,6 +3,7 @@ package rafasconquest.map;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.Countryside;
+import rafasconquest.core.Nations;
 import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 
@@ -23,13 +24,28 @@ import java.util.zip.InflaterInputStream;
  * {@code provinces} holds an index into {@code centres}, or {@link ProvinceMap#WATER} / {@link ProvinceMap#NONE}.
  * {@code names} names each province; {@code titles} groups them into counties, duchies, kingdoms and empires, and
  * {@code cities} are their seat cities ({@link SeatCities}), {@code settlements} the hamlets, villages, watchtowers and
- * castles of the countryside ({@link Countryside}).
+ * castles of the countryside ({@link Countryside}); {@code nations} the nations that took up titles ({@link Nations}), and
+ * {@code holders} which of them (index) holds each province, -1 for nobody.
  */
 public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius, int stormWallRadius,
                       int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
-                      List<SeatCities.City> cities, List<Countryside.Settlement> settlements) {
+                      List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
+                      int[] holders) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 8;
+    private static final int FORMAT = 10;
+
+    /**
+     * A nation holding a title: its faction's id and name ("... Empire" with an empire title), strength and radius,
+     * the title (tier and index), and its seat: province and where its seat city stands.
+     */
+    public record Nation(java.util.UUID id, String name, int strength, int radiusSteps, TitleMap.Tier tier, int title, int seat,
+                         int x, int z) {
+    }
+
+    /** The nation holding a province, or null if nobody does. */
+    public Nation holderOf(int province) {
+        return province < 0 || province >= holders.length || holders[province] < 0 ? null : nations.get(holders[province]);
+    }
 
     /** The map's provinces, for planning on. */
     public SeatCities.Grid grid() {
@@ -55,6 +71,16 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
         }
         int province = provinces[pz * width + px];
         return province >= 0 ? centres.get(province) : null;
+    }
+
+    /** The index of the province at world (x, z), or -1 if that is off the map, at sea or in no province. */
+    public int provinceIndexAt(int x, int z) {
+        int px = Math.floorDiv(x - minX, blocksPerPixel);
+        int pz = Math.floorDiv(z - minZ, blocksPerPixel);
+        if (px < 0 || pz < 0 || px >= width || pz >= height) {
+            return -1;
+        }
+        return Math.max(-1, provinces[pz * width + px]);
     }
 
     /** Compressed form, used both for the save file and for sending to clients. */
@@ -95,6 +121,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeByte(c.districts());
                 out.writeByte(c.tier().ordinal());
                 out.writeShort(c.province());
+                out.writeBoolean(c.ruin());
             }
             out.writeInt(settlements.size());
             for (Countryside.Settlement s : settlements) {
@@ -104,6 +131,20 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeShort(s.province());
                 out.writeByte(s.hamlets());
             }
+            out.writeInt(nations.size());
+            for (Nation n : nations) {
+                out.writeLong(n.id().getMostSignificantBits());
+                out.writeLong(n.id().getLeastSignificantBits());
+                out.writeUTF(n.name());
+                out.writeInt(n.strength());
+                out.writeByte(n.radiusSteps());
+                out.writeByte(n.tier().ordinal());
+                out.writeShort(n.title());
+                out.writeShort(n.seat());
+                out.writeInt(n.x());
+                out.writeInt(n.z());
+            }
+            writeShorts(out, holders);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -176,7 +217,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             List<SeatCities.City> cities = new ArrayList<>(cityCount);
             for (int i = 0; i < cityCount; i++) {
                 cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
-                        in.readShort()));
+                        in.readShort(), in.readBoolean()));
             }
             int settlementCount = in.readInt();
             if (settlementCount < 0 || settlementCount > Short.MAX_VALUE) {
@@ -187,8 +228,18 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 settlements.add(new Countryside.Settlement(in.readInt(), in.readInt(), Countryside.Kind.values()[in.readByte()],
                         in.readShort(), in.readByte()));
             }
+            int nationCount = in.readInt();
+            if (nationCount < 0 || nationCount > Short.MAX_VALUE) {
+                throw new IOException("bad nation count " + nationCount);
+            }
+            List<Nation> nations = new ArrayList<>(nationCount);
+            for (int i = 0; i < nationCount; i++) {
+                nations.add(new Nation(new java.util.UUID(in.readLong(), in.readLong()), in.readUTF(), in.readInt(), in.readByte(),
+                        TitleMap.Tier.values()[in.readByte()], in.readShort(), in.readShort(), in.readInt(), in.readInt()));
+            }
+            int[] holders = readShorts(in);
             return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities,
-                    settlements);
+                    settlements, nations, holders);
         }
     }
 }

@@ -42,6 +42,9 @@ public final class CityGridBuilder {
     private static final int HOUSE_ATTEMPTS = 64;
     /** How deep to follow a building's own jigsaw links (building → villager is 1). */
     private static final int MAX_CHILD_DEPTH = 2;
+    /** In a ruin (an unowned seat, abandoned): this share of plots stand empty, and this share of the wall has fallen. */
+    private static final float RUIN_EMPTY_PLOTS = 0.45f;
+    private static final float RUIN_WALL_GAPS = 0.3f;
     private static final String ENTRANCE = "minecraft:building_entrance";
     private static final String WALL_END = "rafasconquest:wall_end";
     /**
@@ -168,6 +171,9 @@ public final class CityGridBuilder {
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
+                            if (site.ruin() && random.nextFloat() < RUIN_EMPTY_PLOTS) {
+                                continue; // a ruin: many plots stand empty
+                            }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
                             int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
                             house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
@@ -214,6 +220,10 @@ public final class CityGridBuilder {
     private void buildWalls(int cellX, int cellZ) {
         PlacedWall previous = null;
         for (CityLayout.WallSegment seg : CityLayout.wallSegments(site.cells(), cellX, cellZ)) {
+            if (site.ruin() && !seg.corner() && !seg.gate() && random.nextFloat() < RUIN_WALL_GAPS) {
+                previous = null; // a ruin: the wall has fallen here
+                continue;
+            }
             StructurePoolElement element = firstElement(seg.gate() ? variant.gate() : seg.corner() ? variant.corner() : variant.wall());
             if (element == null) {
                 return;
@@ -291,7 +301,7 @@ public final class CityGridBuilder {
         // Shuffled templates repeat each element by its weight; try each distinct element once.
         java.util.Set<StructurePoolElement> tried = new java.util.HashSet<>();
         for (StructurePoolElement element : pool.get().value().getShuffledTemplates(random)) {
-            if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/") || !tried.add(element)) {
+            if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/") != site.ruin() || !tried.add(element)) {
                 continue;
             }
             if (++attempts > HOUSE_ATTEMPTS) {
@@ -333,7 +343,7 @@ public final class CityGridBuilder {
         int cx = blockX + (CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH) / 2;
         int cz = blockZ + (CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH) / 2;
         for (StructurePoolElement element : pool.get().value().getShuffledTemplates(random)) {
-            if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/")) {
+            if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/") != site.ruin()) {
                 continue;
             }
             Rotation rotation = Rotation.getRandom(random);

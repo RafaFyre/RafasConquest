@@ -58,7 +58,11 @@ final class CityBanners {
         if (city == null) {
             city = data.poiInChunk(cityChunk, PoiType.CAPITAL);
         }
-        return city == null ? null : data.faction(city.owner());
+        if (city != null) {
+            return data.faction(city.owner());
+        }
+        // Not a nation's seat: the city belongs to whoever holds its province.
+        return data.faction(precomputer.holderAt(site.x(), site.z()));
     }
 
     private static boolean paint(ServerLevel level, BlockPos pos, FactionBanner design) {

@@ -120,6 +120,8 @@ public final class ConquestServer {
         if (catchUpRemaining > 0) {
             RafasConquest.LOGGER.info("Offline catch-up: {} days to process", catchUpRemaining);
         }
+        // The nations of the world map, before Recruits takes the factions.
+        precomputer.ensureNations();
         // Recruits sets up its faction manager while the server starts, so this is the first point it can take ours.
         recruits.syncAll(data.factions());
         mapStore.start(); // the world map draws in the background

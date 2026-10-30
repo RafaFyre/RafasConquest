@@ -72,10 +72,14 @@ public final class CityLayout {
      * A city's centre. {@code capital} cities are Empire capitals (at the Capital sites); the rest are City-state
      * homes from the city grid. Both are built the same way.
      */
-    public record Site(int x, int z, boolean capital, int cells) {
+    public record Site(int x, int z, boolean capital, int cells, boolean ruin) {
         /** A 3 × 3 city. */
         public Site(int x, int z, boolean capital) {
-            this(x, z, capital, CELLS_PER_SIDE);
+            this(x, z, capital, CELLS_PER_SIDE, false);
+        }
+
+        public Site(int x, int z, boolean capital, int cells) {
+            this(x, z, capital, cells, false);
         }
 
         /** City blocks along a side. */
@@ -329,7 +333,7 @@ public final class CityLayout {
         List<Site> sites = new ArrayList<>();
         for (SeatCities.City c : builtCities.apply(new int[]{minX, minZ}, new int[]{maxX, maxZ})) {
             if (c.x() >= minX && c.x() <= maxX && c.z() >= minZ && c.z() <= maxZ) {
-                sites.add(new Site(c.x(), c.z(), c.tier().ordinal() >= TitleMap.Tier.KINGDOM.ordinal(), c.districts()));
+                sites.add(new Site(c.x(), c.z(), c.tier().ordinal() >= TitleMap.Tier.KINGDOM.ordinal(), c.districts(), c.ruin()));
             }
         }
         return sites;
