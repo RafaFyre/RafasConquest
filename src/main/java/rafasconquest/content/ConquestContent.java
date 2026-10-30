@@ -24,11 +24,16 @@ public final class ConquestContent {
             () -> new CommandTableBlock(BlockBehaviour.Properties.copy(Blocks.LECTERN)));
     public static final RegistryObject<Item> COMMAND_TABLE_ITEM = ITEMS.register("command_table",
             () -> new BlockItem(COMMAND_TABLE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> WORLD_MAP = ITEMS.register("world_map",
+            () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.rafasconquest"))
             .icon(() -> COMMAND_TABLE_ITEM.get().getDefaultInstance())
-            .displayItems((parameters, output) -> output.accept(COMMAND_TABLE_ITEM.get()))
+            .displayItems((parameters, output) -> {
+                output.accept(COMMAND_TABLE_ITEM.get());
+                output.accept(WORLD_MAP.get());
+            })
             .build());
 
     private ConquestContent() {

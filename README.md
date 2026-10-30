@@ -559,7 +559,9 @@ first. The old relation is restored when the battle ends.
 
 ## World map
 
-Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). It is a
+Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). The **World Map** item
+(`content/WorldMapItem`: a vanilla map mirrored and dyed dark brown; crafted from a map and brown dye) opens it too,
+with a right-click. It is a
 political map in the style of Crusader Kings 3, out to four or eight times the storm wall's radius by province size (16,000 or 32,000 blocks at default settings, a pixel every 32 or 64 blocks),
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
