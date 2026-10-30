@@ -154,8 +154,14 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
                 for (int i = 0; i < Math.min(4, j.leadsTo().size()); i++) {
                     text = text.setMessage(i, net.minecraft.network.chat.Component.literal(j.leadsTo().get(i)));
                 }
-                entity.setText(text, true);
-                entity.setText(text, false);
+                // Written into the sign's data, not set: setting it would tell a world it isn't in yet.
+                net.minecraft.nbt.CompoundTag tag = entity.saveWithoutMetadata();
+                net.minecraft.world.level.block.entity.SignText.DIRECT_CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, text).result()
+                        .ifPresent(encoded -> {
+                            tag.put("front_text", encoded);
+                            tag.put("back_text", encoded.copy());
+                        });
+                entity.load(tag);
             }
         }
     }
