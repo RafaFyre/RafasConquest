@@ -2,6 +2,7 @@ package rafasconquest.map;
 
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.Countryside;
 import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 
@@ -21,13 +22,14 @@ import java.util.zip.InflaterInputStream;
  * known world) are transparent and drawn as unexplored; {@code stormWallRadius} is where the storm wall stands.
  * {@code provinces} holds an index into {@code centres}, or {@link ProvinceMap#WATER} / {@link ProvinceMap#NONE}.
  * {@code names} names each province; {@code titles} groups them into counties, duchies, kingdoms and empires, and
- * {@code cities} are their seat cities ({@link SeatCities}).
+ * {@code cities} are their seat cities ({@link SeatCities}), {@code settlements} the hamlets, villages, watchtowers and
+ * castles of the countryside ({@link Countryside}).
  */
 public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius, int stormWallRadius,
                       int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
-                      List<SeatCities.City> cities) {
+                      List<SeatCities.City> cities, List<Countryside.Settlement> settlements) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 7;
+    private static final int FORMAT = 8;
 
     /** The map's provinces, for planning on. */
     public SeatCities.Grid grid() {
@@ -93,6 +95,14 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeByte(c.districts());
                 out.writeByte(c.tier().ordinal());
                 out.writeShort(c.province());
+            }
+            out.writeInt(settlements.size());
+            for (Countryside.Settlement s : settlements) {
+                out.writeInt(s.x());
+                out.writeInt(s.z());
+                out.writeByte(s.kind().ordinal());
+                out.writeShort(s.province());
+                out.writeByte(s.hamlets());
             }
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -168,7 +178,17 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
                         in.readShort()));
             }
-            return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities);
+            int settlementCount = in.readInt();
+            if (settlementCount < 0 || settlementCount > Short.MAX_VALUE) {
+                throw new IOException("bad settlement count " + settlementCount);
+            }
+            List<Countryside.Settlement> settlements = new ArrayList<>(settlementCount);
+            for (int i = 0; i < settlementCount; i++) {
+                settlements.add(new Countryside.Settlement(in.readInt(), in.readInt(), Countryside.Kind.values()[in.readByte()],
+                        in.readShort(), in.readByte()));
+            }
+            return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities,
+                    settlements);
         }
     }
 }

@@ -50,7 +50,9 @@ public final class ConquestEvents {
                     level.getChunkSource().randomState().sampler(), generator.getSeaLevel()));
             ConquestServer.attach(level, data);
             // The map, and so the titles and their seat cities, before the first chunk is made.
-            ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(ConquestServer.get().mapStore().loadOrDrawNow().cities()));
+            rafasconquest.map.BaseMap map = ConquestServer.get().mapStore().loadOrDrawNow();
+            ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(map.cities()));
+            ConquestRuntime.publishCountryside(new rafasconquest.worldgen.CountryIndex(map.settlements()));
             rafasconquest.core.CityLayout.publishBuilt((min, max) -> ConquestRuntime.cities().inBox(min[0], min[1], max[0], max[1]));
         }
     }
@@ -61,6 +63,7 @@ public final class ConquestEvents {
             ConquestServer.detach();
             ConquestRuntime.publish(null);
             ConquestRuntime.publishCities(null);
+            ConquestRuntime.publishCountryside(null);
             CapitalLayout.setLand(0, null);
         }
     }

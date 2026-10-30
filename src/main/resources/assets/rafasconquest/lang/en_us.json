@@ -41,6 +41,10 @@
   "gui.rafasconquest.map.legend.duchy": "Duchy seat; darker line between duchies",
   "gui.rafasconquest.map.legend.kingdom": "Kingdom seat; heavy line between kingdoms",
   "gui.rafasconquest.map.legend.empire": "Empire seat; red line between empires",
+  "gui.rafasconquest.map.legend.castle": "Castle (a county seat; zoom in)",
+  "gui.rafasconquest.map.legend.watchtower": "Watchtower (zoom in)",
+  "gui.rafasconquest.map.legend.village": "Small village (zoom in)",
+  "gui.rafasconquest.map.legend.hamlet": "Hamlet (zoom in)",
   "gui.rafasconquest.map.legend.you": "You",
   "gui.rafasconquest.map.legend.name": "Faction name (double-click for info)"
 }

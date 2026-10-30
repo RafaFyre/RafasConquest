@@ -138,9 +138,9 @@ public class BaseMapStore {
         BaseMap map = BaseMapGenerator.generate(level, settings, visibleRadius, settings.warZoneOuterEdge());
         byte[] bytes = map.encode();
         RafasConquest.LOGGER.info("Drew the world map: {} x {} pixels of {} blocks out to {} blocks, {} provinces in {} counties, {} duchies,"
-                        + " {} kingdoms and {} empires, {} seat cities, in {} ms ({} KB)",
+                        + " {} kingdoms and {} empires, {} seat cities, {} settlements, in {} ms ({} KB)",
                 map.width(), map.height(), map.blocksPerPixel(), visibleRadius, map.centres().size(), map.titles().counties(),
-                map.titles().duchies(), map.titles().kingdoms(), map.titles().empires(), map.cities().size(),
+                map.titles().duchies(), map.titles().kingdoms(), map.titles().empires(), map.cities().size(), map.settlements().size(),
                 (System.nanoTime() - start) / 1_000_000, bytes.length / 1024);
         try {
             Files.createDirectories(file.getParent());

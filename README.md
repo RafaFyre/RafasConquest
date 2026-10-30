@@ -653,7 +653,20 @@ its centre's biome, or the plains style where none matches; one whose box would 
 seeded City-state sites and Empire capitals still place their factions, but no city is built for them: until nations
 take up the titles, the seat cities stand unowned (no banners painted, no guards).
 
-Still to come: hamlets and villages in every other province, and nations taking up the titles by zone.
+**The countryside** (`core/Countryside`, built by `worldgen/CountryStructure` and `CountryPiece`, all in code): every
+province with no city on it has one settlement, planned with the cities and saved with the map. Most are a **hamlet**: a
+5 × 5 shack (plank walls on log corners, a slab roof, a door, a barrel and a crafting table) and a fenced sheep pen beside
+it with hay and 2 to 4 sheep. Some are a **small village**: 3 to 6 hamlets in a ring 18 blocks about a well, their pens
+toward it; a province is one 30 % of the time unless a neighbour already is, so villages never neighbour, and villages
+turn back into hamlets until hamlets outnumber them at least two to one. About one hamlet in eight is a **watchtower**
+instead (one in four on a kingdom's edge, one in twelve inside): a 5 × 5 stone shaft 12 high with a door, a ladder and a
+crenellated lookout. About one county Town in four is a **castle** instead of a city (two in five on a duchy's edge,
+one in eight inside): a curtain wall 41 blocks square with a gate, a tower at each corner and a keep with an upper
+floor; the land the Town would have spread over gets settlements of its own. Each settlement stands as near its
+province's centre as it fits on land, clear of cities, and each building on ground levelled to its own height (filled
+up to 12 below, cleared above). On the world map, zoomed in, each has a mark, named on hover with its province.
+
+Still to come: nations taking up the titles by zone.
 
 ## Cities (City-states and Empire capitals)
 

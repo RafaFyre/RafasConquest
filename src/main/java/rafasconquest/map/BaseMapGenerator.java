@@ -12,6 +12,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.ProvinceNames;
+import rafasconquest.core.Countryside;
 import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 import rafasconquest.core.WorldSettings;
@@ -110,10 +111,11 @@ public final class BaseMapGenerator {
         }
         TitleMap titles = TitleMap.build(level.getSeed(), size, size, provinces, centres.size(), ocean);
         List<String> names = centres.stream().map(c -> ProvinceNames.name(level.getSeed(), c.x(), c.z())).toList();
-        List<SeatCities.City> cities = SeatCities.plan(level.getSeed(),
-                new SeatCities.Grid(minX, minZ, bpp, size, size, provinces, centres), titles);
+        SeatCities.Grid grid = new SeatCities.Grid(minX, minZ, bpp, size, size, provinces, centres);
+        List<SeatCities.City> planned = SeatCities.plan(level.getSeed(), grid, titles);
+        Countryside.Plan countryside = Countryside.plan(level.getSeed(), grid, titles, planned);
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
-                cities);
+                countryside.cities(), countryside.settlements());
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

@@ -1,0 +1,12 @@
+{
+  "structures": [
+    {
+      "structure": "rafasconquest:countryside",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "rafasconquest:countryside_sites",
+    "salt": 1717986919
+  }
+}

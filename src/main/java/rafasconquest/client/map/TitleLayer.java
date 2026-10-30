@@ -21,6 +21,8 @@ public class TitleLayer implements MapLayer {
     private static final int[] SEAT_SIZE = {2, 3, 4, 5};
     private static final int[] SEAT_COLOR = {0xFF6B5A44, 0xFF8C6A2F, 0xFFC9A13A, 0xFFB0302A};
     private static final int OUTLINE = 0xFF1E1A16;
+    /** The countryside shows from this zoom (screen pixels per block) in. */
+    private static final double COUNTRY_MIN_SCALE = 0.05;
 
     /** Each province's highest seat (a tier's ordinal), or -1; worked out once per map. */
     private BaseMap seatsOf;
@@ -49,6 +51,20 @@ public class TitleLayer implements MapLayer {
         }
         int[] tiers = tiers(map.base);
         String hovered = null;
+        // The countryside, once zoomed in a little: hamlets, villages, watchtowers and castles.
+        if (view.scale >= COUNTRY_MIN_SCALE) {
+            for (rafasconquest.core.Countryside.Settlement s : map.base.settlements()) {
+                double x = view.screenX(s.x());
+                double y = view.screenY(s.z());
+                if (!view.near(x, y, 6)) {
+                    continue;
+                }
+                int r = countryMark(g, s.kind(), (int) x, (int) y);
+                if (Math.abs(mouseX - x) <= r + 1 && Math.abs(mouseY - y) <= r + 1) {
+                    hovered = countryName(s) + " (" + map.base.names().get(s.province()) + ")";
+                }
+            }
+        }
         for (int p = 0; p < tiers.length; p++) {
             int tier = tiers[p];
             if (tier < 0) {
@@ -72,6 +88,42 @@ public class TitleLayer implements MapLayer {
         if (hovered != null) {
             g.renderTooltip(Minecraft.getInstance().font, Component.literal(hovered), mouseX, mouseY);
         }
+    }
+
+    /** Draws a settlement's mark centred on (x, y); returns its half size. */
+    private static int countryMark(GuiGraphics g, rafasconquest.core.Countryside.Kind kind, int x, int y) {
+        switch (kind) {
+            case HAMLET -> {
+                g.fill(x - 1, y - 1, x + 2, y + 2, 0xFF7A5A3A);
+                return 1;
+            }
+            case VILLAGE -> {
+                g.fill(x - 3, y - 1, x - 1, y + 1, 0xFF7A5A3A);
+                g.fill(x + 1, y - 1, x + 3, y + 1, 0xFF7A5A3A);
+                g.fill(x - 1, y - 3, x + 1, y - 1, 0xFF7A5A3A);
+                return 3;
+            }
+            case WATCHTOWER -> {
+                g.fill(x - 1, y - 3, x + 1, y + 2, 0xFF5C5C5C);
+                g.fill(x - 2, y - 4, x + 2, y - 3, 0xFF3A3A3A);
+                return 3;
+            }
+            default -> {
+                g.fill(x - 3, y - 3, x + 3, y + 3, 0xFF6E6E6E);
+                g.renderOutline(x - 3, y - 3, 6, 6, OUTLINE);
+                g.fill(x - 1, y - 1, x + 1, y + 1, 0xFF3A3A3A);
+                return 3;
+            }
+        }
+    }
+
+    private static String countryName(rafasconquest.core.Countryside.Settlement s) {
+        return switch (s.kind()) {
+            case HAMLET -> "Hamlet";
+            case VILLAGE -> "Village of " + s.hamlets() + " hamlets";
+            case WATCHTOWER -> "Watchtower";
+            case CASTLE -> "Castle";
+        };
     }
 
     /** Every title seated in a province, highest first. */
@@ -106,6 +158,15 @@ public class TitleLayer implements MapLayer {
     @Override
     public List<LegendEntry> legend() {
         List<LegendEntry> entries = new ArrayList<>();
+        String[] country = {"castle", "watchtower", "village", "hamlet"};
+        rafasconquest.core.Countryside.Kind[] kinds = {rafasconquest.core.Countryside.Kind.CASTLE,
+                rafasconquest.core.Countryside.Kind.WATCHTOWER, rafasconquest.core.Countryside.Kind.VILLAGE,
+                rafasconquest.core.Countryside.Kind.HAMLET};
+        for (int i = 0; i < kinds.length; i++) {
+            rafasconquest.core.Countryside.Kind kind = kinds[i];
+            entries.add(new LegendEntry((g, x, y) -> countryMark(g, kind, x + 5, y + 5),
+                    Component.translatable("gui.rafasconquest.map.legend." + country[i])));
+        }
         String[] keys = {"county", "duchy", "kingdom", "empire"};
         for (int tier = SEAT_SIZE.length - 1; tier >= 0; tier--) {
             int s = SEAT_SIZE[tier];
