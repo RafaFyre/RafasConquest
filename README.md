@@ -48,10 +48,12 @@ scale. It is off by default when a mod it doesn't suit is installed (`Horizontal
 Terralith), and the options say so. A dedicated server's new world takes the defaults. The log says how many climate
 noises were stretched, or that none were found.
 
-With Distant Horizons, a stretched world raises its horizontal quality (how far out its terrain keeps fine detail) to
-suit the wider land: HIGH at 2×, EXTREME at 3× and 4× (`client/DistantHorizonsQuality`). The server tells each joining
-client how far the world is stretched; the quality is set through Distant Horizons' API as an override, never below
-the player's own setting and never saved over it, and cleared when they leave the world.
+With Distant Horizons, a stretched world (`client/DistantHorizonsQuality`) builds its far terrain from generated chunks
+only (generator plan `CHUNKS_ONLY`): Distant Horizons' quick rough-surface pass came out coarse, wrongly coloured and
+treeless there. Its horizontal quality is raised to HIGH (no higher: EXTREME over the whole horizon kept the machine
+flat out). The server tells each joining client how far the world is stretched; both are set through
+Distant Horizons' API as overrides, never saved over the player's own settings (quality never below theirs), and
+cleared when they leave the world. LODs a world already saved keep their old look; a new world shows the change.
 
 ## Recruits integration
 
