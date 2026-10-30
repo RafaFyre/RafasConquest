@@ -2,7 +2,11 @@ package rafasconquest.client;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import com.talhanation.recruits.init.ModEntityTypes;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.world.entity.LivingEntity;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.network.chat.Component;
 import rafasconquest.map.BaseMap;
 import rafasconquest.people.Person;
@@ -26,9 +30,19 @@ public class CharacterScreen extends Screen {
     private static final int GOLD = 0xFFE0C060;
     private static final int MAX_VASSALS = 8;
 
+    /** The skills (six rows), the gap, and the traits line: their height, to sit level with the bottom of the list. */
+    private static final int STATS_HEIGHT = 6 * 12 + 10 + 10;
+    /** At least this much room is left for the figure, however short the list. */
+    private static final int FIGURE_MIN = 90;
+
     private final Screen parent;
     private final BaseMap base;
     private final int index;
+    /** Where the list of people on the right ends. */
+    private int listBottom;
+    /** The figure standing for the character, as a soldier stands in Recruits; not in the world. */
+    @Nullable
+    private LivingEntity figure;
 
     public CharacterScreen(Screen parent, BaseMap base, int index) {
         super(Component.literal(base.realm().people().get(index).name()));
@@ -65,6 +79,8 @@ public class CharacterScreen extends Screen {
                 y = link(x, y, other);
             }
         }
+        listBottom = y;
+        figure = minecraft.level == null ? null : ModEntityTypes.RECRUIT.get().create(minecraft.level);
     }
 
     /** A button opening another character's page, at (x, y); returns where the next goes. */
@@ -93,7 +109,16 @@ public class CharacterScreen extends Screen {
             y += 12;
             g.drawString(font, "Not of the nation's faith (" + realm.faiths().get(realm.nationFaith()[p.nation()]).name() + ")", x, y, BAD, false);
         }
-        y += 22;
+        // The skills and traits sit level with the bottom of the list of people; the figure stands in the room above.
+        int headerBottom = y + 12;
+        int statsTop = Math.max(headerBottom + FIGURE_MIN, listBottom - STATS_HEIGHT);
+        if (figure != null) {
+            int feet = statsTop - 10;
+            int scale = Math.max(20, Math.min(80, (int) ((feet - headerBottom - 8) / 2.1)));
+            int fx = x + 145;
+            InventoryScreen.renderEntityInInventoryFollowsMouse(g, fx, feet, scale, fx - mouseX, feet - scale * 1.6F - mouseY, figure);
+        }
+        y = statsTop;
         for (Stat s : Stat.values()) {
             int v = p.stat(s);
             String tier = s == Stat.PROWESS ? Stat.superhumanTier(v) : "";
