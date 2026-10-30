@@ -51,6 +51,7 @@ public class TitleLayer implements MapLayer {
         }
         int[] tiers = tiers(map.base);
         String hovered = null;
+        int hoveredProvince = -1;
         // The countryside, once zoomed in a little: hamlets, villages, watchtowers and castles.
         if (view.scale >= COUNTRY_MIN_SCALE) {
             for (rafasconquest.core.Countryside.Settlement s : map.base.settlements()) {
@@ -62,6 +63,7 @@ public class TitleLayer implements MapLayer {
                 int r = countryMark(g, s.kind(), (int) x, (int) y);
                 if (Math.abs(mouseX - x) <= r + 1 && Math.abs(mouseY - y) <= r + 1) {
                     hovered = countryName(s) + " (" + map.base.names().get(s.province()) + ")";
+                    hoveredProvince = s.kind() == rafasconquest.core.Countryside.Kind.CASTLE ? s.province() : -1;
                 }
             }
         }
@@ -83,14 +85,46 @@ public class TitleLayer implements MapLayer {
             g.fill((int) x - s, (int) y - s, (int) x + s, (int) y + s, SEAT_COLOR[tier]);
             if (Math.abs(mouseX - x) <= s + 2 && Math.abs(mouseY - y) <= s + 2) {
                 hovered = names(map.base, p, tier);
+                hoveredProvince = p;
             }
         }
         if (hovered != null) {
-            g.renderTooltip(Minecraft.getInstance().font, Component.literal(hovered), mouseX, mouseY);
+            List<Component> lines = new ArrayList<>(List.of(Component.literal(hovered)));
+            int holder = hoveredProvince < 0 ? -1 : map.base.realm().holderOf(hoveredProvince);
+            if (holder >= 0) {
+                lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(map.base,
+                        map.base.realm().people().get(holder)) + " (double-click)").withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+            g.renderComponentTooltip(Minecraft.getInstance().font, lines, mouseX, mouseY);
         }
     }
 
     /** Draws a settlement's mark centred on (x, y); returns its half size. */
+    /** A double-click on a hold (a seat city or a castle) opens its holder's page. */
+    @Override
+    public boolean mouseClicked(MapView view, MapContext map, double mouseX, double mouseY, int button, boolean doubleClick) {
+        if (!doubleClick || button != 0) {
+            return false;
+        }
+        java.util.List<rafasconquest.people.Person> people = map.base.realm().people();
+        int nearest = -1;
+        double best = 7;
+        for (int i = 0; i < people.size(); i++) {
+            rafasconquest.people.Person.Hold hold = people.get(i).hold();
+            double d = Math.hypot(view.screenX(hold.x()) - mouseX, view.screenY(hold.z()) - mouseY);
+            if (d < best) {
+                best = d;
+                nearest = i;
+            }
+        }
+        if (nearest < 0) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        mc.setScreen(new rafasconquest.client.CharacterScreen(mc.screen, map.base, nearest));
+        return true;
+    }
+
     private static int countryMark(GuiGraphics g, rafasconquest.core.Countryside.Kind kind, int x, int y) {
         switch (kind) {
             case HAMLET -> {

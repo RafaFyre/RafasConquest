@@ -686,6 +686,47 @@ Empire capitals and seeded City-state sites. Land, Farms and cities belong to th
 empty shack where it would have stood: no torch, no pen, nobody in it), is **not there at all** 25 % of the time, and
 otherwise still has people living in it, with no nation over them.
 
+## Characters, cultures and faiths
+
+Every hold (a capital, city, town or castle) has a **holder**, planned with the world map from the seed
+(`people/RealmPlanner`), kept and sent with it (`people/Realm`). Holders only for now: no families or courts.
+
+- **Who:** a name in their culture's sounds, sex, age (18 to 70), the hold they keep, and the nation they serve. A
+  nation's ruler holds its capital: Emperor, King, Duke or Count by the nation's rank. Others are titled by their hold:
+  a city's a Duke, a town's a Count, a castle's a Lord (Duchess, Countess and Lady for women).
+- **Skills** (`people/Stat`): Diplomacy, Martial, Stewardship, Intrigue and Learning, 0 to 20, around 6 with one they
+  were schooled in higher. **Prowess** runs 0 to 45: ordinary people stay within 20, but about one in twenty is
+  superhuman (21 and up: Champion; 30 and up: Legend; 40 and up: Mythic), each step rarer, and no more than three stand
+  at 45.
+- **Traits** (`people/Personality`): three personality traits, from opposed pairs (Brave or Craven, Calm or Wrathful,
+  Content or Ambitious, Honest or Deceitful, Zealous or Cynical, and so on; never both of a pair). Each bends a few
+  skills.
+- **Lieges:** a holder answers to the holder of the next higher seat above them in the same nation (a county's town to
+  its duchy's city, up through kingdom and empire seats), else to the ruler. Holds no nation keeps answer to no one.
+- **Friends and rivals:** among each holder's nearest neighbours and those serving the same liege, at most two of each;
+  shared traits make friends likelier, opposed ones rivals.
+- **Opinion** of one character for another, -100 to 100: shared traits please and opposed ones grate; a shared faith
+  pleases (a Zealous character doubly, a Cynical one not at all) and another faith grates; so, less, with culture; a
+  vassal thinks well of their liege; friends and rivals most of all.
+
+**Cultures:** one for the lands of each empire title, with its own name and the sounds its names are made of. A nation
+has the culture of its seat's lands, and every one of its characters has it; a hold no nation keeps has its lands'.
+
+**Faiths:** 3 to 5 broad faiths, each held over the lands nearest where it began, and 4 cults, each from a home in one
+empire's lands. A nation keeps its seat's faith with a piety of its own (worldly to devout). Its characters mostly
+share it, between 70 % (worldly) and 95 % (devout) of them; the rest keep a cult (their lands' own, if there is one)
+or another faith.
+
+**On the world map**, hovering over a seat or a castle names its holder; a double-click opens their **character page**
+(`client/CharacterScreen`): their skills (prowess with its rank), traits, culture and faith (marked if not the
+nation's), and their liege, vassals, friends and rivals, each with what this character thinks of them. Any of those
+names opens that character's page.
+
+**In battle**, an army's general and its three Marshals are its nation's own holders, the best Martial commanding and
+the next three leading the wings, each officer's war-council trait from their personality (Deceitful or Paranoid:
+cunning; Arrogant: proud; Brave, Wrathful or Impatient: bold; Craven, Patient or Calm: cautious). A nation with too
+few holders, or a faction not on the map, makes up the rest as before.
+
 ## Cities (City-states and Empire capitals)
 
 > Since the land titles, the cities built are the titles' seat cities, N × N cells by title (see **Land titles**); what

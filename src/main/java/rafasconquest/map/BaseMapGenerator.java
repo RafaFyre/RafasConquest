@@ -163,7 +163,20 @@ public final class BaseMapGenerator {
             ground[i] = Math.round(heights[i]);
         }
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
-                cities, settlements, nations, plan.holder(), ground, wet);
+                cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
+                        plan.holder()));
+    }
+
+    /** The world's people, planned on the finished map: its holds' holders, their cultures, faiths and bonds. */
+    private static rafasconquest.people.Realm realm(long seed, TitleMap titles, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
+                                                    List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] holder) {
+        List<rafasconquest.people.RealmPlanner.Seat> seats = nations.stream()
+                .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z())).toList();
+        rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder);
+        long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
+        rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",
+                realm.people().size(), superhuman, realm.cultures().size(), realm.faiths().size(), realm.bonds().size());
+        return realm;
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

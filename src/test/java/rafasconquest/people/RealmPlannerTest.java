@@ -1,0 +1,162 @@
+package rafasconquest.people;
+
+import org.junit.jupiter.api.Test;
+import rafasconquest.core.Countryside;
+import rafasconquest.core.Nations;
+import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.SeatCities;
+import rafasconquest.core.TitleMap;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class RealmPlannerTest {
+    private static final int BPP = 32;
+    private static final int CELL = 48;
+    private static final int CELLS = 24;
+
+    private record World(TitleMap titles, List<SeatCities.City> cities, Countryside.Plan country, Nations.Plan nations, Realm realm) {
+    }
+
+    /** A land of square provinces 1,536 blocks a side, the sea along the west, centred on spawn. */
+    private static World world(long seed) {
+        int width = CELLS * CELL;
+        int origin = -width * BPP / 2;
+        int[] provinces = new int[width * width];
+        boolean[] sea = new boolean[width * width];
+        List<ProvinceMap.Centre> centres = new ArrayList<>();
+        int[][] index = new int[CELLS][CELLS];
+        for (int cz = 0; cz < CELLS; cz++) {
+            for (int cx = 0; cx < CELLS; cx++) {
+                index[cz][cx] = cx == 0 ? -1 : centres.size();
+                if (cx > 0) {
+                    centres.add(new ProvinceMap.Centre(origin + cx * CELL * BPP + CELL * BPP / 2, origin + cz * CELL * BPP + CELL * BPP / 2, false));
+                }
+            }
+        }
+        for (int z = 0; z < width; z++) {
+            for (int x = 0; x < width; x++) {
+                int p = index[z / CELL][x / CELL];
+                provinces[z * width + x] = p < 0 ? ProvinceMap.WATER : p;
+                sea[z * width + x] = p < 0;
+            }
+        }
+        TitleMap titles = TitleMap.build(seed, width, width, provinces, centres.size(), sea);
+        SeatCities.Grid grid = new SeatCities.Grid(origin, origin, BPP, width, width, provinces, centres);
+        List<SeatCities.City> cities = SeatCities.plan(seed, grid, titles);
+        Countryside.Plan country = Countryside.plan(seed, grid, titles, cities);
+        Nations.Plan nations = Nations.plan(seed, titles, p -> new int[]{centres.get(p).x(), centres.get(p).z()}, 1000, 8000);
+        List<RealmPlanner.Seat> seats = nations.nations().stream().map(n -> new RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z())).toList();
+        Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder());
+        return new World(titles, country.cities(), country, nations, realm);
+    }
+
+    @Test
+    void everyHoldHasOneHolderAndEveryNationARuler() {
+        World w = world(5);
+        Set<Integer> holds = new HashSet<>();
+        for (Person p : w.realm().people()) {
+            assertTrue(holds.add(p.hold().province()), "two holders of one hold");
+        }
+        for (SeatCities.City c : w.cities()) {
+            assertTrue(holds.contains(c.province()), "a city with no holder");
+        }
+        for (Countryside.Settlement s : w.country().settlements()) {
+            if (s.kind() == Countryside.Kind.CASTLE) {
+                assertTrue(holds.contains(s.province()), "a castle with no holder");
+            }
+        }
+        for (int n = 0; n < w.nations().nations().size(); n++) {
+            int seat = w.nations().nations().get(n).seat();
+            int ruler = w.realm().holderOf(seat);
+            assertTrue(ruler >= 0, "a nation with no ruler");
+            assertEquals(Person.Kind.CAPITAL, w.realm().people().get(ruler).hold().kind());
+            assertEquals(-1, w.realm().people().get(ruler).liege(), "a ruler with a liege");
+        }
+    }
+
+    @Test
+    void liegesServeTheSameNationUpToItsRuler() {
+        World w = world(6);
+        List<Person> people = w.realm().people();
+        for (int i = 0; i < people.size(); i++) {
+            Person p = people.get(i);
+            if (p.nation() < 0) {
+                assertEquals(-1, p.liege(), "an unowned hold's holder with a liege");
+                continue;
+            }
+            int at = i;
+            for (int steps = 0; people.get(at).liege() >= 0; steps++) {
+                assertTrue(steps < 10, "a loop of lieges");
+                at = people.get(at).liege();
+                assertEquals(p.nation(), people.get(at).nation(), "a liege of another nation");
+            }
+            assertEquals(w.nations().nations().get(p.nation()).seat(), people.get(at).hold().province(), "a chain not ending at the ruler");
+        }
+    }
+
+    @Test
+    void skillsTraitsCultureAndFaithFollowTheRules() {
+        int peak = 0;
+        int superhuman = 0;
+        int people = 0;
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            Realm realm = w.realm();
+            long broad = realm.faiths().stream().filter(f -> !f.cult()).count();
+            long cults = realm.faiths().stream().filter(Faith::cult).count();
+            assertTrue(broad >= 1 && broad <= 5, broad + " broad faiths");
+            assertEquals(4, cults);
+            int peakHere = 0;
+            for (Person p : realm.people()) {
+                people++;
+                for (Stat s : Stat.values()) {
+                    assertTrue(p.stat(s) >= 0 && p.stat(s) <= s.max(), s + " " + p.stat(s));
+                }
+                superhuman += p.stat(Stat.PROWESS) >= Stat.SUPERHUMAN ? 1 : 0;
+                peakHere += p.stat(Stat.PROWESS) == Stat.PROWESS.max() ? 1 : 0;
+                assertEquals(RealmPlanner.TRAITS, p.traits().size());
+                for (Personality t : p.traits()) {
+                    assertFalse(p.has(t.opposite()), "both " + t + " and its opposite");
+                }
+                if (p.nation() >= 0) {
+                    assertEquals(realm.nationCulture()[p.nation()], p.culture(), "a character not of the nation's culture");
+                }
+            }
+            assertTrue(peakHere <= Stat.PEAK_HOLDERS, peakHere + " at the peak of prowess");
+            peak += peakHere;
+        }
+        assertTrue(superhuman > 0 && superhuman < people / 5, superhuman + " superhuman of " + people);
+    }
+
+    @Test
+    void theRealmIsKeptWhole() throws IOException {
+        Realm realm = world(9).realm();
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        realm.write(new DataOutputStream(bytes));
+        Realm back = Realm.read(new DataInputStream(new ByteArrayInputStream(bytes.toByteArray())));
+        assertEquals(realm.people().size(), back.people().size());
+        assertEquals(realm.bonds(), back.bonds());
+        for (int i = 0; i < realm.people().size(); i++) {
+            Person a = realm.people().get(i);
+            Person b = back.people().get(i);
+            assertEquals(a.name(), b.name());
+            assertEquals(a.hold(), b.hold());
+            assertEquals(a.liege(), b.liege());
+            assertEquals(a.traits(), b.traits());
+            assertTrue(java.util.Arrays.equals(a.stats(), b.stats()));
+        }
+        assertEquals(realm.cultures().get(0).name(), back.cultures().get(0).name());
+    }
+}

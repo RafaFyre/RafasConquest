@@ -35,6 +35,11 @@ public record GameCharacter(String name, Role role, List<Doctrine> doctrines, Do
      * ({@link Doctrine.Distribution}), a stacked wing taking 35 to 45 % of them.
      */
     public static GameCharacter general(List<Doctrine> factionDoctrines, Random random) {
+        return general(factionDoctrines, random, name(random));
+    }
+
+    /** The same, for a general already named: one of the nation's own characters. */
+    public static GameCharacter general(List<Doctrine> factionDoctrines, Random random, String name) {
         List<Doctrine> pool = new ArrayList<>(factionDoctrines);
         List<Doctrine> chosen = new ArrayList<>();
         while (chosen.size() < 2 && !pool.isEmpty()) {
@@ -44,7 +49,7 @@ public record GameCharacter(String name, Role role, List<Doctrine> doctrines, Do
         Doctrine.Distribution[] spreads = Doctrine.Distribution.values();
         Doctrine.Distribution spread = spreads[random.nextInt(spreads.length)];
         double share = STACK_LEAST + random.nextDouble() * (STACK_MOST - STACK_LEAST);
-        return new GameCharacter(name(random), Role.GENERAL, List.copyOf(chosen), spread, share);
+        return new GameCharacter(name, Role.GENERAL, List.copyOf(chosen), spread, share);
     }
 
     public static String name(Random random) {

@@ -32,9 +32,9 @@ import java.util.zip.InflaterInputStream;
 public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius, int stormWallRadius,
                       int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
                       List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
-                      int[] holders, int[] ground, boolean[] wet) {
+                      int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 12;
+    private static final int FORMAT = 13;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {
@@ -159,6 +159,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             for (boolean w : wet) {
                 out.writeBoolean(w);
             }
+            realm.write(out);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -261,7 +262,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 wet[i] = in.readBoolean();
             }
             return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities,
-                    settlements, nations, holders, ground, wet);
+                    settlements, nations, holders, ground, wet, rafasconquest.people.Realm.read(in));
         }
     }
 }

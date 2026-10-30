@@ -60,6 +60,9 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.BattleSite;
 import rafasconquest.map.BaseMap;
+import rafasconquest.people.Person;
+import rafasconquest.people.Personality;
+import rafasconquest.people.Stat;
 import rafasconquest.worldgen.ConquestRuntime;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattlePlan.Arm;
@@ -538,11 +541,13 @@ public final class RecruitsBattle {
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
         java.util.Random characters = new java.util.Random(level.random.nextLong());
+        Officers officersA = officers(first, characters);
+        Officers officersB = officers(second, characters);
         Side[] sides = {
                 new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first),
-                        GameCharacter.general(first.doctrines(), characters), marshals(characters), traits(characters)),
+                        officersA.general(), officersA.marshals(), officersA.traits()),
                 new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second),
-                        GameCharacter.general(second.doctrines(), characters), marshals(characters), traits(characters))};
+                        officersB.general(), officersB.marshals(), officersB.traits())};
         int blocksA = BattlePlan.blocks(firstSoldiers);
         int blocksB = BattlePlan.blocks(secondSoldiers);
         long seed = level.random.nextLong();
@@ -722,6 +727,65 @@ public final class RecruitsBattle {
             }
         }
         return "Plains";
+    }
+
+    /** An army's general, its Marshals (left wing, centre, right wing), and the four's traits in that order. */
+    private record Officers(GameCharacter general, String[] marshals, Trait[] traits) {
+    }
+
+    /**
+     * An army's officers: its nation's own characters (from the world map) by Martial, the best commanding and the next
+     * three leading the wings, each officer's trait from their personality. Where the nation has too few characters, or
+     * isn't on the map, the rest are made up as before.
+     */
+    private static Officers officers(Faction faction, java.util.Random characters) {
+        BaseMap map = ConquestRuntime.map();
+        List<Person> people = new ArrayList<>();
+        if (map != null) {
+            for (int n = 0; n < map.nations().size(); n++) {
+                if (map.nations().get(n).id().equals(faction.id())) {
+                    for (Person p : map.realm().people()) {
+                        if (p.nation() == n) {
+                            people.add(p);
+                        }
+                    }
+                }
+            }
+        }
+        people.sort(Comparator.comparingInt((Person p) -> -p.stat(Stat.MARTIAL)));
+        Trait[] traits = traits(characters);
+        String[] names = new String[4];
+        for (int i = 0; i < names.length; i++) {
+            if (i < people.size()) {
+                names[i] = people.get(i).name();
+                Trait own = officerTrait(people.get(i));
+                if (own != null) {
+                    traits[i] = own;
+                }
+            } else {
+                names[i] = GameCharacter.name(characters);
+            }
+        }
+        return new Officers(GameCharacter.general(faction.doctrines(), characters, names[0]), new String[]{names[1], names[2], names[3]},
+                traits);
+    }
+
+    /** The war-council trait a personality makes of an officer, or null if none of theirs says. */
+    @Nullable
+    private static Trait officerTrait(Person p) {
+        if (p.has(Personality.DECEITFUL) || p.has(Personality.PARANOID)) {
+            return Trait.CUNNING;
+        }
+        if (p.has(Personality.ARROGANT)) {
+            return Trait.PROUD;
+        }
+        if (p.has(Personality.BRAVE) || p.has(Personality.WRATHFUL) || p.has(Personality.IMPATIENT)) {
+            return Trait.BOLD;
+        }
+        if (p.has(Personality.CRAVEN) || p.has(Personality.PATIENT) || p.has(Personality.CALM)) {
+            return Trait.CAUTIOUS;
+        }
+        return null;
     }
 
     /** The traits of an army's general and its Marshals of the left wing, centre and right wing. */
