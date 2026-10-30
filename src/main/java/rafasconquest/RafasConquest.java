@@ -20,6 +20,7 @@ public class RafasConquest {
         IEventBus modBus = context.getModEventBus();
         ConquestWorldgen.register(modBus);
         ConquestContent.register(modBus);
+        rafasconquest.npc.ConquestEntities.register(modBus);
         ConquestNetwork.register();
         modBus.addListener(this::commonSetup);
         context.registerConfig(ModConfig.Type.COMMON, ConquestConfig.SPEC);

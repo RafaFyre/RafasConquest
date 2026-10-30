@@ -745,6 +745,24 @@ the next three leading the wings, each officer's war-council trait from their pe
 cunning; Arrogant: proud; Brave, Wrathful or Impatient: bold; Craven, Patient or Calm: cautious). A nation with too
 few holders, or a faction not on the map, makes up the rest as before.
 
+## Townsfolk
+
+Cities' streets are busy near players with **townsfolk** (`npc/Townsperson`, peopled by `npc/Townsfolk`), there only
+to make a city feel alive: fully ambient, they do nothing but walk.
+
+- **How many:** every district within 64 blocks of a player has 40 on its ordinary roads; the main roads (the avenues
+  through the gates, across the town centre) are twice as busy (`core/StreetWalks`). The edge road under the wall has
+  none.
+- **Spread out:** each townsperson has their own stretch of road and walks it back and forth, stopping now and then
+  and turning back at its ends, so they never bunch up. A district's people are always the same (skin, pace, where
+  they start).
+- **Looks:** a player-shaped figure in one of Recruits' 20 human skins.
+- **Light:** never saved (spawned near players, removed once no one is near, or with the chunk); no AI, no
+  pathfinding, no gravity or physics, no collision or pushing, can't be hit or clicked. On the server a tick is a step
+  along a straight line, the ground's height looked up only on reaching a new block; their position goes to clients
+  every third tick, sent only within 64 blocks, and the client smooths and animates the walk. Every 30 seconds the log
+  says how many are walking and what they cost the server per tick.
+
 ## Cities (City-states and Empire capitals)
 
 > Since the land titles, the cities built are the titles' seat cities, N × N cells by title (see **Land titles**); what

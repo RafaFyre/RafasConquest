@@ -46,6 +46,7 @@
   "gui.rafasconquest.map.legend.village": "Small village (zoom in)",
   "gui.rafasconquest.map.legend.hamlet": "Hamlet (zoom in)",
   "gui.rafasconquest.map.legend.ruin": "Ruin (zoom in)",
+  "entity.rafasconquest.townsperson": "Townsperson",
   "gui.rafasconquest.map.legend.you": "You",
   "gui.rafasconquest.map.legend.name": "Faction name (double-click for info)"
 }

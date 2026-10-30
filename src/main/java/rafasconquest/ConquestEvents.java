@@ -110,6 +110,7 @@ public final class ConquestEvents {
         } else {
             RecruitsBattle.onServerTickEnd();
             BattleMap.tick();
+            rafasconquest.npc.Townsfolk.tick(event.getServer());
         }
     }
 
@@ -117,6 +118,7 @@ public final class ConquestEvents {
     public static void onServerStopping(ServerStoppingEvent event) {
         RecruitsBattle.stop();
         BattleMap.close();
+        rafasconquest.npc.Townsfolk.clear();
     }
 
     /** A battle's dead drop nothing: no loot to clutter the field, and no armour for others to swap into. */

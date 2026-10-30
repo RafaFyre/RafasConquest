@@ -20,6 +20,11 @@ public final class ClientModEvents {
         event.enqueueWork(DistantHorizonsLink::link);
     }
 
+    @SubscribeEvent
+    public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.TOWNSPERSON.get(), TownspersonRenderer::new);
+    }
+
     /** Generals are Recruits' plain recruits; their back banner is a layer on that renderer (either look). */
     @SubscribeEvent
     @SuppressWarnings({"unchecked", "rawtypes"})
