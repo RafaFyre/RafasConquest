@@ -106,6 +106,65 @@ public final class ConquestNetwork {
                 .decoder(WorldStretch::read)
                 .consumerMainThread(ConquestNetwork::handleWorldStretch)
                 .add();
+        CHANNEL.messageBuilder(RecruiterOffer.class, 13, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(RecruiterOffer::write)
+                .decoder(RecruiterOffer::read)
+                .consumerMainThread(ConquestNetwork::handleRecruiterOffer)
+                .add();
+        CHANNEL.messageBuilder(RecruiterAccept.class, 14, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(RecruiterAccept::write)
+                .decoder(RecruiterAccept::read)
+                .consumerMainThread(ConquestNetwork::handleRecruiterAccept)
+                .add();
+    }
+
+    // ---- recruitment posts ----
+
+    /** Server → client: a recruiter's offer, for the dialogue. */
+    public record RecruiterOffer(rafasconquest.npc.Recruitment.Offer offer) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(offer.recruiter());
+            buf.writeUtf(offer.recruiterName());
+            buf.writeUtf(offer.nation());
+            buf.writeBoolean(offer.member());
+            buf.writeBoolean(offer.noble());
+            buf.writeUtf(offer.startRank());
+        }
+
+        static RecruiterOffer read(FriendlyByteBuf buf) {
+            return new RecruiterOffer(new rafasconquest.npc.Recruitment.Offer(buf.readVarInt(), buf.readUtf(), buf.readUtf(), buf.readBoolean(),
+                    buf.readBoolean(), buf.readUtf()));
+        }
+    }
+
+    public static void sendRecruiterOffer(ServerPlayer player, rafasconquest.npc.Recruitment.Offer offer) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new RecruiterOffer(offer));
+    }
+
+    private static void handleRecruiterOffer(RecruiterOffer msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openRecruiter(msg.offer()));
+    }
+
+    /** Client → server: the player takes a recruiter's offer. */
+    public record RecruiterAccept(int recruiter) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(recruiter);
+        }
+
+        static RecruiterAccept read(FriendlyByteBuf buf) {
+            return new RecruiterAccept(buf.readVarInt());
+        }
+    }
+
+    public static void acceptRecruiter(int recruiter) {
+        CHANNEL.sendToServer(new RecruiterAccept(recruiter));
+    }
+
+    private static void handleRecruiterAccept(RecruiterAccept msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            rafasconquest.npc.Recruitment.accept(player, msg.recruiter());
+        }
     }
 
     /** Server → client: how far the world is stretched (1: not at all), for the client's far-terrain quality. */

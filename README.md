@@ -780,6 +780,23 @@ Hamlets and hidden dojos have none.
   its roads lead to.
 - Roads stop at city walls, at settlements, and short of a dojo.
 
+## Recruitment posts
+
+Every city a nation holds has a **recruitment post** (`core/RecruitmentPost`, built by `worldgen/RecruitmentPostPiece`)
+on the plot beside the town centre (the first plot of the block just east of it): a stone house for now, its door
+facing the road to the west, with a bedrock counter inside.
+
+- **Its people** take their places when its chunk first loads (`sim/RecruitmentPosts`), once: five swordsmen in iron
+  on the city owner's Recruits team, holding their posts (two beside the door outside, three within), and a
+  **recruiter** (`npc/Recruiter`) behind the counter facing the door, named for their nation ("Recruiter of ..."); kept
+  with the world, still, and unhurtable.
+- **Talking to the recruiter** (right-click) opens a dialogue (`client/RecruiterScreen`) offering to join their nation
+  and enlist in its army. Accepting (`npc/Recruitment`) leaves any other faction and joins theirs the way Recruits adds a
+  member, and enlists the player at rank 1, **Soldier**; a player of **noble title** starts at rank 5, **Major**. A
+  player already of higher rank keeps it; one already serving the nation is only greeted.
+- **Noble title**: no player holds a land title yet, so for now a player counts as noble who leads a Recruits faction,
+  or was granted it with `/pve noble <player> true` (`false` takes it away).
+
 ## Townsfolk
 
 Cities' streets are busy near players with **townsfolk** (`npc/Townsperson`, peopled by `npc/Townsfolk`), there only

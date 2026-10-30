@@ -88,6 +88,11 @@ public final class PveCommands {
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("rank", IntegerArgumentType.integer(1, 8))
                                                 .executes(ctx -> rankSet(ctx, EntityArgument.getPlayer(ctx, "player"), IntegerArgumentType.getInteger(ctx, "rank")))))))
+                .then(Commands.literal("noble").requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.argument("noble", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                        .executes(ctx -> nobleSet(ctx, EntityArgument.getPlayer(ctx, "player"),
+                                                com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "noble"))))))
                 .then(Commands.literal("poi")
                         .then(Commands.literal("list")
                                 .executes(ctx -> poiList(ctx, 500))
@@ -322,6 +327,17 @@ public final class PveCommands {
         Ranks.get(ctx.getSource().getServer()).set(player.getUUID(), rank);
         ctx.getSource().sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "%s is now a %s (rank %d)",
                 player.getName().getString(), rank.title(), rank.number())), true);
+        return 1;
+    }
+
+    /**
+     * Grants or takes a player's noble title, until players can hold land titles: a noble enlists at a recruitment post
+     * as a Major (rank 5).
+     */
+    private static int nobleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, boolean noble) {
+        player.getPersistentData().putBoolean(rafasconquest.npc.Recruitment.NOBLE_TAG, noble);
+        ctx.getSource().sendSuccess(() -> Component.literal(player.getName().getString() + (noble ? " now holds" : " no longer holds")
+                + " a noble title"), true);
         return 1;
     }
 

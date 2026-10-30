@@ -41,6 +41,10 @@ public final class ConquestServer {
     private final ConquestSavedData data;
     private final PoiPrecomputer precomputer;
     private final RecruitsBridge recruits;
+
+    public RecruitsBridge recruits() {
+        return recruits;
+    }
     private final BaseMapStore mapStore;
     private final Deque<long[]> pendingRegions = new ArrayDeque<>();
     private final Set<Long> queuedRegions = new HashSet<>();
@@ -196,6 +200,7 @@ public final class ConquestServer {
             if (chunk != null) {
                 CityBanners.paintChunk(overworld, chunk, data, precomputer);
                 CityGuards.postChunk(overworld, chunk, data, precomputer, recruits);
+                RecruitmentPosts.postChunk(overworld, chunk, data, precomputer, recruits);
             }
         }
     }

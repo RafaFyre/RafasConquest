@@ -29,4 +29,20 @@ public interface RecruitsBridge {
     default boolean spawnWallGuard(Faction owner, BlockPos feet, float yaw) {
         return false;
     }
+
+    /**
+     * Spawns a swordsman of {@code owner}'s faction standing guard at {@code feet}, facing {@code yaw}, holding that
+     * position. Returns false if it couldn't.
+     */
+    default boolean spawnPostGuard(Faction owner, BlockPos feet, float yaw) {
+        return false;
+    }
+
+    /**
+     * Puts a player in {@code nation}'s Recruits faction (leaving any other first), the way Recruits adds a member.
+     * Returns false if it couldn't.
+     */
+    default boolean join(net.minecraft.server.level.ServerPlayer player, Faction nation) {
+        return false;
+    }
 }

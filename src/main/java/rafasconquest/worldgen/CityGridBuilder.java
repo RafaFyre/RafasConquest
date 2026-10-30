@@ -23,6 +23,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.CityLayout;
+import rafasconquest.core.RecruitmentPost;
 import rafasconquest.core.CityTerrain;
 import rafasconquest.core.SeedHash;
 
@@ -168,6 +169,11 @@ public final class CityGridBuilder {
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
+                            if (qx == 0 && qz == 0 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
+                                    && heldByANation(site)) {
+                                pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                continue; // the recruitment post has this plot
+                            }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
                             int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
                             house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
@@ -181,6 +187,12 @@ public final class CityGridBuilder {
 
         // Walls last, so they stand on top of the edge road.
         buildWalls(cellX, cellZ);
+    }
+
+    /** Whether a nation holds the city's province (by the world map): only such a city has a recruitment post. */
+    public static boolean heldByANation(CityLayout.Site city) {
+        rafasconquest.map.BaseMap map = ConquestRuntime.map();
+        return map != null && map.holderOf(map.provinceIndexAt(city.x(), city.z())) != null;
     }
 
     /**

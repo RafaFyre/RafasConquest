@@ -168,6 +168,51 @@ public class RecruitsFactions implements RecruitsBridge {
         return true;
     }
 
+    /** A swordsman in iron, on the owner's team, standing guard at a recruitment post. */
+    @Override
+    public boolean spawnPostGuard(Faction owner, BlockPos feet, float yaw) {
+        PlayerTeam team = team(owner);
+        AbstractRecruitEntity guard = ModEntityTypes.RECRUIT.get().create(overworld);
+        if (team == null || guard == null) {
+            return false;
+        }
+        Vec3 post = Vec3.atBottomCenterOf(feet);
+        guard.moveTo(post.x, post.y, post.z, yaw, 0);
+        guard.setYHeadRot(yaw);
+        guard.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        guard.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        guard.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+        guard.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+        guard.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+        guard.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+        AbstractRecruitEntity.applyBiomeAndVariant(guard);
+        guard.setPersistenceRequired();
+        guard.setHunger(100);
+        guard.setMoral(100);
+        guard.setHoldPos(post);
+        guard.setShouldHoldPos(true);
+        guard.setFollowState(HOLD_POSITION);
+        overworld.addFreshEntity(guard);
+        FactionEvents.addRecruitToTeam(guard, team, overworld);
+        return true;
+    }
+
+    /** Leaves the player's faction, if another, then joins them to the nation's, as Recruits adds a member. */
+    @Override
+    public boolean join(net.minecraft.server.level.ServerPlayer player, Faction nation) {
+        PlayerTeam team = team(nation);
+        if (team == null) {
+            return false;
+        }
+        if (player.getTeam() != null && !player.getTeam().getName().equals(team.getName())) {
+            FactionEvents.leaveTeam(false, player, player.getTeam().getName(), overworld, false);
+        }
+        if (player.getTeam() == null || !player.getTeam().getName().equals(team.getName())) {
+            FactionEvents.addPlayerToTeam(player, overworld, team.getName(), player.getName().getString());
+        }
+        return player.getTeam() != null && player.getTeam().getName().equals(team.getName());
+    }
+
     /**
      * The faction's scoreboard team, registering the faction with Recruits first if needed, with its team rules
      * applied (which also covers teams registered before these rules were set). Null if Recruits isn't ready.
