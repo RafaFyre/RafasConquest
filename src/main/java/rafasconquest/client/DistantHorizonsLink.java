@@ -42,6 +42,20 @@ public final class DistantHorizonsLink {
         return linked ? DistantHorizonsArmies.fadeStart(partialTick) : 0;
     }
 
+    /** The world joined is stretched {@code factor} times (1: not at all): Distant Horizons' quality is raised to suit it. */
+    public static void worldStretch(int factor) {
+        if (linked) {
+            DistantHorizonsQuality.forStretch(factor);
+        }
+    }
+
+    /** The player left the world: Distant Horizons' quality goes back to their own setting. */
+    public static void leftWorld() {
+        if (linked) {
+            DistantHorizonsQuality.clear();
+        }
+    }
+
     /** Each frame, before the world is drawn: moves the soldiers drawn in Distant Horizons' terrain. */
     public static void update() {
         if (linked) {

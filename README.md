@@ -48,6 +48,11 @@ scale. It is off by default when a mod it doesn't suit is installed (`Horizontal
 Terralith), and the options say so. A dedicated server's new world takes the defaults. The log says how many climate
 noises were stretched, or that none were found.
 
+With Distant Horizons, a stretched world raises its horizontal quality (how far out its terrain keeps fine detail) to
+suit the wider land: HIGH at 2×, EXTREME at 3× and 4× (`client/DistantHorizonsQuality`). The server tells each joining
+client how far the world is stretched; the quality is set through Distant Horizons' API as an override, never below
+the player's own setting and never saved over it, and cleared when they leave the world.
+
 ## Recruits integration
 
 Every faction this mod creates is also registered as a Villager Recruits faction, so it appears in the Recruits faction

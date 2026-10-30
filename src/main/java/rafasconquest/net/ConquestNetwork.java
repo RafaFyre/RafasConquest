@@ -101,6 +101,30 @@ public final class ConquestNetwork {
                 .decoder(FigureStrike::read)
                 .consumerMainThread(ConquestNetwork::handleFigureStrike)
                 .add();
+        CHANNEL.messageBuilder(WorldStretch.class, 12, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(WorldStretch::write)
+                .decoder(WorldStretch::read)
+                .consumerMainThread(ConquestNetwork::handleWorldStretch)
+                .add();
+    }
+
+    /** Server → client: how far the world is stretched (1: not at all), for the client's far-terrain quality. */
+    public record WorldStretch(int factor) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeVarInt(factor);
+        }
+
+        static WorldStretch read(FriendlyByteBuf buf) {
+            return new WorldStretch(buf.readVarInt());
+        }
+    }
+
+    public static void sendWorldStretch(ServerPlayer player, int factor) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new WorldStretch(factor));
+    }
+
+    private static void handleWorldStretch(WorldStretch msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.DistantHorizonsLink.worldStretch(msg.factor()));
     }
 
     // ---- the war horn: a player's units ----

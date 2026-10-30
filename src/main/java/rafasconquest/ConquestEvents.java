@@ -61,6 +61,14 @@ public final class ConquestEvents {
         }
     }
 
+    /** A player joins: their client is told how far the world is stretched, for its far-terrain quality. */
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
+        }
+    }
+
     /** Before the world's levels are made: its horizontal stretch, as chosen when it was created. */
     @SubscribeEvent
     public static void onServerAboutToStart(net.minecraftforge.event.server.ServerAboutToStartEvent event) {

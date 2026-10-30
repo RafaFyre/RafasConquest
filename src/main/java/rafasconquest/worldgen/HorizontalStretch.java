@@ -57,6 +57,13 @@ public final class HorizontalStretch {
         }
     }
 
+    /** How far the running world is stretched (1: not at all). */
+    private static volatile int current = MIN;
+
+    public static int current() {
+        return current;
+    }
+
     /** The choice made in the world creation screen for the world about to be made, if any. Client thread sets it. */
     @Nullable
     private static volatile Choice pending;
@@ -103,11 +110,16 @@ public final class HorizontalStretch {
             write(file, choice);
         }
         pending = null;
+        current = MIN;
+        pending = null;
         if (!choice.on() || choice.factor() == MIN) {
             RafasConquest.LOGGER.info("[world] horizontal stretch off");
             return;
         }
         int stretched = apply(server, choice.factor());
+        if (stretched > 0) {
+            current = choice.factor();
+        }
         if (stretched == 0) {
             RafasConquest.LOGGER.warn("[world] horizontal stretch: no climate noise found in the overworld's generator; left as it is");
         } else {

@@ -67,6 +67,7 @@ public final class ClientEvents {
         DistantArmies.clear();
         BattleSounds.clear();
         BattleSpotRing.clear();
+        DistantHorizonsLink.leftWorld();
         ArrowVolleys.clear();
     }
 
