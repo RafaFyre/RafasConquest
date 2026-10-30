@@ -61,6 +61,12 @@ public final class ConquestEvents {
         }
     }
 
+    /** Before the world's levels are made: its horizontal stretch, as chosen when it was created. */
+    @SubscribeEvent
+    public static void onServerAboutToStart(net.minecraftforge.event.server.ServerAboutToStartEvent event) {
+        rafasconquest.worldgen.HorizontalStretch.onServerAboutToStart(event.getServer());
+    }
+
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         ConquestServer server = ConquestServer.get();

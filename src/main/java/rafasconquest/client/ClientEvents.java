@@ -27,6 +27,9 @@ public final class ClientEvents {
     private ClientEvents() {
     }
 
+    /** The world creation screen last opened, so its RafasConquest options start from the defaults only once. */
+    private static net.minecraft.client.gui.screens.Screen worldBeingCreated;
+
     /**
      * Adds a second row to Recruits' faction menu, lined up under its own two buttons: Faction Info and World Map.
      */
@@ -42,6 +45,17 @@ public final class ClientEvents {
             event.addListener(Button.builder(Component.translatable("gui.rafasconquest.map"),
                             button -> menu.getMinecraft().setScreen(new FactionMapScreen(menu)))
                     .bounds(left + 130, top + 55, 100, 20)
+                    .build());
+        }
+        if (event.getScreen() instanceof net.minecraft.client.gui.screens.worldselection.CreateWorldScreen create) {
+            if (create != worldBeingCreated) {
+                // A new world: its RafasConquest options start from the defaults.
+                worldBeingCreated = create;
+                rafasconquest.worldgen.HorizontalStretch.setPending(rafasconquest.worldgen.HorizontalStretch.defaultChoice());
+            }
+            event.addListener(Button.builder(Component.literal("RafasConquest"),
+                            button -> create.getMinecraft().setScreen(new ConquestWorldScreen(create)))
+                    .bounds(create.width - 98, 30, 90, 20)
                     .build());
         }
     }

@@ -37,13 +37,16 @@ Debug commands (permission level 2): `/pve faction list`, `/pve faction info <na
 
 ## Bigger world
 
-The mod stretches the overworld 3× each way: biomes (temperature and humidity) and the land itself (continents,
-erosion and ridges: mountains, coasts and oceans). It does so by overriding vanilla's world-generation data
-(`data/minecraft/worldgen/noise_settings/overworld.json`, the temperature and vegetation `xz_scale`, and
-`density_function/overworld/{continents,erosion,ridges}.json`), each scale 0.25 → 0.0833. It applies to every world
-with the mod; only chunks generated afterwards follow it, so start a new world (an old one would show seams where new
-chunks meet old ones). Everything that reads the world generator (the world map, provinces, cities, battlefield
-terrain) follows it.
+The world creation screen has a **RafasConquest** button (top right) with the world's options: the **horizontal
+stretch**, on or off, and how far (a slider, 1× to 4× wider each way; 3× by default). It stretches the overworld's
+biomes (the temperature and humidity maps) and its land (continentalness, erosion and ridges: continents, mountains,
+coasts), on whatever overworld generator is in use, vanilla's or a terrain mod's: when the server starts, before any
+level is made, every climate noise in the overworld's noise router has its horizontal scale divided
+(`worldgen/HorizontalStretch`; edited through the game's own codec). Each world keeps its choice in
+`rafasconquest_world.properties` in its save folder; a world made before this, with chunks already, keeps vanilla's
+scale. It is off by default when a mod it doesn't suit is installed (`HorizontalStretch.INCOMPATIBLE`: Tectonic,
+Terralith), and the options say so. A dedicated server's new world takes the defaults. The log says how many climate
+noises were stretched, or that none were found.
 
 ## Recruits integration
 
