@@ -49,6 +49,8 @@ public final class ConquestEvents {
             CapitalLayout.setLand(level.getSeed(), SettlementBiomes.land(generator.getBiomeSource(),
                     level.getChunkSource().randomState().sampler(), generator.getSeaLevel()));
             ConquestServer.attach(level, data);
+            // The map, and so the titles and their seat cities, before the first chunk is made.
+            ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(ConquestServer.get().mapStore().loadOrDrawNow().cities()));
         }
     }
 
@@ -57,6 +59,7 @@ public final class ConquestEvents {
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             ConquestServer.detach();
             ConquestRuntime.publish(null);
+            ConquestRuntime.publishCities(null);
             CapitalLayout.setLand(0, null);
         }
     }

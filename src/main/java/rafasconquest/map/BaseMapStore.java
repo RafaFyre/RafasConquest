@@ -87,6 +87,22 @@ public class BaseMapStore {
         }));
     }
 
+    /**
+     * Loads the saved map, or draws it, now, on the calling (server) thread: world generation places cities at the
+     * titles' seats, so the map must exist before the first chunk is made. Drawing a new world's map takes a while
+     * (about 20 s at default settings); a saved one loads at once.
+     */
+    public BaseMap loadOrDrawNow() {
+        if (map != null) {
+            return map;
+        }
+        Ready ready = loadOrDraw();
+        encoded = ready.encoded();
+        map = ready.map();
+        onReady.accept(map);
+        return map;
+    }
+
     /** The map, once drawn; null before. */
     @org.jetbrains.annotations.Nullable
     public BaseMap map() {
@@ -121,8 +137,10 @@ public class BaseMapStore {
         long start = System.nanoTime();
         BaseMap map = BaseMapGenerator.generate(level, settings, visibleRadius, settings.warZoneOuterEdge());
         byte[] bytes = map.encode();
-        RafasConquest.LOGGER.info("Drew the world map: {} x {} pixels of {} blocks out to {} blocks, {} provinces, in {} ms ({} KB)",
-                map.width(), map.height(), map.blocksPerPixel(), visibleRadius, map.centres().size(),
+        RafasConquest.LOGGER.info("Drew the world map: {} x {} pixels of {} blocks out to {} blocks, {} provinces in {} counties, {} duchies,"
+                        + " {} kingdoms and {} empires, {} seat cities, in {} ms ({} KB)",
+                map.width(), map.height(), map.blocksPerPixel(), visibleRadius, map.centres().size(), map.titles().counties(),
+                map.titles().duchies(), map.titles().kingdoms(), map.titles().empires(), map.cities().size(),
                 (System.nanoTime() - start) / 1_000_000, bytes.length / 1024);
         try {
             Files.createDirectories(file.getParent());

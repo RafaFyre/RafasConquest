@@ -10,6 +10,8 @@ import rafasconquest.core.WorldSettings;
 public final class ConquestRuntime {
     @Nullable
     private static volatile WorldSettings settings;
+    /** The world's seat cities, from its map (empty until it is loaded or drawn). */
+    private static volatile CityIndex cities = CityIndex.EMPTY;
 
     private ConquestRuntime() {
     }
@@ -21,5 +23,13 @@ public final class ConquestRuntime {
 
     public static void publish(@Nullable WorldSettings frozen) {
         settings = frozen;
+    }
+
+    public static CityIndex cities() {
+        return cities;
+    }
+
+    public static void publishCities(@Nullable CityIndex index) {
+        cities = index == null ? CityIndex.EMPTY : index;
     }
 }

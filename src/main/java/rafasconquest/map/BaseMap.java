@@ -2,6 +2,7 @@ package rafasconquest.map;
 
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.core.ProvinceMap;
+import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 
 import java.io.ByteArrayInputStream;
@@ -19,12 +20,19 @@ import java.util.zip.InflaterInputStream;
  * {@code blocksPerPixel} blocks wide, starting at (minX, minZ). Pixels beyond {@code visibleRadius} (the edge of the
  * known world) are transparent and drawn as unexplored; {@code stormWallRadius} is where the storm wall stands.
  * {@code provinces} holds an index into {@code centres}, or {@link ProvinceMap#WATER} / {@link ProvinceMap#NONE}.
- * {@code names} names each province; {@code titles} groups them into counties, duchies, kingdoms and empires.
+ * {@code names} names each province; {@code titles} groups them into counties, duchies, kingdoms and empires, and
+ * {@code cities} are their seat cities ({@link SeatCities}).
  */
 public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int height, int visibleRadius, int stormWallRadius,
-                      int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles) {
+                      int[] pixels, int[] provinces, List<ProvinceMap.Centre> centres, List<String> names, TitleMap titles,
+                      List<SeatCities.City> cities) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 6;
+    private static final int FORMAT = 7;
+
+    /** The map's provinces, for planning on. */
+    public SeatCities.Grid grid() {
+        return new SeatCities.Grid(minX, minZ, blocksPerPixel, width, height, provinces, centres);
+    }
 
     /** A title's name: its tier and its seat province's name ("Duchy of Shukai"). */
     public String titleName(TitleMap.Tier tier, int seat) {
@@ -77,6 +85,14 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             for (int[] level : new int[][]{titles.county(), titles.duchy(), titles.kingdom(), titles.empire(),
                     titles.countySeat(), titles.duchySeat(), titles.kingdomSeat(), titles.empireSeat()}) {
                 writeShorts(out, level);
+            }
+            out.writeInt(cities.size());
+            for (SeatCities.City c : cities) {
+                out.writeInt(c.x());
+                out.writeInt(c.z());
+                out.writeByte(c.districts());
+                out.writeByte(c.tier().ordinal());
+                out.writeShort(c.province());
             }
         } catch (IOException e) {
             throw new IllegalStateException(e);
@@ -143,7 +159,16 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 levels[i] = readShorts(in);
             }
             TitleMap titles = new TitleMap(levels[0], levels[1], levels[2], levels[3], levels[4], levels[5], levels[6], levels[7]);
-            return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles);
+            int cityCount = in.readInt();
+            if (cityCount < 0 || cityCount > Short.MAX_VALUE) {
+                throw new IOException("bad city count " + cityCount);
+            }
+            List<SeatCities.City> cities = new ArrayList<>(cityCount);
+            for (int i = 0; i < cityCount; i++) {
+                cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
+                        in.readShort()));
+            }
+            return new BaseMap(minX, minZ, bpp, width, height, visible, stormWall, pixels, provinces, centres, names, titles, cities);
         }
     }
 }

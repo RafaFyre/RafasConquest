@@ -633,8 +633,21 @@ brighter the higher its title (county seats once zoomed in); hovering over one n
 **Vanilla villages are off:** the mod overrides vanilla's village placement (`data/minecraft/worldgen/structure_set/
 villages.json`) with no structures in it; the mod's own settlements will take their place.
 
-Still to come: seat cities sized by title, hamlets and villages in every other province, and nations taking up the
-titles by zone.
+**Seat cities** (`core/SeatCities`) are planned with the titles: N × N districts of 160 blocks (a district is 5 × 5 city
+blocks), by the highest title a city seats: a county's Town 2 × 2; a duchy's 3 × 3, or 4 × 4 with 5 or 6 counties; a
+kingdom's 5 × 5, one in four 4 × 4; an empire's 7 × 7, 8 × 8 with 5 kingdoms, a 9 × 9 metropolis with 6. Cities are placed
+highest title first, each as near its seat province's centre as it can while standing wholly on land and 64 blocks
+clear of the others, so a seat by the shore draws up to the water's edge. A seat with no room moves to another province
+the title could seat (one of its lower titles' seats), so seats stay nested; a title with no room anywhere has no city.
+A big city spreads over the provinces around its own, which have it as their structure. The cities are saved with the
+map and drawn on it as squares in the colour of their highest title, with the seat marks on them.
+
+World generation needs the cities before the first chunk is made, so a world's map is now **loaded or drawn when the
+overworld loads** (`BaseMapStore.loadOrDrawNow`), not in the background: a new world takes about 20 s longer to open the
+first time. Provinces are drawn from the land alone now, no longer centred on the old city sites.
+
+Still to come: building the seat cities in place of today's, hamlets and villages in every other province, and nations
+taking up the titles by zone.
 
 ## Cities (City-states and Empire capitals)
 

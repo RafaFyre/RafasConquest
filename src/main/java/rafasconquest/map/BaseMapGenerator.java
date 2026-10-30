@@ -12,6 +12,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.ProvinceNames;
+import rafasconquest.core.SeatCities;
 import rafasconquest.core.TitleMap;
 import rafasconquest.core.WorldSettings;
 
@@ -97,11 +98,9 @@ public final class BaseMapGenerator {
             }
         });
 
-        // Provinces, with every city (City-state home or Empire capital) at the centre of one.
+        // Provinces first, from the land alone: titles and their seat cities are drawn on them.
         ProvinceMap.Terrain terrain = new ProvinceMap.Terrain(minX, minZ, bpp, size, size, water, heights, biomeIds, rough);
-        List<int[]> cities = CityLayout.allSitesInBox(level.getSeed(), settings, minX, minZ, minX + size * bpp, minZ + size * bpp)
-                .stream().map(s -> new int[]{s.x(), s.z()}).toList();
-        List<ProvinceMap.Centre> centres = ProvinceMap.centres(level.getSeed(), terrain, cities);
+        List<ProvinceMap.Centre> centres = ProvinceMap.centres(level.getSeed(), terrain, List.of());
         int[] provinces = ProvinceMap.assign(terrain, centres);
         // The titles: provinces into counties, duchies, kingdoms and empires, telling the shore by the sea beside it
         // (the sea within the known world; beyond it is no shore).
@@ -111,7 +110,10 @@ public final class BaseMapGenerator {
         }
         TitleMap titles = TitleMap.build(level.getSeed(), size, size, provinces, centres.size(), ocean);
         List<String> names = centres.stream().map(c -> ProvinceNames.name(level.getSeed(), c.x(), c.z())).toList();
-        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles);
+        List<SeatCities.City> cities = SeatCities.plan(level.getSeed(),
+                new SeatCities.Grid(minX, minZ, bpp, size, size, provinces, centres), titles);
+        return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
+                cities);
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */

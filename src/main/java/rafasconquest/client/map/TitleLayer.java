@@ -14,7 +14,8 @@ import java.util.List;
 /**
  * Layer 3: the land's titles. Borders between counties, duchies, kingdoms and empires, each stronger than the last
  * ({@link rafasconquest.map.TitleStyle}), and a mark on each seat sized by the highest title seated there; hovering
- * over a seat names every title it holds ("Empire of Shukai, Kingdom of Shukai, ...").
+ * over a seat names every title it holds ("Empire of Shukai, Kingdom of Shukai, ..."). Each seat city is drawn as its
+ * square, outlined in the colour of its highest title.
  */
 public class TitleLayer implements MapLayer {
     private static final int[] SEAT_SIZE = {2, 3, 4, 5};
@@ -24,6 +25,7 @@ public class TitleLayer implements MapLayer {
     /** Each province's highest seat (a tier's ordinal), or -1; worked out once per map. */
     private BaseMap seatsOf;
     private int[] seatTier;
+    private rafasconquest.core.SeatCities.City[] cityAt;
 
     @Override
     public void render(GuiGraphics g, MapView view, MapContext map, int mouseX, int mouseY) {
@@ -31,6 +33,20 @@ public class TitleLayer implements MapLayer {
         RenderSystem.defaultBlendFunc();
         BaseMapLayer.drawAligned(g, view, map, MapContext.TITLES_TEXTURE);
         RenderSystem.disableBlend();
+        // The seat cities' squares, faintly filled, outlined in the colour of their highest title.
+        for (rafasconquest.core.SeatCities.City c : map.base.cities()) {
+            int half = c.size() / 2;
+            int x0 = (int) view.screenX(c.x() - half);
+            int z0 = (int) view.screenY(c.z() - half);
+            int x1 = (int) view.screenX(c.x() + half);
+            int z1 = (int) view.screenY(c.z() + half);
+            if (x1 < view.left || x0 > view.right || z1 < view.top || z0 > view.bottom || x1 - x0 < 2) {
+                continue;
+            }
+            int color = SEAT_COLOR[c.tier().ordinal()];
+            g.fill(x0, z0, x1, z1, 0x40000000 | color & 0xFFFFFF);
+            g.renderOutline(x0, z0, x1 - x0, z1 - z0, color);
+        }
         int[] tiers = tiers(map.base);
         String hovered = null;
         for (int p = 0; p < tiers.length; p++) {
@@ -38,9 +54,11 @@ public class TitleLayer implements MapLayer {
             if (tier < 0) {
                 continue;
             }
+            // On its city, if it has one (a city may stand off its province's centre, by the shore), else the centre.
             ProvinceMap.Centre c = map.base.centres().get(p);
-            double x = view.screenX(c.x());
-            double y = view.screenY(c.z());
+            rafasconquest.core.SeatCities.City city = cityAt[p];
+            double x = view.screenX(city != null ? city.x() : c.x());
+            double y = view.screenY(city != null ? city.z() : c.z());
             if (!view.near(x, y, 8) || tier == 0 && view.scale < 0.03) {
                 continue; // county seats only once zoomed in a little
             }
@@ -70,6 +88,10 @@ public class TitleLayer implements MapLayer {
             seatsOf = base;
             TitleMap t = base.titles();
             seatTier = new int[base.centres().size()];
+            cityAt = new rafasconquest.core.SeatCities.City[base.centres().size()];
+            for (rafasconquest.core.SeatCities.City city : base.cities()) {
+                cityAt[city.province()] = city;
+            }
             java.util.Arrays.fill(seatTier, -1);
             int[][] seats = {t.countySeat(), t.duchySeat(), t.kingdomSeat(), t.empireSeat()};
             for (int tier = 0; tier < seats.length; tier++) {
