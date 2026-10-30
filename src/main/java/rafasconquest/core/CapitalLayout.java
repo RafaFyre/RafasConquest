@@ -124,7 +124,7 @@ public final class CapitalLayout {
         }
         int clear = CityLayout.SIZE + CityLayout.CLEARANCE;
         int reach = MAX_SHIFT + clear;
-        List<CityLayout.Site> cityStates = CityLayout.sitesInBox(seed, s, site.x() - reach, site.z() - reach, site.x() + reach, site.z() + reach);
+        List<CityLayout.Site> cityStates = CityLayout.cityStateSitesInBox(seed, s, site.x() - reach, site.z() - reach, site.x() + reach, site.z() + reach);
         List<Site> capitals = rawSitesInBox(seed, s, site.x() - reach, site.z() - reach, site.x() + reach, site.z() + reach);
         List<int[]> offsets = new ArrayList<>();
         for (int dx = -MAX_SHIFT; dx <= MAX_SHIFT; dx += SHIFT_STEP) {

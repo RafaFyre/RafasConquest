@@ -38,7 +38,7 @@ public class CityTerrainPiece extends StructurePiece {
     public CityTerrainPiece(CityLayout.Site site, int cellX, int cellZ, CityVariant variant, CityTerrain.Plan plan, int minY, int maxY) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, new BoundingBox(
                 site.originX() + CityTerrain.ownedMin(cellX), minY, site.originZ() + CityTerrain.ownedMin(cellZ),
-                site.originX() + CityTerrain.ownedMax(cellX), maxY, site.originZ() + CityTerrain.ownedMax(cellZ)));
+                site.originX() + CityTerrain.ownedMax(site.cells(), cellX), maxY, site.originZ() + CityTerrain.ownedMax(site.cells(), cellZ)));
         this.originX = site.originX();
         this.originZ = site.originZ();
         this.variant = variant;
@@ -52,7 +52,8 @@ public class CityTerrainPiece extends StructurePiece {
         this.originZ = tag.getInt("originZ");
         this.variant = CityVariant.valueOf(tag.getString("variant"));
         int sides = CityTerrain.Side.values().length;
-        int segments = CityTerrain.SEGMENTS_PER_SIDE;
+        int cells = tag.contains("cells") ? tag.getInt("cells") : CityLayout.CELLS_PER_SIDE;
+        int segments = CityTerrain.segments(cells);
         String encoded = tag.getString("edges");
         int[] carve = tag.getIntArray("carveTo");
         CityTerrain.Edge[][] edges = new CityTerrain.Edge[sides][segments];
@@ -62,7 +63,7 @@ public class CityTerrainPiece extends StructurePiece {
                     ? CityTerrain.Edge.values()[encoded.charAt(i) - '0'] : CityTerrain.Edge.CARVE;
             carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
-        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo);
+        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo, cells);
     }
 
     @Override
@@ -71,8 +72,9 @@ public class CityTerrainPiece extends StructurePiece {
         tag.putInt("originZ", originZ);
         tag.putString("variant", variant.name());
         tag.putInt("plateY", plan.plateY());
+        tag.putInt("cells", plan.cells());
         StringBuilder edges = new StringBuilder();
-        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.SEGMENTS_PER_SIDE];
+        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.segments(plan.cells())];
         int i = 0;
         for (int side = 0; side < plan.edges().length; side++) {
             for (int seg = 0; seg < plan.edges()[side].length; seg++) {
@@ -91,7 +93,7 @@ public class CityTerrainPiece extends StructurePiece {
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
                 CityTerrain.Column column = CityTerrain.column(plan, x - originX, z - originZ);
-                boolean wall = CityLayout.inWallBand(x - originX, z - originZ);
+                boolean wall = CityLayout.inWallBand(plan.size(), x - originX, z - originZ);
                 switch (column.kind()) {
                     case PLATE -> flatten(level, pos, x, z, false, wall);
                     case WALL_BASE -> flatten(level, pos, x, z, true, wall);

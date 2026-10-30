@@ -107,7 +107,7 @@ public class PoiPrecomputer {
         for (CapitalLayout.Site site : CapitalLayout.sitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
             ensureCapital(site);
         }
-        for (CityLayout.Site site : CityLayout.sitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
+        for (CityLayout.Site site : CityLayout.cityStateSitesInBox(seed, settings, minX, minZ, maxX, maxZ)) {
             ensureCity(site);
         }
 
@@ -167,7 +167,7 @@ public class PoiPrecomputer {
     UUID holderAt(int x, int z) {
         List<TerritoryMap.Claim> claims = new ArrayList<>();
         int r = TerritoryMap.CITY_STATE_RADIUS;
-        for (CityLayout.Site site : CityLayout.sitesInBox(seed, settings, x - r, z - r, x + r, z + r)) {
+        for (CityLayout.Site site : CityLayout.cityStateSitesInBox(seed, settings, x - r, z - r, x + r, z + r)) {
             Faction f = ensureCity(site);
             if (f != null && f.type() == FactionType.CITY_STATE) {
                 claims.add(claim(f));

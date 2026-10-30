@@ -10,8 +10,8 @@ import rafasconquest.core.WorldSettings;
 import java.util.Optional;
 
 /**
- * A city's middle cell, holding the town centre. The 8 surrounding cells are {@link CityDistrictStructure}s. Used both
- * for City-state homes and for Empire capitals. Whether the city exists, and its style, come from
+ * The cell of a city holding its town centre. Its other cells are {@link CityDistrictStructure}s. Used for every
+ * title seat city, whatever its size. Whether the city exists, and its style, come from
  * {@link CityVariant#forSite}; districts ask the same thing, so the whole square always generates together.
  */
 public class CityStructure extends Structure {
@@ -29,8 +29,10 @@ public class CityStructure extends Structure {
         }
         return CityLayout.siteInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z).flatMap(site ->
                 CityVariant.forSite(ctx, site).map(variant -> {
-                    BlockPos pos = new BlockPos(site.x(), CityGridBuilder.ground(ctx, site.x(), site.z()).y(), site.z());
-                    return new GenerationStub(pos, pieces -> CityGridBuilder.build(ctx, site, variant, 1, 1, pieces));
+                    // The cell holding the town centre: its start is in this chunk.
+                    CityLayout.District centre = new CityLayout.District(site, site.centerCell(), site.centerCell());
+                    BlockPos pos = new BlockPos(centre.x(), CityGridBuilder.ground(ctx, centre.x(), centre.z()).y(), centre.z());
+                    return new GenerationStub(pos, pieces -> CityGridBuilder.build(ctx, site, variant, site.centerCell(), site.centerCell(), pieces));
                 }));
     }
 

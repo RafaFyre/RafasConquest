@@ -62,7 +62,7 @@ class CityLayoutTest {
     @Test
     void citiesAvoidTheEyeCapitalsAndEachOther() {
         for (long seed : new long[]{1L, 12345L, -77L}) {
-            List<CityLayout.Site> cities = CityLayout.sitesInBox(seed, s, -30_000, -30_000, 30_000, 30_000);
+            List<CityLayout.Site> cities = CityLayout.cityStateSitesInBox(seed, s, -30_000, -30_000, 30_000, 30_000);
             assertFalse(cities.isEmpty());
             for (CityLayout.Site c : cities) {
                 assertTrue(Math.hypot(c.x(), c.z()) >= s.eyeRadius() + CityLayout.HALF_EXTENT);
@@ -80,10 +80,31 @@ class CityLayoutTest {
         }
     }
 
+    /** Seat cities of every size, published as the world map would. */
+    private static final List<SeatCities.City> SEATS = List.of(
+            new SeatCities.City(3000, 3000, 2, TitleMap.Tier.COUNTY, 0),
+            new SeatCities.City(6000, -4000, 3, TitleMap.Tier.DUCHY, 1),
+            new SeatCities.City(-7000, 2000, 4, TitleMap.Tier.DUCHY, 2),
+            new SeatCities.City(-3000, -9000, 5, TitleMap.Tier.KINGDOM, 3),
+            new SeatCities.City(12000, 9000, 9, TitleMap.Tier.EMPIRE, 4));
+
+    private static void publishSeats() {
+        CityLayout.publishBuilt((min, max) -> SEATS.stream().filter(c -> c.x() + c.reach() >= min[0] && c.x() - c.reach() <= max[0]
+                && c.z() + c.reach() >= min[1] && c.z() - c.reach() <= max[1]).toList());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void unpublish() {
+        CityLayout.publishBuilt((min, max) -> List.of());
+    }
+
     @Test
     void everyCentreAndDistrictIsFoundFromItsChunk() {
-        for (CityLayout.Site c : CityLayout.sitesInBox(9L, s, -20_000, -20_000, 20_000, 20_000)) {
-            assertEquals(c, CityLayout.siteInChunk(9L, s, c.x() >> 4, c.z() >> 4).orElseThrow());
+        publishSeats();
+        for (CityLayout.Site c : CityLayout.allSitesInBox(9L, s, -20_000, -20_000, 20_000, 20_000)) {
+            CityLayout.District centre = new CityLayout.District(c, c.centerCell(), c.centerCell());
+            assertEquals(c, CityLayout.siteInChunk(9L, s, centre.x() >> 4, centre.z() >> 4).orElseThrow());
+            assertEquals(c.cells() * c.cells() - 1, CityLayout.districts(c).size());
             for (CityLayout.District d : CityLayout.districts(c)) {
                 assertEquals(d, CityLayout.districtInChunk(9L, s, d.x() >> 4, d.z() >> 4).orElseThrow());
             }
@@ -92,26 +113,12 @@ class CityLayoutTest {
 
     @Test
     void farmsAreKeptOutOfCities() {
-        for (CityLayout.Site c : CityLayout.sitesInBox(4L, s, -20_000, -20_000, 20_000, 20_000)) {
-            for (int dx = -CityLayout.HALF_EXTENT; dx <= CityLayout.HALF_EXTENT + 1; dx += 8) {
-                for (int dz = -CityLayout.HALF_EXTENT; dz <= CityLayout.HALF_EXTENT + 1; dz += 8) {
+        publishSeats();
+        assertEquals(SEATS.size(), CityLayout.allSitesInBox(4L, s, -20_000, -20_000, 20_000, 20_000).size());
+        for (CityLayout.Site c : CityLayout.allSitesInBox(4L, s, -20_000, -20_000, 20_000, 20_000)) {
+            for (int dx = -c.halfExtent(); dx <= c.halfExtent() + 1; dx += 8) {
+                for (int dz = -c.halfExtent(); dz <= c.halfExtent() + 1; dz += 8) {
                     assertFalse(FarmLayout.isFarmChunk(4L, s, (c.x() + dx) >> 4, (c.z() + dz) >> 4), "farm inside city at " + c);
-                }
-            }
-        }
-    }
-
-    @Test
-    void everyCapitalIsACity() {
-        for (CapitalLayout.Site cap : CapitalLayout.sitesInBox(12345L, s, -20_000, -20_000, 20_000, 20_000)) {
-            CityLayout.Site city = CityLayout.siteInChunk(12345L, s, cap.x() >> 4, cap.z() >> 4).orElseThrow();
-            assertEquals(new CityLayout.Site(cap.x(), cap.z(), true), city);
-            for (CityLayout.District d : CityLayout.districts(city)) {
-                assertEquals(d, CityLayout.districtInChunk(12345L, s, d.x() >> 4, d.z() >> 4).orElseThrow());
-            }
-            for (int dx = -CityLayout.HALF_EXTENT; dx <= CityLayout.HALF_EXTENT + 1; dx += 16) {
-                for (int dz = -CityLayout.HALF_EXTENT; dz <= CityLayout.HALF_EXTENT + 1; dz += 16) {
-                    assertFalse(FarmLayout.isFarmChunk(12345L, s, (cap.x() + dx) >> 4, (cap.z() + dz) >> 4), "farm inside capital city " + cap);
                 }
             }
         }
@@ -132,11 +139,9 @@ class CityLayoutTest {
                 d.stormWallRadiusMin(), d.stormWallRadiusMax(), d.stormWallStrengthMin(), d.stormWallStrengthMax(),
                 d.farRadiusMin(), d.farRadiusMax(), d.farStrengthMin(), d.farStrengthMax(), d.farDistanceOffset(),
                 d.maxCatchUpDays(), d.initialPrecomputeRadius(), d.lazyPrecomputeDistance(), 0, 0, 0, 0, 0);
-        assertTrue(CityLayout.sitesInBox(1L, off, -50_000, -50_000, 50_000, 50_000).isEmpty());
+        assertTrue(CityLayout.cityStateSitesInBox(1L, off, -50_000, -50_000, 50_000, 50_000).isEmpty());
         assertFalse(CityLayout.nearCity(1L, off, 0, 0, 1000));
-        // Capitals are still cities when City-states are switched off.
-        assertTrue(CityLayout.allSitesInBox(1L, off, -5_000, -5_000, 5_000, 5_000).stream().allMatch(CityLayout.Site::capital));
-        assertEquals(off.ringCapitalCount(), CityLayout.allSitesInBox(1L, off, -4_000, -4_000, 4_000, 4_000).stream()
-                .filter(c -> Math.hypot(c.x(), c.z()) <= off.warZoneOuterEdge()).count());
+        // The cities built are the title seats', whatever the City-state setting (none are published here).
+        assertTrue(CityLayout.allSitesInBox(1L, off, -5_000, -5_000, 5_000, 5_000).isEmpty());
     }
 }

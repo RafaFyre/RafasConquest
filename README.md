@@ -646,10 +646,20 @@ World generation needs the cities before the first chunk is made, so a world's m
 overworld loads** (`BaseMapStore.loadOrDrawNow`), not in the background: a new world takes about 20 s longer to open the
 first time. Provinces are drawn from the land alone now, no longer centred on the old city sites.
 
-Still to come: building the seat cities in place of today's, hamlets and villages in every other province, and nations
-taking up the titles by zone.
+**The seat cities are the cities built.** World generation builds each one where it was planned: N × N cells of 5 × 5
+city blocks, each cell its own structure start (the one holding the middle block has the town centre), every road,
+plot, lamp and wall segment, and the terrain (plate, carve, fill, valley) sized to the city. A city takes the style of
+its centre's biome, or the plains style where none matches; one whose box would touch ocean is not built. The old
+seeded City-state sites and Empire capitals still place their factions, but no city is built for them: until nations
+take up the titles, the seat cities stand unowned (no banners painted, no guards).
+
+Still to come: hamlets and villages in every other province, and nations taking up the titles by zone.
 
 ## Cities (City-states and Empire capitals)
+
+> Since the land titles, the cities built are the titles' seat cities, N × N cells by title (see **Land titles**); what
+> follows describes how any city is laid out and built, with a 3 × 3 city's numbers. Where City-states and capitals are
+> placed now only decides where their factions start.
 
 A city is a planned, square settlement built from vanilla village buildings, 3× as wide as a village. City-state
 cities each spawn a `CITY_STATE` faction (no territory claims), tracked as a `CITY` POI. **Every Empire's capital is a

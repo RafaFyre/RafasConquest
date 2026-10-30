@@ -149,11 +149,11 @@ public final class CityGridBuilder {
         pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY));
 
         // Roads next, so buildings placed afterwards win wherever they touch.
-        for (int k : CityLayout.roadsInCell(cellX)) {
+        for (int k : CityLayout.roadsInCell(site.cells(), cellX)) {
             int x = ox + CityLayout.roadStart(k);
             pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, cellMinZ, x + CityLayout.ROAD_WIDTH - 1, plate, cellMaxZ), variant));
         }
-        for (int k : CityLayout.roadsInCell(cellZ)) {
+        for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
             pieces.addPiece(new CityRoadPiece(new BoundingBox(cellMinX, plate, z, cellMaxX, plate, z + CityLayout.ROAD_WIDTH - 1), variant));
         }
@@ -163,7 +163,7 @@ public final class CityGridBuilder {
                 int blockX = ox + CityLayout.blockStart(bx);
                 int blockZ = oz + CityLayout.blockStart(bz);
                 occupied.clear();
-                if (bx == CityLayout.CENTER_BLOCK && bz == CityLayout.CENTER_BLOCK) {
+                if (bx == site.centerBlock() && bz == site.centerBlock()) {
                     townCenter(blockX, blockZ);
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
@@ -188,7 +188,7 @@ public final class CityGridBuilder {
      * the city's corners touch only the wall, so they face the alley between plots instead.
      */
     private Direction facing(int bx, int bz, int qx, int qz) {
-        int last = CityLayout.BLOCKS_PER_SIDE - 1;
+        int last = site.blocksPerSide() - 1;
         Direction xRoad = qx == 0 ? Direction.WEST : Direction.EAST;
         Direction zRoad = qz == 0 ? Direction.NORTH : Direction.SOUTH;
         boolean xIsWall = (qx == 0 && bx == 0) || (qx == 1 && bx == last);
@@ -213,7 +213,7 @@ public final class CityGridBuilder {
      */
     private void buildWalls(int cellX, int cellZ) {
         PlacedWall previous = null;
-        for (CityLayout.WallSegment seg : CityLayout.wallSegments(cellX, cellZ)) {
+        for (CityLayout.WallSegment seg : CityLayout.wallSegments(site.cells(), cellX, cellZ)) {
             StructurePoolElement element = firstElement(seg.gate() ? variant.gate() : seg.corner() ? variant.corner() : variant.wall());
             if (element == null) {
                 return;

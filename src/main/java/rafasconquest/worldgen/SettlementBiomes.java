@@ -38,7 +38,7 @@ public final class SettlementBiomes {
     /** True if any part of a city's flattened box lies on a forbidden biome. */
     public static boolean blocksCity(Structure.GenerationContext ctx, CityLayout.Site site) {
         return CITY_BLOCKED.computeIfAbsent(new CityKey(ctx.seed(), site), k -> cityTouches(ctx.biomeSource(),
-                ctx.randomState().sampler(), ctx.chunkGenerator().getSeaLevel(), site.x(), site.z(), CITY_STEP));
+                ctx.randomState().sampler(), ctx.chunkGenerator().getSeaLevel(), site.x(), site.z(), site.cells(), CITY_STEP));
     }
 
     /**
@@ -46,15 +46,18 @@ public final class SettlementBiomes {
      * coarser pass that rules out most ocean spots cheaply.
      */
     public static CapitalLayout.Land land(BiomeSource source, Climate.Sampler sampler, int seaLevel) {
-        return (x, z) -> !cityTouches(source, sampler, seaLevel, x, z, 2 * CITY_STEP)
-                && !cityTouches(source, sampler, seaLevel, x, z, CITY_STEP);
+        return (x, z) -> !cityTouches(source, sampler, seaLevel, x, z, CityLayout.CELLS_PER_SIDE, 2 * CITY_STEP)
+                && !cityTouches(source, sampler, seaLevel, x, z, CityLayout.CELLS_PER_SIDE, CITY_STEP);
     }
 
-    private static boolean cityTouches(BiomeSource source, Climate.Sampler sampler, int seaLevel, int centreX, int centreZ, int step) {
-        int originX = centreX - CityLayout.HALF_EXTENT;
-        int originZ = centreZ - CityLayout.HALF_EXTENT;
+    private static boolean cityTouches(BiomeSource source, Climate.Sampler sampler, int seaLevel, int centreX, int centreZ, int cells,
+                                       int step) {
+        int half = CityTerrain.size(cells) / 2;
+        int originX = centreX - half;
+        int originZ = centreZ - half;
+        int boxMax = CityTerrain.boxMax(cells);
         return touches(source, sampler, seaLevel, originX + CityTerrain.BOX_MIN, originZ + CityTerrain.BOX_MIN,
-                originX + CityTerrain.BOX_MAX, originZ + CityTerrain.BOX_MAX, step);
+                originX + boxMax, originZ + boxMax, step);
     }
 
     public static boolean touches(Structure.GenerationContext ctx, int minX, int minZ, int maxX, int maxZ, int step) {

@@ -26,10 +26,10 @@ final class CityGuards {
     static int postChunk(ServerLevel level, LevelChunk chunk, ConquestSavedData data, PoiPrecomputer precomputer, RecruitsBridge recruits) {
         int minX = chunk.getPos().getMinBlockX();
         int minZ = chunk.getPos().getMinBlockZ();
-        int r = CityLayout.HALF_EXTENT + CityLayout.WALL_OUTSET + 1;
+        int r = CityLayout.MAX_HALF_EXTENT + CityLayout.WALL_OUTSET + 1;
         int spawned = 0;
         for (CityLayout.Site site : CityLayout.allSitesInBox(level.getSeed(), data.settings(), minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
-            for (CityLayout.WallSegment seg : CityLayout.wallSegments()) {
+            for (CityLayout.WallSegment seg : CityLayout.wallSegments(site.cells())) {
                 // A corner segment's posts sit as on any other segment, past its lead.
                 int lead = seg.length() - WallTemplates.LENGTH;
                 for (int postX : WallTemplates.GUARD_X) {

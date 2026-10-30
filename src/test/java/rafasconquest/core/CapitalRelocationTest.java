@@ -51,7 +51,7 @@ class CapitalRelocationTest {
         CapitalLayout.setLand(SEED, oceanAround(wet));
         CapitalLayout.Site moved = CapitalLayout.relocated(SEED, s, wet, oceanAround(wet));
         int clear = CityLayout.SIZE + CityLayout.CLEARANCE;
-        for (CityLayout.Site city : CityLayout.sitesInBox(SEED, s, moved.x() - clear, moved.z() - clear, moved.x() + clear, moved.z() + clear)) {
+        for (CityLayout.Site city : CityLayout.cityStateSitesInBox(SEED, s, moved.x() - clear, moved.z() - clear, moved.x() + clear, moved.z() + clear)) {
             assertFalse(Math.abs(city.x() - moved.x()) <= clear && Math.abs(city.z() - moved.z()) <= clear, "too close to " + city);
         }
     }

@@ -159,7 +159,7 @@ public final class CityStats {
      * has to reach.
      */
     public static List<String> describeTerrain(ServerLevel level, WorldSettings settings, int x, int z) {
-        int r = 3 * CityLayout.SIZE;
+        int r = 2 * CityLayout.MAX_HALF_EXTENT;
         Optional<CityLayout.Site> nearest = CityLayout.allSitesInBox(level.getSeed(), settings, x - r, z - r, x + r, z + r).stream()
                 .min(java.util.Comparator.comparingLong(s -> (long) (s.x() - x) * (s.x() - x) + (long) (s.z() - z) * (s.z() - z)));
         if (nearest.isEmpty()) {
@@ -172,7 +172,7 @@ public final class CityStats {
         for (CityTerrain.Side side : CityTerrain.Side.values()) {
             StringBuilder sb = new StringBuilder();
             StringBuilder carve = new StringBuilder();
-            for (int s = 0; s < CityTerrain.SEGMENTS_PER_SIDE; s++) {
+            for (int s = 0; s < CityTerrain.segments(site.cells()); s++) {
                 sb.append(plan.edge(side, s).name().charAt(0));
                 carve.append(' ').append(plan.carveTo()[side.ordinal()][s]);
             }

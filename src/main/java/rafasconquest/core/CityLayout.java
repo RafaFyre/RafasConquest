@@ -8,13 +8,13 @@ import java.util.Optional;
  * Where cities go and how each one is laid out.
  * <p>
  * A city is a planned square: a street grid with a 3-wide road every 32 blocks (including an edge road all round),
- * giving 15 × 15 city blocks of 29 × 29, each split into four 14 × 14 plots. The square is cut into 3 × 3 cells of 5 × 5
- * blocks; each cell is its own structure start (the town centre in the middle, a district in each of the other 8),
- * which keeps every piece inside the engine's 128-block reach from its start. Every cell builds its share of the same
- * grid, so cells meet seamlessly.
+ * giving city blocks of 29 × 29, each split into four 14 × 14 plots. The square is cut into N × N cells (districts) of
+ * 5 × 5 blocks; each cell is its own structure start (the town centre in the one holding the middle block, a district in
+ * each of the others), which keeps every piece inside the engine's 128-block reach from its start. Every cell builds
+ * its share of the same grid, so cells meet seamlessly. The constants and size-less methods describe a 3 × 3 city.
  * <p>
- * City-state cities: one seeded site per city grid cell; sites inside the eye or too close to a Capital are dropped.
- * Every Empire capital is a city too, at its Capital site.
+ * The cities built are the titles' seat cities ({@link SeatCities}), published from the world map. The old seeded
+ * City-state sites ({@link #gridSite}, {@link #cityStateSitesInBox}) only place City-state factions now, with no city.
  */
 public final class CityLayout {
     public static final int ROAD_PERIOD = 32;
@@ -23,12 +23,16 @@ public final class CityLayout {
     public static final int PLOT_SIZE = (ROAD_PERIOD - ROAD_WIDTH - 1) / 2;
     public static final int BLOCKS_PER_CELL = 5;
     public static final int CELLS_PER_SIDE = 3;
+    /** The cities built, from the world map; set from the server thread when the overworld loads. */
+    private static volatile java.util.function.BiFunction<int[], int[], List<SeatCities.City>> builtCities = (min, max) -> List.of();
     public static final int BLOCKS_PER_SIDE = BLOCKS_PER_CELL * CELLS_PER_SIDE;
     /** The block holding the town centre instead of plots. */
     public static final int CENTER_BLOCK = BLOCKS_PER_SIDE / 2;
     /** Side length of the whole city, edge roads included. */
     public static final int SIZE = BLOCKS_PER_SIDE * ROAD_PERIOD + ROAD_WIDTH;
     public static final int HALF_EXTENT = SIZE / 2;
+    /** Half the side of the largest city (a 9 × 9 metropolis), for searches that must find any city nearby. */
+    public static final int MAX_HALF_EXTENT = (9 * BLOCKS_PER_CELL * ROAD_PERIOD + ROAD_WIDTH) / 2;
     /** Distance between cell centres, and so between district starts. */
     public static final int DISTRICT_SPACING = BLOCKS_PER_CELL * ROAD_PERIOD;
     /** Extra gap kept between a city's edge and a Capital or Farm. */
@@ -68,39 +72,74 @@ public final class CityLayout {
      * A city's centre. {@code capital} cities are Empire capitals (at the Capital sites); the rest are City-state
      * homes from the city grid. Both are built the same way.
      */
-    public record Site(int x, int z, boolean capital) {
+    public record Site(int x, int z, boolean capital, int cells) {
+        /** A 3 × 3 city. */
+        public Site(int x, int z, boolean capital) {
+            this(x, z, capital, CELLS_PER_SIDE);
+        }
+
+        /** City blocks along a side. */
+        public int blocksPerSide() {
+            return cells * BLOCKS_PER_CELL;
+        }
+
+        /** Side length, edge roads included. */
+        public int size() {
+            return blocksPerSide() * ROAD_PERIOD + ROAD_WIDTH;
+        }
+
+        public int halfExtent() {
+            return size() / 2;
+        }
+
+        /** The block holding the town centre. */
+        public int centerBlock() {
+            return blocksPerSide() / 2;
+        }
+
+        /** The cell holding the town centre: the city's own structure start. */
+        public int centerCell() {
+            return centerBlock() / BLOCKS_PER_CELL;
+        }
+
         /** World x of the city's west edge (local 0). */
         public int originX() {
-            return x - HALF_EXTENT;
+            return x - halfExtent();
         }
 
         /** World z of the city's north edge (local 0). */
         public int originZ() {
-            return z - HALF_EXTENT;
+            return z - halfExtent();
         }
     }
 
     /**
-     * One of the 3 × 3 cells. Cell (1, 1) is the town centre; the others are districts.
+     * One of the city's N × N cells, its structure start at the cell's middle. The cell holding the town centre is the
+     * city's own start; the others are districts.
      */
     public record District(Site city, int cellX, int cellZ) {
         public int x() {
-            return city.x() + (cellX - 1) * DISTRICT_SPACING;
+            return city.originX() + cellX * DISTRICT_SPACING + DISTRICT_SPACING / 2 + 1;
         }
 
         public int z() {
-            return city.z() + (cellZ - 1) * DISTRICT_SPACING;
+            return city.originZ() + cellZ * DISTRICT_SPACING + DISTRICT_SPACING / 2 + 1;
         }
     }
 
     /** Road indices (0 .. BLOCKS_PER_SIDE) a cell builds along one axis. The last cell also builds the far edge road. */
     public static List<Integer> roadsInCell(int cell) {
+        return roadsInCell(CELLS_PER_SIDE, cell);
+    }
+
+    /** The same, for a city {@code cells} cells a side. */
+    public static List<Integer> roadsInCell(int cells, int cell) {
         List<Integer> roads = new ArrayList<>();
         for (int k = cell * BLOCKS_PER_CELL; k < (cell + 1) * BLOCKS_PER_CELL; k++) {
             roads.add(k);
         }
-        if (cell == CELLS_PER_SIDE - 1) {
-            roads.add(BLOCKS_PER_SIDE);
+        if (cell == cells - 1) {
+            roads.add(cells * BLOCKS_PER_CELL);
         }
         return roads;
     }
@@ -135,10 +174,15 @@ public final class CityLayout {
 
     /** All wall segments, every side, in clockwise order. */
     public static List<WallSegment> wallSegments() {
+        return wallSegments(CELLS_PER_SIDE);
+    }
+
+    /** All wall segments of a city {@code cells} cells a side. */
+    public static List<WallSegment> wallSegments(int cells) {
         List<WallSegment> all = new ArrayList<>();
         for (Side side : Side.values()) {
-            for (int j = 0; j < BLOCKS_PER_SIDE; j++) {
-                all.add(wallSegment(side, j));
+            for (int j = 0; j < cells * BLOCKS_PER_CELL; j++) {
+                all.add(wallSegment(cells, side, j));
             }
         }
         return all;
@@ -146,9 +190,13 @@ public final class CityLayout {
 
     /** The wall segments a cell builds, in clockwise order along each side. */
     public static List<WallSegment> wallSegments(int cellX, int cellZ) {
+        return wallSegments(CELLS_PER_SIDE, cellX, cellZ);
+    }
+
+    public static List<WallSegment> wallSegments(int cells, int cellX, int cellZ) {
         List<WallSegment> mine = new ArrayList<>();
-        for (WallSegment seg : wallSegments()) {
-            int[] cell = wallCell(seg);
+        for (WallSegment seg : wallSegments(cells)) {
+            int[] cell = wallCell(cells, seg);
             if (cell[0] == cellX && cell[1] == cellZ) {
                 mine.add(seg);
             }
@@ -157,22 +205,28 @@ public final class CityLayout {
     }
 
     static WallSegment wallSegment(Side side, int j) {
-        int far = SIZE - 1;
+        return wallSegment(CELLS_PER_SIDE, side, j);
+    }
+
+    static WallSegment wallSegment(int cells, Side side, int j) {
+        int blocks = cells * BLOCKS_PER_CELL;
+        int far = blocks * ROAD_PERIOD + ROAD_WIDTH - 1;
         int out = WALL_OUTSET;
+        int gate = blocks / 2;
         // A corner segment starts WALL_OUTSET early; every other one starts on its road.
         int step = j * ROAD_PERIOD - (j == 0 ? out : 0);
         return switch (side) {
-            case NORTH -> new WallSegment(side, j, step, -out, 0, j == GATE_ROAD);
-            case EAST -> new WallSegment(side, j, far + out, step, 1, j == GATE_ROAD);
-            // South and west run back toward the origin, so road k is met by segment 15 - k.
-            case SOUTH -> new WallSegment(side, j, far - step, far + out, 2, j == BLOCKS_PER_SIDE - GATE_ROAD);
-            case WEST -> new WallSegment(side, j, -out, far - step, 3, j == BLOCKS_PER_SIDE - GATE_ROAD);
+            case NORTH -> new WallSegment(side, j, step, -out, 0, j == gate);
+            case EAST -> new WallSegment(side, j, far + out, step, 1, j == gate);
+            // South and west run back toward the origin, so road k is met by segment (blocks - k).
+            case SOUTH -> new WallSegment(side, j, far - step, far + out, 2, j == blocks - gate);
+            case WEST -> new WallSegment(side, j, -out, far - step, 3, j == blocks - gate);
         };
     }
 
-    private static int[] wallCell(WallSegment seg) {
+    private static int[] wallCell(int cells, WallSegment seg) {
         int along = seg.index() / BLOCKS_PER_CELL;
-        int last = CELLS_PER_SIDE - 1;
+        int last = cells - 1;
         return switch (seg.side()) {
             case NORTH -> new int[]{along, 0};
             case EAST -> new int[]{last, along};
@@ -196,18 +250,23 @@ public final class CityLayout {
 
     /** True if city-local (x, z) is on the wall: the outermost road band and the {@link #WALL_OUTSET} blocks past it. */
     public static boolean inWallBand(int localX, int localZ) {
-        if (localX < -WALL_OUTSET || localZ < -WALL_OUTSET || localX >= SIZE + WALL_OUTSET || localZ >= SIZE + WALL_OUTSET) {
+        return inWallBand(SIZE, localX, localZ);
+    }
+
+    /** The same, for a city {@code size} blocks a side. */
+    public static boolean inWallBand(int size, int localX, int localZ) {
+        if (localX < -WALL_OUTSET || localZ < -WALL_OUTSET || localX >= size + WALL_OUTSET || localZ >= size + WALL_OUTSET) {
             return false;
         }
-        int inner = SIZE - ROAD_WIDTH;
+        int inner = size - ROAD_WIDTH;
         return localX < ROAD_WIDTH || localZ < ROAD_WIDTH || localX >= inner || localZ >= inner;
     }
 
     /** The city whose wall band contains world (x, z), if any. */
     public static Optional<Site> wallAt(long seed, WorldSettings s, int x, int z) {
-        int r = HALF_EXTENT + WALL_OUTSET + 1;
+        int r = MAX_HALF_EXTENT + WALL_OUTSET + 1;
         for (Site city : allSitesInBox(seed, s, x - r, z - r, x + r, z + r)) {
-            if (inWallBand(x - city.originX(), z - city.originZ())) {
+            if (inWallBand(city.size(), x - city.originX(), z - city.originZ())) {
                 return Optional.of(city);
             }
         }
@@ -218,14 +277,14 @@ public final class CityLayout {
     public static boolean chunkTouchesWall(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        int r = HALF_EXTENT + WALL_OUTSET + 1;
+        int r = MAX_HALF_EXTENT + WALL_OUTSET + 1;
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             int lx0 = minX - city.originX();
             int lz0 = minZ - city.originZ();
             int lo = -WALL_OUTSET;
-            int hi = SIZE + WALL_OUTSET;
+            int hi = city.size() + WALL_OUTSET;
             boolean overlapsCity = lx0 + 15 >= lo && lz0 + 15 >= lo && lx0 < hi && lz0 < hi;
-            int inner = SIZE - ROAD_WIDTH;
+            int inner = city.size() - ROAD_WIDTH;
             boolean insideInner = lx0 >= ROAD_WIDTH && lz0 >= ROAD_WIDTH && lx0 + 15 < inner && lz0 + 15 < inner;
             if (overlapsCity && !insideInner) {
                 return true;
@@ -257,17 +316,30 @@ public final class CityLayout {
         return Optional.of(new Site(x, z, false));
     }
 
-    /** Every city, City-state homes and Empire capitals alike, whose centre lies in the box. */
+    /** Publishes the world's seat cities: those whose square reaches into a box ({min x, min z}, {max x, max z}). */
+    public static void publishBuilt(java.util.function.BiFunction<int[], int[], List<SeatCities.City>> cities) {
+        builtCities = cities;
+    }
+
+    /**
+     * Every city built, whose centre lies in the box: the titles' seat cities. A kingdom's or empire's is built whatever
+     * its biome ({@code capital}).
+     */
     public static List<Site> allSitesInBox(long seed, WorldSettings s, int minX, int minZ, int maxX, int maxZ) {
-        List<Site> sites = sitesInBox(seed, s, minX, minZ, maxX, maxZ);
-        for (CapitalLayout.Site capital : CapitalLayout.sitesInBox(seed, s, minX, minZ, maxX, maxZ)) {
-            sites.add(new Site(capital.x(), capital.z(), true));
+        List<Site> sites = new ArrayList<>();
+        for (SeatCities.City c : builtCities.apply(new int[]{minX, minZ}, new int[]{maxX, maxZ})) {
+            if (c.x() >= minX && c.x() <= maxX && c.z() >= minZ && c.z() <= maxZ) {
+                sites.add(new Site(c.x(), c.z(), c.tier().ordinal() >= TitleMap.Tier.KINGDOM.ordinal(), c.districts()));
+            }
         }
         return sites;
     }
 
-    /** Every City-state city site with minX <= x <= maxX and minZ <= z <= maxZ (capital cities not included). */
-    public static List<Site> sitesInBox(long seed, WorldSettings s, int minX, int minZ, int maxX, int maxZ) {
+    /**
+     * Every old seeded City-state site with minX <= x <= maxX and minZ <= z <= maxZ: where City-state factions start,
+     * with no city built there (cities are the titles' seats now).
+     */
+    public static List<Site> cityStateSitesInBox(long seed, WorldSettings s, int minX, int minZ, int maxX, int maxZ) {
         List<Site> sites = new ArrayList<>();
         if (!s.citiesEnabled()) {
             return sites;
@@ -287,16 +359,22 @@ public final class CityLayout {
     public static Optional<Site> siteInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        List<Site> sites = allSitesInBox(seed, s, minX, minZ, minX + 15, minZ + 15);
-        return sites.isEmpty() ? Optional.empty() : Optional.of(sites.get(0));
+        int r = MAX_HALF_EXTENT;
+        for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
+            District centre = new District(city, city.centerCell(), city.centerCell());
+            if (centre.x() >= minX && centre.x() <= minX + 15 && centre.z() >= minZ && centre.z() <= minZ + 15) {
+                return Optional.of(city);
+            }
+        }
+        return Optional.empty();
     }
 
-    /** The 8 outer cells of a city. */
+    /** A city's cells other than the one holding its town centre. */
     public static List<District> districts(Site city) {
-        List<District> districts = new ArrayList<>(8);
-        for (int cz = 0; cz < CELLS_PER_SIDE; cz++) {
-            for (int cx = 0; cx < CELLS_PER_SIDE; cx++) {
-                if (cx != 1 || cz != 1) {
+        List<District> districts = new ArrayList<>();
+        for (int cz = 0; cz < city.cells(); cz++) {
+            for (int cx = 0; cx < city.cells(); cx++) {
+                if (cx != city.centerCell() || cz != city.centerCell()) {
                     districts.add(new District(city, cx, cz));
                 }
             }
@@ -308,7 +386,7 @@ public final class CityLayout {
     public static Optional<District> districtInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        int r = DISTRICT_SPACING;
+        int r = MAX_HALF_EXTENT;
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (District d : districts(city)) {
                 if (d.x() >= minX && d.x() <= minX + 15 && d.z() >= minZ && d.z() <= minZ + 15) {
@@ -321,8 +399,9 @@ public final class CityLayout {
 
     /** True if (x, z) lies within a city's footprint plus {@code margin} blocks. Site-level, so it ignores biome checks. */
     public static boolean nearCity(long seed, WorldSettings s, int x, int z, int margin) {
-        int r = HALF_EXTENT + 1 + margin;
-        for (Site city : allSitesInBox(seed, s, x - r, z - r, x + r, z + r)) {
+        int search = MAX_HALF_EXTENT + 1 + margin;
+        for (Site city : allSitesInBox(seed, s, x - search, z - search, x + search, z + search)) {
+            int r = city.halfExtent() + 1 + margin;
             if (Math.abs(city.x() - x) <= r && Math.abs(city.z() - z) <= r) {
                 return true;
             }

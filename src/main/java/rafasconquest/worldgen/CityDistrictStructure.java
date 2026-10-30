@@ -10,7 +10,7 @@ import rafasconquest.core.WorldSettings;
 import java.util.Optional;
 
 /**
- * One of a city's 8 outer cells: its share of the street grid and plots. Uses the variant of the city centre, so the
+ * One of a city's cells other than the town centre's: its share of the street grid and plots. Uses the variant of the city centre, so the
  * whole city shares one style, and never skips, so the square is always complete.
  */
 public class CityDistrictStructure extends Structure {

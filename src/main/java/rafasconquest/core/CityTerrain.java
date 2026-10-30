@@ -70,20 +70,45 @@ public final class CityTerrain {
      * {@code carveTo[side][segment]} is how far above the plate the carve must reach at {@link #SLOPE_REACH}, measured
      * at that stretch (0 or less if 1:2 already clears the land).
      */
-    public record Plan(int plateY, Edge[][] edges, int[][] carveTo) {
+    public record Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells) {
+        /** A 3 × 3 city's plan. */
+        public Plan(int plateY, Edge[][] edges, int[][] carveTo) {
+            this(plateY, edges, carveTo, CityLayout.CELLS_PER_SIDE);
+        }
+
         public Edge edge(Side side, int segment) {
-            return edges[side.ordinal()][Math.max(0, Math.min(SEGMENTS_PER_SIDE - 1, segment))];
+            Edge[] side0 = edges[side.ordinal()];
+            return side0[Math.max(0, Math.min(side0.length - 1, segment))];
+        }
+
+        /** The city's side, edge roads included. */
+        public int size() {
+            return CityTerrain.size(cells);
         }
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof Plan p && p.plateY == plateY && Arrays.deepEquals(p.edges, edges) && Arrays.deepEquals(p.carveTo, carveTo);
+            return o instanceof Plan p && p.plateY == plateY && p.cells == cells && Arrays.deepEquals(p.edges, edges)
+                    && Arrays.deepEquals(p.carveTo, carveTo);
         }
 
         @Override
         public int hashCode() {
-            return 31 * (31 * plateY + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo);
+            return 31 * (31 * (31 * plateY + cells) + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo);
         }
+    }
+
+    /** A city {@code cells} cells a side: its side in blocks, the box's far edge, and the stretches along each side. */
+    public static int size(int cells) {
+        return cells * CityLayout.BLOCKS_PER_CELL * CityLayout.ROAD_PERIOD + CityLayout.ROAD_WIDTH;
+    }
+
+    public static int boxMax(int cells) {
+        return size(cells) - 1 + CityLayout.WALL_OUTSET + BOX_MARGIN;
+    }
+
+    public static int segments(int cells) {
+        return (boxMax(cells) - BOX_MIN + EDGE_SEGMENT) / EDGE_SEGMENT;
     }
 
     public enum Kind {
@@ -109,43 +134,50 @@ public final class CityTerrain {
      * coastal city doesn't sit in a pit the sea could pour into.
      */
     public static Plan plan(CityLayout.Site site, Heights heights, int seaLevel) {
+        int cells = site.cells();
+        int boxMax = boxMax(cells);
+        int segments = segments(cells);
         List<Integer> samples = new ArrayList<>();
-        for (int lx = BOX_MIN; lx <= BOX_MAX; lx = next(lx)) {
-            for (int lz = BOX_MIN; lz <= BOX_MAX; lz = next(lz)) {
+        for (int lx = BOX_MIN; lx <= boxMax; lx = next(lx, boxMax)) {
+            for (int lz = BOX_MIN; lz <= boxMax; lz = next(lz, boxMax)) {
                 samples.add(heights.at(site.originX() + lx, site.originZ() + lz));
             }
         }
         samples.sort(Integer::compare);
         int plate = Math.max(seaLevel - 1, samples.get(samples.size() / 2));
 
-        Edge[][] edges = new Edge[Side.values().length][SEGMENTS_PER_SIDE];
-        int[][] carveTo = new int[Side.values().length][SEGMENTS_PER_SIDE];
+        Edge[][] edges = new Edge[Side.values().length][segments];
+        int[][] carveTo = new int[Side.values().length][segments];
         for (Side side : Side.values()) {
-            for (int seg = 0; seg < SEGMENTS_PER_SIDE; seg++) {
-                int along = center(seg);
-                edges[side.ordinal()][seg] = classify(site, heights, plate, side, along);
-                carveTo[side.ordinal()][seg] = carveTarget(site, heights, plate, side, along);
+            for (int seg = 0; seg < segments; seg++) {
+                int along = center(seg, boxMax);
+                edges[side.ordinal()][seg] = classify(site, heights, plate, side, along, boxMax);
+                carveTo[side.ordinal()][seg] = carveTarget(site, heights, plate, side, along, boxMax);
             }
         }
-        return new Plan(plate, edges, carveTo);
+        return new Plan(plate, edges, carveTo, cells);
     }
 
-    private static int next(int l) {
-        return l == BOX_MAX ? BOX_MAX + 1 : Math.min(BOX_MAX, l + MEDIAN_STEP);
+    private static int next(int l, int boxMax) {
+        return l == boxMax ? boxMax + 1 : Math.min(boxMax, l + MEDIAN_STEP);
     }
 
     /** Along-edge position of a stretch's centre. */
     static int center(int segment) {
-        return Math.min(BOX_MAX, BOX_MIN + segment * EDGE_SEGMENT + EDGE_SEGMENT / 2);
+        return center(segment, BOX_MAX);
+    }
+
+    static int center(int segment, int boxMax) {
+        return Math.min(boxMax, BOX_MIN + segment * EDGE_SEGMENT + EDGE_SEGMENT / 2);
     }
 
     /** Looks straight out from the box edge: does the land fall away, and if so does a 1:2 fill reach it? */
-    static Edge classify(CityLayout.Site site, Heights heights, int plate, Side side, int along) {
+    static Edge classify(CityLayout.Site site, Heights heights, int plate, Side side, int along, int boxMax) {
         long sum = 0;
         int n = 0;
         boolean fillMeets = false;
         for (int d = RAY_STEP; d <= SLOPE_REACH; d += RAY_STEP) {
-            int y = height(site, heights, side, along, d);
+            int y = height(site, heights, side, along, d, boxMax);
             sum += y - plate;
             n++;
             if (y >= plate - rise(d)) {
@@ -159,28 +191,28 @@ public final class CityTerrain {
     }
 
     /** The highest land around the end of the carve's reach, relative to the plate: what the carve has to meet. */
-    static int carveTarget(CityLayout.Site site, Heights heights, int plate, Side side, int along) {
+    static int carveTarget(CityLayout.Site site, Heights heights, int plate, Side side, int along, int boxMax) {
         int highest = Integer.MIN_VALUE;
         for (int offset = -RAY_SPREAD; offset <= RAY_SPREAD; offset += RAY_SPREAD) {
-            int a = Math.max(BOX_MIN, Math.min(BOX_MAX, along + offset));
+            int a = Math.max(BOX_MIN, Math.min(boxMax, along + offset));
             for (int d = SLOPE_REACH - RAY_STEP; d <= SLOPE_REACH + BEYOND_REACH; d += RAY_STEP) {
-                highest = Math.max(highest, height(site, heights, side, a, d) - plate);
+                highest = Math.max(highest, height(site, heights, side, a, d, boxMax) - plate);
             }
         }
         return highest;
     }
 
-    private static int height(CityLayout.Site site, Heights heights, Side side, int along, int d) {
-        int[] l = outward(side, along, d);
+    private static int height(CityLayout.Site site, Heights heights, Side side, int along, int d, int boxMax) {
+        int[] l = outward(side, along, d, boxMax);
         return heights.at(site.originX() + l[0], site.originZ() + l[1]);
     }
 
     /** Local (x, z) {@code d} blocks straight out from the box edge at position {@code along} on {@code side}. */
-    static int[] outward(Side side, int along, int d) {
+    static int[] outward(Side side, int along, int d, int boxMax) {
         return switch (side) {
             case NORTH -> new int[]{along, BOX_MIN - d};
-            case EAST -> new int[]{BOX_MAX + d, along};
-            case SOUTH -> new int[]{along, BOX_MAX + d};
+            case EAST -> new int[]{boxMax + d, along};
+            case SOUTH -> new int[]{along, boxMax + d};
             case WEST -> new int[]{BOX_MIN - d, along};
         };
     }
@@ -200,8 +232,9 @@ public final class CityTerrain {
     }
 
     public static Column column(Plan plan, int lx, int lz) {
-        int dx = lx < BOX_MIN ? BOX_MIN - lx : lx > BOX_MAX ? lx - BOX_MAX : 0;
-        int dz = lz < BOX_MIN ? BOX_MIN - lz : lz > BOX_MAX ? lz - BOX_MAX : 0;
+        int boxMax = boxMax(plan.cells());
+        int dx = lx < BOX_MIN ? BOX_MIN - lx : lx > boxMax ? lx - boxMax : 0;
+        int dz = lz < BOX_MIN ? BOX_MIN - lz : lz > boxMax ? lz - boxMax : 0;
         int plate = plan.plateY();
         if (dx == 0 && dz == 0) {
             return insideBox(plan, lx, lz);
@@ -216,15 +249,15 @@ public final class CityTerrain {
             // Corner: as steep as the steeper of the two sides meeting there, and only filled if both are filled.
             Side xSide = lx < BOX_MIN ? Side.WEST : Side.EAST;
             Side zSide = lz < BOX_MIN ? Side.NORTH : Side.SOUTH;
-            int xEnd = zSide == Side.NORTH ? BOX_MIN : BOX_MAX;
-            int zEnd = xSide == Side.WEST ? BOX_MIN : BOX_MAX;
+            int xEnd = zSide == Side.NORTH ? BOX_MIN : boxMax;
+            int zEnd = xSide == Side.WEST ? BOX_MIN : boxMax;
             target = Math.max(carveTarget(plan, xSide, xEnd), carveTarget(plan, zSide, zEnd));
-            fill = plan.edge(xSide, segment(xEnd)) == Edge.FILL && plan.edge(zSide, segment(zEnd)) == Edge.FILL;
+            fill = plan.edge(xSide, segment(plan, xEnd)) == Edge.FILL && plan.edge(zSide, segment(plan, zEnd)) == Edge.FILL;
         } else {
             Side side = dz > 0 ? (lz < BOX_MIN ? Side.NORTH : Side.SOUTH) : (lx < BOX_MIN ? Side.WEST : Side.EAST);
             int along = dz > 0 ? lx : lz;
             target = carveTarget(plan, side, along);
-            fill = plan.edge(side, segment(along)) == Edge.FILL;
+            fill = plan.edge(side, segment(plan, along)) == Edge.FILL;
         }
         return new Column(Kind.SLOPE, plate - rise(d), plate + carveRise(d, target), fill);
     }
@@ -232,7 +265,7 @@ public final class CityTerrain {
     /** Inside the box: the plate, except under and outside the wall on valley stretches. */
     private static Column insideBox(Plan plan, int lx, int lz) {
         int plate = plan.plateY();
-        int far = CityLayout.SIZE - 1;
+        int far = plan.size() - 1;
         int wall = CityLayout.ROAD_WIDTH;
         // The wall's outer face, on the low and high side of each axis.
         int lo = -CityLayout.WALL_OUTSET;
@@ -266,37 +299,43 @@ public final class CityTerrain {
     }
 
     private static boolean valley(Plan plan, Side side, int along) {
-        return plan.edge(side, segment(along)) == Edge.VALLEY;
+        return plan.edge(side, segment(plan, along)) == Edge.VALLEY;
     }
 
     /** The carve's target at a position along a side, blended linearly between neighbouring stretch centres. */
     static int carveTarget(Plan plan, Side side, int along) {
         int[] targets = plan.carveTo()[side.ordinal()];
-        if (along <= center(0)) {
+        int boxMax = boxMax(plan.cells());
+        if (along <= center(0, boxMax)) {
             return targets[0];
         }
-        for (int seg = 0; seg < SEGMENTS_PER_SIDE - 1; seg++) {
-            int a = center(seg);
-            int b = center(seg + 1);
+        for (int seg = 0; seg < targets.length - 1; seg++) {
+            int a = center(seg, boxMax);
+            int b = center(seg + 1, boxMax);
             if (along <= b) {
                 double t = b == a ? 1 : (double) (along - a) / (b - a);
                 return (int) Math.round(targets[seg] + (targets[seg + 1] - targets[seg]) * t);
             }
         }
-        return targets[SEGMENTS_PER_SIDE - 1];
+        return targets[targets.length - 1];
     }
 
-    static int segment(int along) {
-        return Math.max(0, Math.min(SEGMENTS_PER_SIDE - 1, (along - BOX_MIN) / EDGE_SEGMENT));
+    static int segment(Plan plan, int along) {
+        return Math.max(0, Math.min(segments(plan.cells()) - 1, (along - BOX_MIN) / EDGE_SEGMENT));
     }
 
     /**
-     * Which cell (0–2 along each axis) owns a column, inside or outside the box. Columns outside the city square
-     * belong to the nearest edge cell, so each cell's flattening covers a disjoint area and they never overlap.
+     * Which cell (0 to cells - 1 along each axis) owns a column, inside or outside the box. Columns outside the city
+     * square belong to the nearest edge cell, so each cell's flattening covers a disjoint area and they never overlap.
+     * The size-less forms are for a 3 × 3 city.
      */
     public static int cellOf(int local) {
-        int clamped = Math.max(0, Math.min(CityLayout.SIZE - 1, local));
-        return Math.min(CityLayout.CELLS_PER_SIDE - 1, clamped / CityLayout.DISTRICT_SPACING);
+        return cellOf(CityLayout.CELLS_PER_SIDE, local);
+    }
+
+    public static int cellOf(int cells, int local) {
+        int clamped = Math.max(0, Math.min(size(cells) - 1, local));
+        return Math.min(cells - 1, clamped / CityLayout.DISTRICT_SPACING);
     }
 
     /** Local extent [min, max] of the columns a cell flattens along one axis, slopes included. */
@@ -305,6 +344,10 @@ public final class CityTerrain {
     }
 
     public static int ownedMax(int cell) {
-        return cell == CityLayout.CELLS_PER_SIDE - 1 ? BOX_MAX + SLOPE_REACH : (cell + 1) * CityLayout.DISTRICT_SPACING - 1;
+        return ownedMax(CityLayout.CELLS_PER_SIDE, cell);
+    }
+
+    public static int ownedMax(int cells, int cell) {
+        return cell == cells - 1 ? boxMax(cells) + SLOPE_REACH : (cell + 1) * CityLayout.DISTRICT_SPACING - 1;
     }
 }
