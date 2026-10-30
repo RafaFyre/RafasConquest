@@ -26,19 +26,8 @@ public final class SeatCities {
     private static final int MARGIN = 10;
     private static final long SALT = 0x5345415443495459L;
 
-    /**
-     * A seat city: its centre, how many districts a side, the highest title it seats, its seat province, and whether
-     * it lies in ruins (an unowned seat, abandoned).
-     */
-    public record City(int x, int z, int districts, TitleMap.Tier tier, int province, boolean ruin) {
-        public City(int x, int z, int districts, TitleMap.Tier tier, int province) {
-            this(x, z, districts, tier, province, false);
-        }
-
-        public City ruined() {
-            return new City(x, z, districts, tier, province, true);
-        }
-
+    /** A seat city: its centre, how many districts a side, the highest title it seats, and its seat province. */
+    public record City(int x, int z, int districts, TitleMap.Tier tier, int province) {
         /** Its side in blocks, edge roads included. */
         public int size() {
             return districts * DISTRICT + 3;

@@ -103,6 +103,10 @@ public class TitleLayer implements MapLayer {
                 g.fill(x - 1, y - 3, x + 1, y - 1, 0xFF7A5A3A);
                 return 3;
             }
+            case RUIN -> {
+                g.fill(x - 1, y - 1, x + 2, y + 2, 0xFF8A8A80);
+                return 1;
+            }
             case WATCHTOWER -> {
                 g.fill(x - 1, y - 3, x + 1, y + 2, 0xFF5C5C5C);
                 g.fill(x - 2, y - 4, x + 2, y - 3, 0xFF3A3A3A);
@@ -123,6 +127,7 @@ public class TitleLayer implements MapLayer {
             case VILLAGE -> "Village of " + s.hamlets() + " hamlets";
             case WATCHTOWER -> "Watchtower";
             case CASTLE -> "Castle";
+            case RUIN -> "Ruin";
         };
     }
 
@@ -158,10 +163,10 @@ public class TitleLayer implements MapLayer {
     @Override
     public List<LegendEntry> legend() {
         List<LegendEntry> entries = new ArrayList<>();
-        String[] country = {"castle", "watchtower", "village", "hamlet"};
+        String[] country = {"castle", "watchtower", "village", "hamlet", "ruin"};
         rafasconquest.core.Countryside.Kind[] kinds = {rafasconquest.core.Countryside.Kind.CASTLE,
                 rafasconquest.core.Countryside.Kind.WATCHTOWER, rafasconquest.core.Countryside.Kind.VILLAGE,
-                rafasconquest.core.Countryside.Kind.HAMLET};
+                rafasconquest.core.Countryside.Kind.HAMLET, rafasconquest.core.Countryside.Kind.RUIN};
         for (int i = 0; i < kinds.length; i++) {
             rafasconquest.core.Countryside.Kind kind = kinds[i];
             entries.add(new LegendEntry((g, x, y) -> countryMark(g, kind, x + 5, y + 5),

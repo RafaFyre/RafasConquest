@@ -15,7 +15,9 @@ import java.util.TreeSet;
  */
 public final class Countryside {
     public enum Kind {
-        HAMLET, VILLAGE, WATCHTOWER, CASTLE
+        HAMLET, VILLAGE, WATCHTOWER, CASTLE,
+        /** An unowned seat's ruin: a single empty house where its city would have stood (placed with the nations). */
+        RUIN
     }
 
     /** One settlement: its centre, kind, province, and for a village how many hamlets it has. */
@@ -27,6 +29,7 @@ public final class Countryside {
                 case VILLAGE -> 28;
                 case WATCHTOWER -> 5;
                 case CASTLE -> 24;
+                case RUIN -> 4;
             };
         }
     }

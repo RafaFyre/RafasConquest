@@ -676,8 +676,8 @@ City-state's, its county's Town). The nations are planned and named with the map
 each province) and made factions when the server starts (`PoiPrecomputer.ensureNations`), replacing the old ring of
 Empire capitals and seeded City-state sites. Land, Farms and cities belong to their province's holder.
 
-**Unowned seats:** a seat city in a province nobody holds lies in **ruins** 60 % of the time (zombie village houses and
-town centre, about half its plots empty, a third of its wall fallen), is **not there at all** 25 % of the time, and
+**Unowned seats:** a seat city in a province nobody holds is a **ruin** 60 % of the time (no city, just a single
+empty shack where it would have stood: no torch, no pen, nobody in it), is **not there at all** 25 % of the time, and
 otherwise still has people living in it, with no nation over them.
 
 ## Cities (City-states and Empire capitals)

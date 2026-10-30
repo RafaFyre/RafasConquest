@@ -26,13 +26,13 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSeriali
 
 /**
  * One building of the countryside, built in code on ground levelled to a height fixed when its structure started (so
- * every chunk it crosses agrees): a hamlet's shack and sheep pen, a village's well, a watchtower, or a castle (a
+ * every chunk it crosses agrees): a hamlet's shack and sheep pen, a ruin's lone empty shack, a village's well, a watchtower, or a castle (a
  * curtain wall with corner towers and a gate, about a keep). Coordinates are local: (0, 0, 0) is the middle of the
  * ground, x running {@link #facing}'s way after a rotation of {@code turns} quarter turns.
  */
 public class CountryPiece extends StructurePiece {
     public enum Build {
-        HAMLET(9, 6), WELL(3, 5), TOWER(4, 16), CASTLE(24, 14);
+        HAMLET(9, 6), RUIN(4, 6), WELL(3, 5), TOWER(4, 16), CASTLE(24, 14);
 
         /** How far it reaches from its middle, and how tall it stands. */
         final int half;
@@ -116,6 +116,7 @@ public class CountryPiece extends StructurePiece {
         level(level, chunkBox);
         switch (build) {
             case HAMLET -> hamlet(level, chunkBox, random);
+            case RUIN -> shack(level, chunkBox, 6, false);
             case WELL -> well(level, chunkBox);
             case TOWER -> tower(level, chunkBox);
             case CASTLE -> castle(level, chunkBox);
@@ -151,36 +152,10 @@ public class CountryPiece extends StructurePiece {
         }
     }
 
-    /** A shack (5 × 5, plank walls on log corners, a slab roof, a door toward the pen) and a sheep pen beside it. */
+    /** A shack and a sheep pen beside it. */
     private void hamlet(WorldGenLevel level, BoundingBox chunk, RandomSource random) {
-        BlockState log = Blocks.OAK_LOG.defaultBlockState();
-        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
-        // The shack: x -8 .. -4, z -2 .. 2.
-        for (int x = -8; x <= -4; x++) {
-            for (int z = -2; z <= 2; z++) {
-                set(level, chunk, x, -1, z, Blocks.COBBLESTONE.defaultBlockState());
-                boolean wallX = x == -8 || x == -4;
-                boolean wallZ = z == -2 || z == 2;
-                for (int y = 0; y < 3; y++) {
-                    if (wallX && wallZ) {
-                        set(level, chunk, x, y, z, log);
-                    } else if (wallX || wallZ) {
-                        boolean window = y == 1 && (x == -6 && wallZ || z == 0 && x == -8);
-                        set(level, chunk, x, y, z, window ? Blocks.GLASS_PANE.defaultBlockState() : planks);
-                    }
-                }
-                set(level, chunk, x, 3, z, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
-            }
-        }
+        shack(level, chunk, 0, true);
         Direction out = facing();
-        set(level, chunk, -4, 0, 0, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, out)
-                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
-        set(level, chunk, -4, 1, 0, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, out)
-                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
-        set(level, chunk, -7, 0, -1, Blocks.BARREL.defaultBlockState());
-        set(level, chunk, -5, 0, -1, Blocks.CRAFTING_TABLE.defaultBlockState());
-        set(level, chunk, -6, 1, 1, Blocks.WALL_TORCH.defaultBlockState()
-                .setValue(net.minecraft.world.level.block.WallTorchBlock.FACING, rotate(Direction.NORTH)));
         // The pen: x -1 .. 8, z -4 .. 4, a gate facing the shack, hay inside.
         for (int x = -1; x <= 8; x++) {
             for (int z = -4; z <= 4; z++) {
@@ -212,6 +187,42 @@ public class CountryPiece extends StructurePiece {
                 sheep.setPersistenceRequired();
                 level.addFreshEntityWithPassengers(sheep);
             }
+        }
+    }
+
+    /**
+     * A shack (5 × 5, plank walls on log corners, a slab roof, a door facing x), from x -8 + {@code shift} to -4 + shift
+     * and z -2 .. 2. Lit with a torch if anyone lives there; a ruin's stands dark and empty.
+     */
+    private void shack(WorldGenLevel level, BoundingBox chunk, int shift, boolean lived) {
+        BlockState log = Blocks.OAK_LOG.defaultBlockState();
+        BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+        for (int x = -8 + shift; x <= -4 + shift; x++) {
+            for (int z = -2; z <= 2; z++) {
+                set(level, chunk, x, -1, z, Blocks.COBBLESTONE.defaultBlockState());
+                boolean wallX = x == -8 + shift || x == -4 + shift;
+                boolean wallZ = z == -2 || z == 2;
+                for (int y = 0; y < 3; y++) {
+                    if (wallX && wallZ) {
+                        set(level, chunk, x, y, z, log);
+                    } else if (wallX || wallZ) {
+                        boolean window = y == 1 && (x == -6 + shift && wallZ || z == 0 && x == -8 + shift);
+                        set(level, chunk, x, y, z, window ? Blocks.GLASS_PANE.defaultBlockState() : planks);
+                    }
+                }
+                set(level, chunk, x, 3, z, Blocks.OAK_SLAB.defaultBlockState().setValue(SlabBlock.TYPE, SlabType.BOTTOM));
+            }
+        }
+        Direction out = facing();
+        set(level, chunk, -4 + shift, 0, 0, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, out)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
+        set(level, chunk, -4 + shift, 1, 0, Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, out)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+        set(level, chunk, -7 + shift, 0, -1, Blocks.BARREL.defaultBlockState());
+        set(level, chunk, -5 + shift, 0, -1, Blocks.CRAFTING_TABLE.defaultBlockState());
+        if (lived) {
+            set(level, chunk, -6 + shift, 1, 1, Blocks.WALL_TORCH.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.WallTorchBlock.FACING, rotate(Direction.NORTH)));
         }
     }
 

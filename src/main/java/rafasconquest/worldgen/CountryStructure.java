@@ -37,6 +37,7 @@ public class CountryStructure extends Structure {
             case HAMLET -> pieces.addPiece(new CountryPiece(CountryPiece.Build.HAMLET, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
             case WATCHTOWER -> pieces.addPiece(new CountryPiece(CountryPiece.Build.TOWER, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
             case CASTLE -> pieces.addPiece(new CountryPiece(CountryPiece.Build.CASTLE, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
+            case RUIN -> pieces.addPiece(new CountryPiece(CountryPiece.Build.RUIN, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
             case VILLAGE -> {
                 pieces.addPiece(new CountryPiece(CountryPiece.Build.WELL, s.x(), ground(ctx, s.x(), s.z()), s.z(), 0));
                 for (int i = 0; i < s.hamlets(); i++) {

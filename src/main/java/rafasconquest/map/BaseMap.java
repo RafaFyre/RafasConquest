@@ -32,7 +32,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       List<SeatCities.City> cities, List<Countryside.Settlement> settlements, List<Nation> nations,
                       int[] holders) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 10;
+    private static final int FORMAT = 11;
 
     /**
      * A nation holding a title: its faction's id and name ("... Empire" with an empire title), strength and radius,
@@ -121,7 +121,6 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeByte(c.districts());
                 out.writeByte(c.tier().ordinal());
                 out.writeShort(c.province());
-                out.writeBoolean(c.ruin());
             }
             out.writeInt(settlements.size());
             for (Countryside.Settlement s : settlements) {
@@ -217,7 +216,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             List<SeatCities.City> cities = new ArrayList<>(cityCount);
             for (int i = 0; i < cityCount; i++) {
                 cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
-                        in.readShort(), in.readBoolean()));
+                        in.readShort()));
             }
             int settlementCount = in.readInt();
             if (settlementCount < 0 || settlementCount > Short.MAX_VALUE) {

@@ -33,7 +33,7 @@ public final class BaseMapGenerator {
     static final int MIN_BLOCKS_PER_PIXEL = 16;
     /** Largest map side in pixels; a bigger known world gets coarser pixels instead. */
     static final int MAX_SIZE = 1024;
-    /** An unowned seat lies in ruins this often, and is nothing at all this often; otherwise people still live there. */
+    /** An unowned seat is a ruin (a lone empty house) this often, and nothing at all this often; otherwise people still live there. */
     static final double UNOWNED_RUIN = 0.6;
     static final double UNOWNED_EMPTY = 0.25;
     /** Heights are sampled every this many pixels; they change slowly and each sample is costly. */
@@ -139,9 +139,11 @@ public final class BaseMapGenerator {
             nations.add(new BaseMap.Nation(roll.id(), name, roll.strength(), roll.radiusSteps(), nation.tier(), nation.title(),
                     nation.seat(), nation.x(), nation.z()));
         }
-        // The seats no nation holds: mostly ruins, sometimes nothing at all, sometimes still lived in (with no owner).
+        // The seats no nation holds: mostly a ruin (one empty house where the city would have stood), sometimes nothing
+        // at all, sometimes still lived in (with no owner).
         java.util.Random fates = new java.util.Random(level.getSeed() ^ 0x4641544553L);
         List<SeatCities.City> cities = new java.util.ArrayList<>();
+        List<Countryside.Settlement> settlements = new java.util.ArrayList<>(countryside.settlements());
         for (SeatCities.City c : countryside.cities()) {
             if (plan.holder()[c.province()] >= 0) {
                 cities.add(c);
@@ -149,13 +151,13 @@ public final class BaseMapGenerator {
             }
             double roll = fates.nextDouble();
             if (roll < UNOWNED_RUIN) {
-                cities.add(c.ruined());
+                settlements.add(new Countryside.Settlement(c.x(), c.z(), Countryside.Kind.RUIN, c.province(), 0));
             } else if (roll >= UNOWNED_RUIN + UNOWNED_EMPTY) {
                 cities.add(c);
             }
         }
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
-                cities, countryside.settlements(), nations, plan.holder());
+                cities, settlements, nations, plan.holder());
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */
