@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "type=bottom": { "model": "rafasconquest:block/dirt_path_slab" },
+    "type=top": { "model": "rafasconquest:block/dirt_path_slab_top" },
+    "type=double": { "model": "rafasconquest:block/dirt_path_slab_double" }
+  }
+}

@@ -16,6 +16,11 @@ public final class ConquestWorldgen {
     private static final DeferredRegister<StructureType<?>> STRUCTURE_TYPES = DeferredRegister.create(Registries.STRUCTURE_TYPE, RafasConquest.MOD_ID);
     private static final DeferredRegister<StructurePlacementType<?>> PLACEMENT_TYPES = DeferredRegister.create(Registries.STRUCTURE_PLACEMENT, RafasConquest.MOD_ID);
     private static final DeferredRegister<StructurePieceType> PIECE_TYPES = DeferredRegister.create(Registries.STRUCTURE_PIECE, RafasConquest.MOD_ID);
+    private static final DeferredRegister<net.minecraft.world.level.levelgen.feature.Feature<?>> FEATURES = DeferredRegister.create(Registries.FEATURE, RafasConquest.MOD_ID);
+
+    /** The roads, built into each chunk ({@link RoadFeature}). */
+    public static final RegistryObject<RoadFeature> ROADS = FEATURES.register("roads",
+            () -> new RoadFeature(net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
     public static final RegistryObject<StructureType<CityStructure>> CITY_STRUCTURE = STRUCTURE_TYPES.register("city", () -> () -> CityStructure.CODEC);
@@ -49,5 +54,6 @@ public final class ConquestWorldgen {
         STRUCTURE_TYPES.register(modBus);
         PLACEMENT_TYPES.register(modBus);
         PIECE_TYPES.register(modBus);
+        FEATURES.register(modBus);
     }
 }

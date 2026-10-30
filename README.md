@@ -747,6 +747,39 @@ the next three leading the wings, each officer's war-council trait from their pe
 cunning; Arrogant: proud; Brave, Wrathful or Impatient: bold; Craven, Patient or Calm: cautious). A nation with too
 few holders, or a faction not on the map, makes up the rest as before.
 
+## Roads
+
+The world's roads are planned with the world map (`core/Roads`) and built into each chunk as it generates
+(`worldgen/RoadFeature`, from `worldgen/RoadNetwork`).
+
+| Road | Joins | Surface | Width |
+|---|---|---|---|
+| High road | each capital (a kingdom's or empire's seat) to its two nearest capitals | cobblestone, some mossy | 5 |
+| City road | each small city (a duchy's seat) to its kingdom's capital | gravel down the middle, dirt path at the edges | 4 |
+| Town road | each town (a county's seat) to its duchy's city, and to its nearest town if within 3,000 blocks | dirt path | 3 |
+
+A road between two ranks takes the lower one's grade. **Spurs** join the network from its nearest road: a city road
+to every castle, a dirt path to every village; and a cobblestone road to every known dojo from its nearest fork.
+Hamlets and hidden dojos have none.
+
+- **Routes** are found over the map's pixels, cheapest first: steep and high ground, jungles and mountains cost more,
+  water a lot (a river is crossed where narrow) and the sea most of all; cities are gone round. A road already laid
+  costs less, so roads share their way and meet at forks. Roads leave and enter cities by the gate facing their way,
+  just outside the walls. The pixel steps are rounded into curves. The world map draws them (the high roads from
+  further out).
+- **Height:** each road's ground is read from the world generator every 4 blocks along it, the first time a chunk
+  needs it, and smoothed over 12 blocks each way, so every chunk agrees and the road rises and falls gently. Each
+  column gets a full block at the road's height, and a **slab** on top where the road stands half a block higher,
+  easing it up and down; the ground is filled below with dirt and cut away above, plants and trees cleared. The mod
+  adds a **gravel slab** and a **dirt path slab** for this.
+- **Bridges:** where water stands over the ground (a river) or the ground falls 8 or more below the land about it (a
+  ravine), the road is a bridge, its deck flat across, 2 above the water or level with the higher bank, the smoothing
+  ramping the road up to it: oak on log posts for town roads, spruce on stone brick posts for city roads, stone brick
+  with wall rails for high and dojo roads; a rail along each side, a post down to the ground every 6 blocks.
+- **Signposts** stand at every fork: an oak sign on a fence post beside the road, facing the fork, naming the places
+  its roads lead to.
+- Roads stop at city walls, at settlements, and short of a dojo.
+
 ## Townsfolk
 
 Cities' streets are busy near players with **townsfolk** (`npc/Townsperson`, peopled by `npc/Townsfolk`), there only
