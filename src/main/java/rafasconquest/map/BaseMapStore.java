@@ -28,7 +28,7 @@ public class BaseMapStore {
     private static final String FILE = "rafasconquest_basemap.bin";
 
     /** The known world on the map reaches this many times as far as the storm wall. */
-    public static final int KNOWN_WORLD_FACTOR = 2;
+    public static final int KNOWN_WORLD_FACTOR = 4;
 
     private final ServerLevel level;
     private final WorldSettings settings;

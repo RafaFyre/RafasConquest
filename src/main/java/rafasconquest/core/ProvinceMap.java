@@ -22,7 +22,7 @@ import java.util.stream.IntStream;
  */
 public final class ProvinceMap {
     /** Blocks between province centres on ordinary land. */
-    public static final int SPACING = 384;
+    public static final int SPACING = 768;
     /** How far a pixel looks for centres. Covers the gaps rough land leaves. */
     public static final int SEARCH = 3 * SPACING;
     /** Grid centres closer than this to a city give way to it. */

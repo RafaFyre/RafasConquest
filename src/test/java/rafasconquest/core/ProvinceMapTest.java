@@ -67,12 +67,12 @@ class ProvinceMapTest {
     @Test
     void anAreaWithItsMarginMatchesTheWholeMap() {
         // Wavy coastline and hills, so paths matter.
-        int size = 320;
+        int size = 640;
         boolean[] water = new boolean[size * size];
         float[] heights = new float[size * size];
         for (int z = 0; z < size; z++) {
             for (int x = 0; x < size; x++) {
-                water[z * size + x] = x + 12 * Math.sin(z / 9.0) > 250;
+                water[z * size + x] = x + 12 * Math.sin(z / 9.0) > 560;
                 heights[z * size + x] = (float) (30 * Math.sin(x / 13.0) * Math.cos(z / 17.0));
             }
         }
@@ -82,7 +82,7 @@ class ProvinceMapTest {
 
         // A 40-pixel tile in the middle, computed from just itself plus SEARCH blocks of margin.
         int margin = ProvinceMap.SEARCH / BPP + 1;
-        int from = 140 - margin;
+        int from = 300 - margin;
         int span = 40 + 2 * margin;
         boolean[] w2 = new boolean[span * span];
         float[] h2 = new float[span * span];
@@ -96,7 +96,7 @@ class ProvinceMapTest {
         int[] part = ProvinceMap.assign(tile, centres);
         for (int z = 0; z < 40; z++) {
             for (int x = 0; x < 40; x++) {
-                assertEquals(all[(140 + z) * size + 140 + x], part[(margin + z) * span + margin + x], "pixel " + x + "," + z);
+                assertEquals(all[(300 + z) * size + 300 + x], part[(margin + z) * span + margin + x], "pixel " + x + "," + z);
             }
         }
         assertTrue(Arrays.stream(all).filter(p -> p >= 0).distinct().count() > 20, "split into many provinces");

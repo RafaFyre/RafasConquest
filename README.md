@@ -551,7 +551,7 @@ first. The old relation is restored when the battle ends.
 ## World map
 
 Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). It is a
-political map in the style of Crusader Kings 3, out to twice the storm wall's radius (8,000 blocks at default settings),
+political map in the style of Crusader Kings 3, out to four times the storm wall's radius (16,000 blocks at default settings, a pixel every 32 blocks),
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
 
@@ -576,13 +576,13 @@ It is drawn as layers, bottom to top, each its own class, listed in order in `Fa
 Each layer adds its own rows to the legend.
 
 **Provinces** (`core/ProvinceMap`) split the land like CK3's counties:
-- **Centres:** they sit on a seeded, jittered grid every 384 blocks. Deserts, badlands, snow and peaks drop half of
+- **Centres:** they sit on a seeded, jittered grid every 768 blocks. Deserts, badlands, snow and peaks drop half of
   theirs, so provinces are larger there. Every city (City-state home or Empire capital) is a centre itself.
 - **Shapes:** each land pixel joins the centre that is cheapest to reach in a straight line. The sea costs a lot (coasts
   become borders, and islands get their own provinces). A ridge rising above both ends of the path costs (mountain
   ranges become borders). Crossing a biome edge costs a little (borders lean onto rivers and biome edges).
 - **Smoothing:** two passes give each pixel the province most of its neighbours have, which clears ragged edges.
-- **Tiles:** everything a pixel looks at is within 1,152 blocks of it, so any area computed with that margin matches
+- **Tiles:** everything a pixel looks at is within 2,304 blocks of it, so any area computed with that margin matches
   the whole map. That allows tiled provinces beyond the map later.
 
 **Who holds a province** (`map/PoliticalMap`) is the nation that took up its title on the base map (see **Nations**
@@ -650,7 +650,7 @@ belongs to the nation holding its province (its banners painted in its colours, 
 stands unowned.
 
 **The countryside** (`core/Countryside`, built by `worldgen/CountryStructure` and `CountryPiece`, all in code): every
-province with no city on it has one settlement, planned with the cities and saved with the map. Most are a **hamlet**: a
+province with no city on it has one settlement half the time (the other half is wilderness), planned with the cities and saved with the map. Most are a **hamlet**: a
 5 × 5 shack (plank walls on log corners, a slab roof, a door, a barrel and a crafting table) and a fenced sheep pen beside
 it with hay and 2 to 4 sheep. Some are a **small village**: 3 to 6 hamlets in a ring 18 blocks about a well, their pens
 toward it; a province is one 30 % of the time unless a neighbour already is, so villages never neighbour, and villages

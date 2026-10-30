@@ -7,8 +7,8 @@ import java.util.Random;
 import java.util.TreeSet;
 
 /**
- * The countryside, planned with the titles and their seat cities: every province with no city on it has one
- * settlement. Most are a **hamlet** (one shack and a sheep pen); some a **small village** (3 to 6 hamlets about a well),
+ * The countryside, planned with the titles and their seat cities: about half the provinces with no city on them have one
+ * settlement; the rest are wilderness. Most are a **hamlet** (one shack and a sheep pen); some a **small village** (3 to 6 hamlets about a well),
  * never two in neighbouring provinces, and always at least twice as many hamlets as villages. About one hamlet in eight
  * is a **watchtower** instead, more often on the edge of a kingdom; about one county Town in four is a **castle**
  * instead of a city, more often on the edge of a duchy.
@@ -35,6 +35,8 @@ public final class Countryside {
     public record Plan(List<Settlement> settlements, List<SeatCities.City> cities) {
     }
 
+    /** A province with no city is left wilderness (no settlement) this often. */
+    static final double WILD_CHANCE = 0.5;
     /** A province is a village this often, where a neighbour isn't one already. */
     static final double VILLAGE_CHANCE = 0.3;
     /** Watchtowers: one hamlet in this many on a kingdom's edge, and in this many elsewhere (about one in eight in all). */
@@ -71,11 +73,11 @@ public final class Countryside {
                 }
             }
         }
-        // Hamlets and villages in every other province, villages never side by side.
+        // Hamlets and villages in about half the other provinces (the rest wilderness), villages never side by side.
         Kind[] kind = new Kind[n];
         List<Integer> order = new ArrayList<>();
         for (int p = 0; p < n; p++) {
-            if (!covered[p]) {
+            if (!covered[p] && random.nextDouble() >= WILD_CHANCE) {
                 order.add(p);
             }
         }

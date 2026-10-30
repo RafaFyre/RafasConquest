@@ -14,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CountrysideTest {
     private static final int BPP = 16;
-    private static final int CELL = 30;
+    private static final int CELL = 48;
     private static final int CELLS = 20;
 
     private record World(SeatCities.Grid grid, TitleMap titles, List<SeatCities.City> cities, Countryside.Plan plan) {
     }
 
-    /** A land of square provinces 480 blocks a side, the sea along the west. */
+    /** A land of square provinces 768 blocks a side, the sea along the west. */
     private static World world(long seed) {
         int width = CELLS * CELL;
         int[] provinces = new int[width * width];
@@ -49,7 +49,7 @@ class CountrysideTest {
     }
 
     @Test
-    void everyProvinceWithoutACityHasOneSettlementInIt() {
+    void aboutHalfTheProvincesWithoutACityHaveOneSettlementInThem() {
         World w = world(3);
         Set<Integer> covered = new HashSet<>();
         for (SeatCities.City c : w.plan().cities()) {
@@ -66,7 +66,7 @@ class CountrysideTest {
             }
         }
         long free = java.util.stream.IntStream.range(0, w.grid().centres().size()).filter(p -> !covered.contains(p)).count();
-        assertTrue(seen.size() >= free * 0.9, seen.size() + " settlements for " + free + " free provinces");
+        assertTrue(seen.size() >= free * 0.35 && seen.size() <= free * 0.65, seen.size() + " settlements for " + free + " free provinces");
     }
 
     @Test
