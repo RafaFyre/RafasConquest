@@ -115,8 +115,14 @@ public class TitleLayer implements MapLayer {
             if (player != null) {
                 lines.add(Component.literal("Held by " + player).withStyle(net.minecraft.ChatFormatting.GOLD));
             } else if (holder >= 0) {
-                lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(map.base,
-                        map.base.realm().people().get(holder)) + " (double-click)").withStyle(net.minecraft.ChatFormatting.GRAY));
+                rafasconquest.people.Person p = map.base.realm().people().get(holder);
+                int nation = capitalOf(map.base, p);
+                lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(map.base, p)
+                        + (nation >= 0 ? "" : " (double-click)")).withStyle(net.minecraft.ChatFormatting.GRAY));
+                if (nation >= 0) {
+                    lines.add(Component.literal("Capital of " + map.base.nations().get(nation).name() + " (double-click)")
+                            .withStyle(net.minecraft.ChatFormatting.GRAY));
+                }
             }
             g.renderComponentTooltip(Minecraft.getInstance().font, lines, mouseX, mouseY);
         }
@@ -144,8 +150,16 @@ public class TitleLayer implements MapLayer {
             return false;
         }
         Minecraft mc = Minecraft.getInstance();
-        mc.setScreen(new rafasconquest.client.CharacterScreen(mc.screen, map.base, nearest));
+        int nation = capitalOf(map.base, people.get(nearest));
+        mc.setScreen(nation >= 0 ? new rafasconquest.client.NationScreen(mc.screen, map.base, nation)
+                : new rafasconquest.client.CharacterScreen(mc.screen, map.base, nearest));
         return true;
+    }
+
+    /** The nation whose capital a character holds, or -1. */
+    private static int capitalOf(BaseMap base, rafasconquest.people.Person p) {
+        return p.nation() >= 0 && p.hold().kind() == rafasconquest.people.Person.Kind.CAPITAL
+                && base.nations().get(p.nation()).seat() == p.hold().province() ? p.nation() : -1;
     }
 
     private static int countryMark(GuiGraphics g, rafasconquest.core.Countryside.Kind kind, int x, int y) {

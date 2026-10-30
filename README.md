@@ -729,13 +729,15 @@ the surface (a pillager outpost's buildings, without pillagers, for now) and are
 hidden (Blood, Shadow, Light): their dojos are underground (a stronghold, for now) and on no map. A world too small
 for all ten loses hidden dojos before known ones. The schools teach nothing yet.
 
-**Cultures:** one for the lands of each empire title, with its own name and the sounds its names are made of. A nation
-has the culture of its seat's lands, and every one of its characters has it; a hold no nation keeps has its lands'.
+**Cultures:** seven, one for each kind of land (`people/Homeland`, a vanilla villager type: desert, jungle, plains,
+savanna, snow, swamp, taiga), each with its own name and the sounds its names are made of. A province's kind of land is
+the villager type of most of its biomes. A nation has the culture of its seat's land, and every one of its characters
+has it; a hold no nation keeps has its own land's.
 
 **Faiths:** 3 to 5 broad faiths, each held over the lands nearest where it began, and 4 cults, each from a home in one
-empire's lands. A nation keeps its seat's faith with a piety of its own (worldly to devout). Its characters mostly
-share it, between 70 % (worldly) and 95 % (devout) of them; the rest keep a cult (their lands' own, if there is one)
-or another faith.
+empire's lands. Every nation keeps a broad faith, its seat's, with a piety of its own (worldly to devout). Its
+characters mostly share it, between 70 % (worldly) and 95 % (devout) of them; the rest keep a cult (their lands' own,
+if there is one) or another faith.
 
 **On the world map**, hovering over a seat or a castle names its holder; a double-click opens their **character page**
 (`client/CharacterScreen`): their skills (prowess with its rank), traits, culture and faith (marked if not the
@@ -746,6 +748,37 @@ names opens that character's page.
 the next three leading the wings, each officer's war-council trait from their personality (Deceitful or Paranoid:
 cunning; Arrogant: proud; Brave, Wrathful or Impatient: bold; Craven, Patient or Calm: cautious). A nation with too
 few holders, or a faction not on the map, makes up the rest as before.
+
+## Nations: their people and their page
+
+**Races** (`people/Race`): seven, one for each kind of land, as the cultures are: the Sunborn (desert), Vinekin
+(jungle), Meadowfolk (plains), Grasswalkers (savanna), Frostborn (snow), Bogfolk (swamp) and Pinekin (taiga).
+
+**Demographics** (`people/Demographics`, planned in `people/RealmPlanner` and kept with the realm): each nation's
+**population** and the share of it of each culture and each race.
+- **People** are counted in each province the nation holds: 150 on its farms, 400 for each district of a city, 25 for
+  each hamlet (alone or in a village), 120 for a castle and 10 for a watchtower.
+- **Races** follow the land: each province's people are of its land's race, but for 3 to 12 % of wanderers, of every
+  race at random.
+- **Cultures** lean further to the nation's own: it has made 35 to 85 % of its people its own culture; the rest keep
+  their race's.
+
+**The nation page** (`client/NationScreen`): a double-click on a nation's **capital** on the world map opens it (any
+other hold still opens its holder's character page). On a dark ground, the nation's banner hangs at both top corners;
+its title ("THE EMPIRE OF ULDARESH", or a sanctum's own name) has its population beside it; under it, green diamonds
+list what it is:
+- its rank (Empire, Kingdom, Duchy, City-state or Sword Sanctum);
+- its faith ("Followers of ..."), with its piety (worldly, lax, observant, pious, devout);
+- its ways, from what its ruler is best at: Accords (diplomacy), Swords (martial), Laws (stewardship), Whispers
+  (intrigue) or Scholars (learning);
+- its culture, with the shares of the cultures among its people;
+- the race most of its people are, with the shares of the races.
+
+Across the lower half stands its **peerage** as a pyramid of figures on plinths, each in the Recruits skin of their
+culture's land: the ruler at the top; the three most powerful nobles under them (by their hold, a city's over a town's
+over a castle's, then by how many answer to them, then by their skills); the lesser nobles in two wide rows below, the
+second set between the first's. Nobles beyond those rows are counted in the corner. Hovering over a figure names them;
+a click opens their character page.
 
 ## Roads
 

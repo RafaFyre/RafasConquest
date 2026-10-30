@@ -15,8 +15,12 @@ import java.util.Set;
 /**
  * Plans a world's people from its map, the same every time for the same seed:
  * <ul>
- *   <li><b>Cultures</b>: one for each empire's lands. A nation's is the culture of the lands its seat stands in, and
- *       every one of its characters has it; a hold no nation keeps has its lands' culture.</li>
+ *   <li><b>Cultures</b>: one for each kind of land ({@link Homeland}, a vanilla villager type). A nation's is the
+ *       culture of the land its seat stands in, and every one of its characters has it; a hold no nation keeps has its
+ *       land's culture.</li>
+ *   <li><b>Demographics</b>: a nation's people, counted from its cities, castles and countryside; their races follow
+ *       the lands they live in, with a few wanderers from elsewhere, and their cultures lean further towards the
+ *       nation's own, some nations having made more of their people their own than others.</li>
  *   <li><b>Faiths</b>: 3 to 5 broad faiths, each spread over the lands nearest where it began, and 4 cults, each from
  *       a home in one empire's lands. A nation keeps its seat's faith, devoutly or not ({@code piety}); its characters
  *       mostly share it, the more devout the nation the more so, the rest keeping a cult or another faith.</li>
@@ -48,25 +52,45 @@ public final class RealmPlanner {
     private static final double RIVAL = 0.1;
     private static final int MAX_BONDS = 2;
     private static final long SALT = 0x5045_4F50_4C45_5321L;
+    private static final long PEOPLE_SALT = 0x4445_4D4F_4752_4150L;
+    /** People living in each province's farms and fields, whatever stands there. */
+    static final int RURAL = 150;
+    /** People in each district of a city, each hamlet (alone or in a village), each castle and each watchtower. */
+    static final int PER_DISTRICT = 400;
+    static final int PER_HAMLET = 25;
+    static final int PER_CASTLE = 120;
+    static final int PER_WATCHTOWER = 10;
+    /** The share of a nation's people come from lands it doesn't hold: at least this, and up to this much more. */
+    static final double WANDERERS = 0.03;
+    static final double WANDERERS_MORE = 0.09;
+    /** How much of its people a nation has made of its own culture: at least this, and up to this much more. */
+    static final double ASSIMILATED = 0.35;
+    static final double ASSIMILATED_MORE = 0.5;
 
     private RealmPlanner() {
     }
 
     public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
                              List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder) {
-        return plan(seed, t, centres, cities, settlements, nations, holder, true);
+        int[] plains = new int[centres.size()];
+        java.util.Arrays.fill(plains, Homeland.PLAINS.ordinal());
+        return plan(seed, t, centres, cities, settlements, nations, holder, plains, true);
     }
 
-    /** The same, with the martial titles or (where the world has none) with no one past ordinary prowess. */
+    /**
+     * The same, with each province's kind of land ({@link Homeland} ordinal), and with the martial titles or (where the
+     * world has none) with no one past ordinary prowess.
+     */
     public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
-                             List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder, boolean martialTitles) {
+                             List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder, int[] homeland,
+                             boolean martialTitles) {
         Random random = new Random(seed ^ SALT);
         int empires = t.empires();
 
-        // Cultures: one for each empire's lands.
+        // Cultures: one for each kind of land.
         List<Culture> cultures = new ArrayList<>();
-        for (int e = 0; e < empires; e++) {
-            cultures.add(Culture.make(e, random));
+        for (Homeland h : Homeland.values()) {
+            cultures.add(Culture.make(h, random));
         }
 
         // Faiths: the broad ones spread from their beginnings over the nearest lands; the cults each from a home.
@@ -98,13 +122,13 @@ public final class RealmPlanner {
             faiths.add(Faith.cult(faiths.size(), random, cultNames));
         }
 
-        // Nations: culture and faith of their seat's lands, and a piety of their own.
+        // Nations: the culture of the land their seat stands in, the faith of its empire's lands, and a piety of their own.
         int[] nationCulture = new int[nations.size()];
         int[] nationFaith = new int[nations.size()];
         float[] nationPiety = new float[nations.size()];
         for (int n = 0; n < nations.size(); n++) {
             int e = empireOf(t, nations.get(n).province());
-            nationCulture[n] = e;
+            nationCulture[n] = homeland[nations.get(n).province()];
             nationFaith[n] = empireFaith[e];
             nationPiety[n] = random.nextFloat();
         }
@@ -150,7 +174,7 @@ public final class RealmPlanner {
             int p = hold.province();
             int nation = p < holder.length ? holder[p] : -1;
             int empire = empireOf(t, p);
-            int culture = nation >= 0 ? nationCulture[nation] : empire;
+            int culture = nation >= 0 ? nationCulture[nation] : homeland[p];
             int faith = faithOf(random, nation >= 0 ? nationFaith[nation] : empireFaith[empire],
                     nation >= 0 ? nationPiety[nation] : 0.5f, empire, faiths, cultHome);
             boolean sanctum = nation >= 0 && nations.get(nation).sanctum() && nations.get(nation).province() == p;
@@ -186,7 +210,76 @@ public final class RealmPlanner {
             people.set(i, withLiege(p, liege));
         }
 
-        return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety);
+        return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
+                demographics(seed, cities, settlements, nations.size(), holder, homeland, nationCulture));
+    }
+
+    /**
+     * Each nation's people: counted from the cities, castles and countryside of the provinces it holds; of the race of
+     * the land each lives in, but for a few wanderers from other lands; and of the nation's culture as far as it has
+     * made them its own, else of their race's.
+     */
+    static List<Demographics> demographics(long seed, List<SeatCities.City> cities, List<Countryside.Settlement> settlements,
+                                           int nationCount, int[] holder, int[] homeland, int[] nationCulture) {
+        Random random = new Random(seed ^ PEOPLE_SALT);
+        int[] living = new int[holder.length];
+        java.util.Arrays.fill(living, RURAL);
+        for (SeatCities.City c : cities) {
+            living[c.province()] += PER_DISTRICT * c.districts() * c.districts();
+        }
+        for (Countryside.Settlement s : settlements) {
+            living[s.province()] += switch (s.kind()) {
+                case HAMLET -> PER_HAMLET;
+                case VILLAGE -> PER_HAMLET * s.hamlets();
+                case CASTLE -> PER_CASTLE;
+                case WATCHTOWER -> PER_WATCHTOWER;
+                case RUIN -> 0;
+            };
+        }
+        int kinds = Homeland.values().length;
+        List<Demographics> all = new ArrayList<>(nationCount);
+        for (int n = 0; n < nationCount; n++) {
+            int population = 0;
+            float[] land = new float[kinds];
+            for (int p = 0; p < holder.length; p++) {
+                if (holder[p] == n) {
+                    population += living[p];
+                    land[homeland[p]] += living[p];
+                }
+            }
+            if (population == 0) {
+                land[nationCulture[n]] = 1; // a nation holding no land of its own still has its seat's people
+            }
+            normalise(land);
+            // A few wanderers, from other lands at random.
+            float[] wanderers = new float[kinds];
+            for (int h = 0; h < kinds; h++) {
+                wanderers[h] = random.nextFloat();
+            }
+            normalise(wanderers);
+            float wandering = (float) (WANDERERS + WANDERERS_MORE * random.nextDouble());
+            float[] races = new float[kinds];
+            for (int h = 0; h < kinds; h++) {
+                races[h] = land[h] * (1 - wandering) + wanderers[h] * wandering;
+            }
+            float assimilated = (float) (ASSIMILATED + ASSIMILATED_MORE * random.nextDouble());
+            float[] cultures = new float[kinds];
+            for (int h = 0; h < kinds; h++) {
+                cultures[h] = races[h] * (1 - assimilated) + (h == nationCulture[n] ? assimilated : 0);
+            }
+            all.add(new Demographics(population, cultures, races));
+        }
+        return all;
+    }
+
+    private static void normalise(float[] shares) {
+        float total = 0;
+        for (float s : shares) {
+            total += s;
+        }
+        for (int i = 0; i < shares.length; i++) {
+            shares[i] = total > 0 ? shares[i] / total : 1f / shares.length;
+        }
     }
 
     /** A holder: name of their culture, skills from their schooling and traits, prowess now and then superhuman. */

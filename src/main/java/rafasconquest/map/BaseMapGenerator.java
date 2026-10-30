@@ -81,6 +81,7 @@ public final class BaseMapGenerator {
         boolean[] rough = new boolean[n];
         boolean[] wet = new boolean[n];
         byte[] hard = new byte[n];
+        byte[] homeland = new byte[n];
         IntStream.range(0, size).parallel().forEach(pz -> {
             for (int px = 0; px < size; px++) {
                 int index = pz * size + px;
@@ -98,6 +99,7 @@ public final class BaseMapGenerator {
                 water[index] = BiomePalette.isSea(biome);
                 wet[index] = water[index] || biome.is(net.minecraft.tags.BiomeTags.IS_RIVER);
                 rough[index] = BiomePalette.isRough(biome);
+                homeland[index] = (byte) homeland(biome).ordinal();
                 hard[index] = (byte) (biome.is(net.minecraft.tags.BiomeTags.IS_JUNGLE) ? 1
                         : biome.is(net.minecraft.tags.BiomeTags.IS_MOUNTAIN) || biome.is(net.minecraftforge.common.Tags.Biomes.IS_PEAK) ? 2 : 0);
                 int color = BiomePalette.color(biome, (int) h, sea);
@@ -192,6 +194,7 @@ public final class BaseMapGenerator {
                 settlements, dojos);
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
                 cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
+                        homelands(provinces, homeland, centres.size()),
                         plan.holder()), dojos, roads);
     }
 
@@ -258,12 +261,54 @@ public final class BaseMapGenerator {
         return dojos;
     }
 
+    /** The kind of land a biome is, by the villagers who would live there; plains for any other mod's own kinds. */
+    private static rafasconquest.people.Homeland homeland(Holder<Biome> biome) {
+        net.minecraft.world.entity.npc.VillagerType type = net.minecraft.world.entity.npc.VillagerType.byBiome(biome);
+        if (type == net.minecraft.world.entity.npc.VillagerType.DESERT) {
+            return rafasconquest.people.Homeland.DESERT;
+        } else if (type == net.minecraft.world.entity.npc.VillagerType.JUNGLE) {
+            return rafasconquest.people.Homeland.JUNGLE;
+        } else if (type == net.minecraft.world.entity.npc.VillagerType.SAVANNA) {
+            return rafasconquest.people.Homeland.SAVANNA;
+        } else if (type == net.minecraft.world.entity.npc.VillagerType.SNOW) {
+            return rafasconquest.people.Homeland.SNOW;
+        } else if (type == net.minecraft.world.entity.npc.VillagerType.SWAMP) {
+            return rafasconquest.people.Homeland.SWAMP;
+        } else if (type == net.minecraft.world.entity.npc.VillagerType.TAIGA) {
+            return rafasconquest.people.Homeland.TAIGA;
+        }
+        return rafasconquest.people.Homeland.PLAINS;
+    }
+
+    /** Each province's kind of land: the one most of its pixels are. */
+    private static int[] homelands(int[] provinces, byte[] homeland, int count) {
+        int kinds = rafasconquest.people.Homeland.values().length;
+        int[] tally = new int[count * kinds];
+        for (int i = 0; i < provinces.length; i++) {
+            if (provinces[i] >= 0) {
+                tally[provinces[i] * kinds + homeland[i]]++;
+            }
+        }
+        int[] chosen = new int[count];
+        for (int p = 0; p < count; p++) {
+            int best = rafasconquest.people.Homeland.PLAINS.ordinal();
+            for (int h = 0; h < kinds; h++) {
+                if (tally[p * kinds + h] > tally[p * kinds + best]) {
+                    best = h;
+                }
+            }
+            chosen[p] = best;
+        }
+        return chosen;
+    }
+
     /** The world's people, planned on the finished map: its holds' holders, their cultures, faiths and bonds. */
     private static rafasconquest.people.Realm realm(long seed, TitleMap titles, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
-                                                    List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] holder) {
+                                                    List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] homeland,
+                                                    int[] holder) {
         List<rafasconquest.people.RealmPlanner.Seat> seats = nations.stream()
                 .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
-        rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder,
+        rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder, homeland,
                 WorldFeatures.martialTitles());
         long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
         rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",

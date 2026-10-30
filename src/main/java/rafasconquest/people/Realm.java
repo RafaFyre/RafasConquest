@@ -7,13 +7,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The world's people: its cultures and faiths, every hold's holder ({@link Person}), the bonds between them, and each
- * nation's culture, faith and piety (0, worldly, to 1, devout). Planned with the world map ({@link RealmPlanner}) and
- * kept and sent with it.
+ * The world's people: its cultures (one for each {@link Homeland}) and faiths, every hold's holder ({@link Person}), the
+ * bonds between them, and each nation's culture, faith, piety (0, worldly, to 1, devout) and people
+ * ({@link Demographics}). Planned with the world map ({@link RealmPlanner}) and kept and sent with it.
  */
 public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> people, List<Bond> bonds,
-                    int[] nationCulture, int[] nationFaith, float[] nationPiety) {
-    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0]);
+                    int[] nationCulture, int[] nationFaith, float[] nationPiety, List<Demographics> demographics) {
+    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0], List.of());
+
+    /** A nation's people, or none if it has no record. */
+    public Demographics demographics(int nation) {
+        return nation >= 0 && nation < demographics.size() ? demographics.get(nation) : Demographics.NONE;
+    }
+
+    /** A nation's ruler (the holder of its capital, liege to no one), or -1. */
+    public int ruler(int nation) {
+        for (int i = 0; i < people.size(); i++) {
+            Person p = people.get(i);
+            if (p.nation() == nation && p.liege() < 0 && p.hold().kind() == Person.Kind.CAPITAL) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
     /** Two characters' bond, either way round: friends or rivals. */
     public record Bond(int a, int b, Kind kind) {
@@ -125,6 +141,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         out.writeShort(cultures.size());
         for (Culture c : cultures) {
             out.writeUTF(c.name());
+            out.writeByte(c.homeland().ordinal());
             writeStrings(out, c.starts());
             writeStrings(out, c.middles());
             writeStrings(out, c.maleEnds());
@@ -171,13 +188,21 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             out.writeShort(nationFaith[i]);
             out.writeFloat(nationPiety[i]);
         }
+        out.writeShort(demographics.size());
+        for (Demographics d : demographics) {
+            out.writeInt(d.population());
+            for (int h = 0; h < Homeland.values().length; h++) {
+                out.writeFloat(d.cultures()[h]);
+                out.writeFloat(d.races()[h]);
+            }
+        }
     }
 
     public static Realm read(DataInputStream in) throws IOException {
         int cultureCount = in.readUnsignedShort();
         List<Culture> cultures = new ArrayList<>(cultureCount);
         for (int i = 0; i < cultureCount; i++) {
-            cultures.add(new Culture(i, in.readUTF(), readStrings(in), readStrings(in), readStrings(in), readStrings(in), readStrings(in)));
+            cultures.add(new Culture(i, in.readUTF(), Homeland.values()[in.readUnsignedByte()], readStrings(in), readStrings(in), readStrings(in), readStrings(in), readStrings(in)));
         }
         int faithCount = in.readUnsignedShort();
         List<Faith> faiths = new ArrayList<>(faithCount);
@@ -220,7 +245,19 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             nationFaith[i] = in.readShort();
             nationPiety[i] = in.readFloat();
         }
-        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety);
+        int counted = in.readUnsignedShort();
+        List<Demographics> demographics = new ArrayList<>(counted);
+        for (int i = 0; i < counted; i++) {
+            int population = in.readInt();
+            float[] cultureShares = new float[Homeland.values().length];
+            float[] raceShares = new float[Homeland.values().length];
+            for (int h = 0; h < cultureShares.length; h++) {
+                cultureShares[h] = in.readFloat();
+                raceShares[h] = in.readFloat();
+            }
+            demographics.add(new Demographics(population, cultureShares, raceShares));
+        }
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics);
     }
 
     private static void writeStrings(DataOutputStream out, List<String> strings) throws IOException {

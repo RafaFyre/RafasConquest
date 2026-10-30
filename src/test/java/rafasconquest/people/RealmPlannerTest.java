@@ -26,7 +26,8 @@ class RealmPlannerTest {
     private static final int CELL = 48;
     private static final int CELLS = 24;
 
-    private record World(TitleMap titles, List<SeatCities.City> cities, Countryside.Plan country, Nations.Plan nations, Realm realm) {
+    private record World(TitleMap titles, List<SeatCities.City> cities, Countryside.Plan country, Nations.Plan nations, Realm realm,
+                         int[] homeland) {
     }
 
     /** A land of square provinces 1,536 blocks a side, the sea along the west, centred on spawn. */
@@ -58,8 +59,13 @@ class RealmPlannerTest {
         Countryside.Plan country = Countryside.plan(seed, grid, titles, cities);
         Nations.Plan nations = Nations.plan(seed, titles, p -> new int[]{centres.get(p).x(), centres.get(p).z()}, 1000, 8000);
         List<RealmPlanner.Seat> seats = nations.nations().stream().map(n -> new RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
-        Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder());
-        return new World(titles, country.cities(), country, nations, realm);
+        // Bands of land from north to south: snow, taiga, plains, savanna, desert, and so on round.
+        int[] homeland = new int[centres.size()];
+        for (int p = 0; p < homeland.length; p++) {
+            homeland[p] = Math.floorMod((centres.get(p).z() - origin) / (CELL * BPP * 4) + Homeland.SNOW.ordinal(), Homeland.values().length);
+        }
+        Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder(), homeland, true);
+        return new World(titles, country.cities(), country, nations, realm, homeland);
     }
 
     @Test
@@ -185,5 +191,127 @@ class RealmPlannerTest {
             assertTrue(java.util.Arrays.equals(a.stats(), b.stats()));
         }
         assertEquals(realm.cultures().get(0).name(), back.cultures().get(0).name());
+        assertEquals(realm.cultures().get(3).homeland(), back.cultures().get(3).homeland());
+        assertEquals(realm.demographics().size(), back.demographics().size());
+        for (int n = 0; n < realm.demographics().size(); n++) {
+            Demographics a = realm.demographics().get(n);
+            Demographics b = back.demographics().get(n);
+            assertEquals(a.population(), b.population());
+            assertTrue(java.util.Arrays.equals(a.cultures(), b.cultures()));
+            assertTrue(java.util.Arrays.equals(a.races(), b.races()));
+        }
+    }
+
+    @Test
+    void oneCultureForEachKindOfLand() {
+        World w = world(3);
+        Realm realm = w.realm();
+        assertEquals(Homeland.values().length, realm.cultures().size());
+        for (Homeland h : Homeland.values()) {
+            Culture c = realm.cultures().get(h.ordinal());
+            assertEquals(h, c.homeland());
+            assertEquals(h.ordinal(), c.id());
+            assertEquals(h, h.race().homeland());
+        }
+        for (int n = 0; n < w.nations().nations().size(); n++) {
+            assertEquals(w.homeland()[w.nations().nations().get(n).seat()], realm.nationCulture()[n], "a nation not of its seat's culture");
+        }
+        for (Person p : realm.people()) {
+            if (p.nation() < 0) {
+                assertEquals(w.homeland()[p.hold().province()], p.culture(), "an unowned hold's holder not of its land's culture");
+            }
+        }
+    }
+
+    @Test
+    void everyNationHasABroadFaith() {
+        for (long seed = 0; seed < 4; seed++) {
+            Realm realm = world(seed).realm();
+            for (int n = 0; n < realm.nationFaith().length; n++) {
+                int faith = realm.nationFaith()[n];
+                assertTrue(faith >= 0 && faith < realm.faiths().size(), "a nation of no faith");
+                assertFalse(realm.faiths().get(faith).cult(), "a nation keeping a cult");
+            }
+        }
+    }
+
+    @Test
+    void demographicsShareOutEveryNationsPeople() {
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            Realm realm = w.realm();
+            assertEquals(w.nations().nations().size(), realm.demographics().size());
+            for (Demographics d : realm.demographics()) {
+                assertTrue(d.population() > 0, "a nation of no people");
+                for (float[] shares : new float[][]{d.cultures(), d.races()}) {
+                    assertEquals(Homeland.values().length, shares.length);
+                    float total = 0;
+                    for (float s : shares) {
+                        assertTrue(s >= 0 && s <= 1, "a share of " + s);
+                        total += s;
+                    }
+                    assertEquals(1, total, 1e-4, "shares adding up to " + total);
+                }
+            }
+        }
+    }
+
+    @Test
+    void racesFollowTheLandAndCulturesTheSeat() {
+        int mixed = 0;
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            Realm realm = w.realm();
+            int[] holder = w.nations().holder();
+            for (int n = 0; n < realm.demographics().size(); n++) {
+                Demographics d = realm.demographics().get(n);
+                java.util.Set<Integer> lands = new HashSet<>();
+                for (int p = 0; p < holder.length; p++) {
+                    if (holder[p] == n) {
+                        lands.add(w.homeland()[p]);
+                    }
+                }
+                // Every land the nation holds has people of its race; the wanderers are few.
+                float ofItsLands = 0;
+                for (int h : lands) {
+                    assertTrue(d.races()[h] > 0, "no one of the race of a land it holds");
+                    ofItsLands += d.races()[h];
+                }
+                assertTrue(ofItsLands >= 1 - RealmPlanner.WANDERERS - RealmPlanner.WANDERERS_MORE - 1e-4, ofItsLands + " of its lands' races");
+                if (lands.size() == 1) {
+                    assertEquals(Demographics.largest(d.races()), lands.iterator().next(), "most not of the race of its only land");
+                } else {
+                    mixed++;
+                }
+                // Its culture: at least as common as that land's race, and never less than it has made its own.
+                int culture = realm.nationCulture()[n];
+                assertTrue(d.cultures()[culture] >= d.races()[culture] - 1e-4, "its culture rarer than its seat's race");
+                assertTrue(d.cultures()[culture] >= RealmPlanner.ASSIMILATED - 1e-4, "its culture held by only " + d.cultures()[culture]);
+            }
+        }
+        assertTrue(mixed > 0, "no nation spans more than one kind of land");
+    }
+
+    @Test
+    void greaterNationsHaveMorePeople() {
+        double[] total = new double[TitleMap.Tier.values().length];
+        int[] count = new int[total.length];
+        for (long seed = 0; seed < 4; seed++) {
+            World w = world(seed);
+            for (int n = 0; n < w.nations().nations().size(); n++) {
+                int tier = w.nations().nations().get(n).tier().ordinal();
+                total[tier] += w.realm().demographics().get(n).population();
+                count[tier]++;
+            }
+        }
+        double previous = 0;
+        for (int tier = 0; tier < total.length; tier++) {
+            if (count[tier] == 0) {
+                continue;
+            }
+            double mean = total[tier] / count[tier];
+            assertTrue(mean > previous, TitleMap.Tier.values()[tier] + " nations average " + mean + " people, fewer than smaller ones");
+            previous = mean;
+        }
     }
 }

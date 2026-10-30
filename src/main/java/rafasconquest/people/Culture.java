@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * A people's culture: its name, and the sounds its names are made of. Each culture draws its own few beginnings and
- * endings from the common stock, so its people's names sound alike and unlike a neighbour's. Every character of a
- * nation has the nation's culture.
+ * A people's culture: its name, the kind of land it grew in (one culture for each {@link Homeland}), and the sounds
+ * its names are made of. Each culture draws its own few beginnings and endings from the common stock, so its people's
+ * names sound alike and unlike a neighbour's. Every character of a nation has the nation's culture.
  */
-public record Culture(int id, String name, List<String> starts, List<String> middles, List<String> maleEnds,
+public record Culture(int id, String name, Homeland homeland, List<String> starts, List<String> middles, List<String> maleEnds,
                       List<String> femaleEnds, List<String> familyEnds) {
     private static final String[] STARTS = {
             "Al", "Bar", "Cal", "Dor", "El", "Fen", "Gal", "Har", "Ist", "Jor", "Kar", "Lor", "Mar", "Nor", "Os", "Pel",
@@ -27,11 +27,11 @@ public record Culture(int id, String name, List<String> starts, List<String> mid
             "court", "lock", "ward", "stone", "vale", "mark", "dane", "crest", "sson", "ovic", "ez", "elli", "anu"};
     private static final String[] ADJECTIVE_ENDS = {"ish", "ian", "ic", "an", "ese", "i", "ite"};
 
-    /** A new culture, its sounds chosen from the common stock by {@code random}. */
-    static Culture make(int id, Random random) {
+    /** A new culture of a homeland, its sounds chosen from the common stock by {@code random}. */
+    static Culture make(Homeland homeland, Random random) {
         List<String> starts = pick(STARTS, 9, random);
         String name = starts.get(0) + pick(MIDDLES, 1, random).get(0) + ADJECTIVE_ENDS[random.nextInt(ADJECTIVE_ENDS.length)];
-        return new Culture(id, name, starts, pick(MIDDLES, 5, random), pick(MALE_ENDS, 5, random), pick(FEMALE_ENDS, 4, random),
+        return new Culture(homeland.ordinal(), name, homeland, starts, pick(MIDDLES, 5, random), pick(MALE_ENDS, 5, random), pick(FEMALE_ENDS, 4, random),
                 pick(FAMILY_ENDS, 5, random));
     }
 
