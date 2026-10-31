@@ -27,8 +27,8 @@ import java.util.function.Consumer;
 public class BaseMapStore {
     private static final String FILE = "rafasconquest_basemap.bin";
 
-    /** The known world on the map reaches this many times as far as the storm wall, at province size 1; each size step doubles it. */
-    public static final int KNOWN_WORLD_FACTOR = 4;
+    /** The known world on the map reaches this far from spawn at province size 1; each size step doubles it. */
+    public static final int KNOWN_WORLD_RADIUS = 16_000;
 
     private final ServerLevel level;
     private final WorldSettings settings;
@@ -54,7 +54,7 @@ public class BaseMapStore {
     public BaseMapStore(ServerLevel level, WorldSettings settings, BiConsumer<ServerPlayer, byte[]> sender, Consumer<BaseMap> onReady) {
         this.level = level;
         this.settings = settings;
-        this.visibleRadius = (KNOWN_WORLD_FACTOR << (rafasconquest.core.ProvinceMap.size() - 1)) * settings.warZoneOuterEdge();
+        this.visibleRadius = KNOWN_WORLD_RADIUS << (rafasconquest.core.ProvinceMap.size() - 1);
         this.sender = sender;
         this.onReady = onReady;
         this.file = level.getServer().getWorldPath(LevelResource.ROOT).resolve("data").resolve(FILE);

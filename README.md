@@ -70,9 +70,9 @@ scale. It is off by default when a mod it doesn't suit is installed (`Horizontal
 Terralith), and the options say so. A dedicated server's new world takes the defaults. The log says how many climate
 noises were stretched, or that none were found.
 
-The same screen has a **province size** slider: 1, provinces 768 blocks apart and the world map out to four times the
-storm wall (16,000 blocks by default); 2 (the default), provinces 1,536 blocks apart and the map out to eight times
-(32,000 blocks), a pixel every 64 blocks. It is kept with the stretch in the world's properties file.
+The same screen has a **province size** slider: 1, provinces 768 blocks apart and the world map out to 16,000 blocks;
+2 (the default), provinces 1,536 blocks apart and the map out to 32,000 blocks,
+a pixel every 64 blocks. It is kept with the stretch in the world's properties file.
 And two switches: **Enable Martial Titles** (Sword Gods, Sword Kings, Sword Saints, and the sword sanctums; off,
 no one passes prowess 20 and there are no sanctums) and **Enable Mantra Schools** (an offensive magic system of ten
 schools, each with a dojo; off, no dojos). Both are on by default.
@@ -584,7 +584,7 @@ first. The old relation is restored when the battle ends.
 Recruits' faction menu has a **World Map** button beside Faction Info (`client/map/FactionMapScreen`). The **World Map** item
 (`content/WorldMapItem`: a vanilla map mirrored and dyed dark brown; crafted from a map and brown dye) opens it too,
 with a right-click. It is a
-political map in the style of Crusader Kings 3, out to four or eight times the storm wall's radius by province size (16,000 or 32,000 blocks at default settings, a pixel every 32 or 64 blocks),
+political map in the style of Crusader Kings 3, out to 16,000 or 32,000 blocks by province size (a pixel every 32 or 64 blocks),
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
 In **creative mode**, a right-click on any place drawn on the map (a seat city, a castle, village, hamlet, watchtower or
@@ -708,12 +708,15 @@ up to 12 below, cleared above). On the world map, zoomed in, each has a mark, na
 
 **Nations** (`core/Nations`) take up the titles once they are drawn, by zone, judged from each title's seat:
 - **The eye** (within the eye radius of spawn): nobody's.
-- **The war zone** (out to its outer edge): a kingdom is held whole by a **small nation** 40 % of the time; otherwise
+- **The war zone** (out to its outer edge, the storm wall, 12,000 blocks by default): a kingdom is held whole by a **small nation** 40 % of the time; otherwise
   each of its counties is a **City-state** 35 % of the time, and the rest is nobody's.
 - **The outer world:** an empire is held whole by one great nation 35 % of the time, which takes "Empire" into its
   name ("Branundun Empire"); otherwise each of its kingdoms is a **large nation** 70 % of the time.
 - **Mini-eyes:** about one outer kingdom in four is the centre of a calm as big as the eye, at least four eye radii from
   the next and clear of the war zone, where nobody holds anything.
+- **At least 12, at most 4 City-states:** the world never has more than 4 City-states, and the map's known world
+  always has at least 12 nations, sword sanctums not counted. When the rolls leave fewer, free kingdoms in the known
+  world become nations, in a seeded order, then free duchies (a **duchy** nation).
 
 A nation holds its title and every province under it, outside the calms; its capital is its title's seat city (a
 City-state's, its county's Town). The nations are planned and named with the map, saved in it (with which nation holds

@@ -95,9 +95,9 @@ class NationsTest {
                         ? w.at(w.titles().kingdomSeat()[w.titles().kingdom()[w.titles().duchy()[n.title()]]]) : new int[]{n.x(), n.z()};
                 double d = Math.hypot(zoneAt[0], zoneAt[1]);
                 if (d <= WAR_ZONE) {
-                    assertTrue(n.tier() == TitleMap.Tier.COUNTY || n.tier() == TitleMap.Tier.KINGDOM, "a " + n.tier() + " in the war zone");
+                    assertTrue(n.tier() != TitleMap.Tier.EMPIRE, "an empire in the war zone");
                 } else {
-                    assertTrue(n.tier() == TitleMap.Tier.KINGDOM || n.tier() == TitleMap.Tier.EMPIRE, "a " + n.tier() + " in the outer world");
+                    assertTrue(n.tier() != TitleMap.Tier.COUNTY, "a City-state in the outer world");
                 }
                 empire |= n.tier() == TitleMap.Tier.EMPIRE;
                 cityState |= n.tier() == TitleMap.Tier.COUNTY;
@@ -114,6 +114,33 @@ class NationsTest {
         }
         assertTrue(empire, "no empires");
         assertTrue(cityState, "no City-states");
+    }
+
+    @Test
+    void theKnownWorldHasTwelveNationsAndAtMostFourCityStates() {
+        for (long seed = 0; seed < 20; seed++) {
+            World w = world(seed);
+            List<Nations.Nation> nations = w.plan().nations();
+            assertTrue(Nations.known(nations, Integer.MAX_VALUE) >= Nations.MIN_NATIONS, nations.size() + " nations, seed " + seed);
+            assertTrue(Nations.cityStates(nations) <= Nations.MAX_CITY_STATES, Nations.cityStates(nations) + " City-states, seed " + seed);
+        }
+    }
+
+    @Test
+    void theTopUpStaysInTheKnownWorld() {
+        int known = 11_000;
+        for (long seed = 0; seed < 10; seed++) {
+            World w = world(seed);
+            List<ProvinceMap.Centre> centres = w.centres();
+            Nations.Plan plan = Nations.plan(seed, w.titles(), p -> new int[]{centres.get(p).x(), centres.get(p).z()}, EYE, WAR_ZONE, known,
+                    Nations.SANCTUMS);
+            assertTrue(Nations.known(plan.nations(), known) >= Nations.MIN_NATIONS, "seed " + seed);
+            for (Nations.Nation n : plan.nations()) {
+                if (n.tier() == TitleMap.Tier.DUCHY) {
+                    assertTrue(Math.hypot(n.x(), n.z()) <= known, "a duchy topped up beyond the known world");
+                }
+            }
+        }
     }
 
     @Test

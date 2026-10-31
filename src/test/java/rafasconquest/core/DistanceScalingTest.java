@@ -11,19 +11,19 @@ class DistanceScalingTest {
     @Test
     void stormWallUsesStormBounds() {
         assertEquals(new DistanceScaling.Bounds(1, 3, 300, 1500), DistanceScaling.boundsAt(2500, s));
-        assertEquals(new DistanceScaling.Bounds(1, 3, 300, 1500), DistanceScaling.boundsAt(4000, s));
+        assertEquals(new DistanceScaling.Bounds(1, 3, 300, 1500), DistanceScaling.boundsAt(12_000, s));
     }
 
     @Test
     void farWorldUsesFarBounds() {
-        assertEquals(new DistanceScaling.Bounds(6, 10, 3500, 5000), DistanceScaling.boundsAt(24_000, s));
+        assertEquals(new DistanceScaling.Bounds(6, 10, 3500, 5000), DistanceScaling.boundsAt(32_000, s));
         assertEquals(new DistanceScaling.Bounds(6, 10, 3500, 5000), DistanceScaling.boundsAt(100_000, s));
     }
 
     @Test
     void boundsInterpolateLinearlyBetween() {
-        // Halfway from R2 (4,000) to R2 + 20,000.
-        DistanceScaling.Bounds mid = DistanceScaling.boundsAt(14_000, s);
+        // Halfway from R2 (12,000) to R2 + 20,000.
+        DistanceScaling.Bounds mid = DistanceScaling.boundsAt(22_000, s);
         assertEquals(new DistanceScaling.Bounds(4, 7, 1900, 3250), mid);
     }
 

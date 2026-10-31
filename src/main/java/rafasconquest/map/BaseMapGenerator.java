@@ -260,7 +260,7 @@ public final class BaseMapGenerator {
         }
         Nations.Plan plan = Nations.plan(level.getSeed(), titles,
                 p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()}),
-                settings.eyeRadius(), settings.warZoneOuterEdge(), WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0);
+                settings.eyeRadius(), settings.warZoneOuterEdge(), visibleRadius, WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0);
         List<BaseMap.Nation> nations = new java.util.ArrayList<>();
         for (Nations.Nation nation : plan.nations()) {
             OriginRoller.Roll roll = OriginRoller.roll(level.getSeed(), nation.x(), nation.z(), settings);

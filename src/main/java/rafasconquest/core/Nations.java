@@ -19,6 +19,10 @@ import java.util.Random;
  * </ul>
  * A nation holds its title and every title within it; its seat is the title's seat. The provinces of titles no nation
  * holds are nobody's, and their seats are unowned.
+ * <p>
+ * The world has at most {@link #MAX_CITY_STATES} City-states, and the known world at least {@link #MIN_NATIONS}
+ * nations (sword sanctums not counted): if the rolls leave fewer, more of its free kingdoms, then duchies, become
+ * nations, in a seeded order.
  */
 public final class Nations {
     static final double SMALL_NATION_CHANCE = 0.4;
@@ -26,6 +30,8 @@ public final class Nations {
     static final double EMPIRE_CHANCE = 0.35;
     static final double LARGE_NATION_CHANCE = 0.7;
     static final int KINGDOMS_PER_MINI_EYE = 4;
+    static final int MIN_NATIONS = 12;
+    static final int MAX_CITY_STATES = 4;
     private static final long SALT = 0x4E4154494F4E5321L;
 
     /** How many sword sanctums a world has. */
@@ -55,11 +61,45 @@ public final class Nations {
     }
 
     public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge) {
-        return plan(seed, t, seats, eyeRadius, warZoneEdge, SANCTUMS);
+        return plan(seed, t, seats, eyeRadius, warZoneEdge, Integer.MAX_VALUE, SANCTUMS);
     }
 
-    /** The same, with this many sword sanctums (none where the world has no martial titles). */
-    public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int sanctumCount) {
+    /**
+     * The same, with the known world's radius (seats within it count towards {@link #MIN_NATIONS}) and this many sword
+     * sanctums (none where the world has no martial titles).
+     */
+    public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int knownRadius, int sanctumCount) {
+        // Empires and kingdoms, rolled or topped up, can take so much land that too little is left free for the rest;
+        // then the plan is drawn again topping up with duchies alone, then with one empire fewer each time, then (no
+        // empires left) one rolled kingdom fewer.
+        int maxEmpires = Integer.MAX_VALUE;
+        int maxKingdoms = Integer.MAX_VALUE;
+        while (true) {
+            Plan plan = null;
+            for (boolean topUpKingdoms : new boolean[]{true, false}) {
+                plan = plan(seed, t, seats, eyeRadius, warZoneEdge, knownRadius, sanctumCount, maxEmpires, maxKingdoms, topUpKingdoms);
+                if (known(plan.nations(), knownRadius) >= MIN_NATIONS) {
+                    return plan;
+                }
+            }
+            int empires = count(plan.nations(), TitleMap.Tier.EMPIRE);
+            int kingdoms = count(plan.nations(), TitleMap.Tier.KINGDOM);
+            if (empires > 0) {
+                maxEmpires = empires - 1;
+            } else if (kingdoms > 0) {
+                maxKingdoms = kingdoms - 1;
+            } else {
+                return plan; // the known world has too little free land for more
+            }
+        }
+    }
+
+    private static int count(List<Nation> nations, TitleMap.Tier tier) {
+        return (int) nations.stream().filter(n -> !n.sanctum() && n.tier() == tier).count();
+    }
+
+    private static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int knownRadius, int sanctumCount,
+                             int maxEmpires, int maxKingdoms, boolean topUpKingdoms) {
         Random random = new Random(seed ^ SALT);
         int provinces = t.county().length;
         int[] holder = new int[provinces];
@@ -122,7 +162,7 @@ public final class Nations {
             if (distance(at) <= warZoneEdge || calm(at, eyeRadius, miniEyes)) {
                 continue;
             }
-            if (random.nextDouble() < EMPIRE_CHANCE) {
+            if (random.nextDouble() < EMPIRE_CHANCE && count(nations, TitleMap.Tier.EMPIRE) < maxEmpires) {
                 take(t, nations, holder, new Nation(TitleMap.Tier.EMPIRE, e, t.empireSeat()[e], at[0], at[1]), seats, eyeRadius, miniEyes);
             }
         }
@@ -134,7 +174,7 @@ public final class Nations {
             }
             boolean warZone = distance(at) <= warZoneEdge;
             double chance = warZone ? SMALL_NATION_CHANCE : LARGE_NATION_CHANCE;
-            if (random.nextDouble() < chance) {
+            if (random.nextDouble() < chance && count(nations, TitleMap.Tier.KINGDOM) < maxKingdoms) {
                 take(t, nations, holder, new Nation(TitleMap.Tier.KINGDOM, k, seat, at[0], at[1]), seats, eyeRadius, miniEyes);
             } else if (warZone) {
                 // City-states in the kingdom's counties.
@@ -144,13 +184,52 @@ public final class Nations {
                     }
                     int cs = t.countySeat()[c];
                     int[] cat = seats.at(cs);
-                    if (distance(cat) > eyeRadius && random.nextDouble() < CITY_STATE_CHANCE) {
+                    if (distance(cat) > eyeRadius && random.nextDouble() < CITY_STATE_CHANCE && cityStates(nations) < MAX_CITY_STATES) {
                         take(t, nations, holder, new Nation(TitleMap.Tier.COUNTY, c, cs, cat[0], cat[1]), seats, eyeRadius, miniEyes);
                     }
                 }
             }
         }
+
+        // Too few nations in the known world: free kingdoms there become nations, then free duchies.
+        List<Integer> kingdoms = new ArrayList<>();
+        for (int k = 0; k < t.kingdoms(); k++) {
+            kingdoms.add(k);
+        }
+        java.util.Collections.shuffle(kingdoms, random);
+        for (int k : topUpKingdoms ? kingdoms : List.<Integer>of()) {
+            fill(t, nations, holder, TitleMap.Tier.KINGDOM, k, t.kingdomSeat()[k], seats, eyeRadius, knownRadius, miniEyes);
+        }
+        List<Integer> duchies = new ArrayList<>();
+        for (int d = 0; d < t.duchies(); d++) {
+            duchies.add(d);
+        }
+        java.util.Collections.shuffle(duchies, random);
+        for (int d : duchies) {
+            fill(t, nations, holder, TitleMap.Tier.DUCHY, d, t.duchySeat()[d], seats, eyeRadius, knownRadius, miniEyes);
+        }
         return new Plan(nations, holder, miniEyes);
+    }
+
+    /** While the known world has too few nations, a title whose seat is free there becomes one. */
+    private static void fill(TitleMap t, List<Nation> nations, int[] holder, TitleMap.Tier tier, int title, int seat, Seats seats,
+                             int eyeRadius, int knownRadius, List<int[]> miniEyes) {
+        int[] at = seats.at(seat);
+        if (known(nations, knownRadius) >= MIN_NATIONS || held(t, holder, seat) || calm(at, eyeRadius, miniEyes)
+                || distance(at) <= eyeRadius || distance(at) > knownRadius) {
+            return;
+        }
+        take(t, nations, holder, new Nation(tier, title, seat, at[0], at[1]), seats, eyeRadius, miniEyes);
+    }
+
+    /** The nations (not sword sanctums) seated in the known world. */
+    static int known(List<Nation> nations, int knownRadius) {
+        return (int) nations.stream().filter(n -> !n.sanctum() && Math.hypot(n.x(), n.z()) <= knownRadius).count();
+    }
+
+    /** The City-states (not sword sanctums). */
+    static int cityStates(List<Nation> nations) {
+        return (int) nations.stream().filter(n -> !n.sanctum() && n.tier() == TitleMap.Tier.COUNTY).count();
     }
 
     /** A nation takes its title: every province under it not in a calm (the eye or a mini-eye) is its. */

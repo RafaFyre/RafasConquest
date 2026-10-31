@@ -43,7 +43,7 @@ public record WorldSettings(
     public static final int CAPITAL_LOOKUP_RANGE = MAX_RADIUS_STEPS * RADIUS_STEP_BLOCKS;
 
     public static WorldSettings defaults() {
-        return new WorldSettings(1000, 4000, 6, 2500, 400, 8000, 1000, 32, 12, 5,
+        return new WorldSettings(1000, 12000, 6, 2500, 400, 8000, 1000, 32, 12, 5,
                 1, 3, 300, 1500, 6, 10, 3500, 5000, 20000, 0, 8000, 4000,
                 3000, 400, 300, 800, 0);
     }
