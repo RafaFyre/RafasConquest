@@ -133,5 +133,21 @@ final class Portraits {
             g.flush();
             Lighting.setupFor3DItems();
         }
+
+        /** Hangs the banner in a scene, the top of its flag's middle at (x, y, z), {@code size} times a placed banner's. */
+        void drawHanging(PoseStack pose, net.minecraft.client.renderer.MultiBufferSource buffers, double x, double y, double z, float size) {
+            if (flag == null) {
+                return;
+            }
+            pose.pushPose();
+            // As a banner block entity hangs its flag: model space has y down and faces -z.
+            pose.translate(x, y, z);
+            pose.scale(size * 2 / 3F, -size * 2 / 3F, -size * 2 / 3F);
+            flag.xRot = 0;
+            flag.y = 0;
+            BannerRenderer.renderPatterns(pose, buffers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, flag,
+                    ModelBakery.BANNER_BASE, true, patterns);
+            pose.popPose();
+        }
     }
 }

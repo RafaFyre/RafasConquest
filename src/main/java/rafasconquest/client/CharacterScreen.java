@@ -22,12 +22,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * A character's page, opened from a hold on the world map or a figure on a nation's page. On a dark ground: their name
- * and title at the top, with their culture, faith, race, marriage, sex and age under it; their model, large, on the
- * left, and their nation's banner on the right; their traits, titles and feats as icons (hovering over one names it and
- * says what it means); a description of them, with their liege, friends and rivals; their skills; and their retainers
- * (vassals) along the bottom. Any person shown opens their own page; the arrow at the top left goes back, the cross at
- * the top right closes every page.
+ * A character's page, opened from a hold on the world map or a figure on a nation's page. Over their court
+ * ({@link CourtView}), the camera on them where they stand on the left (gliding there from wherever it was): their name
+ * and title at the top, with their culture, faith, race, marriage, sex and age under it; their nation's banner on the
+ * right; their traits, titles and feats as icons (hovering over one names it and says what it means); a description of
+ * them, with their liege, friends and rivals; their skills; and their retainers (vassals) along the bottom. Any person
+ * shown, in the court too, opens their own page; the arrow at the top left goes back, the cross closes every page.
  */
 public class CharacterScreen extends Screen {
     private static final int TEXT = Portraits.TEXT;
@@ -40,12 +40,17 @@ public class CharacterScreen extends Screen {
     private static final int[] STAT_COLOURS = {0xFF3CC26A, 0xFFC01818, 0xFF3A6CC8, 0xFF7A48D8, 0xFFF0A020, 0xFFF4F4F4};
     private static final int BAR = 0xFF1C1D1F;
     private static final int BAR_EDGE = 0xFF555658;
+    /** Where they stand on the screen (the middle of them), and how close the camera is: as tall as most of the screen. */
+    private static final float MODEL_X = 0.199F;
+    private static final float MODEL_Y = 0.62F;
+    private static final float MODEL_ZOOM = 0.31F;
 
     private final Screen parent;
     private final BaseMap base;
     private final int index;
+    /** Their court, with the camera on them (handed on from the page that opened this one, so it glides). */
     @Nullable
-    private AbstractRecruitEntity model;
+    private CourtView court;
     @Nullable
     private Portraits.Banner banner;
     private final List<Retainer> retainers = new ArrayList<>();
@@ -68,10 +73,15 @@ public class CharacterScreen extends Screen {
     }
 
     public CharacterScreen(Screen parent, BaseMap base, int index) {
+        this(parent, base, index, null);
+    }
+
+    public CharacterScreen(Screen parent, BaseMap base, int index, @Nullable CourtView court) {
         super(Component.literal(base.realm().people().get(index).name()));
         this.parent = parent;
         this.base = base;
         this.index = index;
+        this.court = court;
     }
 
     /**
@@ -86,7 +96,13 @@ public class CharacterScreen extends Screen {
     protected void init() {
         Portraits.buttons(this, width, this::onClose, this::addRenderableWidget);
         Person p = base.realm().people().get(index);
-        model = Portraits.model(minecraft, p);
+        CourtView shown = CourtView.of(base, index, court);
+        boolean fresh = shown != court;
+        court = shown;
+        court.showPerson(index, MODEL_X, MODEL_Y, MODEL_ZOOM);
+        if (fresh) {
+            court.arrive();
+        }
         banner = p.nation() >= 0 ? new Portraits.Banner(minecraft, base.nations().get(p.nation()).id()) : null;
         layOutRetainers();
     }
@@ -115,7 +131,9 @@ public class CharacterScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        g.fill(0, 0, width, height, Portraits.BACKGROUND);
+        court.render(g, width, height, mouseX, mouseY, partialTick);
+        // The court shows plainly behind them on the left, dimmed behind the page on the right.
+        g.fill((int) (width * 0.31), 0, width, height, 0xC8000000 | court.sky() & 0xFFFFFF);
         spots.clear();
         Realm realm = base.realm();
         Person p = realm.people().get(index);
@@ -152,13 +170,7 @@ public class CharacterScreen extends Screen {
         x = info(g, x, infoY, "Unmarried", 0xFFE07AB0, "Marriage", "Not married.");
         info(g, x, infoY, (p.female() ? "Female, " : "Male, ") + p.age(), 0xFFE08A8A, "Age", p.age() + " years old.");
 
-        // Their model, large, on the left; their nation's banner on the right.
-        if (model != null) {
-            int feet = (int) (height * 0.928);
-            int scale = Math.max(20, (int) (height * 0.65 / 1.95));
-            int mx = (int) (width * 0.199);
-            InventoryScreen.renderEntityInInventoryFollowsMouse(g, mx, feet, scale, mx - mouseX, feet - scale * 1.6F - mouseY, model);
-        }
+        // They stand in their court on the left (drawn above); their nation's banner on the right.
         int bannerX = (int) (width * 0.853);
         int bannerW = (int) (width * 0.077);
         int bannerH = (int) (height * 0.398);
@@ -377,16 +389,25 @@ public class CharacterScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
         if (button == 0) {
+            // Someone else in the court, where it shows plainly on the left.
+            int other = mouseX < width * 0.31 ? court.pick(mouseX, mouseY) : -1;
+            if (other >= 0 && other != index) {
+                minecraft.setScreen(new CharacterScreen(this, base, other, court));
+                return true;
+            }
             for (Retainer r : retainers) {
                 if (r.contains(mouseX, mouseY)) {
-                    minecraft.setScreen(new CharacterScreen(this, base, r.person()));
+                    minecraft.setScreen(new CharacterScreen(this, base, r.person(), court));
                     return true;
                 }
             }
             for (Spot s : spots) {
                 if (s.person() >= 0 && s.contains(mouseX, mouseY)) {
-                    minecraft.setScreen(new CharacterScreen(this, base, s.person()));
+                    minecraft.setScreen(new CharacterScreen(this, base, s.person(), court));
                     return true;
                 }
             }

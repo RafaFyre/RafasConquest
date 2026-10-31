@@ -1,10 +1,8 @@
 package rafasconquest.client;
 
-import com.talhanation.recruits.entities.AbstractRecruitEntity;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.map.BaseMap;
@@ -15,63 +13,46 @@ import rafasconquest.people.Realm;
 import rafasconquest.people.Stat;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * A nation's page, opened from its capital on the world map: its banner at both top corners, its name and people, what
  * it is (its rank, faith, ways, culture and race, with their shares of its people), and its peerage as a pyramid of
- * figures: the ruler at the top, the greatest nobles under them, the lesser ones in wider rows below. A figure opens
- * that character's page; Esc goes back.
+ * people standing on the podiums of its court ({@link CourtView}), in a hall of its land's style: the ruler at the top,
+ * the greatest nobles under them, the lesser ones in wider rows below. Clicking someone glides the camera in on them and
+ * shows who they are; clicking them again opens their page. Esc (or the arrow) glides back out, then goes back.
  */
 public class NationScreen extends Screen {
-    private static final int BACKGROUND = Portraits.BACKGROUND;
     private static final int BOX = Portraits.BOX;
     private static final int BOX_EDGE = Portraits.BOX_EDGE;
     private static final int TEXT = Portraits.TEXT;
     private static final int MUTED = Portraits.MUTED;
     private static final int DIAMOND = 0xFF3CC26A;
     private static final int DIAMOND_EDGE = 0xFFE8F8EC;
-    /** The greatest nobles, in the row under the ruler. */
-    private static final int GREAT = 3;
     /** Shares below this are not named. */
     private static final float NAMED_SHARE = 0.03F;
 
     private final Screen parent;
     private final BaseMap base;
     private final int nation;
-    /** The ruler (or -1), then the nobles, most powerful first. */
+    /** The ruler, or -1. */
     private final int ruler;
-    private final List<Integer> nobles;
-    private final List<Figure> figures = new ArrayList<>();
+    /** The court and its camera, kept while the pages it opens come and go. */
     @Nullable
-    private Portraits.Banner banner;
-    /** Nobles who found no room on the screen. */
-    private int unseen;
-
-    /** A character's model, as the inventory shows the player: their index, where their feet are, how big, and the model. */
-    private record Figure(int person, int x, int feet, int scale, @Nullable AbstractRecruitEntity entity) {
-        boolean contains(double mx, double my) {
-            return Math.abs(mx - x) <= scale / 2.0 && my >= feet - scale * 2 && my <= feet;
-        }
-    }
+    private CourtView court;
+    /** Where the whole court is centred, and where someone looked at stands, on the screen. */
+    private static final float WHOLE_X = 0.5F;
+    private static final float WHOLE_Y = 0.6F;
+    private static final float CLOSE_X = 0.36F;
+    private static final float CLOSE_Y = 0.6F;
 
     public NationScreen(Screen parent, BaseMap base, int nation) {
         super(Component.literal(base.nations().get(nation).name()));
         this.parent = parent;
         this.base = base;
         this.nation = nation;
-        Realm realm = base.realm();
-        this.ruler = realm.ruler(nation);
-        List<Integer> found = new ArrayList<>();
-        for (int i = 0; i < realm.people().size(); i++) {
-            if (i != ruler && realm.people().get(i).nation() == nation) {
-                found.add(i);
-            }
-        }
-        found.sort(Comparator.comparingInt((Integer i) -> power(realm, i)).reversed());
-        this.nobles = found;
+        this.ruler = base.realm().ruler(nation);
     }
 
     /** How powerful a noble is: the rank of their hold first, then how many answer to them, then their skills. */
@@ -93,69 +74,31 @@ public class NationScreen extends Screen {
     @Override
     protected void init() {
         Portraits.buttons(this, width, this::onClose, this::addRenderableWidget);
-        banner = new Portraits.Banner(minecraft, base.nations().get(nation).id());
-        layOut();
-    }
-
-    /**
-     * The pyramid, across the lower part of the screen: four levels, each lower one a little behind the one above —
-     * the ruler, the greatest nobles, and the lesser ones in two wide rows, the second set between the first's.
-     */
-    private void layOut() {
-        figures.clear();
-        int top = (int) (height * 0.30);
-        int bottom = height - 8;
-        int tall = Math.max(24, (int) ((bottom - top) / 3.4));
-        int scale = Math.max(10, tall * 10 / 19);
-        int step = (bottom - top - tall - tall / 5) / 3;
-        int feet = top + tall;
-        int centre = width / 2;
-        int spacing = scale * 2;
-        if (ruler >= 0) {
-            figures.add(figure(ruler, centre, feet, scale));
+        if (court == null) {
+            court = CourtView.ofNation(base, nation);
+            court.showWhole(WHOLE_X, WHOLE_Y);
+            court.arrive();
+        } else if (court.focus() >= 0) {
+            court.showPerson(court.focus(), CLOSE_X, CLOSE_Y); // back from their page: still on them
         }
-        int next = 0;
-        int great = Math.min(GREAT, nobles.size());
-        for (int i = 0; i < great; i++) {
-            // The middle one just under the ruler; the others to either side, a little higher.
-            int x = great == 1 ? centre : centre + (i == 0 ? 0 : i == 1 ? -spacing * 3 / 2 : spacing * 3 / 2);
-            figures.add(figure(nobles.get(next++), x, feet + step - (i == 0 ? 0 : step / 3), scale));
-        }
-        int perRow = Math.max(1, (width - 40) / spacing);
-        for (int row = 0; row < 2 && next < nobles.size(); row++) {
-            int count = Math.min(nobles.size() - next, row == 0 ? perRow : perRow - 1);
-            int rowWidth = (count - 1) * spacing;
-            int y = feet + step * (row + 2);
-            for (int i = 0; i < count; i++) {
-                figures.add(figure(nobles.get(next++), centre - rowWidth / 2 + i * spacing, y, scale));
-            }
-        }
-        unseen = nobles.size() - next;
-    }
-
-    /** A figure for a character, in the skin of their race's land. */
-    private Figure figure(int person, int x, int feet, int scale) {
-        return new Figure(person, x, feet, scale, Portraits.model(minecraft, base.realm().people().get(person)));
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        g.fill(0, 0, width, height, BACKGROUND);
+        court.render(g, width, height, mouseX, mouseY, partialTick);
         Realm realm = base.realm();
+        int hovered = court.pick(mouseX, mouseY);
+        if (court.focus() >= 0) {
+            card(g, court.focus());
+            super.render(g, mouseX, mouseY, partialTick);
+            tooltip(g, hovered, mouseX, mouseY);
+            return;
+        }
         BaseMap.Nation n = base.nations().get(nation);
         Demographics people = realm.demographics(nation);
 
-        // The banners, at both top corners.
-        int bannerWidth = Math.max(30, Math.min(64, (int) (width * 0.075)));
-        int bannerHeight = Math.min((int) (height * 0.4), bannerWidth * 27 / 10);
-        int leftBanner = (int) (width * 0.07);
-        if (banner != null) {
-            banner.draw(g, leftBanner, 8, bannerWidth, bannerHeight);
-            banner.draw(g, width - leftBanner - bannerWidth, 8, bannerWidth, bannerHeight);
-        }
-
-        // The title, with the nation's people beside it.
-        int boxX = leftBanner + bannerWidth + 4;
+        // The title, with the nation's people beside it (the banners hang on the court's wall).
+        int boxX = (int) (width * 0.07);
         String title = title(n);
         String population = "Population " + String.format("%,d", people.population());
         int titleWidth = font.width(title) * 3 / 2;
@@ -194,33 +137,60 @@ public class NationScreen extends Screen {
             y += 2;
         }
 
-        // The peerage.
-        Figure hovered = null;
-        for (Figure f : figures) {
-            if (f.contains(mouseX, mouseY)) {
-                hovered = f;
-            }
-        }
-        for (Figure f : figures) {
-            if (f.entity() != null) {
-                InventoryScreen.renderEntityInInventoryFollowsMouse(g, f.x(), f.feet(), f.scale(), f.x() - mouseX,
-                        f.feet() - f.scale() * 1.6F - mouseY, f.entity());
-            }
-        }
         if (ruler < 0) {
             g.drawCenteredString(font, "No ruler", width / 2, (int) (height * 0.4), MUTED);
         }
-        if (unseen > 0) {
-            String more = "and " + unseen + " more noble" + (unseen == 1 ? "" : "s");
+        if (court.unseated > 0) {
+            String more = "and " + court.unseated + " more noble" + (court.unseated == 1 ? "" : "s");
             g.drawString(font, more, width - font.width(more) - 8, height - 12, MUTED, false);
         }
         super.render(g, mouseX, mouseY, partialTick);
-        if (hovered != null) {
-            Person p = realm.people().get(hovered.person());
-            g.renderComponentTooltip(font, List.of(Component.literal(CharacterScreen.styled(base, p)),
-                    Component.literal("Holds " + base.names().get(p.hold().province()) + " (click)").withStyle(net.minecraft.ChatFormatting.GRAY)),
-                    mouseX, mouseY);
+        tooltip(g, hovered, mouseX, mouseY);
+    }
+
+    /** Names whoever the mouse is over. */
+    private void tooltip(GuiGraphics g, int person, int mouseX, int mouseY) {
+        if (person < 0) {
+            return;
         }
+        Person p = base.realm().people().get(person);
+        String hint = person == court.focus() ? "Click to see their page" : "Holds " + base.names().get(p.hold().province()) + " (click)";
+        g.renderComponentTooltip(font, List.of(Component.literal(CharacterScreen.styled(base, p)),
+                Component.literal(hint).withStyle(net.minecraft.ChatFormatting.GRAY)), mouseX, mouseY);
+    }
+
+    /** Who the camera is on, beside them: their style, hold, liege, vassals and traits, and how to see more. */
+    private void card(GuiGraphics g, int person) {
+        Realm realm = base.realm();
+        Person p = realm.people().get(person);
+        int x = (int) (width * 0.56);
+        int y = (int) (height * 0.22);
+        int w = Math.min(260, width - x - 16);
+        List<String> lines = new ArrayList<>();
+        lines.add(p.name() + ", " + p.age());
+        lines.add("Holds " + base.names().get(p.hold().province()));
+        if (p.liege() >= 0) {
+            lines.add("Sworn to " + realm.people().get(p.liege()).name());
+        }
+        int vassals = realm.vassals(person).size();
+        if (vassals > 0) {
+            lines.add(vassals + " vassal" + (vassals == 1 ? "" : "s"));
+        }
+        lines.add(p.traits().stream().map(rafasconquest.people.Personality::title).collect(Collectors.joining(", ")));
+        List<net.minecraft.util.FormattedCharSequence> head = font.split(Component.literal(CharacterScreen.styled(base, p)), w - 16);
+        int h = 12 + head.size() * 10 + 6 + lines.size() * 11 + 18;
+        Portraits.box(g, x, y, w, h);
+        int ty = y + 8;
+        for (net.minecraft.util.FormattedCharSequence line : head) {
+            g.drawString(font, line, x + 8, ty, Portraits.GOLD, false);
+            ty += 10;
+        }
+        ty += 6;
+        for (String line : lines) {
+            g.drawString(font, font.plainSubstrByWidth(line, w - 16), x + 8, ty, TEXT, false);
+            ty += 11;
+        }
+        g.drawString(font, "Click them again to see their page", x + 8, ty + 4, MUTED, false);
     }
 
     /** "THE EMPIRE OF ULDARESH": the nation's rank and its name, or a sanctum's own name. */
@@ -303,20 +273,30 @@ public class NationScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            for (int i = figures.size() - 1; i >= 0; i--) { // the nearer rows first, as they stand in front
-                Figure f = figures.get(i);
-                if (f.contains(mouseX, mouseY)) {
-                    minecraft.setScreen(new CharacterScreen(this, base, f.person()));
-                    return true;
-                }
-            }
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (button == 0) {
+            int person = court.pick(mouseX, mouseY);
+            if (person >= 0 && person == court.focus()) {
+                minecraft.setScreen(new CharacterScreen(this, base, person, court));
+            } else if (person >= 0) {
+                court.showPerson(person, CLOSE_X, CLOSE_Y);
+            } else if (court.focus() >= 0) {
+                court.showWhole(WHOLE_X, WHOLE_Y);
+            }
+            return true;
+        }
+        return false;
     }
 
+    /** Back out to the whole court first, then to the page before. */
     @Override
     public void onClose() {
+        if (court != null && court.focus() >= 0) {
+            court.showWhole(WHOLE_X, WHOLE_Y);
+            return;
+        }
         minecraft.setScreen(parent);
     }
 

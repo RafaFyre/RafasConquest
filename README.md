@@ -783,7 +783,7 @@ few holders, or a faction not on the map, makes up the rest as before.
   their race's.
 
 **The nation page** (`client/NationScreen`): a double-click on a nation's **capital** on the world map opens it (any
-other hold still opens its holder's character page). On a dark ground, the nation's banner hangs at both top corners;
+other hold still opens its holder's character page). Over its court (below), with its banners on the wall,
 its title ("THE EMPIRE OF ULDARESH", or a sanctum's own name) has its population beside it; under it, green diamonds
 list what it is:
 - its rank (Empire, Kingdom, Duchy, City-state or Sword Sanctum);
@@ -793,11 +793,21 @@ list what it is:
 - its culture, with the shares of the cultures among its people;
 - the race most of its people are, with the shares of the races.
 
-Across the lower half stands its **peerage** as a pyramid of character models, drawn as the inventory draws the player
-(following the mouse), each in the Recruits skin of their culture's land: the ruler at the top; the three most powerful nobles under them (by their hold, a city's over a town's
-over a castle's, then by how many answer to them, then by their skills); the lesser nobles in two wide rows below, the
-second set between the first's. Nobles beyond those rows are counted in the corner. Hovering over a figure names them;
-a click opens their character page.
+Behind it all stands its **court** (`client/CourtView`, `client/CourtSet`), a small 3D scene drawn in the page as Create's
+Ponder draws its scenes: a hall in the style of the nation's land (sandstone and terracotta for the desert, mossy stone
+and jungle wood for the jungle, stone brick for the plains, acacia and terracotta for the savanna, spruce, diorite and
+snow for the snow, mud brick and mangrove for the swamp, spruce and cobblestone for the taiga), with pillars, lanterns,
+the nation's banners hung on the back wall and a carpet of its colour up the middle. Its **peerage** stands on a
+stepped pyramid of podiums, each in the Recruits skin of their race's land: the ruler at the top; the three most
+powerful nobles under them (by their hold, a city's over a town's over a castle's, then by how many answer to them, then
+by their skills); the lesser nobles in two rows below, lower and nearer. Nobles beyond those 21 are counted in the
+corner. Hovering over someone names them; a click **glides the camera in** on them, with a card of who they are beside
+them; a second click opens their character page; Esc (or the arrow) glides back out. The halls are generated for now,
+to be replaced by built ones.
+
+The character page stands over the same court, the camera on them on the left (gliding there from the nation page, or
+from one character to the next), the court dimmed behind the page on the right; anyone else showing in the court on
+the left opens their page with a click.
 
 ## Roads
 
