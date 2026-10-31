@@ -13,17 +13,16 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PoliticsTest {
     /**
-     * A row of nine provinces: nation 0 holds 0-2 (seat 0), nation 1 holds 3-5 (seat 5), nation 2 holds 6-8 (seat 8).
-     * Each nation's ruler is person n.
+     * A row of twelve provinces, 1000 blocks apart; counties of two (county = province / 2), duchies of two counties.
+     * Nation 0 holds 0-3 (seat 0), nation 1 holds 4-9 (seat 9), nation 2 holds 10-11 (seat 11). Rulers are people 0-2.
      */
     static final class Row implements Lands {
-        final int[] owner = {0, 0, 0, 1, 1, 1, 2, 2, 2};
-        final int[] soldiers = {1000, 1000, 1000};
+        final int[] owner = {0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2};
+        final int[] levy = {1000, 1000, 1000};
         final Person[] rulers;
         int opinion;
 
@@ -73,7 +72,12 @@ class PoliticsTest {
 
         @Override
         public int seat(int nation) {
-            return new int[]{0, 5, 8}[nation];
+            return new int[]{0, 9, 11}[nation];
+        }
+
+        @Override
+        public int[] capital(int nation) {
+            return centre(seat(nation));
         }
 
         @Override
@@ -89,8 +93,28 @@ class PoliticsTest {
         }
 
         @Override
-        public int soldiers(int nation) {
-            return soldiers[nation];
+        public int county(int province) {
+            return province / 2;
+        }
+
+        @Override
+        public int counties() {
+            return owner.length / 2;
+        }
+
+        @Override
+        public int duchy(int county) {
+            return county / 2;
+        }
+
+        @Override
+        public String titleName(Goal goal) {
+            return (goal.duchy() ? "Duchy " : "County ") + goal.index();
+        }
+
+        @Override
+        public int levy(int nation) {
+            return levy[nation];
         }
 
         @Override
@@ -111,12 +135,12 @@ class PoliticsTest {
 
     static final Politics.Front FAR = new Politics.Front() {
         @Override
-        public boolean fightForReal(War war, int[] site, int attackers, int defenders) {
+        public boolean fightForReal(War war, int attackers, int defenders) {
             return false;
         }
 
         @Override
-        public void declared(War war) {
+        public void raised(War war, boolean attacking) {
         }
     };
 
@@ -131,82 +155,115 @@ class PoliticsTest {
         return new Row(ruler(10), ruler(10), ruler(10));
     }
 
-    @Test
-    void aWarIsOverABorderProvinceNotTheSeat() {
-        Row lands = row();
-        Politics p = new Politics();
-        War w = p.declare(0, 1, 1, lands, new Random(1), FAR);
-        assertNotNull(w);
-        assertEquals(3, w.goal(), "nation 1's only province beside nation 0 is 3");
-        assertTrue(p.atWar(0) && p.atWar(1));
-        assertFalse(p.atWar(2));
-        assertNull(p.declare(0, 2, 1, lands, new Random(1), FAR), "no border with nation 2");
-    }
-
-    @Test
-    void anAllyComesToTheDefence() {
-        Row lands = row();
-        Politics p = new Politics();
-        p.alliances.add(Politics.pair(1, 2));
-        War w = p.declare(0, 1, 1, lands, new Random(1), FAR);
-        assertEquals(List.of(2), w.defenderAllies());
-        assertTrue(p.atWar(2));
-        assertEquals(1000 + 500, Politics.soldiers(w, false, lands), "an ally brings half its army");
-    }
-
-    @Test
-    void theStrongWinTheProvinceAndATruceFollows() {
-        Row lands = row();
-        lands.soldiers[0] = 20000;
-        lands.soldiers[1] = 500;
-        Politics p = new Politics();
-        p.declare(0, 1, 1, lands, new Random(1), FAR);
-        Random random = new Random(2);
-        long day = 2;
-        while (!p.wars().isEmpty() && day < 60) {
-            p.day(day++, lands, random, FAR);
+    /** Runs the politics on, a twentieth of a day at a time, until the war is over (or {@code days} pass). */
+    static void runWar(Politics p, Row lands, Random random, double from, int days) {
+        for (int step = 1; step <= days * 20 && !p.wars().isEmpty(); step++) {
+            double now = from + step / 20.0;
+            if (step % 20 == 0) {
+                p.day((long) now, lands, random, FAR);
+            }
+            p.advance(now, lands, random, FAR);
         }
-        assertTrue(p.wars().stream().noneMatch(w -> w.attacker() == 0 && w.defender() == 1), "the war never ended");
-        assertEquals(0, lands.owner(3), "the province fought over went to the winner");
-        assertEquals(0, p.conquered().get(3));
+    }
+
+    @Test
+    void titlesBesideUsAreClaimedButNotTheEnemySeat() {
+        List<Politics.Claim> claims = Politics.claims(0, row());
+        assertTrue(claims.stream().anyMatch(c -> !c.goal().duchy() && c.goal().index() == 2 && c.defender() == 1), "the county beside us");
+        assertTrue(claims.stream().anyMatch(c -> c.goal().duchy() && c.goal().index() == 1), "the duchy beside us");
+        assertFalse(claims.stream().anyMatch(c -> !c.goal().duchy() && c.goal().index() == 4), "the county with nation 1's seat");
+        assertFalse(claims.stream().anyMatch(c -> !c.goal().duchy() && c.goal().index() == 3), "a county nowhere near us");
+    }
+
+    @Test
+    void aHoleInOurLandIsWantedMost() {
+        Row lands = row();
+        // Nation 0 also holds 6-7: nation 1's 4-5 is now a hole between our two pieces.
+        lands.owner[6] = 0;
+        lands.owner[7] = 0;
+        List<Politics.Claim> claims = Politics.claims(0, lands);
+        Politics.Claim hole = claims.stream().filter(c -> !c.goal().duchy() && c.goal().index() == 2).findFirst().orElseThrow();
+        Politics.Claim plain = Politics.claims(0, row()).stream().filter(c -> !c.goal().duchy() && c.goal().index() == 2).findFirst().orElseThrow();
+        assertTrue(hole.want() > plain.want() + 2, hole.want() + " vs " + plain.want());
+    }
+
+    @Test
+    void armiesMusterADayThenMarchToTheBorder() {
+        Row lands = row();
+        Politics p = new Politics();
+        War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        assertNotNull(w);
+        assertEquals(2, w.target());
+        assertEquals(3500, w.siteX(), 1e-9, "between our province 3 and their 4");
+        assertEquals(0, w.army(true).x(), 1e-9, "the attacker musters at its capital");
+        assertEquals(9000, w.army(false).x(), 1e-9, "the defender musters at its capital");
+        p.advance(1.5, lands, new Random(2), FAR);
+        p.advance(1.9, lands, new Random(2), FAR);
+        assertEquals(0, w.army(true).x(), 1e-9, "marched while mustering");
+        p.advance(2.5, lands, new Random(2), FAR);
+        assertEquals(1000, w.army(true).x(), 1e-9, "half a day's march");
+    }
+
+    @Test
+    void theStrongTakeTheTitleCountyByCounty() {
+        Row lands = row();
+        lands.levy[0] = 50000;
+        lands.levy[1] = 2000;
+        Politics p = new Politics();
+        p.declare(0, 1, new Goal(true, 1), 1, lands, new Random(1), FAR);
+        runWar(p, lands, new Random(3), 1, 100);
+        assertTrue(p.wars().isEmpty(), "the war never ended");
+        for (int province = 4; province <= 7; province++) {
+            assertEquals(0, lands.owner(province), "province " + province + " of the duchy");
+        }
+        assertEquals(1, lands.owner(9), "the defender's seat taken");
         assertTrue(p.truces.containsKey(Politics.pair(0, 1)), "no truce after the war");
     }
 
     @Test
-    void aWarDraggingOnEndsInPeace() {
+    void aBeatenAttackerChangesNoLand() {
         Row lands = row();
+        lands.levy[0] = 300;
+        lands.levy[1] = 50000;
         Politics p = new Politics();
-        War w = p.declare(0, 1, 1, lands, new Random(1), FAR);
-        w.score = 0;
-        p.day(1 + Politics.LONG_WAR, lands, new Random(3), new Politics.Front() {
-            @Override
-            public boolean fightForReal(War war, int[] site, int attackers, int defenders) {
-                return true; // every battle "fought for real": none settles today
-            }
-
-            @Override
-            public void declared(War war) {
-            }
-        });
-        assertTrue(p.wars().stream().noneMatch(x -> x.id() == w.id()), "a 30-day war still going");
-        assertEquals(1, lands.owner(3), "a province changed hands in a drawn war");
+        p.declare(0, 1, new Goal(true, 1), 1, lands, new Random(1), FAR);
+        runWar(p, lands, new Random(4), 1, 100);
+        assertTrue(p.wars().isEmpty(), "the war never ended");
+        for (int province = 4; province <= 9; province++) {
+            assertEquals(1, lands.owner(province), "province " + province + " changed hands");
+        }
+        assertTrue(p.dead.getOrDefault(0, 0) > 0, "the beaten attacker lost no one");
     }
 
     @Test
-    void aRealBattleCountsMore() {
+    void aDefenderWithNoOneLeftCedesTheRest() {
         Row lands = row();
         Politics p = new Politics();
-        War w = p.declare(0, 1, 1, lands, new Random(1), FAR);
-        p.realBattle(w.id(), true, 2, lands);
-        assertEquals(25, w.score());
-        assertEquals(1, w.battles());
+        War w = p.declare(0, 1, new Goal(true, 1), 1, lands, new Random(1), FAR);
+        lands.levy[1] = 0; // their people spent: no army can be raised again
+        p.after(w, true, 0.9, 0.4, 3, lands, new Random(5), FAR);
+        assertTrue(p.wars().isEmpty());
+        for (int province = 4; province <= 7; province++) {
+            assertEquals(0, lands.owner(province), "province " + province + " of the duchy not ceded");
+        }
+        assertTrue(p.chronicle().stream().anyMatch(e -> e.text().contains("ceded")));
+    }
+
+    @Test
+    void theDeadAreMadeGoodSlowly() {
+        Row lands = row();
+        Politics p = new Politics();
+        p.dead.put(1, 300);
+        assertEquals(700, p.manpower(1, lands));
+        p.day(2, lands, new Random(1), FAR);
+        assertEquals(720, p.manpower(1, lands), "2 % of the levy back each day");
     }
 
     @Test
     void warlikeRulersMoreSoThanPeacefulOnes() {
-        double hawk = Politics.aggression(ruler(18, Personality.AMBITIOUS, Personality.WRATHFUL));
-        double dove = Politics.aggression(ruler(3, Personality.CONTENT, Personality.CRAVEN));
-        assertTrue(hawk > 5 * dove, hawk + " vs " + dove);
+        assertTrue(Politics.aggression(ruler(18, Personality.AMBITIOUS, Personality.WRATHFUL))
+                > 5 * Politics.aggression(ruler(3, Personality.CONTENT, Personality.CRAVEN)));
+        assertTrue(Politics.temper(ruler(5, Personality.CRAVEN)) > Politics.temper(ruler(5, Personality.WRATHFUL)));
     }
 
     @Test
@@ -226,15 +283,19 @@ class PoliticsTest {
         Row lands = row();
         Politics p = new Politics();
         p.alliances.add(Politics.pair(1, 2));
-        War w = p.declare(0, 1, 4, lands, new Random(1), FAR);
-        w.score = 37;
+        War w = p.declare(0, 1, new Goal(true, 1), 4, lands, new Random(1), FAR);
         p.conquered.put(4, 0);
+        p.dead.put(0, 55);
         Politics back = Politics.load(p.save());
-        assertEquals(1, back.wars().size());
-        assertEquals(37, back.wars().get(0).score());
-        assertEquals(List.of(2), back.wars().get(0).defenderAllies());
+        War b = back.wars().get(0);
+        assertEquals(w.goal(), b.goal());
+        assertEquals(w.target(), b.target());
+        assertEquals(w.army(true).soldiers(), b.army(true).soldiers());
+        assertEquals(w.army(false).x(), b.army(false).x(), 1e-9);
+        assertEquals(List.of(2), b.defenderAllies());
         assertTrue(back.allied(1, 2));
         assertEquals(0, back.conquered().get(4));
+        assertEquals(55, back.dead.get(0));
         assertEquals(p.chronicle(), back.chronicle());
     }
 }

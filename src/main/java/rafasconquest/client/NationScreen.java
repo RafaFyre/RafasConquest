@@ -182,15 +182,22 @@ public class NationScreen extends Screen {
     /** Its wars, with how each goes, and its allies. */
     private List<String[]> politics() {
         List<String[]> lines = new ArrayList<>();
-        for (int[] w : ClientPolitics.wars()) {
+        List<int[]> wars = ClientPolitics.wars();
+        for (int i = 0; i < wars.size(); i++) {
+            int[] w = wars.get(i);
             boolean attacking = w[0] == nation;
             if (!attacking && w[1] != nation) {
                 continue;
             }
-            int score = attacking ? w[3] : -w[3];
-            String how = score >= 50 ? "winning" : score > 10 ? "ahead" : score >= -10 ? "even" : score > -50 ? "behind" : "losing";
+            String title = ClientPolitics.titleName(base, w[2] == 1, w[3]);
+            String army = "no army in the field";
+            for (int[] a : ClientPolitics.armies()) {
+                if (a[5] == i && a[0] == nation) {
+                    army = String.format("%,d", a[1]) + " soldiers " + (a[4] == 1 ? "mustering" : "on the march");
+                }
+            }
             lines.add(new String[]{"At war with " + base.nations().get(attacking ? w[1] : w[0]).name(),
-                    (attacking ? "Attacking" : "Defending") + " " + base.names().get(w[2]) + ", " + how + " (" + score + ")"});
+                    (attacking ? "For the " : "Defending the ") + title + ": " + w[5] + " of " + w[6] + " counties taken; " + army});
         }
         List<String> allies = new ArrayList<>();
         for (int[] a : ClientPolitics.alliances()) {

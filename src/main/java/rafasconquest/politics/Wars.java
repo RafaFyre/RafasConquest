@@ -1,9 +1,12 @@
 package rafasconquest.politics;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.BattlePlan;
@@ -13,36 +16,55 @@ import rafasconquest.map.BaseMap;
 import rafasconquest.sim.ConquestServer;
 import rafasconquest.worldgen.ConquestRuntime;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * The politics in the running world: each new day (by the overworld's clock, not days caught up while away) the nations
- * act ({@link Politics#day}); a war's battle near a player is fought for real, with the battle system, and its result
- * goes back to the war; enlisted players are called to muster when their nation goes to war; and heralds tell everyone
- * the day before's news. Conquests change the map's holders, here and on the clients.
+ * The politics in the running world. Each new day (by the overworld's clock, not days caught up while away) the
+ * nations act ({@link Politics#day}); every few seconds the armies march on ({@link Politics#advance}). When a side
+ * raises an army its enlisted players are called to muster: answering ({@code /pve muster}) takes them to their army, at
+ * their capital or on the march, and they go with it into battle. A battle with a player near it is fought for real, by
+ * the battle system, and its result goes back to the war. Heralds tell everyone the day before's news. Conquests change
+ * the map's holders, here and on the clients.
  */
 public final class Wars {
     /** A war's battle within this many blocks of a player is fought for real. */
     static final int REAL_RANGE = 400;
     /** The most soldiers a side brings to a real battle (the rest are elsewhere): the server's limit, not the war's. */
     static final int REAL_CAP = 1000;
+    /** How often the armies march on, in ticks. */
+    static final int MARCH_TICKS = 100;
+    /** How far behind its lines a mustered player is brought to the battle. */
+    static final int BEHIND_LINES = 70;
 
-    /** The war whose battle is being fought for real, and its sides' factions. */
+    /** The war whose battle is being fought for real, and its attacker's faction. */
     private static long pendingWar = -1;
     @Nullable
     private static UUID pendingAttacker;
+    /** The players who answered a muster call: by war, and on which side (true: attacking). */
+    private static final Map<UUID, long[]> mustered = new HashMap<>();
 
     private Wars() {
     }
 
     /** Puts the conquests back on a freshly loaded map. */
-    public static void restore(net.minecraft.server.level.ServerLevel overworld, BaseMap map) {
+    public static void restore(ServerLevel overworld, BaseMap map) {
         PoliticsData.get(overworld).politics.conquered().forEach((p, n) -> {
             if (p < map.holders().length) {
                 map.holders()[p] = n;
             }
         });
+        mustered.clear();
+        pendingWar = -1;
+    }
+
+    /** The time now, in days. */
+    static double now(MinecraftServer server) {
+        return server.overworld().getDayTime() / 24000.0;
     }
 
     /** A new day has come. */
@@ -57,59 +79,90 @@ public final class Wars {
             pendingWar = -1;
         }
         Random random = new Random(server.overworld().getSeed() ^ day * 0x9E3779B97F4A7C15L);
-        data.politics.day(day, MapLands.of(map), random, front(server, map, day));
+        data.politics.day(day, MapLands.of(map), random, front(server, map));
         data.setDirty();
         claimCities(map, data.politics);
         heralds(server, data.politics, day);
         PoliticsSync.toAll(server);
     }
 
-    private static Politics.Front front(MinecraftServer server, BaseMap map, long day) {
+    /** Every tick: every few seconds, the armies march on, and battles are fought where they meet. */
+    public static void tick(MinecraftServer server) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null || server.overworld().getGameTime() % MARCH_TICKS != 0) {
+            return;
+        }
+        PoliticsData data = PoliticsData.get(server);
+        if (data.politics.wars().isEmpty()) {
+            return;
+        }
+        Random random = new Random(server.overworld().getGameTime() ^ server.overworld().getSeed());
+        int events = data.politics.chronicle().size();
+        data.politics.advance(now(server), MapLands.of(map), random, front(server, map));
+        data.setDirty();
+        if (data.politics.chronicle().size() != events) {
+            claimCities(map, data.politics);
+        }
+        PoliticsSync.toAll(server); // the armies have moved
+    }
+
+    private static Politics.Front front(MinecraftServer server, BaseMap map) {
         return new Politics.Front() {
             @Override
-            public boolean fightForReal(War war, int[] site, int attackers, int defenders) {
-                return fight(server, map, war, site, attackers, defenders);
+            public boolean fightForReal(War war, int attackers, int defenders) {
+                return fight(server, map, war, attackers, defenders);
             }
 
             @Override
-            public void declared(War war) {
-                muster(server, map, war);
+            public void raised(War war, boolean attacking) {
+                call(server, map, war, attacking);
             }
         };
     }
 
-    /** Fights a war's battle for real if a player is near its site and no other battle is on. */
-    private static boolean fight(MinecraftServer server, BaseMap map, War war, int[] site, int attackers, int defenders) {
+    /** The way from the attacker's side of a battle toward the defender's: from their capital toward the site. */
+    private static double[] axis(BaseMap map, War war) {
+        BaseMap.Nation a = map.nations().get(war.attacker());
+        double dx = war.siteX() - a.x();
+        double dz = war.siteZ() - a.z();
+        double length = Math.max(1, Math.hypot(dx, dz));
+        return new double[]{dx / length, dz / length};
+    }
+
+    /**
+     * Fights a war's battle for real if a player is near its site (those who mustered with its armies are brought there
+     * first) and no other battle is on.
+     */
+    private static boolean fight(MinecraftServer server, BaseMap map, War war, int attackers, int defenders) {
         if (RecruitsBattle.running() || pendingWar >= 0) {
             return false;
         }
-        ServerPlayer near = null;
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            if (p.level() == server.overworld() && Math.hypot(p.getX() - site[0], p.getZ() - site[1]) <= REAL_RANGE) {
-                near = p;
-            }
-        }
         ConquestServer conquest = ConquestServer.get();
-        if (near == null || conquest == null) {
-            return false;
-        }
-        Faction a = conquest.data().faction(map.nations().get(war.attacker()).id());
-        Faction d = conquest.data().faction(map.nations().get(war.defender()).id());
+        Faction a = conquest == null ? null : conquest.data().faction(map.nations().get(war.attacker()).id());
+        Faction d = conquest == null ? null : conquest.data().faction(map.nations().get(war.defender()).id());
         if (a == null || d == null) {
             return false;
         }
+        double[] axis = axis(map, war);
+        bringToBattle(server, war, axis);
+        boolean near = false;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p.level() == server.overworld() && Math.hypot(p.getX() - war.siteX(), p.getZ() - war.siteZ()) <= REAL_RANGE) {
+                near = true;
+            }
+        }
+        if (!near) {
+            return false;
+        }
         double scale = Math.min(1, REAL_CAP / (double) Math.max(attackers, defenders));
-        int[] from = MapLands.of(map).centre(war.goal());
-        double ax = from[0] - site[0];
-        double az = from[1] - site[1];
-        double length = Math.max(1, Math.hypot(ax, az));
+        String county = MapLands.of(map).titleName(new Goal(false, war.target()));
         try {
             RecruitsBattle.start(server.overworld(), a, Math.max(20, (int) (attackers * scale)), d, Math.max(20, (int) (defenders * scale)),
-                    new BattlePlan.Point(site[0], site[1]), ax / length, az / length,
-                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] " + a.name() + " and " + d.name()
-                            + " meet in battle near you, at " + map.names().get(war.goal()) + ". " + line).withStyle(ChatFormatting.RED), false),
+                    new BattlePlan.Point(war.siteX(), war.siteZ()), axis[0], axis[1],
+                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] The armies of " + a.name() + " and "
+                            + d.name() + " meet in battle for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
                     why -> {
-                        RafasConquest.LOGGER.warn("[war] The battle of {} could not be fought for real: {}", map.names().get(war.goal()), why);
+                        RafasConquest.LOGGER.warn("[war] The battle for the {} could not be fought for real: {}", county, why);
                         PoliticsData.get(server).politics.realBattleCancelled(war.id());
                         pendingWar = -1;
                     });
@@ -121,8 +174,29 @@ public final class Wars {
         return true;
     }
 
+    /** The players who mustered with a war's armies come with them to the battle, behind their own lines. */
+    private static void bringToBattle(MinecraftServer server, War war, double[] axis) {
+        ServerLevel level = server.overworld();
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            long[] answer = mustered.get(p.getUUID());
+            if (answer == null || answer[0] != war.id()) {
+                continue;
+            }
+            double side = answer[1] == 1 ? -1 : 1;
+            int x = (int) Math.round(war.siteX() + axis[0] * BEHIND_LINES * side);
+            int z = (int) Math.round(war.siteZ() + axis[1] * BEHIND_LINES * side);
+            teleport(p, level, x, z);
+            p.sendSystemMessage(Component.literal("Your army has reached the field of battle.").withStyle(ChatFormatting.RED));
+        }
+    }
+
+    private static void teleport(ServerPlayer p, ServerLevel level, int x, int z) {
+        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        p.teleportTo(level, x + 0.5, y, z + 0.5, p.getYRot(), p.getXRot());
+    }
+
     /** A battle fought for real is over: if it was a war's, its result goes to the war. */
-    public static void battleOver(UUID first, UUID second, int winner) {
+    public static void battleOver(UUID first, UUID second, int winner, double firstLeft, double secondLeft) {
         if (pendingWar < 0) {
             return;
         }
@@ -134,14 +208,18 @@ public final class Wars {
         PoliticsData data = PoliticsData.get(server);
         long war = pendingWar;
         pendingWar = -1;
-        if (winner < 0) {
+        BaseMap map = ConquestRuntime.map();
+        if (winner < 0 || map == null) {
             data.politics.realBattleCancelled(war);
         } else {
+            boolean attackerFirst = first.equals(pendingAttacker);
             UUID won = winner == 0 ? first : second;
-            data.politics.realBattle(war, won.equals(pendingAttacker), conquest.overworld().getDayTime() / 24000L, MapLands.of(ConquestRuntime.map()));
+            data.politics.realBattle(war, won.equals(pendingAttacker), attackerFirst ? firstLeft : secondLeft,
+                    attackerFirst ? secondLeft : firstLeft, now(server), MapLands.of(map),
+                    new Random(server.overworld().getGameTime()), front(server, map));
+            claimCities(map, data.politics);
         }
         data.setDirty();
-        claimCities(ConquestRuntime.map(), data.politics);
         PoliticsSync.toAll(server);
     }
 
@@ -167,28 +245,58 @@ public final class Wars {
         }
     }
 
-    /** Calls the enlisted players of every nation in a new war to muster at their capital. */
-    private static void muster(MinecraftServer server, BaseMap map, War war) {
+    /** Calls the enlisted players of a side's nations to muster: a line, and a button that answers. */
+    private static void call(MinecraftServer server, BaseMap map, War war, boolean attacking) {
         ConquestServer conquest = ConquestServer.get();
         if (conquest == null) {
             return;
         }
-        for (boolean attacking : new boolean[]{true, false}) {
-            for (int n : war.side(attacking)) {
-                Faction nation = conquest.data().faction(map.nations().get(n).id());
-                if (nation == null) {
+        Goal goal = war.goal();
+        String title = MapLands.of(map).titleName(goal);
+        for (int n : war.side(attacking)) {
+            Faction nation = conquest.data().faction(map.nations().get(n).id());
+            if (nation == null) {
+                continue;
+            }
+            String enemy = map.nations().get(attacking ? war.defender() : war.attacker()).name();
+            String capital = map.names().get(map.nations().get(attacking ? war.attacker() : war.defender()).seat());
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                if (rafasconquest.peerage.Talk.serves(p, nation)) {
+                    p.sendSystemMessage(Component.literal("To arms! " + nation.name() + " raises an army against " + enemy + ", for the "
+                            + title + ". It musters at " + capital + " for a day, then marches. ").withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
+                            .append(Component.literal("[Muster]").withStyle(style -> style.withColor(ChatFormatting.GOLD).withUnderlined(true)
+                                    .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/pve muster")))));
+                }
+            }
+        }
+    }
+
+    /** A player answers the call: to their side's army, at its capital or on the march. */
+    public static String muster(ServerPlayer player) {
+        BaseMap map = ConquestRuntime.map();
+        ConquestServer conquest = ConquestServer.get();
+        if (map == null || conquest == null) {
+            return "No world map yet";
+        }
+        for (War war : PoliticsData.get(player.server).politics.wars()) {
+            for (boolean attacking : new boolean[]{true, false}) {
+                Army army = war.army(attacking);
+                if (army == null) {
                     continue;
                 }
-                String enemy = map.nations().get(attacking ? war.defender() : war.attacker()).name();
-                String capital = map.names().get(map.nations().get(n).seat());
-                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-                    if (rafasconquest.peerage.Talk.serves(p, nation)) {
-                        p.sendSystemMessage(Component.literal("War! " + nation.name() + " is at war with " + enemy + ", over "
-                                + map.names().get(war.goal()) + ". The army musters at " + capital + ".").withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
+                for (int n : war.side(attacking)) {
+                    Faction nation = conquest.data().faction(map.nations().get(n).id());
+                    if (nation != null && rafasconquest.peerage.Talk.serves(player, nation)) {
+                        mustered.put(player.getUUID(), new long[]{war.id(), attacking ? 1 : 0});
+                        teleport(player, player.server.overworld(), (int) Math.round(army.x()), (int) Math.round(army.z()));
+                        return army.mustering(now(player.server)) ? "You have mustered with the army of " + nation.name()
+                                + ". It marches at dawn; you will go with it into battle"
+                                : "You have joined the army of " + nation.name() + " on the march; you will go with it into battle";
                     }
                 }
             }
         }
+        return "Your nation has no army in the field";
     }
 
     /** The wars, alliances, conquests and latest news, for {@code /pve politics}. */
@@ -198,12 +306,22 @@ public final class Wars {
             return "No world map yet";
         }
         Politics politics = PoliticsData.get(server).politics;
+        MapLands lands = MapLands.of(map);
         StringBuilder out = new StringBuilder();
         out.append(politics.wars().size()).append(" war(s):");
+        double now = now(server);
         for (War w : politics.wars()) {
             out.append("\n  ").append(map.nations().get(w.attacker()).name()).append(" against ").append(map.nations().get(w.defender()).name())
-                    .append(" over ").append(map.names().get(w.goal())).append(", score ").append(w.score()).append(", ").append(w.battles())
-                    .append(" battle(s) since day ").append(w.started());
+                    .append(" for the ").append(lands.titleName(w.goal())).append(": ").append(w.taken().size()).append(" of ")
+                    .append(w.goal().counties(lands).size()).append(" counties taken, ").append(w.battles()).append(" battle(s); next for the ")
+                    .append(lands.titleName(new Goal(false, w.target()))).append(String.format(" at %.0f, %.0f", w.siteX(), w.siteZ()));
+            for (boolean attacking : new boolean[]{true, false}) {
+                Army army = w.army(attacking);
+                if (army != null) {
+                    out.append("\n    ").append(map.nations().get(attacking ? w.attacker() : w.defender()).name()).append(": ").append(army.soldiers())
+                            .append(" soldiers, ").append(army.mustering(now) ? "mustering" : String.format("at %.0f, %.0f", army.x(), army.z()));
+                }
+            }
         }
         out.append("\n").append(politics.alliances().size()).append(" alliance(s):");
         for (int[] a : politics.alliances()) {
@@ -217,18 +335,30 @@ public final class Wars {
         return out.toString();
     }
 
-    /** Runs {@code days} days of politics at once, from today (for {@code /pve politics day}). */
+    /** Runs {@code days} days of politics at once, armies marching through them (for {@code /pve politics day}). */
     public static String runDays(MinecraftServer server, int days) {
-        long today = server.overworld().getDayTime() / 24000L;
-        int before = PoliticsData.get(server).politics.chronicle().size();
-        for (int i = 0; i < days; i++) {
-            day(server, today + i);
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return "No world map yet";
         }
-        int happened = PoliticsData.get(server).politics.chronicle().size() - before;
+        PoliticsData data = PoliticsData.get(server);
+        double start = now(server);
+        int before = data.politics.chronicle().size();
+        Random random = new Random();
+        for (int i = 0; i < days; i++) {
+            data.politics.day((long) start + i, MapLands.of(map), random, front(server, map));
+            for (int step = 1; step <= 20; step++) {
+                data.politics.advance(start + i + step / 20.0, MapLands.of(map), random, front(server, map));
+            }
+        }
+        data.setDirty();
+        claimCities(map, data.politics);
+        PoliticsSync.toAll(server);
+        int happened = data.politics.chronicle().size() - before;
         return days + " day(s) of politics run: " + Math.max(0, happened) + " event(s). /pve politics to see them";
     }
 
-    /** One nation declares war on another now, by name (for {@code /pve politics war}). */
+    /** One nation declares war on another now, for a title of the other's beside its land (for {@code /pve politics war}). */
     public static String forceWar(MinecraftServer server, String attacker, String defender) {
         BaseMap map = ConquestRuntime.map();
         if (map == null) {
@@ -239,13 +369,22 @@ public final class Wars {
         if (a < 0 || d < 0 || a == d) {
             return "No such pair of nations";
         }
+        MapLands lands = MapLands.of(map);
+        Politics.Claim best = null;
+        for (Politics.Claim claim : Politics.claims(a, lands)) {
+            if (claim.defender() == d && (best == null || claim.want() > best.want())) {
+                best = claim;
+            }
+        }
+        if (best == null) {
+            return map.nations().get(d).name() + " holds no title beside " + map.nations().get(a).name() + " to fight for";
+        }
         PoliticsData data = PoliticsData.get(server);
-        long today = server.overworld().getDayTime() / 24000L;
-        War war = data.politics.declare(a, d, today, MapLands.of(map), new Random(), front(server, map, today));
+        War war = data.politics.declare(a, d, best.goal(), (long) now(server), lands, new Random(), front(server, map));
         data.setDirty();
         PoliticsSync.toAll(server);
-        return war == null ? map.nations().get(a).name() + " has no border with " + map.nations().get(d).name() + " to fight over"
-                : map.nations().get(a).name() + " declared war on " + map.nations().get(d).name() + " over " + map.names().get(war.goal());
+        return war == null ? map.nations().get(a).name() + " could not raise an army"
+                : map.nations().get(a).name() + " declared war on " + map.nations().get(d).name() + " for the " + lands.titleName(war.goal());
     }
 
     private static int nationNamed(BaseMap map, String name) {

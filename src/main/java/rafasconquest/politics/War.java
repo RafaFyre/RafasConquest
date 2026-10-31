@@ -2,28 +2,36 @@ package rafasconquest.politics;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntArrayTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A war: who attacked whom, over which of the defender's provinces, since when, and how it goes. Its score runs from
- * -100 (the defender has won) to 100 (the attacker has); each battle moves it. Allies who answered the call fight beside
- * each side.
+ * A war: who attacked whom, for which title ({@link Goal}), since when, which of its counties have been taken, the
+ * county fought over next and where (the battle site, on its border), and each side's army. Allies who answered the call
+ * lend half their soldiers to their side's army.
  */
 public final class War {
     final long id;
     final int attacker;
     final int defender;
-    /** The province fought over: the defender's, beside the attacker's land. */
-    final int goal;
+    final Goal goal;
     final long started;
-    int score;
+    final List<Integer> taken = new ArrayList<>();
+    /** The county the next battle is for, and where it is fought. */
+    int target = -1;
+    double siteX;
+    double siteZ;
+    @Nullable
+    Army attackerArmy;
+    @Nullable
+    Army defenderArmy;
     int battles;
     final List<Integer> attackerAllies = new ArrayList<>();
     final List<Integer> defenderAllies = new ArrayList<>();
 
-    War(long id, int attacker, int defender, int goal, long started) {
+    War(long id, int attacker, int defender, Goal goal, long started) {
         this.id = id;
         this.attacker = attacker;
         this.defender = defender;
@@ -43,7 +51,7 @@ public final class War {
         return defender;
     }
 
-    public int goal() {
+    public Goal goal() {
         return goal;
     }
 
@@ -51,8 +59,25 @@ public final class War {
         return started;
     }
 
-    public int score() {
-        return score;
+    public List<Integer> taken() {
+        return taken;
+    }
+
+    public int target() {
+        return target;
+    }
+
+    public double siteX() {
+        return siteX;
+    }
+
+    public double siteZ() {
+        return siteZ;
+    }
+
+    @Nullable
+    public Army army(boolean attacking) {
+        return attacking ? attackerArmy : defenderArmy;
     }
 
     public int battles() {
@@ -85,9 +110,19 @@ public final class War {
         tag.putLong("id", id);
         tag.putInt("attacker", attacker);
         tag.putInt("defender", defender);
-        tag.putInt("goal", goal);
+        tag.putBoolean("duchy", goal.duchy());
+        tag.putInt("title", goal.index());
         tag.putLong("started", started);
-        tag.putInt("score", score);
+        tag.put("taken", new IntArrayTag(taken));
+        tag.putInt("target", target);
+        tag.putDouble("siteX", siteX);
+        tag.putDouble("siteZ", siteZ);
+        if (attackerArmy != null) {
+            tag.put("attackerArmy", attackerArmy.save());
+        }
+        if (defenderArmy != null) {
+            tag.put("defenderArmy", defenderArmy.save());
+        }
         tag.putInt("battles", battles);
         tag.put("attackerAllies", new IntArrayTag(attackerAllies));
         tag.put("defenderAllies", new IntArrayTag(defenderAllies));
@@ -95,8 +130,16 @@ public final class War {
     }
 
     static War load(CompoundTag tag) {
-        War w = new War(tag.getLong("id"), tag.getInt("attacker"), tag.getInt("defender"), tag.getInt("goal"), tag.getLong("started"));
-        w.score = tag.getInt("score");
+        War w = new War(tag.getLong("id"), tag.getInt("attacker"), tag.getInt("defender"), new Goal(tag.getBoolean("duchy"), tag.getInt("title")),
+                tag.getLong("started"));
+        for (int c : tag.getIntArray("taken")) {
+            w.taken.add(c);
+        }
+        w.target = tag.getInt("target");
+        w.siteX = tag.getDouble("siteX");
+        w.siteZ = tag.getDouble("siteZ");
+        w.attackerArmy = tag.contains("attackerArmy") ? Army.load(tag.getCompound("attackerArmy")) : null;
+        w.defenderArmy = tag.contains("defenderArmy") ? Army.load(tag.getCompound("defenderArmy")) : null;
         w.battles = tag.getInt("battles");
         for (int n : tag.getIntArray("attackerAllies")) {
             w.attackerAllies.add(n);

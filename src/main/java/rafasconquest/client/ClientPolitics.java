@@ -11,7 +11,7 @@ import java.util.Map;
  * into the client's world map as they come (and again when the map itself arrives), so it is drawn as the land now lies.
  */
 public final class ClientPolitics {
-    private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), Map.of(), List.of());
+    private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), List.of(), Map.of(), List.of());
 
     private ClientPolitics() {
     }
@@ -33,9 +33,21 @@ public final class ClientPolitics {
         });
     }
 
-    /** Each war: attacker, defender, the province fought over, and its score (to 100 for the attacker). */
+    /** Each war: attacker, defender, duchy? 1 : 0, the title, the county fought for next, counties taken, counties in all, site x, z. */
     public static List<int[]> wars() {
         return view.wars();
+    }
+
+    /** Each army in the field: nation, soldiers, x, z, mustering? 1 : 0, which war. */
+    public static List<int[]> armies() {
+        return view.armies();
+    }
+
+    /** A war's title by name: "County of Mill", "Duchy of Shukai". */
+    public static String titleName(BaseMap map, boolean duchy, int index) {
+        rafasconquest.core.TitleMap t = map.titles();
+        return duchy ? map.titleName(rafasconquest.core.TitleMap.Tier.DUCHY, t.duchySeat()[index])
+                : map.titleName(rafasconquest.core.TitleMap.Tier.COUNTY, t.countySeat()[index]);
     }
 
     public static List<int[]> alliances() {

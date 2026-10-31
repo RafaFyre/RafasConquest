@@ -87,14 +87,11 @@ public class TitleLayer implements MapLayer {
                 hoveredProvince = -1;
             }
         }
-        // The provinces fought over: a red cross on each, naming the war.
-        for (int[] war : rafasconquest.client.ClientPolitics.wars()) {
-            if (war[2] < 0 || war[2] >= map.base.centres().size()) {
-                continue;
-            }
-            ProvinceMap.Centre c = map.base.centres().get(war[2]);
-            int x = (int) view.screenX(c.x());
-            int y = (int) view.screenY(c.z());
+        // Each war's battle site: a red cross, naming the war; and the armies, a pennant each in their nation's colour.
+        java.util.List<int[]> wars = rafasconquest.client.ClientPolitics.wars();
+        for (int[] war : wars) {
+            int x = (int) view.screenX(war[7]);
+            int y = (int) view.screenY(war[8]);
             if (!view.near(x, y, 10)) {
                 continue;
             }
@@ -107,8 +104,25 @@ public class TitleLayer implements MapLayer {
                 g.fill(x + d, y - d, x + d + 1, y - d + 1, 0xFFD02020);
             }
             if (Math.abs(mouseX - x) <= 6 && Math.abs(mouseY - y) <= 6) {
-                hovered = "War over " + map.base.names().get(war[2]) + ": " + map.base.nations().get(war[0]).name() + " against "
-                        + map.base.nations().get(war[1]).name() + " (" + (war[3] > 0 ? "+" : "") + war[3] + ")";
+                hovered = "Battle for the " + rafasconquest.client.ClientPolitics.titleName(map.base, false, war[4]) + ": "
+                        + map.base.nations().get(war[0]).name() + " against " + map.base.nations().get(war[1]).name() + ", for the "
+                        + rafasconquest.client.ClientPolitics.titleName(map.base, war[2] == 1, war[3]) + " (" + war[5] + " of " + war[6] + " counties taken)";
+                hoveredProvince = -1;
+            }
+        }
+        for (int[] army : rafasconquest.client.ClientPolitics.armies()) {
+            int x = (int) view.screenX(army[2]);
+            int y = (int) view.screenY(army[3]);
+            if (!view.near(x, y, 8) || army[0] >= map.base.nations().size()) {
+                continue;
+            }
+            int colour = 0xFF000000 | map.color(map.base.nations().get(army[0]).id());
+            g.fill(x - 1, y - 7, x + 1, y + 3, OUTLINE); // the pole
+            g.fill(x + 1, y - 7, x + 7, y - 2, OUTLINE);
+            g.fill(x + 1, y - 6, x + 6, y - 3, colour);
+            if (Math.abs(mouseX - x - 3) <= 5 && Math.abs(mouseY - y + 3) <= 6) {
+                hovered = "Army of " + map.base.nations().get(army[0]).name() + ": " + String.format("%,d", army[1]) + " soldiers, "
+                        + (army[4] == 1 ? "mustering" : "on the march");
                 hoveredProvince = -1;
             }
         }

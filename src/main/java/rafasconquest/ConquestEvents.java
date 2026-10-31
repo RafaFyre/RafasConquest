@@ -115,6 +115,7 @@ public final class ConquestEvents {
             BattleMap.tick();
             rafasconquest.npc.Townsfolk.tick(event.getServer());
             rafasconquest.peerage.QuestProgress.tick(event.getServer());
+            rafasconquest.politics.Wars.tick(event.getServer());
         }
     }
 

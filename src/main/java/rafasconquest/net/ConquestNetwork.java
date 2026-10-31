@@ -267,13 +267,15 @@ public final class ConquestNetwork {
     }
 
     /**
-     * Server → client: the nations' politics: each war (attacker, defender, the province fought over, its score), the
-     * alliances (pairs), the provinces conquered and by whom, and the latest news (day, text).
+     * Server → client: the nations' politics: each war (attacker, defender, duchy? 1 : 0, the title, the county fought for
+     * next, counties taken, counties in all, the battle site x and z), the armies in the field (nation, soldiers, x, z,
+     * mustering? 1 : 0, which war), the alliances (pairs), the provinces conquered and by whom, and the latest news.
      */
-    public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
+    public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> armies, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
                                java.util.List<String> news) {
         void write(FriendlyByteBuf buf) {
             buf.writeCollection(wars, FriendlyByteBuf::writeVarIntArray);
+            buf.writeCollection(armies, FriendlyByteBuf::writeVarIntArray);
             buf.writeCollection(alliances, FriendlyByteBuf::writeVarIntArray);
             buf.writeMap(conquered, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeVarInt);
             buf.writeCollection(news, FriendlyByteBuf::writeUtf);
@@ -281,6 +283,7 @@ public final class ConquestNetwork {
 
         static PoliticsView read(FriendlyByteBuf buf) {
             return new PoliticsView(buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readVarIntArray),
+                    buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf));
         }
     }

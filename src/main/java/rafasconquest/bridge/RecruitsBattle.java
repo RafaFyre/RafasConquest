@@ -3323,7 +3323,8 @@ public final class RecruitsBattle {
         reportCalibration();
         merits(outcome);
         victory(outcome);
-        rafasconquest.politics.Wars.battleOver(sides[0].faction.id(), sides[1].faction.id(), outcome.winner());
+        rafasconquest.politics.Wars.battleOver(sides[0].faction.id(), sides[1].faction.id(), outcome.winner(),
+                field.army(0).alive() / (double) Math.max(1, field.army(0).started()), field.army(1).alive() / (double) Math.max(1, field.army(1).started()));
     }
 
     /**

@@ -4,7 +4,7 @@ import rafasconquest.people.Person;
 
 import java.util.Set;
 
-/** What the nations' politics need to know of the world: who holds what, who rules, and how strong each nation is. */
+/** What the nations' politics need to know of the world: who holds what, the titles, who rules, and their armies. */
 public interface Lands {
     int nations();
 
@@ -30,10 +30,24 @@ public interface Lands {
     /** The province a nation's seat is in. */
     int seat(int nation);
 
+    /** Where a nation's capital stands, (x, z): its army musters there. */
+    int[] capital(int nation);
+
     Set<Integer> neighbours(int province);
 
-    /** How many soldiers a nation can field. */
-    int soldiers(int nation);
+    /** The county a province lies in. */
+    int county(int province);
+
+    int counties();
+
+    /** The duchy a county lies in. */
+    int duchy(int county);
+
+    /** A title's name: "County of Mill", "Duchy of Shukai". */
+    String titleName(Goal goal);
+
+    /** The most soldiers a nation can raise, its people and land as they now are. */
+    int levy(int nation);
 
     String nationName(int nation);
 

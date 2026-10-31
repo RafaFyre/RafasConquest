@@ -812,35 +812,54 @@ which sanctum they trained at.
 
 ## Wars
 
-The nations act on their own (`politics/`), day by day (each new day by the overworld's clock; at most three at once
-if the clock jumps; never for days caught up while the server was off). Kept with the world (`PoliticsData`).
-- **Each day**, every war fights, then every ruler not at war makes **one decision** (`Politics.decide`): war on a
-  neighbour, an alliance with one, or (most days) nothing. War is likelier for a warlike ruler (their Martial, and
-  Ambitious, Wrathful, Brave, Arrogant, Impatient, Zealous or Callous; Content, Craven, Calm, Compassionate, Patient
-  or Forgiving the other way), against a weaker neighbour (up to three times as likely), and one whose ruler they
-  dislike. An alliance is likelier for a diplomat, with a ruler they like, and is sworn if the other doesn't dislike them.
+The nations act on their own (`politics/`), kept with the world (`PoliticsData`): decisions each new day (by the
+overworld's clock; at most three at once if the clock jumps; never for days caught up while the server was off), and
+the armies marching on every five seconds.
+- **Each day** every ruler not at war makes **one decision** (`Politics.decide`): a war for a title, an alliance with a
+  neighbour, or (most days) nothing. War is likelier for a warlike ruler (their Martial, and Ambitious, Wrathful,
+  Brave, Arrogant, Impatient, Zealous or Callous; Content, Craven, Calm, Compassionate, Patient or Forgiving the other
+  way), against a weaker neighbour (by manpower, up to three times as likely), against a ruler they dislike, and above
+  all for a title that would make their land whole. An alliance is likelier for a diplomat, with a ruler they like.
   Sword sanctums never go to war.
-- **A war** is over one of the defender's provinces beside the attacker's land (never its seat). The defender's
-  allies come to its defence; the attacker's may join it. Each side fields a twentieth of its people (its leader's
-  whole army, half of each ally's), shrunk or grown with the land it has lost or won.
-- **Battles**: most days of a war (60 %) bring a battle on the border between the province fought over and the
-  attacker's land. **Far from players** it is settled by the armies' strength (the defender's counting 15 % more on
-  its own ground), moving the war's score 12 to 24. **Within 400 blocks of a player** it is **fought for real** with
-  the battle system (up to 1,000 a side; the armies deploy, and it begins when their countdown ends), and its result
-  moves the score 25.
-- **Peace**: a side whose score reaches 100 wins: the attacker takes the province (its city's guards, recruiters and
-  banners now its own; its nobles leave their nation's court, and their pages say they lost it); the defender throws
-  them back. A war still going after 30 days ends: the attacker takes the province if 50 ahead, else nothing changes
-  hands. Every peace brings a 15-day truce between the two sides.
-- **Muster**: when their nation goes to war, its enlisted players are told, and where its army musters (its capital).
-  Mustering itself (a day to gather, then a teleport) is still to come.
-- **Heralds**: each morning everyone hears the day before's news (a war declared, a battle, an alliance, a peace).
-- **On the map**, a red cross marks each province fought over (hovering names the war and its score), and conquered
-  provinces are drawn in their new nation's colour. **The nation page** lists its wars (attacking or defending, and
-  how each goes) and its allies, or that it is at peace.
-- `/pve politics` reports the wars, alliances, conquests and latest news; `/pve politics day [days]` runs that many
-  days of politics at once; `/pve politics war <attacker> <defender>` declares a war now (nation names; quote those
-  with spaces).
+- **War goals** (`Goal`): a **title**, for now one of the two smallest: a **county** or a **duchy**. Each county and
+  duchy beside or within a nation's land, held (mostly) by another nation, is a claim, unless it holds that nation's
+  seat. Nations want their land whole, with no islands or holes: a claim is wanted the more the title's land is
+  enclosed by theirs (a hole or an enclave), the more it would join separate pieces of their land, and the more of it
+  they already hold.
+- **Armies**: a nation's **levy** is a twentieth of its people (shrunk or grown with the land it has lost or won); its
+  **manpower** is its levy less its dead not yet made good, less its armies in the field. Each side raises an army of
+  all its leader's manpower and half of each ally's, **musters it a day at its capital**, then **marches** (2,000 blocks
+  a day) to the **battle site**: the border of the county to be taken next (the defender's county of the title nearest
+  the attacker's land).
+- **Battles**: when both armies have arrived they fight. **Far from players** the battle is settled by the armies'
+  strength (the defender's counting 15 % more on its own ground): the loser loses 35 to 65 % of its army, the winner 10
+  to 25 %. **Within 400 blocks of a player** it is **fought for real** with the battle system (up to 1,000 a side,
+  scaled), and the share of each army left standing is the share that survives. The dead are lost to the nation's
+  manpower; 2 % of its levy is made good each day.
+- **Each attacker victory takes that county**. Then each ruler decides:
+  - **The beaten defender** may **sue for peace**, giving up the rest of the title rather than raise another army and
+    risk more of its people: likelier the less manpower it has left, the stronger the attacker's army, the less of the
+    title is left to lose, and the meeker its ruler (Craven, Compassionate, Calm, Content; Wrathful, Arrogant,
+    Vengeful and Brave hold out). One with too few people to raise an army must. Otherwise it raises another army,
+    which musters and marches to the next county's border, while the victors rest a quarter-day and march on.
+  - **The winning attacker** may be content with what it has taken and make peace (rarely; likelier if Content).
+  - **The whole title taken**, the war is won.
+- **An attacker beaten** may sue for peace: **no more land changes hands** (what it took earlier it keeps). Otherwise
+  it raises another army and marches again; the defender's holds the field. One that can't raise an army makes peace.
+- A war still going after 120 days ends with each side keeping what it holds. Every peace brings a 15-day truce.
+- **Conquest**: a county taken goes to the attacker with all it holds: the map, its city's guards, recruiters and
+  banners (once its chunks reload), and its nobles, who leave their nation's court (their pages say they lost it).
+- **Muster**: when a side raises an army, its enlisted players are called, with a **[Muster]** button
+  (`/pve muster`): answering takes them to their army (at its capital, or on the march), and when it reaches the
+  field they are brought there, 70 blocks behind their own lines, so the battle is fought for real with them in it.
+- **Heralds**: each morning everyone hears the day before's news.
+- **On the map**, a red cross marks each war's battle site (hovering names the war, its title and how many counties
+  are taken), and each army is a pennant in its nation's colour, moving as it marches (hovering gives its soldiers,
+  mustering or on the march). Conquered provinces are drawn in their new nation's colour. **The nation page** lists
+  its wars (the title, counties taken, its army) and its allies, or that it is at peace.
+- `/pve politics` reports the wars and armies, alliances, conquests and latest news; `/pve politics day [days]` runs
+  that many days at once (armies marching through them); `/pve politics war <attacker> <defender>` declares a war now,
+  for the title the attacker wants most of the defender's (nation names; quote those with spaces).
 
 ## Organizations: the sword sanctums
 

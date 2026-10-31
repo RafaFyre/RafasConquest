@@ -10,8 +10,8 @@ import java.util.TreeSet;
 
 /**
  * The world as the politics see it, from the world map: the provinces and who holds them (the map's own record, which
- * conquests change in place), which touch which, the realm's rulers, and each nation's army: a twentieth of its people,
- * shrunk by the share of its land it has lost (or grown by what it has won).
+ * conquests change in place), which touch which, the titles, the realm's rulers, and each nation's levy: a twentieth of
+ * its people, shrunk by the share of its land it has lost (or grown by what it has won).
  */
 public final class MapLands implements Lands {
     /** A nation fields one soldier for this many of its people. */
@@ -90,12 +90,40 @@ public final class MapLands implements Lands {
     }
 
     @Override
+    public int[] capital(int nation) {
+        BaseMap.Nation n = map.nations().get(nation);
+        return new int[]{n.x(), n.z()};
+    }
+
+    @Override
+    public int county(int province) {
+        return map.titles().county()[province];
+    }
+
+    @Override
+    public int counties() {
+        return map.titles().counties();
+    }
+
+    @Override
+    public int duchy(int county) {
+        return map.titles().duchy()[county];
+    }
+
+    @Override
+    public String titleName(Goal goal) {
+        rafasconquest.core.TitleMap t = map.titles();
+        return goal.duchy() ? map.titleName(rafasconquest.core.TitleMap.Tier.DUCHY, t.duchySeat()[goal.index()])
+                : map.titleName(rafasconquest.core.TitleMap.Tier.COUNTY, t.countySeat()[goal.index()]);
+    }
+
+    @Override
     public Set<Integer> neighbours(int province) {
         return adjacent.get(province);
     }
 
     @Override
-    public int soldiers(int nation) {
+    public int levy(int nation) {
         int people = map.realm().demographics(nation).population();
         int start = Math.max(1, heldAtStart[nation]);
         return Math.max(20, (int) ((long) people * held(nation) / start / LEVY));

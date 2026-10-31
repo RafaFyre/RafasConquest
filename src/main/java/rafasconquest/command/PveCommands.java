@@ -93,6 +93,8 @@ public final class PveCommands {
                                 .then(Commands.argument("noble", com.mojang.brigadier.arguments.BoolArgumentType.bool())
                                         .executes(ctx -> nobleSet(ctx, EntityArgument.getPlayer(ctx, "player"),
                                                 com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "noble"))))))
+                .then(Commands.literal("muster")
+                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.muster(ctx.getSource().getPlayerOrException()))))
                 .then(Commands.literal("politics")
                         .executes(ctx -> say(ctx, rafasconquest.politics.Wars.report(ctx.getSource().getServer())))
                         .then(Commands.literal("day").requires(source -> source.hasPermission(2))
