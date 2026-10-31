@@ -74,6 +74,11 @@ public final class Talk {
                         : next + " more renown and you will be a " + Rank.of(rank.number() + 1).title() + "."));
                 lines.add("Read the board for the army's work, then come to me.");
                 questOptions(peer, npc, Quest.OFFICER, options, lines);
+                String war = rafasconquest.politics.Wars.warCampOf(player.server, nation);
+                if (war != null) {
+                    lines.add("We are at war: our army fights for the " + war + ". I can send you to its camp.");
+                    options.add(new Option("camp", "Go to the war camp"));
+                }
             }
         } else if (map != null) {
             Person p = map.realm().people().get(npc.person());
@@ -158,6 +163,12 @@ public final class Talk {
             player.sendSystemMessage(Component.literal(npc.getName().getString() + " knights you. Rise, " + Names.player(peer.name, peer.title) + "."));
         } else if (key.equals("land")) {
             land(player, npc, peerage, peer);
+        } else if (key.equals("camp")) {
+            Faction nation = nationOf(npc);
+            if (nation != null) {
+                player.sendSystemMessage(Component.literal(rafasconquest.politics.Wars.toWarCamp(player, nation) + "."));
+            }
+            return; // they have left the recruiter
         } else {
             return;
         }

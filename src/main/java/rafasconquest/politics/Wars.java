@@ -16,8 +16,10 @@ import rafasconquest.map.BaseMap;
 import rafasconquest.sim.ConquestServer;
 import rafasconquest.worldgen.ConquestRuntime;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -340,6 +342,111 @@ public final class Wars {
         MusterBars.update(server, map, data.politics);
         PoliticsSync.toAll(server);
         return ended == 0 ? "No army is mustering" : ended + " army(ies) done mustering: they march now";
+    }
+
+    /**
+     * Sets every war's armies (or only those of the wars {@code nation} fights in) on their battle site at once, done
+     * mustering: they fight within seconds, for real if a player is near (for {@code /pve politics muster field}).
+     */
+    public static String toField(MinecraftServer server, @Nullable String nation) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return "No world map yet";
+        }
+        int only = nation == null ? -1 : nationNamed(map, nation);
+        if (nation != null && only < 0) {
+            return "No such nation";
+        }
+        PoliticsData data = PoliticsData.get(server);
+        double now = now(server);
+        List<String> fields = new ArrayList<>();
+        for (War war : data.politics.wars()) {
+            if (only >= 0 && !war.side(true).contains(only) && !war.side(false).contains(only)) {
+                continue;
+            }
+            Army a = war.army(true);
+            Army d = war.army(false);
+            if (a == null || d == null) {
+                continue; // a side has no army to send
+            }
+            for (Army army : new Army[]{a, d}) {
+                army.readyAt = Math.min(army.readyAt, now);
+                army.stops.clear();
+                army.x = war.siteX();
+                army.z = war.siteZ();
+            }
+            fields.add(MapLands.of(map).titleName(new Goal(false, war.target())) + " (" + (int) war.siteX() + ", " + (int) war.siteZ() + ")");
+        }
+        data.setDirty();
+        MusterBars.update(server, map, data.politics);
+        PoliticsSync.toAll(server);
+        return fields.isEmpty() ? "No war has both its armies in the field"
+                : "The armies stand on the field: " + String.join("; ", fields) + ". They fight within seconds, for real if a player is near";
+    }
+
+    /** The war a nation fights in with an army in the field, and on which side; null if none. */
+    @Nullable
+    private static War warOf(Politics politics, int nation, boolean[] attacking) {
+        for (War war : politics.wars()) {
+            for (boolean side : new boolean[]{true, false}) {
+                if (war.side(side).contains(nation) && war.army(side) != null) {
+                    attacking[0] = side;
+                    return war;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The battle a recruiter's nation fights now, for the recruiter to offer to send a player there; null if none. */
+    @Nullable
+    public static String warCampOf(MinecraftServer server, Faction nation) {
+        BaseMap map = ConquestRuntime.map();
+        int n = map == null ? -1 : nationIndex(map, nation);
+        War war = n < 0 ? null : warOf(PoliticsData.get(server).politics, n, new boolean[1]);
+        return war == null ? null : MapLands.of(map).titleName(new Goal(false, war.target()));
+    }
+
+    /**
+     * Sends a player who serves {@code nation} to its war camp: the command tent of their side's camp if its battle is
+     * being fought now, else behind their side's lines on the battle site. Either way they muster with its army, and go
+     * with it into battle.
+     */
+    public static String toWarCamp(ServerPlayer player, Faction nation) {
+        BaseMap map = ConquestRuntime.map();
+        int n = map == null ? -1 : nationIndex(map, nation);
+        boolean[] attacking = new boolean[1];
+        War war = n < 0 ? null : warOf(PoliticsData.get(player.server).politics, n, attacking);
+        if (war == null) {
+            return "There is no war to send you to";
+        }
+        mustered.put(player.getUUID(), new long[]{war.id(), attacking[0] ? 1 : 0});
+        ServerLevel level = player.server.overworld();
+        // The battle is fought by the war's leaders' armies: an ally's player goes to its leader's camp.
+        ConquestServer conquest = ConquestServer.get();
+        Faction leader = conquest == null ? null
+                : conquest.data().faction(map.nations().get(attacking[0] ? war.attacker() : war.defender()).id());
+        net.minecraft.world.phys.Vec3 tent = pendingWar == war.id() && leader != null ? RecruitsBattle.commandTent(leader.id()) : null;
+        String county = MapLands.of(map).titleName(new Goal(false, war.target()));
+        if (tent != null) {
+            player.teleportTo(level, tent.x, tent.y, tent.z, player.getYRot(), player.getXRot());
+            return "You arrive at the war camp, before the command tent. The battle for the " + county + " is being fought";
+        }
+        double[] axis = axis(map, war);
+        double side = attacking[0] ? -1 : 1;
+        teleport(player, level, (int) Math.round(war.siteX() + axis[0] * BEHIND_LINES * side),
+                (int) Math.round(war.siteZ() + axis[1] * BEHIND_LINES * side));
+        return "You arrive behind your lines on the field of the " + county + ". You will fight with your army when it comes";
+    }
+
+    /** A faction's nation on the map, by its id; -1 if it is none. */
+    private static int nationIndex(BaseMap map, Faction nation) {
+        for (int i = 0; i < map.nations().size(); i++) {
+            if (map.nations().get(i).id().equals(nation.id())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** The wars, alliances, conquests and latest news, for {@code /pve politics}. */

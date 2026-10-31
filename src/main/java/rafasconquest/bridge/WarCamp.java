@@ -167,6 +167,11 @@ final class WarCamp {
         return Math.abs(r) < half && Math.abs(f) < half && p.getY() >= middle.getY() - 1 && p.getY() <= middle.getY() + height;
     }
 
+    /** The way into the command tent, between its guards: where a newcomer to the camp arrives. */
+    Vec3 entrance() {
+        return groundSpot(0, half + 2);
+    }
+
     private Vec3 groundSpot(int r, int f) {
         BlockPos p = local(r, f, 0);
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ());

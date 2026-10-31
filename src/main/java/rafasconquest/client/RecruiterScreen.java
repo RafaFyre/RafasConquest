@@ -31,7 +31,7 @@ public class RecruiterScreen extends Screen {
         for (Talk.Option option : view.options()) {
             addRenderableWidget(Button.builder(Component.literal(option.label()), b -> {
                 ConquestNetwork.choose(view.entity(), option.key());
-                if (option.key().equals("bye")) {
+                if (option.key().equals("bye") || option.key().equals("camp")) { // the camp: they are sent away
                     onClose();
                 }
             }).bounds(x, y, WIDTH, 20).build());

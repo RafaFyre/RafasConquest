@@ -3528,6 +3528,20 @@ public final class RecruitsBattle {
         }
     }
 
+    /** The way into a faction's command tent in the battle on now; null if it has no camp up. */
+    @Nullable
+    public static Vec3 commandTent(UUID faction) {
+        if (current == null || current.over) {
+            return null;
+        }
+        for (int side = 0; side < 2; side++) {
+            if (current.sides[side].faction.id().equals(faction) && current.camps[side] != null) {
+                return current.camps[side].entrance();
+            }
+        }
+        return null;
+    }
+
     /** The camp a player of a wing sleeps in: their wing's, else the general's. */
     @Nullable
     private WarCamp campOf(int side, int wing) {
