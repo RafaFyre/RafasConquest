@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RafasConquest</title>
+<meta name="description" content="A PvE addon for Villager Recruits: AI-run nations that grow their armies from territory. Forge 1.20.1.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4ecd8;
+    --panel: #fbf6ea;
+    --ink: #2b2118;
+    --muted: #6b5a47;
+    --line: #d9c9a8;
+    --accent: #8b1e1e;
+    --accent-ink: #fff8ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1612;
+      --panel: #251e18;
+      --ink: #ece2cf;
+      --muted: #b3a38c;
+      --line: #3d3228;
+      --accent: #c9443a;
+      --accent-ink: #fff8ec;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 19px/1.6 "EB Garamond", Georgia, serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  header { padding: 72px 0 48px; text-align: center; border-bottom: 1px solid var(--line); }
+  h1, h2, h3 { font-family: Cinzel, Georgia, serif; line-height: 1.2; margin: 0; }
+  h1 { font-size: clamp(2.4rem, 7vw, 4rem); letter-spacing: .04em; }
+  .tag { color: var(--muted); font-size: 1.2rem; margin: 12px auto 28px; max-width: 34em; }
+  .buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 12px 22px; border-radius: 6px; text-decoration: none;
+    font-family: Cinzel, Georgia, serif; font-weight: 600; font-size: .95rem;
+    border: 1px solid var(--accent); color: var(--accent);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .meta { margin-top: 18px; color: var(--muted); font-size: .95rem; }
+  section { padding: 48px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 1.6rem; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .card h3 { font-size: 1.05rem; margin-bottom: 6px; color: var(--accent); }
+  .card p { margin: 0; }
+  ol, ul { padding-left: 1.3em; }
+  li { margin: 6px 0; }
+  code { font-size: .85em; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  a { color: var(--accent); }
+  footer { padding: 32px 0 48px; color: var(--muted); font-size: .9rem; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>RafasConquest</h1>
+    <p class="tag">A PvE addon for Villager Recruits: AI-run nations that hold land, raise armies from their territory, and go to war with each other and with you.</p>
+    <div class="buttons">
+      <a class="btn primary" id="download" href="#">Download latest</a>
+      <a class="btn" id="source" href="#">Source on GitHub</a>
+    </div>
+    <p class="meta">Pre-alpha · Minecraft 1.20.1 · Forge 47.4+ · Java 17</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What it adds</h2>
+    <div class="grid">
+      <div class="card"><h3>Living nations</h3><p>Nations make decisions every day: they muster armies, march on their neighbours and declare wars, whether or not you're watching.</p></div>
+      <div class="card"><h3>Battles</h3><p>Armies of up to 100,000 soldiers fight in formation. Large armies split into a centre and two wings, each with its own orders.</p></div>
+      <div class="card"><h3>Land titles</h3><p>The world is divided into counties, duchies, kingdoms and empires, each with a seat city built into the terrain.</p></div>
+      <div class="card"><h3>Characters and faiths</h3><p>Every hold has a lord with stats, a culture and a faith. Sword Saints, Kings and Gods train at the sword sanctums.</p></div>
+      <div class="card"><h3>World map</h3><p>A map of the realm showing borders, roads, armies on the march and their war camps.</p></div>
+      <div class="card"><h3>Roads and cities</h3><p>Cobble, gravel and dirt roads with bridges and signposts link walled cities, towns, castles and hamlets.</p></div>
+      <div class="card"><h3>Peerage</h3><p>Climb the military and noble ladders: enlist with a nation, take quests from the boards, and earn a grant of land.</p></div>
+      <div class="card"><h3>Bigger world</h3><p>An optional horizontal stretch makes continents, mountains and biomes up to four times wider.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Install</h2>
+    <ol>
+      <li>Install <a href="https://files.minecraftforge.net/net/minecraftforge/forge/index_1.20.1.html">Forge 1.20.1</a> (47.4 or newer).</li>
+      <li>Put <a href="https://modrinth.com/mod/villager-recruits">Villager Recruits</a> 1.15.2 in your <code>mods</code> folder. It's required.</li>
+      <li>Download the latest RafasConquest jar and put it in <code>mods</code> too.</li>
+      <li>Optional: <a href="https://www.curseforge.com/minecraft/mc-mods/epic-knights-shields-armor-and-weapons">Epic Knights</a> gives each culture its own armour, and <a href="https://modrinth.com/mod/distanthorizons">Distant Horizons</a> and <a href="https://modrinth.com/mod/embeddium">Embeddium</a> let you see cities from far away.</li>
+    </ol>
+    <p>When you make a new world, the <strong>RafasConquest</strong> button at the top right of the world creation screen holds the world's options.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Status</h2>
+    <p>RafasConquest is in pre-alpha. Things change daily and saves may not carry over between versions. Every build is listed on the <a id="releases" href="#">releases page</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">By Rafael · Built on <a href="https://modrinth.com/mod/villager-recruits">Villager Recruits</a></div>
+</footer>
+
+<script>
+  // On owner.github.io/repo, link to github.com/owner/repo.
+  (function () {
+    var owner = location.hostname.split(".")[0];
+    var repo = location.pathname.split("/").filter(Boolean)[0] || "RafasConquest";
+    var base = "https://github.com/" + owner + "/" + repo;
+    document.getElementById("source").href = base;
+    document.getElementById("releases").href = base + "/releases";
+    document.getElementById("download").href = base + "/releases/latest";
+  })();
+</script>
+</body>
+</html>
