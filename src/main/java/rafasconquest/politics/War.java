@@ -28,6 +28,9 @@ public final class War {
     @Nullable
     Army defenderArmy;
     int battles;
+    /** Each side's general, chosen (a person's index), or -1: the best at war, by Martial, as each battle finds them. */
+    int attackerGeneral = -1;
+    int defenderGeneral = -1;
     final List<Integer> attackerAllies = new ArrayList<>();
     final List<Integer> defenderAllies = new ArrayList<>();
 
@@ -80,6 +83,11 @@ public final class War {
         return attacking ? attackerArmy : defenderArmy;
     }
 
+    /** A side's chosen general (a person's index), or -1. */
+    public int general(boolean attacking) {
+        return attacking ? attackerGeneral : defenderGeneral;
+    }
+
     public int battles() {
         return battles;
     }
@@ -124,6 +132,8 @@ public final class War {
             tag.put("defenderArmy", defenderArmy.save());
         }
         tag.putInt("battles", battles);
+        tag.putInt("attackerGeneral", attackerGeneral);
+        tag.putInt("defenderGeneral", defenderGeneral);
         tag.put("attackerAllies", new IntArrayTag(attackerAllies));
         tag.put("defenderAllies", new IntArrayTag(defenderAllies));
         return tag;
@@ -141,6 +151,8 @@ public final class War {
         w.attackerArmy = tag.contains("attackerArmy") ? Army.load(tag.getCompound("attackerArmy")) : null;
         w.defenderArmy = tag.contains("defenderArmy") ? Army.load(tag.getCompound("defenderArmy")) : null;
         w.battles = tag.getInt("battles");
+        w.attackerGeneral = tag.contains("attackerGeneral") ? tag.getInt("attackerGeneral") : -1;
+        w.defenderGeneral = tag.contains("defenderGeneral") ? tag.getInt("defenderGeneral") : -1;
         for (int n : tag.getIntArray("attackerAllies")) {
             w.attackerAllies.add(n);
         }

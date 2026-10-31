@@ -860,6 +860,10 @@ the armies marching on every five seconds.
 - `/pve politics` reports the wars and armies, alliances, conquests and latest news; `/pve politics day [days]` runs
   that many days at once (armies marching through them); `/pve politics war <attacker> <defender>` declares a war now,
   for the title the attacker wants most of the defender's (nation names, suggested as you type; quoted where they have spaces).
+  Two more, optional, name each side's **general**: one of that nation's characters (suggested best at war first), or
+  `best`. Without one, each battle puts the nation's best at war (by Martial) in command, as before; a named general
+  leads all the war's real battles, the best of the rest serving as Marshals. Generals aren't kept anywhere else: each
+  battle picks its officers afresh from the realm's characters (`RecruitsBattle.officers`).
 
 ## Organizations: the sword sanctums
 

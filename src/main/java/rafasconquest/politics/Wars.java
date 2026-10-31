@@ -158,7 +158,7 @@ public final class Wars {
         String county = MapLands.of(map).titleName(new Goal(false, war.target()));
         try {
             RecruitsBattle.start(server.overworld(), a, Math.max(20, (int) (attackers * scale)), d, Math.max(20, (int) (defenders * scale)),
-                    new BattlePlan.Point(war.siteX(), war.siteZ()), axis[0], axis[1],
+                    new BattlePlan.Point(war.siteX(), war.siteZ()), axis[0], axis[1], general(map, war, true), general(map, war, false),
                     line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] The armies of " + a.name() + " and "
                             + d.name() + " meet in battle for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
                     why -> {
@@ -172,6 +172,13 @@ public final class Wars {
         pendingWar = war.id();
         pendingAttacker = a.id();
         return true;
+    }
+
+    /** A side's chosen general by name, or null (the battle picks its best). */
+    @Nullable
+    private static String general(BaseMap map, War war, boolean attacking) {
+        int g = war.general(attacking);
+        return g < 0 || g >= map.realm().people().size() ? null : map.realm().people().get(g).name();
     }
 
     /** The players who mustered with a war's armies come with them to the battle, behind their own lines. */
@@ -358,8 +365,12 @@ public final class Wars {
         return days + " day(s) of politics run: " + Math.max(0, happened) + " event(s). /pve politics to see them";
     }
 
-    /** One nation declares war on another now, for a title of the other's beside its land (for {@code /pve politics war}). */
-    public static String forceWar(MinecraftServer server, String attacker, String defender) {
+    /**
+     * One nation declares war on another now, for a title of the other's beside its land (for {@code /pve politics war}),
+     * each side led by the general named (one of its own characters), or by its best at war if none is.
+     */
+    public static String forceWar(MinecraftServer server, String attacker, String defender, @Nullable String attackerGeneral,
+                                  @Nullable String defenderGeneral) {
         BaseMap map = ConquestRuntime.map();
         if (map == null) {
             return "No world map yet";
@@ -368,6 +379,11 @@ public final class Wars {
         int d = nationNamed(map, defender);
         if (a < 0 || d < 0 || a == d) {
             return "No such pair of nations";
+        }
+        int ga = attackerGeneral == null ? -1 : personNamed(map, a, attackerGeneral);
+        int gd = defenderGeneral == null ? -1 : personNamed(map, d, defenderGeneral);
+        if (attackerGeneral != null && ga < 0 || defenderGeneral != null && gd < 0) {
+            return "No character of that name serves " + map.nations().get(attackerGeneral != null && ga < 0 ? a : d).name();
         }
         MapLands lands = MapLands.of(map);
         Politics.Claim best = null;
@@ -381,10 +397,39 @@ public final class Wars {
         }
         PoliticsData data = PoliticsData.get(server);
         War war = data.politics.declare(a, d, best.goal(), (long) now(server), lands, new Random(), front(server, map));
+        if (war != null) {
+            war.attackerGeneral = ga;
+            war.defenderGeneral = gd;
+        }
         data.setDirty();
         PoliticsSync.toAll(server);
         return war == null ? map.nations().get(a).name() + " could not raise an army"
-                : map.nations().get(a).name() + " declared war on " + map.nations().get(d).name() + " for the " + lands.titleName(war.goal());
+                : map.nations().get(a).name() + " declared war on " + map.nations().get(d).name() + " for the " + lands.titleName(war.goal())
+                + (ga >= 0 ? "; " + map.realm().people().get(ga).name() + " leads the attack" : "")
+                + (gd >= 0 ? "; " + map.realm().people().get(gd).name() + " leads the defence" : "");
+    }
+
+    /** One of a nation's characters by name, or -1. */
+    private static int personNamed(BaseMap map, int nation, String name) {
+        java.util.List<rafasconquest.people.Person> people = map.realm().people();
+        for (int i = 0; i < people.size(); i++) {
+            if (people.get(i).nation() == nation && people.get(i).name().equalsIgnoreCase(name.trim())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** A nation's characters' names, best at war first (for the war command's suggestions). */
+    public static java.util.List<String> generals(String nation) {
+        BaseMap map = ConquestRuntime.map();
+        int n = map == null ? -1 : nationNamed(map, nation);
+        if (n < 0) {
+            return java.util.List.of();
+        }
+        return map.realm().people().stream().filter(p -> p.nation() == n)
+                .sorted(java.util.Comparator.comparingInt((rafasconquest.people.Person p) -> -p.stat(rafasconquest.people.Stat.MARTIAL)))
+                .map(rafasconquest.people.Person::name).toList();
     }
 
     private static int nationNamed(BaseMap map, String name) {

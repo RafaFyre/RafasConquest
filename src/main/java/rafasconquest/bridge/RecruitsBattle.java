@@ -528,6 +528,13 @@ public final class RecruitsBattle {
      */
     public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
                              Point centre, double axisX, double axisZ, Consumer<String> ready, Consumer<String> failed) {
+        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, null, null, ready, failed);
+    }
+
+    /** As above, with each side's general chosen by name (null: the best at war, by Martial). */
+    public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                             Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
+                             Consumer<String> ready, Consumer<String> failed) {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
         }
@@ -541,8 +548,8 @@ public final class RecruitsBattle {
         }
         int[] uniforms = BattlePlan.uniformColors(mainColor(first), mainColor(second));
         java.util.Random characters = new java.util.Random(level.random.nextLong());
-        Officers officersA = officers(first, characters);
-        Officers officersB = officers(second, characters);
+        Officers officersA = officers(first, characters, firstGeneral);
+        Officers officersB = officers(second, characters, secondGeneral);
         Side[] sides = {
                 new Side(first, teamA, uniforms[0], markColor(first), banner(level, first), horn(first),
                         officersA.general(), officersA.marshals(), officersA.traits()),
@@ -738,7 +745,7 @@ public final class RecruitsBattle {
      * three leading the wings, each officer's trait from their personality. Where the nation has too few characters, or
      * isn't on the map, the rest are made up as before.
      */
-    private static Officers officers(Faction faction, java.util.Random characters) {
+    private static Officers officers(Faction faction, java.util.Random characters, @Nullable String general) {
         BaseMap map = ConquestRuntime.map();
         List<Person> people = new ArrayList<>();
         if (map != null) {
@@ -753,6 +760,13 @@ public final class RecruitsBattle {
             }
         }
         people.sort(Comparator.comparingInt((Person p) -> -p.stat(Stat.MARTIAL)));
+        // A general chosen by name leads, whatever their Martial; the best of the rest are the Marshals.
+        if (general != null) {
+            people.stream().filter(p -> p.name().equalsIgnoreCase(general)).findFirst().ifPresent(chosen -> {
+                people.remove(chosen);
+                people.add(0, chosen);
+            });
+        }
         Trait[] traits = traits(characters);
         String[] names = new String[4];
         for (int i = 0; i < names.length; i++) {

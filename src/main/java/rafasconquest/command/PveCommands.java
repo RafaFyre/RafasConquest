@@ -105,9 +105,14 @@ public final class PveCommands {
                         .then(Commands.literal("war").requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
                                         .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
-                                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.forceWar(ctx.getSource().getServer(),
-                                                        com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "attacker"),
-                                                        com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "defender"))))))))
+                                                .executes(ctx -> war(ctx, null, null))
+                                                // Optionally each side's general: one of its characters, or "best" for its best at war.
+                                                .then(Commands.argument("attackerGeneral", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                        .suggests((ctx, b) -> suggestGenerals(ctx, b, "attacker"))
+                                                        .executes(ctx -> war(ctx, arg(ctx, "attackerGeneral"), null))
+                                                        .then(Commands.argument("defenderGeneral", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                                .suggests((ctx, b) -> suggestGenerals(ctx, b, "defender"))
+                                                                .executes(ctx -> war(ctx, arg(ctx, "attackerGeneral"), arg(ctx, "defenderGeneral")))))))))
                 .then(Commands.literal("poi")
                         .then(Commands.literal("list")
                                 .executes(ctx -> poiList(ctx, 500))
@@ -384,6 +389,27 @@ public final class PveCommands {
         }
         return SharedSuggestionProvider.suggest(map.nations().stream().filter(n -> !n.sanctum())
                 .map(n -> n.name().contains(" ") ? "\"" + n.name() + "\"" : n.name()), builder);
+    }
+
+    /** Declares a war by the command, each side's general named or not ("best": its best at war). */
+    private static int war(CommandContext<CommandSourceStack> ctx, @Nullable String attackerGeneral, @Nullable String defenderGeneral) {
+        return say(ctx, rafasconquest.politics.Wars.forceWar(ctx.getSource().getServer(), arg(ctx, "attacker"), arg(ctx, "defender"),
+                attackerGeneral == null || attackerGeneral.equalsIgnoreCase("best") ? null : attackerGeneral,
+                defenderGeneral == null || defenderGeneral.equalsIgnoreCase("best") ? null : defenderGeneral));
+    }
+
+    private static String arg(CommandContext<CommandSourceStack> ctx, String name) {
+        return com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, name);
+    }
+
+    /** A side's characters, best at war first, to lead it (quoted, as their names have spaces); and "best". */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestGenerals(
+            CommandContext<CommandSourceStack> ctx, com.mojang.brigadier.suggestion.SuggestionsBuilder builder, String side) {
+        List<String> names = new java.util.ArrayList<>(List.of("best"));
+        for (String name : rafasconquest.politics.Wars.generals(arg(ctx, side))) {
+            names.add(name.contains(" ") ? "\"" + name + "\"" : name);
+        }
+        return SharedSuggestionProvider.suggest(names, builder);
     }
 
     /** Replies with a line (or several). */
