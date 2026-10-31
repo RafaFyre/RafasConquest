@@ -51,7 +51,7 @@ final class MusterBars {
                 double left = Math.max(0, army.readyAt - now);
                 int seconds = (int) Math.ceil(left * SECONDS_PER_DAY);
                 bar.setName(Component.literal(map.nations().get(leader).name() + "'s army musters at "
-                        + map.names().get(map.nations().get(leader).seat()) + String.format(": it marches in %d:%02d", seconds / 60, seconds % 60)));
+                        + army.place() + String.format(": it marches in %d:%02d", seconds / 60, seconds % 60)));
                 bar.setProgress((float) Math.max(0, Math.min(1, 1 - left / Politics.MUSTER)));
                 // Its nations' members see it; no one else.
                 Set<Faction> side = new HashSet<>();

@@ -439,9 +439,14 @@ public final class Politics {
         return true;
     }
 
-    /** Raises a side's army at its capital, all the manpower its leader has and half its allies'; null if too few. */
+    /** Raises a side's army as this world musters them, all the manpower its leader has and half its allies'; null if too few. */
     @Nullable
     Army raise(War w, boolean attacking, double now, Lands lands) {
+        return raise(w, attacking, now, lands, MUSTERING);
+    }
+
+    @Nullable
+    Army raise(War w, boolean attacking, double now, Lands lands, Muster mustering) {
         List<Integer> side = w.side(attacking);
         int soldiers = 0;
         for (int i = 0; i < side.size(); i++) {
@@ -451,9 +456,36 @@ public final class Politics {
         if (soldiers < MIN_ARMY) {
             return null;
         }
-        int[] home = lands.capital(side.get(0));
-        return new Army(soldiers, home[0], home[1], now + MUSTER);
+        List<Lands.Stronghold> holds = lands.strongholds(side.get(0));
+        Lands.Stronghold capital = holds.get(0);
+        Lands.Stronghold nearest = capital;
+        for (Lands.Stronghold h : holds) {
+            if (Math.hypot(h.x() - w.siteX, h.z() - w.siteZ) < Math.hypot(nearest.x() - w.siteX, nearest.z() - w.siteZ)) {
+                nearest = h;
+            }
+        }
+        if (mustering == Muster.OFFENSIVE) {
+            return new Army(soldiers, nearest.x(), nearest.z(), now + MUSTER, nearest.name());
+        }
+        // Ceremonial: at the capital, then by the city nearest the field.
+        Army army = new Army(soldiers, capital.x(), capital.z(), now + MUSTER, capital.name());
+        if (nearest != capital) {
+            army.stops.add(new double[]{nearest.x(), nearest.z()});
+        }
+        return army;
     }
+
+    /**
+     * How an army musters. <b>Ceremonial</b>: at the capital, then marching by the nation's city or capital nearest the
+     * battle site, then to the battle (in straight lines for now; along the roads is to come). <b>Offensive</b>: at the
+     * nation's city or castle nearest the battle site, marching straight to it.
+     */
+    public enum Muster {
+        CEREMONIAL, OFFENSIVE
+    }
+
+    /** How every army musters, for now. */
+    static final Muster MUSTERING = Muster.OFFENSIVE;
 
     /** Moves the armies to now (in days), and fights the battles of those that have both arrived. */
     public void advance(double now, Lands lands, Random random, Front front) {
@@ -475,18 +507,27 @@ public final class Politics {
         if (army.mustering(now)) {
             return false;
         }
-        double dx = w.siteX - army.x;
-        double dz = w.siteZ - army.z;
-        double left = Math.hypot(dx, dz);
         double step = MARCH * Math.min(dt, now - army.readyAt); // not the time it spent mustering
-        if (left <= Math.max(1, step)) {
-            army.x = w.siteX;
-            army.z = w.siteZ;
-            return true;
+        // Through its stops, then to the field, as far as the day's march carries it.
+        while (step > 0) {
+            double[] to = army.heading(w);
+            double dx = to[0] - army.x;
+            double dz = to[1] - army.z;
+            double left = Math.hypot(dx, dz);
+            if (left > step) {
+                army.x += dx / left * step;
+                army.z += dz / left * step;
+                return false;
+            }
+            army.x = to[0];
+            army.z = to[1];
+            step -= left;
+            if (army.stops.isEmpty()) {
+                return true;
+            }
+            army.stops.remove(0);
         }
-        army.x += dx / left * step;
-        army.z += dz / left * step;
-        return false;
+        return army.stops.isEmpty() && army.x == w.siteX && army.z == w.siteZ;
     }
 
     /** Both armies are at the site: they fight, for real if someone is near, else by strength. */

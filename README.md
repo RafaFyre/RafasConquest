@@ -861,9 +861,12 @@ the armies marching on every five seconds.
   they already hold.
 - **Armies**: a nation's **levy** is a twentieth of its people (shrunk or grown with the land it has lost or won); its
   **manpower** is its levy less its dead not yet made good, less its armies in the field. Each side raises an army of
-  all its leader's manpower and half of each ally's, **musters it a day at its capital**, then **marches** (2,000 blocks
-  a day) to the **battle site**: the border of the county to be taken next (the defender's county of the title nearest
+  all its leader's manpower and half of each ally's, **musters it a day**, then **marches** (2,000 blocks a day) to
+  the **battle site**: the border of the county to be taken next (the defender's county of the title nearest
   the attacker's land).
+- **Mustering** comes two ways (`Politics.Muster`). **Offensive**: at the nation's city or castle nearest the battle
+  site, marching straight to it. **Ceremonial**: at the capital, marching by the nation's city or capital nearest the
+  site, then to it (in straight lines for now; along the roads is to come). For now every army musters offensively.
 - **Battles**: when both armies have arrived they fight. **Far from players** the battle is settled by the armies'
   strength (the defender's counting 15 % more on its own ground): the loser loses 35 to 65 % of its army, the winner 10
   to 25 %. **Within 400 blocks of a player** it is **fought for real** with the battle system (up to 1,000 a side,
@@ -889,8 +892,8 @@ the armies marching on every five seconds.
   until it marches (a day of mustering is 20 real minutes), filling as the time passes.
 - **Heralds**: each morning everyone hears the day before's news.
 - **On the map**, a red cross marks each war's battle site (hovering names the war, its title and how many counties
-  are taken), and each army is a pennant in its nation's colour, moving as it marches (hovering gives its soldiers,
-  mustering or on the march). Conquered provinces are drawn in their new nation's colour. **The nation page** lists
+  are taken), and each army is drawn in its nation's colour: a **tent** while it musters, a **flag** with a dotted
+  **arrow** toward where it heads next (its next stop, or the field) while it marches (hovering gives its soldiers). Conquered provinces are drawn in their new nation's colour. **The nation page** lists
   its wars (the title, counties taken, its army) and its allies, or that it is at peace.
 - `/pve politics` reports the wars and armies, alliances, conquests and latest news; `/pve politics day [days]` runs
   that many days at once (armies marching through them); `/pve politics muster finish [nation]` ends the mustering of every

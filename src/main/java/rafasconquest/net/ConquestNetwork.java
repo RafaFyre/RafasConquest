@@ -274,7 +274,7 @@ public final class ConquestNetwork {
     /**
      * Server → client: the nations' politics: each war (attacker, defender, duchy? 1 : 0, the title, the county fought for
      * next, counties taken, counties in all, the battle site x and z), the armies in the field (nation, soldiers, x, z,
-     * mustering? 1 : 0, which war), the alliances (pairs), the provinces conquered and by whom, and the latest news.
+     * mustering? 1 : 0, which war, heading x, z), the alliances (pairs), the provinces conquered and by whom, and the latest news.
      */
     public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> armies, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
                                java.util.List<String> news) {

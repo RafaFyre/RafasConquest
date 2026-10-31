@@ -117,10 +117,12 @@ public class TitleLayer implements MapLayer {
                 continue;
             }
             int colour = 0xFF000000 | map.color(map.base.nations().get(army[0]).id());
-            g.fill(x - 1, y - 7, x + 1, y + 3, OUTLINE); // the pole
-            g.fill(x + 1, y - 7, x + 7, y - 2, OUTLINE);
-            g.fill(x + 1, y - 6, x + 6, y - 3, colour);
-            if (Math.abs(mouseX - x - 3) <= 5 && Math.abs(mouseY - y + 3) <= 6) {
+            if (army[4] == 1) {
+                armyTent(g, x, y, colour);
+            } else {
+                armyOnTheMarch(g, x, y, (int) view.screenX(army[6]), (int) view.screenY(army[7]), colour);
+            }
+            if (Math.abs(mouseX - x - 3) <= 6 && Math.abs(mouseY - y + 3) <= 7) {
                 hovered = "Army of " + map.base.nations().get(army[0]).name() + ": " + String.format("%,d", army[1]) + " soldiers, "
                         + (army[4] == 1 ? "mustering" : "on the march");
                 hoveredProvince = -1;
@@ -202,6 +204,52 @@ public class TitleLayer implements MapLayer {
     private static int capitalOf(BaseMap base, rafasconquest.people.Person p) {
         return p.nation() >= 0 && p.hold().kind() == rafasconquest.people.Person.Kind.CAPITAL
                 && base.nations().get(p.nation()).seat() == p.hold().province() ? p.nation() : -1;
+    }
+
+    /** A mustering army: a tent in its nation's colour, its door dark, on the spot it musters at. */
+    private static void armyTent(GuiGraphics g, int x, int y, int colour) {
+        for (int row = 0; row <= 6; row++) {
+            g.fill(x - row - 1, y - 6 + row, x + row + 2, y - 5 + row, OUTLINE);
+        }
+        for (int row = 1; row <= 5; row++) {
+            g.fill(x - row, y - 6 + row, x + row + 1, y - 5 + row, colour);
+        }
+        g.fill(x, y - 2, x + 1, y, OUTLINE); // the door
+    }
+
+    /**
+     * An army on the march: a flag in its nation's colour, and a dotted line with an arrowhead toward where it is
+     * heading (its next stop, or the field).
+     */
+    private static void armyOnTheMarch(GuiGraphics g, int x, int y, int tx, int ty, int colour) {
+        double dx = tx - x;
+        double dy = ty - y;
+        double length = Math.hypot(dx, dy);
+        if (length > 4) {
+            double ux = dx / length;
+            double uy = dy / length;
+            double reach = Math.min(length, 26);
+            for (double s = 6; s < reach; s += 3) {
+                int px = (int) Math.round(x + ux * s);
+                int py = (int) Math.round(y + uy * s);
+                g.fill(px, py, px + 1, py + 1, colour);
+            }
+            // The arrowhead, at the line's end.
+            int hx = (int) Math.round(x + ux * reach);
+            int hy = (int) Math.round(y + uy * reach);
+            for (int k = 1; k <= 3; k++) {
+                int bx = (int) Math.round(hx - ux * k - uy * k);
+                int by = (int) Math.round(hy - uy * k + ux * k);
+                int cx = (int) Math.round(hx - ux * k + uy * k);
+                int cy = (int) Math.round(hy - uy * k - ux * k);
+                g.fill(bx, by, bx + 1, by + 1, colour);
+                g.fill(cx, cy, cx + 1, cy + 1, colour);
+            }
+            g.fill(hx, hy, hx + 1, hy + 1, colour);
+        }
+        g.fill(x - 1, y - 7, x + 1, y + 3, OUTLINE); // the pole
+        g.fill(x + 1, y - 7, x + 7, y - 2, OUTLINE);
+        g.fill(x + 1, y - 6, x + 6, y - 3, colour);
     }
 
     private static int countryMark(GuiGraphics g, rafasconquest.core.Countryside.Kind kind, int x, int y) {

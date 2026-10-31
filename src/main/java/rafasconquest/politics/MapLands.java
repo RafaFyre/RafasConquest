@@ -96,6 +96,24 @@ public final class MapLands implements Lands {
     }
 
     @Override
+    public List<Stronghold> strongholds(int nation) {
+        List<Stronghold> all = new ArrayList<>();
+        BaseMap.Nation n = map.nations().get(nation);
+        all.add(new Stronghold(map.names().get(n.seat()), n.x(), n.z()));
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (owner(c.province()) == nation && c.province() != n.seat()) {
+                all.add(new Stronghold(map.names().get(c.province()), c.x(), c.z()));
+            }
+        }
+        for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
+            if (s.kind() == rafasconquest.core.Countryside.Kind.CASTLE && owner(s.province()) == nation && s.province() != n.seat()) {
+                all.add(new Stronghold("the castle of " + map.names().get(s.province()), s.x(), s.z()));
+            }
+        }
+        return all;
+    }
+
+    @Override
     public int county(int province) {
         return map.titles().county()[province];
     }

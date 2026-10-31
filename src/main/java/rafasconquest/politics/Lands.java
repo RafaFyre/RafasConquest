@@ -30,8 +30,15 @@ public interface Lands {
     /** The province a nation's seat is in. */
     int seat(int nation);
 
-    /** Where a nation's capital stands, (x, z): its army musters there. */
+    /** Where a nation's capital stands, (x, z). */
     int[] capital(int nation);
+
+    /** A place an army can muster at: a nation's capital, city or castle, by name, and where it stands. */
+    record Stronghold(String name, int x, int z) {
+    }
+
+    /** The cities and castles a nation now holds, its capital first. */
+    java.util.List<Stronghold> strongholds(int nation);
 
     Set<Integer> neighbours(int province);
 

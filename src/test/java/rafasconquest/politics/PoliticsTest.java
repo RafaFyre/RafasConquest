@@ -80,6 +80,15 @@ class PoliticsTest {
             return centre(seat(nation));
         }
 
+        /** Each nation's capital, then a castle at each end of its land. */
+        @Override
+        public List<Stronghold> strongholds(int nation) {
+            int[] c = capital(nation);
+            return List.of(new Stronghold("capital " + nation, c[0], c[1]),
+                    new Stronghold("castle " + nation + "a", centre(nation == 0 ? 3 : nation == 1 ? 4 : 10)[0], 0),
+                    new Stronghold("castle " + nation + "b", centre(nation == 0 ? 1 : nation == 1 ? 7 : 11)[0], 0));
+        }
+
         @Override
         public Set<Integer> neighbours(int province) {
             Set<Integer> n = new TreeSet<>();
@@ -188,20 +197,41 @@ class PoliticsTest {
     }
 
     @Test
-    void armiesMusterADayThenMarchToTheBorder() {
+    void armiesMusterADayAtTheirStrongholdNearestTheFieldThenMarch() {
         Row lands = row();
         Politics p = new Politics();
         War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
         assertNotNull(w);
         assertEquals(2, w.target());
         assertEquals(3500, w.siteX(), 1e-9, "between our province 3 and their 4");
-        assertEquals(0, w.army(true).x(), 1e-9, "the attacker musters at its capital");
-        assertEquals(9000, w.army(false).x(), 1e-9, "the defender musters at its capital");
+        assertEquals(3000, w.army(true).x(), 1e-9, "the attacker musters at its castle nearest the field");
+        assertEquals("castle 0a", w.army(true).place());
+        assertEquals(4000, w.army(false).x(), 1e-9, "the defender musters at its castle nearest the field");
         p.advance(1.5, lands, new Random(2), FAR);
         p.advance(1.9, lands, new Random(2), FAR);
-        assertEquals(0, w.army(true).x(), 1e-9, "marched while mustering");
-        p.advance(2.5, lands, new Random(2), FAR);
-        assertEquals(1000, w.army(true).x(), 1e-9, "half a day's march");
+        assertEquals(3000, w.army(true).x(), 1e-9, "marched while mustering");
+        p.advance(2.1, lands, new Random(2), FAR);
+        assertEquals(3200, w.army(true).x(), 1e-6, "a tenth of a day's march");
+    }
+
+    @Test
+    void aCeremonialMusterIsAtTheCapitalThenByTheCityNearestTheField() {
+        Row lands = row();
+        Politics p = new Politics();
+        War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        w.attackerArmy = null; // its people back home, to be raised again
+        Army army = p.raise(w, true, 1, lands, Politics.Muster.CEREMONIAL);
+        assertEquals(0, army.x(), 1e-9, "not at the capital");
+        assertEquals("capital 0", army.place());
+        assertEquals(1, army.stops.size());
+        assertEquals(3000, army.heading(w)[0], 1e-9, "not by the castle nearest the field");
+        w.attackerArmy = army;
+        w.defenderArmy.readyAt = 100; // the defender stays home: no battle
+        p.advance(2, lands, new Random(2), FAR);
+        p.advance(2.8, lands, new Random(2), FAR);
+        p.advance(3.6, lands, new Random(2), FAR); // 1.6 days: 3,200 blocks, by the castle and on
+        assertEquals(3200, army.x(), 1e-6);
+        assertEquals(3500, army.heading(w)[0], 1e-9, "the castle not passed");
     }
 
     @Test

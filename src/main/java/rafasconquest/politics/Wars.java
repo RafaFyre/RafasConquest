@@ -270,7 +270,8 @@ public final class Wars {
                 continue;
             }
             String enemy = map.nations().get(attacking ? war.defender() : war.attacker()).name();
-            String capital = map.names().get(map.nations().get(attacking ? war.attacker() : war.defender()).seat());
+            Army army = war.army(attacking);
+            String capital = army != null ? army.place() : map.names().get(map.nations().get(attacking ? war.attacker() : war.defender()).seat());
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 if (rafasconquest.peerage.Talk.serves(p, nation)) {
                     p.sendSystemMessage(Component.literal("To arms! " + nation.name() + " raises an army against " + enemy + ", for the "

@@ -40,8 +40,9 @@ public final class PoliticsSync {
             for (boolean attacking : new boolean[]{true, false}) {
                 Army army = w.army(attacking);
                 if (army != null) {
+                    double[] to = army.heading(w);
                     armies.add(new int[]{attacking ? w.attacker() : w.defender(), army.soldiers(), (int) army.x(), (int) army.z(),
-                            army.mustering(now) ? 1 : 0, i});
+                            army.mustering(now) ? 1 : 0, i, (int) to[0], (int) to[1]});
                 }
             }
         }

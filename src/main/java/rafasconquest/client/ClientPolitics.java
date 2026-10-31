@@ -38,7 +38,7 @@ public final class ClientPolitics {
         return view.wars();
     }
 
-    /** Each army in the field: nation, soldiers, x, z, mustering? 1 : 0, which war. */
+    /** Each army in the field: nation, soldiers, x, z, mustering? 1 : 0, which war, and where it heads next (x, z). */
     public static List<int[]> armies() {
         return view.armies();
     }
