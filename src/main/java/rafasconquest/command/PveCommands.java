@@ -102,6 +102,13 @@ public final class PveCommands {
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 60))
                                         .executes(ctx -> say(ctx, rafasconquest.politics.Wars.runDays(ctx.getSource().getServer(),
                                                 IntegerArgumentType.getInteger(ctx, "days"))))))
+                        .then(Commands.literal("muster").requires(source -> source.hasPermission(2))
+                                .then(Commands.literal("finish")
+                                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.finishMuster(ctx.getSource().getServer(), null)))
+                                        .then(Commands.argument("nation", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                .suggests(PveCommands::suggestNations)
+                                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.finishMuster(ctx.getSource().getServer(),
+                                                        arg(ctx, "nation")))))))
                         .then(Commands.literal("war").requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
                                         .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)

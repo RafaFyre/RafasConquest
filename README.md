@@ -882,13 +882,16 @@ the armies marching on every five seconds.
 - **Muster**: when a side raises an army, its enlisted players are called, with a **[Muster]** button
   (`/pve muster`): answering takes them to their army (at its capital, or on the march), and when it reaches the
   field they are brought there, 70 blocks behind their own lines, so the battle is fought for real with them in it.
+  While an army musters, its nations' members see a bar at the top of the screen: where it musters, and how long
+  until it marches (a day of mustering is 20 real minutes), filling as the time passes.
 - **Heralds**: each morning everyone hears the day before's news.
 - **On the map**, a red cross marks each war's battle site (hovering names the war, its title and how many counties
   are taken), and each army is a pennant in its nation's colour, moving as it marches (hovering gives its soldiers,
   mustering or on the march). Conquered provinces are drawn in their new nation's colour. **The nation page** lists
   its wars (the title, counties taken, its army) and its allies, or that it is at peace.
 - `/pve politics` reports the wars and armies, alliances, conquests and latest news; `/pve politics day [days]` runs
-  that many days at once (armies marching through them); `/pve politics war <attacker> <defender>` declares a war now,
+  that many days at once (armies marching through them); `/pve politics muster finish [nation]` ends the mustering of every
+  army (or only those on the sides a nation fights on) at once, so they march now; `/pve politics war <attacker> <defender>` declares a war now,
   for the title the attacker wants most of the defender's (nation names, suggested as you type; quoted where they have spaces).
   Two more, optional, name each side's **general**: one of that nation's characters (suggested best at war first), or
   `best`. Without one, each battle puts the nation's best at war (by Martial) in command, as before; a named general

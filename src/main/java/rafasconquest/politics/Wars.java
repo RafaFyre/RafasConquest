@@ -60,6 +60,7 @@ public final class Wars {
         });
         mustered.clear();
         pendingWar = -1;
+        MusterBars.clear();
     }
 
     /** The time now, in days. */
@@ -89,6 +90,9 @@ public final class Wars {
     /** Every tick: every few seconds, the armies march on, and battles are fought where they meet. */
     public static void tick(MinecraftServer server) {
         BaseMap map = ConquestRuntime.map();
+        if (map != null && server.overworld().getGameTime() % MusterBars.EVERY == 0) {
+            MusterBars.update(server, map, PoliticsData.get(server).politics);
+        }
         if (map == null || server.overworld().getGameTime() % MARCH_TICKS != 0) {
             return;
         }
@@ -304,6 +308,37 @@ public final class Wars {
             }
         }
         return "Your nation has no army in the field";
+    }
+
+    /**
+     * Ends the mustering of every army still at its capital now, or only those of the sides {@code nation} (a name) fights
+     * on; they march at once (for {@code /pve politics muster finish}).
+     */
+    public static String finishMuster(MinecraftServer server, @Nullable String nation) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return "No world map yet";
+        }
+        int only = nation == null ? -1 : nationNamed(map, nation);
+        if (nation != null && only < 0) {
+            return "No such nation";
+        }
+        PoliticsData data = PoliticsData.get(server);
+        double now = now(server);
+        int ended = 0;
+        for (War war : data.politics.wars()) {
+            for (boolean attacking : new boolean[]{true, false}) {
+                Army army = war.army(attacking);
+                if (army != null && army.mustering(now) && (only < 0 || war.side(attacking).contains(only))) {
+                    army.readyAt = now;
+                    ended++;
+                }
+            }
+        }
+        data.setDirty();
+        MusterBars.update(server, map, data.politics);
+        PoliticsSync.toAll(server);
+        return ended == 0 ? "No army is mustering" : ended + " army(ies) done mustering: they march now";
     }
 
     /** The wars, alliances, conquests and latest news, for {@code /pve politics}. */
