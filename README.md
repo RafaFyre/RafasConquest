@@ -783,7 +783,7 @@ few holders, or a faction not on the map, makes up the rest as before.
   their race's.
 
 **The nation page** (`client/NationScreen`): a double-click on a nation's **capital** on the world map opens it (any
-other hold still opens its holder's character page). Over its court (below), with its banners on the wall,
+other hold still opens its holder's character page). Over its court (below), its banner hangs at both top corners;
 its title ("THE EMPIRE OF ULDARESH", or a sanctum's own name) has its population beside it; under it, green diamonds
 list what it is:
 - its rank (Empire, Kingdom, Duchy, City-state or Sword Sanctum);
@@ -797,7 +797,7 @@ Behind it all stands its **court** (`client/CourtView`, `client/CourtSet`), a sm
 Ponder draws its scenes: a hall in the style of the nation's land (sandstone and terracotta for the desert, mossy stone
 and jungle wood for the jungle, stone brick for the plains, acacia and terracotta for the savanna, spruce, diorite and
 snow for the snow, mud brick and mangrove for the swamp, spruce and cobblestone for the taiga), with pillars, lanterns,
-the nation's banners hung on the back wall and a carpet of its colour up the middle. Its **peerage** stands on a
+and a carpet of the nation's colour up the middle. Its **peerage** stands on a
 stepped pyramid of podiums, each in the Recruits skin of their race's land: the ruler at the top; the three most
 powerful nobles under them (by their hold, a city's over a town's over a castle's, then by how many answer to them, then
 by their skills); the lesser nobles in two rows below, lower and nearer. Nobles beyond those 21 are counted in the
@@ -807,7 +807,23 @@ to be replaced by built ones.
 
 The character page stands over the same court, the camera on them on the left (gliding there from the nation page, or
 from one character to the next), the court dimmed behind the page on the right; anyone else showing in the court on
-the left opens their page with a click.
+the left opens their page with a click. Their nation's banner hangs at the top right. A Sword King or Saint's page says
+which sanctum they trained at.
+
+## Organizations: the sword sanctums
+
+Beside characters and nations, the world has **organizations** (`people/Organization`, kept with the realm): for now
+the three sword sanctums. Each is headed by its **Sword God** (the sanctum's ruler) and has the **Sword Kings** (2 to 7)
+and **Sword Saints** trained there, whatever nation they now serve (`people/Organizations`). Who trained where is chance
+on paper, but the nearer a sanctum the likelier (its weight halves at 4,000 blocks); a sanctum full of kings sends the
+rest elsewhere, and kings no sanctum has room for trained nowhere in particular. Every Sword Saint trained somewhere.
+Sword Gods other than the sanctums' heads belong to none.
+
+**The organization page** (`client/OrganizationScreen`): a double-click on a sanctum's city on the world map opens it,
+laid out as a nation's page: the sanctum's banner at both top corners, its title with its members counted, what it is
+(its head, its kings and saints, its seat), and its court: the Sword God on the top podium, the Sword Kings in a wide
+row beneath, the Sword Saints (strongest first) in the two rows below, any beyond counted in the corner. The camera
+glides in on whoever is clicked, as on a nation's page.
 
 ## Roads
 

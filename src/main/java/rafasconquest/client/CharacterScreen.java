@@ -329,6 +329,11 @@ public class CharacterScreen extends Screen {
         if (!sword.isEmpty()) {
             text.append(" A ").append(sword).append(": ").append(Stat.superhumanMeaning(p.stat(Stat.PROWESS))).append('.');
         }
+        int school = realm.organizationOf(index);
+        if (school >= 0) {
+            rafasconquest.people.Organization o = realm.organizations().get(school);
+            text.append(o.head() == index ? " Heads the " : " Trained at the ").append(o.name()).append('.');
+        }
         if (p.away()) {
             text.append(" Away from ").append(place).append('.');
         }

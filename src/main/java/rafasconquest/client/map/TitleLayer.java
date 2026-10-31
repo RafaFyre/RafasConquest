@@ -151,7 +151,10 @@ public class TitleLayer implements MapLayer {
         }
         Minecraft mc = Minecraft.getInstance();
         int nation = capitalOf(map.base, people.get(nearest));
-        mc.setScreen(nation >= 0 ? new rafasconquest.client.NationScreen(mc.screen, map.base, nation)
+        int organization = nation >= 0 ? rafasconquest.client.OrganizationScreen.of(map.base, nation) : -1;
+        // A sword sanctum's city opens the sanctum's page; another capital its nation's; any other hold its holder's.
+        mc.setScreen(organization >= 0 ? new rafasconquest.client.OrganizationScreen(mc.screen, map.base, organization)
+                : nation >= 0 ? new rafasconquest.client.NationScreen(mc.screen, map.base, nation)
                 : new rafasconquest.client.CharacterScreen(mc.screen, map.base, nearest));
         return true;
     }

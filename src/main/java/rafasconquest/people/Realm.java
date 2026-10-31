@@ -9,15 +9,31 @@ import java.util.List;
 /**
  * The world's people: its cultures (one for each {@link Homeland}) and faiths, every hold's holder ({@link Person}), the
  * bonds between them, and each nation's culture, faith, piety (0, worldly, to 1, devout) and people
- * ({@link Demographics}). Planned with the world map ({@link RealmPlanner}) and kept and sent with it.
+ * ({@link Demographics}), and its organizations (the sword sanctums, {@link Organization}). Planned with the world map ({@link RealmPlanner}) and kept and sent with it.
  */
 public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> people, List<Bond> bonds,
-                    int[] nationCulture, int[] nationFaith, float[] nationPiety, List<Demographics> demographics) {
-    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0], List.of());
+                    int[] nationCulture, int[] nationFaith, float[] nationPiety, List<Demographics> demographics,
+                    List<Organization> organizations) {
+    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0], List.of(), List.of());
 
     /** A nation's people, or none if it has no record. */
     public Demographics demographics(int nation) {
         return nation >= 0 && nation < demographics.size() ? demographics.get(nation) : Demographics.NONE;
+    }
+
+    /** The same realm with these organizations. */
+    public Realm withOrganizations(List<Organization> organizations) {
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations);
+    }
+
+    /** The organization a person belongs to (heads or trained at), or -1. */
+    public int organizationOf(int person) {
+        for (int o = 0; o < organizations.size(); o++) {
+            if (organizations.get(o).members().contains(person)) {
+                return o;
+            }
+        }
+        return -1;
     }
 
     /** A nation's ruler (the holder of its capital, liege to no one), or -1. */
@@ -197,6 +213,14 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
                 out.writeFloat(d.races()[h]);
             }
         }
+        out.writeShort(organizations.size());
+        for (Organization o : organizations) {
+            out.writeUTF(o.name());
+            out.writeShort(o.nation());
+            out.writeShort(o.head());
+            writeIndexes(out, o.kings());
+            writeIndexes(out, o.saints());
+        }
     }
 
     public static Realm read(DataInputStream in) throws IOException {
@@ -259,7 +283,28 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             }
             demographics.add(new Demographics(population, cultureShares, raceShares));
         }
-        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics);
+        int organizationCount = in.readUnsignedShort();
+        List<Organization> organizations = new ArrayList<>(organizationCount);
+        for (int i = 0; i < organizationCount; i++) {
+            organizations.add(new Organization(in.readUTF(), in.readShort(), in.readShort(), readIndexes(in), readIndexes(in)));
+        }
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations);
+    }
+
+    private static void writeIndexes(DataOutputStream out, List<Integer> indexes) throws IOException {
+        out.writeShort(indexes.size());
+        for (int i : indexes) {
+            out.writeShort(i);
+        }
+    }
+
+    private static List<Integer> readIndexes(DataInputStream in) throws IOException {
+        int n = in.readUnsignedShort();
+        List<Integer> indexes = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            indexes.add((int) in.readShort());
+        }
+        return List.copyOf(indexes);
     }
 
     private static void writeStrings(DataOutputStream out, List<String> strings) throws IOException {

@@ -28,6 +28,8 @@ final class CourtSet {
     /** Seats, by row: the ruler, the greatest nobles, then the two rows of lesser ones. */
     static final int[] ROW_SEATS = {1, 3, 9, 8};
     static final int MAX_SEATS = 21;
+    /** The most the second row holds, spread out (a sanctum's Sword Kings). */
+    static final int WIDE_ROW = 7;
     static final int HALF_WIDTH = 15;
     static final int BACK = -14;
     static final int FRONT = 4;
@@ -39,10 +41,6 @@ final class CourtSet {
     record Seat(double x, double y, double z) {
     }
 
-    /** A hanging banner on the back wall: the top of its pole's middle. */
-    record BannerSpot(double x, double y, double z) {
-    }
-
     /** A land's materials, and the colour behind the hall. */
     record Style(BlockState floor, BlockState floorAlt, BlockState wall, BlockState trim, BlockState pillar, BlockState podium,
                  BlockState podiumTop, BlockState decor, int sky) {
@@ -50,22 +48,34 @@ final class CourtSet {
 
     final Map<BlockPos, BlockState> blocks = new LinkedHashMap<>();
     final List<Seat> seats = new ArrayList<>();
-    final List<BannerSpot> banners = new ArrayList<>();
     final Style style;
 
     private CourtSet(Style style) {
         this.style = style;
     }
 
-    /** The court of a nation of {@code homeland}'s style, its carpet {@code carpet}, with room for {@code people} people. */
-    static CourtSet build(Homeland homeland, DyeColor carpet, int people) {
+    /** How many stand in each row when {@code people} fill the court in order: 1, 3, 9 and 8 at most. */
+    static int[] pyramid(int people) {
+        int[] rows = new int[ROW_SEATS.length];
+        int left = Math.min(people, MAX_SEATS);
+        for (int row = 0; row < rows.length; row++) {
+            rows[row] = Math.min(left, ROW_SEATS[row]);
+            left -= rows[row];
+        }
+        return rows;
+    }
+
+    /**
+     * A court in {@code homeland}'s style, its carpet {@code carpet}, with {@code rows[i]} seats in row i (the second
+     * row up to {@link #WIDE_ROW}, the last two up to 9 and 8); the seats run row by row.
+     */
+    static CourtSet build(Homeland homeland, DyeColor carpet, int[] rows) {
         CourtSet set = new CourtSet(style(homeland));
         set.hall(carpet);
-        int left = Math.min(people, MAX_SEATS);
-        for (int row = 0; row < ROW_SEATS.length && left > 0; row++) {
-            int count = Math.min(left, ROW_SEATS[row]);
-            set.row(row, count);
-            left -= count;
+        for (int row = 0; row < Math.min(rows.length, ROW_SEATS.length); row++) {
+            if (rows[row] > 0) {
+                set.row(row, rows[row]);
+            }
         }
         return set;
     }
@@ -97,9 +107,6 @@ final class CourtSet {
                 put(x, 0, z, rug.defaultBlockState());
             }
         }
-        // The ruler's banners, either side of the throne, hung from the wall.
-        banners.add(new BannerSpot(-9, 10.5, BACK + 0.6));
-        banners.add(new BannerSpot(9, 10.5, BACK + 0.6));
     }
 
     /** A row of podiums and the seats on them. */
@@ -112,8 +119,11 @@ final class CourtSet {
             if (row == 0) {
                 x = 0;
                 size = 3;
-            } else if (row == 1) {
+            } else if (row == 1 && count <= 3) {
                 x = i == 0 ? 0 : i == 1 ? -5 : 5;
+                size = 3;
+            } else if (row == 1) {
+                x = (i - (count - 1) / 2.0) * 4; // a wide row, four apart
                 size = 3;
             } else {
                 // Spread about the middle, three apart; the last row set between the one before.

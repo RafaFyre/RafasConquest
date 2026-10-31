@@ -33,7 +33,7 @@ import java.util.Map;
 
 /**
  * A nation's court as a little 3D scene behind the nation and character pages, in the way Create's Ponder shows its
- * scenes: the hall of {@link CourtSet} in the style of the nation's land, its banners on the wall, and its people on
+ * scenes: the hall of {@link CourtSet} in the style of the nation's land, a carpet of its colour, and its people on
  * their podiums, the ruler at the top. A camera looks on, from far enough back to see them all, and glides in on whoever
  * is chosen (and back out). Kept by the pages as they open one another, so the camera carries on where it was.
  */
@@ -50,8 +50,6 @@ final class CourtView {
     final int nation;
     private final CourtSet set;
     private final List<Figure> figures = new ArrayList<>();
-    @Nullable
-    private final Portraits.Banner banner;
     /** People of the nation with no seat (beyond the court's room). */
     final int unseated;
 
@@ -86,17 +84,16 @@ final class CourtView {
         }
     }
 
-    private CourtView(BaseMap base, int nation, Homeland homeland, DyeColor colour, List<Integer> people, int unseated) {
+    private CourtView(BaseMap base, int nation, Homeland homeland, DyeColor colour, List<Integer> people, int[] rows, int unseated) {
         this.base = base;
         this.nation = nation;
         this.unseated = unseated;
-        this.set = CourtSet.build(homeland, colour, people.size());
+        this.set = CourtSet.build(homeland, colour, rows);
         Minecraft mc = Minecraft.getInstance();
         for (int i = 0; i < Math.min(people.size(), set.seats.size()); i++) {
             int person = people.get(i);
             figures.add(new Figure(person, set.seats.get(i), Portraits.model(mc, base.realm().people().get(person))));
         }
-        this.banner = nation >= 0 ? new Portraits.Banner(mc, base.nations().get(nation).id()) : null;
         goal.set(now);
     }
 
@@ -128,14 +125,35 @@ final class CourtView {
         }
         Homeland homeland = realm.cultures().get(realm.nationCulture()[nation]).homeland();
         DyeColor colour = FactionBannerNbt.baseColor(FactionBanner.of(base.nations().get(nation).id()));
-        return new CourtView(base, nation, homeland, colour, people.subList(0, seated), people.size() - seated);
+        return new CourtView(base, nation, homeland, colour, people.subList(0, seated), CourtSet.pyramid(seated), people.size() - seated);
+    }
+
+    /**
+     * A sword sanctum's court: its Sword God on top, its Sword Kings in the wide row beneath, its Sword Saints in the two
+     * rows below (the strongest first); in the hall of its nation's land.
+     */
+    static CourtView ofOrganization(BaseMap base, rafasconquest.people.Organization o) {
+        Realm realm = base.realm();
+        List<Integer> people = new ArrayList<>();
+        int head = o.head() >= 0 ? 1 : 0;
+        if (o.head() >= 0) {
+            people.add(o.head());
+        }
+        int kings = Math.min(o.kings().size(), CourtSet.WIDE_ROW);
+        people.addAll(o.kings().subList(0, kings));
+        int saints = Math.min(o.saints().size(), CourtSet.ROW_SEATS[2] + CourtSet.ROW_SEATS[3]);
+        people.addAll(o.saints().subList(0, saints));
+        int[] rows = {head, kings, Math.min(saints, CourtSet.ROW_SEATS[2]), Math.max(0, saints - CourtSet.ROW_SEATS[2])};
+        Homeland homeland = realm.cultures().get(realm.nationCulture()[o.nation()]).homeland();
+        DyeColor colour = FactionBannerNbt.baseColor(FactionBanner.of(base.nations().get(o.nation()).id()));
+        return new CourtView(base, o.nation(), homeland, colour, people, rows, o.members().size() - people.size());
     }
 
     /** One person on their own podium in a hall of their own land: for someone of no nation. */
     static CourtView ofOne(BaseMap base, int person) {
         Person p = base.realm().people().get(person);
         Homeland homeland = base.realm().cultures().get(p.culture()).homeland();
-        return new CourtView(base, -1, homeland, DyeColor.GRAY, List.of(person), 0);
+        return new CourtView(base, -1, homeland, DyeColor.GRAY, List.of(person), CourtSet.pyramid(1), 0);
     }
 
     /** The court a page about {@code person} shows: theirs, or {@code current} if they already stand in it. */
@@ -225,11 +243,6 @@ final class CourtView {
             pose.translate(at.getX(), at.getY(), at.getZ());
             blocks.renderSingleBlock(e.getValue(), pose, buffers, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
             pose.popPose();
-        }
-        if (banner != null) {
-            for (CourtSet.BannerSpot b : set.banners) {
-                banner.drawHanging(pose, buffers, b.x(), b.y(), b.z(), 2.4F);
-            }
         }
         buffers.endBatch();
 

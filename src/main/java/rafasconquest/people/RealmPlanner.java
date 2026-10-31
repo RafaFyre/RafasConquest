@@ -236,7 +236,7 @@ public final class RealmPlanner {
         }
 
         return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
-                demographics);
+                demographics, List.of());
     }
 
     /**

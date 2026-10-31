@@ -34,13 +34,15 @@ public class NationScreen extends Screen {
     private static final float NAMED_SHARE = 0.03F;
 
     private final Screen parent;
-    private final BaseMap base;
-    private final int nation;
+    protected final BaseMap base;
+    protected final int nation;
     /** The ruler, or -1. */
     private final int ruler;
     /** The court and its camera, kept while the pages it opens come and go. */
     @Nullable
     private CourtView court;
+    @Nullable
+    private Portraits.Banner banner;
     /** Where the whole court is centred, and where someone looked at stands, on the screen. */
     private static final float WHOLE_X = 0.5F;
     private static final float WHOLE_Y = 0.6F;
@@ -74,8 +76,9 @@ public class NationScreen extends Screen {
     @Override
     protected void init() {
         Portraits.buttons(this, width, this::onClose, this::addRenderableWidget);
+        banner = new Portraits.Banner(minecraft, base.nations().get(nation).id());
         if (court == null) {
-            court = CourtView.ofNation(base, nation);
+            court = court();
             court.showWhole(WHOLE_X, WHOLE_Y);
             court.arrive();
         } else if (court.focus() >= 0) {
@@ -86,21 +89,27 @@ public class NationScreen extends Screen {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         court.render(g, width, height, mouseX, mouseY, partialTick);
-        Realm realm = base.realm();
         int hovered = court.pick(mouseX, mouseY);
+
+        // The banners, at both top corners.
+        int bannerWidth = Math.max(30, Math.min(64, (int) (width * 0.075)));
+        int bannerHeight = Math.min((int) (height * 0.4), bannerWidth * 27 / 10);
+        int leftBanner = (int) (width * 0.07);
+        if (banner != null) {
+            banner.draw(g, leftBanner, 8, bannerWidth, bannerHeight);
+            banner.draw(g, width - leftBanner - bannerWidth, 8, bannerWidth, bannerHeight);
+        }
         if (court.focus() >= 0) {
             card(g, court.focus());
             super.render(g, mouseX, mouseY, partialTick);
             tooltip(g, hovered, mouseX, mouseY);
             return;
         }
-        BaseMap.Nation n = base.nations().get(nation);
-        Demographics people = realm.demographics(nation);
 
-        // The title, with the nation's people beside it (the banners hang on the court's wall).
-        int boxX = (int) (width * 0.07);
-        String title = title(n);
-        String population = "Population " + String.format("%,d", people.population());
+        // The title, with what it counts beside it.
+        int boxX = leftBanner + bannerWidth + 4;
+        String title = heading();
+        String population = subheading();
         int titleWidth = font.width(title) * 3 / 2;
         int titleBoxWidth = titleWidth + font.width(population) + 30;
         g.fill(boxX, 14, boxX + titleBoxWidth, 38, BOX);
@@ -112,8 +121,8 @@ public class NationScreen extends Screen {
         g.pose().popPose();
         g.drawString(font, population, boxX + 20 + titleWidth, 23, MUTED, false);
 
-        // What the nation is.
-        List<String[]> bullets = bullets(realm, n, people);
+        // What it is.
+        List<String[]> bullets = facts();
         int listWidth = 0;
         for (String[] b : bullets) {
             listWidth = Math.max(listWidth, Math.max(font.width(b[0]) + 30, b.length > 1 ? font.width(b[1]) + 30 : 0));
@@ -141,11 +150,36 @@ public class NationScreen extends Screen {
             g.drawCenteredString(font, "No ruler", width / 2, (int) (height * 0.4), MUTED);
         }
         if (court.unseated > 0) {
-            String more = "and " + court.unseated + " more noble" + (court.unseated == 1 ? "" : "s");
+            String more = unseated(court.unseated);
             g.drawString(font, more, width - font.width(more) - 8, height - 12, MUTED, false);
         }
         super.render(g, mouseX, mouseY, partialTick);
         tooltip(g, hovered, mouseX, mouseY);
+    }
+
+    /** The court shown: the nation's. */
+    protected CourtView court() {
+        return CourtView.ofNation(base, nation);
+    }
+
+    /** "THE EMPIRE OF ULDARESH". */
+    protected String heading() {
+        return title(base.nations().get(nation));
+    }
+
+    /** Beside the title: its people. */
+    protected String subheading() {
+        return "Population " + String.format("%,d", base.realm().demographics(nation).population());
+    }
+
+    /** The lines beside the diamonds: each a line, and maybe a quieter one under it. */
+    protected List<String[]> facts() {
+        return bullets(base.realm(), base.nations().get(nation), base.realm().demographics(nation));
+    }
+
+    /** "and 4 more nobles": those with no room in the court. */
+    protected String unseated(int count) {
+        return "and " + count + " more noble" + (count == 1 ? "" : "s");
     }
 
     /** Names whoever the mouse is over. */

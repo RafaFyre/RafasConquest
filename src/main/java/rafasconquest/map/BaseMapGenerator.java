@@ -318,6 +318,15 @@ public final class BaseMapGenerator {
                 .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
         rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder, homeland,
                 WorldFeatures.martialTitles());
+        // The sword sanctums, as organizations: each its Sword God's, with the kings and saints trained there.
+        List<rafasconquest.people.Organizations.Sanctum> sanctums = new java.util.ArrayList<>();
+        for (int n = 0; n < nations.size(); n++) {
+            BaseMap.Nation nation = nations.get(n);
+            if (nation.sanctum()) {
+                sanctums.add(new rafasconquest.people.Organizations.Sanctum(nation.name(), n, realm.ruler(n), nation.x(), nation.z()));
+            }
+        }
+        realm = realm.withOrganizations(rafasconquest.people.Organizations.plan(new java.util.Random(seed ^ 0x53414E4354L), realm.people(), sanctums));
         long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
         rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",
                 realm.people().size(), superhuman, realm.cultures().size(), realm.faiths().size(), realm.bonds().size());
