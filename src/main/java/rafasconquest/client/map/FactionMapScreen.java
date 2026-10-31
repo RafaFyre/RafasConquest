@@ -39,7 +39,8 @@ public class FactionMapScreen extends Screen {
             new TitleLayer(),       // 4. the land's titles: county to empire borders, seats, countryside and dojos
             new PoiIconLayer(),     // 5. capitals, City-states, farms
             new UnitLayer(),        // 6. players, later armies
-            new LabelLayer(this::openFaction)); // 7. faction names
+            new LabelLayer(this::openFaction), // 7. faction names
+            new PlaceMenuLayer());  // 8. creative: right-click a place to teleport there
     @Nullable
     private List<FactionInfo> factions;
     @Nullable

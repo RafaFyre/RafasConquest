@@ -136,6 +136,11 @@ public final class ConquestNetwork {
                 .decoder(PoliticsView::read)
                 .consumerMainThread(ConquestNetwork::handlePoliticsView)
                 .add();
+        CHANNEL.messageBuilder(TeleportTo.class, 19, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(TeleportTo::write)
+                .decoder(TeleportTo::read)
+                .consumerMainThread(ConquestNetwork::handleTeleportTo)
+                .add();
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -286,6 +291,32 @@ public final class ConquestNetwork {
                     buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf));
         }
+    }
+
+    /** Client → server: teleport me to the ground at (x, z), from the world map's menu. Creative mode only. */
+    public record TeleportTo(int x, int z) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeInt(x);
+            buf.writeInt(z);
+        }
+
+        static TeleportTo read(FriendlyByteBuf buf) {
+            return new TeleportTo(buf.readInt(), buf.readInt());
+        }
+    }
+
+    public static void teleport(int x, int z) {
+        CHANNEL.sendToServer(new TeleportTo(x, z));
+    }
+
+    private static void handleTeleportTo(TeleportTo msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player == null || !player.isCreative()) {
+            return; // only in creative
+        }
+        net.minecraft.server.level.ServerLevel level = player.server.overworld();
+        int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, msg.x(), msg.z());
+        player.teleportTo(level, msg.x() + 0.5, y, msg.z() + 0.5, player.getYRot(), player.getXRot());
     }
 
     public static void sendPolitics(ServerPlayer player, PoliticsView view) {

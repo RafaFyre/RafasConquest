@@ -587,6 +587,9 @@ with a right-click. It is a
 political map in the style of Crusader Kings 3, out to four or eight times the storm wall's radius by province size (16,000 or 32,000 blocks at default settings, a pixel every 32 or 64 blocks),
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
+In **creative mode**, a right-click on any place drawn on the map (a seat city, a castle, village, hamlet, watchtower or
+ruin, a dojo, a war's battle site, a capital, City-state or farm) opens a small menu there, headed by its name, with
+**Teleport here** (`PlaceMenuLayer`): the server, checking the player is in creative, puts them on the ground there.
 
 **A new world's map is drawn before its first chunk** (cities stand at its titles' seats), while the world loads, and
 it reads the terrain generator a great deal, so a heavy terrain mod (Tectonic) can make it many times slower (6 minutes
