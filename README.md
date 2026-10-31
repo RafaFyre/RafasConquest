@@ -805,8 +805,8 @@ few holders, or a faction not on the map, makes up the rest as before.
 
 **Demographics** (`people/Demographics`, planned in `people/RealmPlanner` and kept with the realm): each nation's
 **population** and the share of it of each culture and each race.
-- **People** are counted in each province the nation holds: 150 on its farms, 400 for each district of a city, 25 for
-  each hamlet (alone or in a village), 120 for a castle and 10 for a watchtower.
+- **People** are counted in each province the nation holds: 1,500 on its farms, 4,000 for each district of a city,
+  250 for each hamlet (alone or in a village), 1,200 for a castle and 100 for a watchtower.
 - **Races** follow the land: each province's people are of its land's race, but for 3 to 12 % of wanderers, of every
   race at random.
 - **Cultures** lean further to the nation's own: it has made 35 to 85 % of its people its own culture; the rest keep

@@ -55,12 +55,12 @@ public final class RealmPlanner {
     private static final long SALT = 0x5045_4F50_4C45_5321L;
     private static final long PEOPLE_SALT = 0x4445_4D4F_4752_4150L;
     /** People living in each province's farms and fields, whatever stands there. */
-    static final int RURAL = 150;
+    static final int RURAL = 1500;
     /** People in each district of a city, each hamlet (alone or in a village), each castle and each watchtower. */
-    static final int PER_DISTRICT = 400;
-    static final int PER_HAMLET = 25;
-    static final int PER_CASTLE = 120;
-    static final int PER_WATCHTOWER = 10;
+    static final int PER_DISTRICT = 4000;
+    static final int PER_HAMLET = 250;
+    static final int PER_CASTLE = 1200;
+    static final int PER_WATCHTOWER = 100;
     /** The share of a nation's people come from lands it doesn't hold: at least this, and up to this much more. */
     static final double WANDERERS = 0.03;
     static final double WANDERERS_MORE = 0.09;
