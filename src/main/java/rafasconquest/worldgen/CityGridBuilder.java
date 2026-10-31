@@ -103,7 +103,17 @@ public final class CityGridBuilder {
 
     private static CityTerrain.Plan planAndLog(Structure.GenerationContext ctx, CityLayout.Site site) {
         long start = System.nanoTime();
-        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> ground(ctx, x, z).y(), ctx.chunkGenerator().getSeaLevel());
+        // Where the survey reads the ground doesn't depend on what it finds: list those places first (each once), read
+        // them all at once on every core, then survey from the readings. A heavy terrain mod makes each reading slow.
+        java.util.Set<Long> wanted = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        int sea = ctx.chunkGenerator().getSeaLevel();
+        CityTerrain.plan(site, (x, z) -> {
+            wanted.add(xz(x, z));
+            return sea;
+        }, sea);
+        java.util.Map<Long, Integer> read = new java.util.concurrent.ConcurrentHashMap<>();
+        wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)));
+        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea);
         int[] counts = new int[CityTerrain.Edge.values().length];
         for (CityTerrain.Edge[] side : plan.edges()) {
             for (CityTerrain.Edge e : side) {
@@ -117,6 +127,20 @@ public final class CityGridBuilder {
 
     static void build(Structure.GenerationContext ctx, CityLayout.Site site, CityVariant variant, int cellX, int cellZ, StructurePiecesBuilder pieces) {
         new CityGridBuilder(ctx, site, variant, pieces).buildCell(cellX, cellZ);
+    }
+
+    /** (x, z) as one key: x in the high half. */
+    private static long xz(int x, int z) {
+        return ((long) x << 32) | (z & 0xffffffffL);
+    }
+
+    /**
+     * The y of the top non-air block of the noise terrain at (x, z), as {@link #ground} finds it, but reading down only
+     * as far as that block rather than the whole column.
+     */
+    static int surface(Structure.GenerationContext ctx, int x, int z) {
+        return ctx.chunkGenerator().getBaseHeight(x, z, net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG,
+                ctx.heightAccessor(), ctx.randomState()) - 1;
     }
 
     /** The top non-air block of the noise terrain at (x, z), and whether it is water. Needs no generated chunks. */
