@@ -859,7 +859,7 @@ the armies marching on every five seconds.
   its wars (the title, counties taken, its army) and its allies, or that it is at peace.
 - `/pve politics` reports the wars and armies, alliances, conquests and latest news; `/pve politics day [days]` runs
   that many days at once (armies marching through them); `/pve politics war <attacker> <defender>` declares a war now,
-  for the title the attacker wants most of the defender's (nation names; quote those with spaces).
+  for the title the attacker wants most of the defender's (nation names, suggested as you type; quoted where they have spaces).
 
 ## Organizations: the sword sanctums
 
@@ -905,7 +905,10 @@ Hamlets and hidden dojos have none.
 - **Bridges:** where water stands over the ground (a river) or the ground falls 8 or more below the land about it (a
   ravine), the road is a bridge, its deck flat across, 2 above the water or level with the higher bank, the smoothing
   ramping the road up to it: oak on log posts for town roads, spruce on stone brick posts for city roads, stone brick
-  with wall rails for high and dojo roads; a rail along each side, a post down to the ground every 6 blocks.
+  with wall rails for high and dojo roads; a rail along each side, a post down to the ground every 6 blocks. Only where
+  the deck stands 3 or more above the ground, or over water deeper than 2, is it built as a bridge; elsewhere the road is
+  raised to it on earth, so no stretch of land is laid with planks. Shallow water alone (a marsh, a ford) is crossed on
+  an earth causeway just above it.
 - **Signposts** stand at every fork: an oak sign on a fence post beside the road, facing the fork, naming the places
   its roads lead to.
 - Roads stop at city walls, at settlements, and short of a dojo.

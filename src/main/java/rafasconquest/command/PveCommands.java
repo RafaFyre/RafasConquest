@@ -103,8 +103,8 @@ public final class PveCommands {
                                         .executes(ctx -> say(ctx, rafasconquest.politics.Wars.runDays(ctx.getSource().getServer(),
                                                 IntegerArgumentType.getInteger(ctx, "days"))))))
                         .then(Commands.literal("war").requires(source -> source.hasPermission(2))
-                                .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string())
-                                        .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
+                                        .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
                                                 .executes(ctx -> say(ctx, rafasconquest.politics.Wars.forceWar(ctx.getSource().getServer(),
                                                         com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "attacker"),
                                                         com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "defender"))))))))
@@ -375,6 +375,17 @@ public final class PveCommands {
     }
 
     @Nullable
+    /** The nations of the world map, for the war command: quoted where a name has spaces. */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestNations(
+            CommandContext<CommandSourceStack> ctx, com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            return builder.buildFuture();
+        }
+        return SharedSuggestionProvider.suggest(map.nations().stream().filter(n -> !n.sanctum())
+                .map(n -> n.name().contains(" ") ? "\"" + n.name() + "\"" : n.name()), builder);
+    }
+
     /** Replies with a line (or several). */
     private static int say(CommandContext<CommandSourceStack> ctx, String text) {
         ctx.getSource().sendSuccess(() -> Component.literal(text), false);

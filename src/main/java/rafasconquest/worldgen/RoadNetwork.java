@@ -20,7 +20,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li>The ground is read every {@link #STEP} blocks along the road.</li>
  *   <li>Where water stands over it (a river), or it falls {@link #RAVINE_DEPTH} or more below the ground on both sides of
- *       it, close by (a ravine), the road is a <b>bridge</b>: its deck flat across, above the water or level with the far banks.</li>
+ *       it, close by (a ravine), the road is a <b>bridge</b>: its deck flat across, above the water or level with the far banks.
+ *       Only where the deck stands {@link #CLEAR} or more above the ground, or over water deeper than {@link #SHALLOW}, is it
+ *       built as a bridge; elsewhere the road is raised to the deck on earth. Shallow water alone (a marsh, a ford) is
+ *       crossed on a causeway just above it.</li>
  *   <li>The road's height is the ground's (or the deck's) smoothed over {@link #SMOOTH} samples each way, so it rises
  *       and falls gently: half a block at a time, which the slabs make.</li>
  * </ul>
@@ -35,6 +38,10 @@ public final class RoadNetwork {
     static final int RAVINE_WIDTH = 6;
     /** A bridge's deck stands this far above the water. */
     static final int ABOVE_WATER = 2;
+    /** Water this deep or shallower is crossed on a causeway, not a bridge. */
+    static final int SHALLOW = 2;
+    /** A deck at least this far above the ground beneath it is a bridge there; nearer, the road is built up to it instead. */
+    static final int CLEAR = 3;
 
     /** A road's height along it, every {@link #STEP} blocks, and where it is a bridge. */
     public record Profile(float[] height, boolean[] bridge) {
@@ -153,18 +160,38 @@ public final class RoadNetwork {
                 i++;
             }
             int b = i - 1;
-            // The banks: one sample out each way, included in the bridge.
+            // The banks: one sample out each way, at the deck's height.
             int left = Math.max(0, a - 1);
             int right = Math.min(n - 1, b + 1);
+            float deepest = 0;
+            boolean ravine = false;
+            for (int j = a; j <= b; j++) {
+                deepest = Math.max(deepest, water[j] - ground[j]);
+                ravine |= water[j] <= ground[j];
+            }
+            if (!ravine && deepest <= SHALLOW) {
+                // Shallow water (a marsh, a ford, a puddle): a causeway of earth just above it, not a bridge.
+                float top = 0;
+                for (int j = a; j <= b; j++) {
+                    top = Math.max(top, water[j] + 1);
+                }
+                for (int j = a; j <= b; j++) {
+                    bridge[j] = false;
+                    target[j] = top;
+                }
+                continue;
+            }
             float deck = Math.max(ground[left], ground[right]);
             for (int j = a; j <= b; j++) {
                 if (water[j] > ground[j]) {
                     deck = Math.max(deck, water[j] + ABOVE_WATER);
                 }
             }
+            // Only where the deck stands clear of the ground (or over deep water) is it a bridge; the rest is road at its
+            // height, on earth, so no stretch of plain land is laid with planks.
             for (int j = left; j <= right; j++) {
-                bridge[j] = true;
                 target[j] = deck;
+                bridge[j] = water[j] - ground[j] > SHALLOW || deck - ground[j] >= CLEAR;
             }
         }
         float[] height = new float[n];
