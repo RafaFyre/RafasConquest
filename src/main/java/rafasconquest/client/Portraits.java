@@ -64,6 +64,16 @@ final class Portraits {
         return entity;
     }
 
+    /** A character's model, dressed as they would be (crown, ceremonial dress or sword-titled harness, with Epic Knights). */
+    @Nullable
+    static AbstractRecruitEntity model(Minecraft mc, rafasconquest.map.BaseMap base, int person) {
+        AbstractRecruitEntity entity = model(mc, base.realm().people().get(person));
+        if (entity != null) {
+            rafasconquest.gear.Armoury.dressCharacter(entity, base, person);
+        }
+        return entity;
+    }
+
     /** The back button at the very top left (to the page before) and the close button at the very top right (to the game). */
     static void buttons(Screen screen, int width, Runnable back, java.util.function.Consumer<Button> add) {
         add.accept(Button.builder(Component.literal("<"), b -> back.run()).bounds(6, 6, 20, 20).build());

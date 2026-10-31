@@ -61,6 +61,7 @@ public final class Advancement {
         if (reached != rank) {
             ranks.set(player.getUUID(), reached);
             player.sendSystemMessage(Component.literal("You are promoted to " + reached.title() + " (rank " + reached.number() + ")."));
+            rafasconquest.gear.RankKits.issue(player, rank, reached);
         }
     }
 

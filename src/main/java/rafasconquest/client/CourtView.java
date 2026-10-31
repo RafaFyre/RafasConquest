@@ -92,7 +92,7 @@ final class CourtView {
         Minecraft mc = Minecraft.getInstance();
         for (int i = 0; i < Math.min(people.size(), set.seats.size()); i++) {
             int person = people.get(i);
-            figures.add(new Figure(person, set.seats.get(i), Portraits.model(mc, base.realm().people().get(person))));
+            figures.add(new Figure(person, set.seats.get(i), Portraits.model(mc, base, person)));
         }
         goal.set(now);
     }

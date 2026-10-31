@@ -26,6 +26,28 @@ Not required (they aren't in `mods.toml`), but recommended for everyone, and loa
 They are `runtimeOnly` dependencies in `build.gradle`, pinned in `gradle.properties` (`embeddium_version`,
 `distant_horizons_version`).
 
+## Epic Knights
+
+[Epic Knights](https://www.curseforge.com/minecraft/mc-mods/epic-knights-shields-armor-and-weapons) (`magistuarmory`)
+is optional: when installed, its armour and arms are worn (`gear/Armoury`); without it everyone keeps their vanilla
+gear. Its items are looked up by name, so it is never needed to build or run.
+- **Each land's look** (by its nation's culture): the plains' knights in mail and kettle hats, knightly harness for
+  the cavalry and plate for the officers, crested with a big plume; the taiga's nasal helms and lamellar (a bear's
+  head crest); the snows' great helms and crusader mail (a fur hood); the desert's pointed helms, lamellar and round
+  shields (a torse and mantle); the savanna's barbutes and gambesons (feathers); the jungle's sallets and gambesons
+  (feathers); the swamp's coifs, gambesons and bucklers (two plumes). Each has its own weapons and shield.
+- **Who wears it**: in battle, the **heavy infantry**, the **cavalry** (lances), the **captains** (body armour; the
+  banner stays on the head) and the **general** and their guard; the war camps' guards; the cities' wall archers and
+  the recruitment posts' guards and recruiters. Levies and archers keep their dyed leather.
+- **Colours**: every piece that takes a dye, and each crest, is dyed the side's colour; chestplates (surcoats) and
+  shields carry the nation's banner, as Epic Knights' heraldry does.
+- **Nobles** (in the world and on the nation and character pages): a ruler wears a crown and ceremonial dress; a duke
+  or a capital's lord a small crown; other nobles ceremonial dress. **Sword Saints** wear knightly harness, **Sword
+  Kings** gothic plate with a plumed armet, **Sword Gods** Maximilian plate with a great plume.
+- **Rank kits**: an enlisted player is issued their rank's arms in their nation's style on enlisting and on each
+  promotion into a better grade: the levy's gambeson (Soldier, Corporal), the heavy infantry's (Serjeant, Captain),
+  the cavalry's (Major, Colonel), the officers' (Marshal, Grand Marshal).
+
 ## Milestone 1 status
 
 Built: one Empire per Capital, Farms producing food, virtual POIs, ownership, the daily food tick, offline catch-up and debug commands.

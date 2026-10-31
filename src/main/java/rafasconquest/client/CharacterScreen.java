@@ -122,7 +122,7 @@ public class CharacterScreen extends Screen {
             if (x > width * 0.80) {
                 break;
             }
-            retainers.add(new Retainer(v, x, feet, scale, Portraits.model(minecraft, realm.people().get(v))));
+            retainers.add(new Retainer(v, x, feet, scale, Portraits.model(minecraft, base, v)));
             x += spacing;
             shown++;
         }

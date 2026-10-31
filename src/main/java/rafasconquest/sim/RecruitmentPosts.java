@@ -58,6 +58,8 @@ public final class RecruitmentPosts {
                 if (recruiter != null) {
                     recruiter.post(owner.id(), owner.name(), at.getX() + 0.5, at.getY(), at.getZ() + 0.5, FACING,
                             Math.floorMod(site.x() * 31 + site.z(), 20));
+                    // An officer: armoured in the nation's style (with Epic Knights).
+                    rafasconquest.gear.Armoury.dress(recruiter, rafasconquest.gear.Armoury.Kit.CAPTAIN, rafasconquest.worldgen.ConquestRuntime.map(), owner.id());
                     level.addFreshEntity(recruiter);
                     data.markGuardSpawned(at);
                     placed++;
@@ -144,6 +146,7 @@ public final class RecruitmentPosts {
             }
             noble.noble(i, rafasconquest.peerage.Names.styled(map, p), map.nations().get(p.nation()).id(), at.getX() + 0.5, at.getY(),
                     at.getZ() + 0.5, yaw, Math.floorMod(hold.x() * 17 + hold.z() * 3, 20));
+            rafasconquest.gear.Armoury.dressCharacter(noble, map, i); // crown, ceremonial dress or sword-titled harness
             level.addFreshEntity(noble);
             data.markGuardSpawned(at);
             placed++;

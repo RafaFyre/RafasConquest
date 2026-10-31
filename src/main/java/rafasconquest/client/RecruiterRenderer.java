@@ -20,6 +20,10 @@ public class RecruiterRenderer extends HumanoidMobRenderer<Recruiter, PlayerMode
 
     public RecruiterRenderer(EntityRendererProvider.Context context) {
         super(context, new PlayerModel<>(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+        // What they wear: a noble's crown and dress, an officer's harness.
+        addLayer(new net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer<>(this,
+                new net.minecraft.client.model.HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+                new net.minecraft.client.model.HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager()));
     }
 
     @Override

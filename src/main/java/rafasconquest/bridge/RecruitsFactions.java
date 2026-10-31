@@ -154,6 +154,8 @@ public class RecruitsFactions implements RecruitsBridge {
         bowman.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
         bowman.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.CHAINMAIL_BOOTS));
         bowman.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+        // With Epic Knights, in the owner's land's infantry harness, its colour and banner (keeping the bow).
+        rafasconquest.gear.Armoury.dress(bowman, rafasconquest.gear.Armoury.Kit.ARCHER_GUARD, rafasconquest.worldgen.ConquestRuntime.map(), owner.id());
         bowman.getInventory().addItem(new ItemStack(Items.ARROW, 64));
         AbstractRecruitEntity.applyBiomeAndVariant(bowman);
         bowman.setPersistenceRequired();
@@ -185,6 +187,7 @@ public class RecruitsFactions implements RecruitsBridge {
         guard.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
         guard.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
         guard.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+        rafasconquest.gear.Armoury.dress(guard, rafasconquest.gear.Armoury.Kit.GUARD, rafasconquest.worldgen.ConquestRuntime.map(), owner.id());
         AbstractRecruitEntity.applyBiomeAndVariant(guard);
         guard.setPersistenceRequired();
         guard.setHunger(100);

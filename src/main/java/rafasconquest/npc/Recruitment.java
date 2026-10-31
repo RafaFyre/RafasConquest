@@ -66,6 +66,7 @@ public final class Recruitment {
         Rank rank = ranks.of(player.getUUID());
         player.sendSystemMessage(Component.literal("You have joined " + nation.name() + " and enlisted in its army as "
                 + rank.title() + " (rank " + rank.number() + ")."));
+        rafasconquest.gear.RankKits.issue(player, null, rank); // their arms, with Epic Knights
     }
 
     private static Faction nationOf(Recruiter recruiter) {

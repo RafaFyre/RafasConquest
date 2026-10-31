@@ -1158,6 +1158,8 @@ public final class RecruitsBattle {
             equip(soldier, EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
             equip(soldier, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
             equip(soldier, EquipmentSlot.HEAD, new ItemStack(role == Role.GENERAL ? Items.GOLDEN_HELMET : Items.IRON_HELMET));
+            // With Epic Knights: the general in their land's officers' harness, crested; the guard as its cavalry.
+            wear(soldier, side, role == Role.GENERAL ? rafasconquest.gear.Armoury.Kit.GENERAL : rafasconquest.gear.Armoury.Kit.CAVALRY);
             return;
         }
         equip(soldier, EquipmentSlot.CHEST, dyed(Items.LEATHER_CHESTPLATE, side.uniform));
@@ -1173,6 +1175,18 @@ public final class RecruitsBattle {
             equip(soldier, EquipmentSlot.MAINHAND, side.banner.copy());
             equip(soldier, EquipmentSlot.OFFHAND, ItemStack.EMPTY);
         }
+        // With Epic Knights: cavalry in their land's harness; a captain's body armoured (the banner stays on the head).
+        if (soldier instanceof com.talhanation.recruits.entities.HorsemanEntity) {
+            wear(soldier, side, rafasconquest.gear.Armoury.Kit.CAVALRY);
+        } else if (role == Role.LEADER) {
+            wear(soldier, side, rafasconquest.gear.Armoury.Kit.CAPTAIN);
+        }
+    }
+
+    /** Puts on an Epic Knights kit in the side's land's style, colour and banner (nothing, without Epic Knights). */
+    private static void wear(AbstractRecruitEntity soldier, Side side, rafasconquest.gear.Armoury.Kit kit) {
+        rafasconquest.people.Homeland land = rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), side.faction.id());
+        rafasconquest.gear.Armoury.outfit(kit, land, side.uniform, side.banner).slots().forEach((slot, stack) -> equip(soldier, slot, stack));
     }
 
     /** Recruits keeps a copy of each worn item in its inventory; both have to change or the old kit comes back. */
@@ -1989,6 +2003,10 @@ public final class RecruitsBattle {
                 }
                 equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
                 equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
+                wear(soldier, side, rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY);
+                if (leader) {
+                    equip(soldier, EquipmentSlot.HEAD, side.banner.copy()); // the captain keeps the banner
+                }
             }
             default -> {
             }
@@ -3547,6 +3565,7 @@ public final class RecruitsBattle {
                 equip(guard, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
                 equip(guard, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
                 equip(guard, EquipmentSlot.OFFHAND, bannerShield(sides[side]));
+                wear(guard, sides[side], rafasconquest.gear.Armoury.Kit.GUARD);
                 campFolk.computeIfAbsent(side, s -> new ArrayList<>()).add(guard.getUUID());
             }
         }
