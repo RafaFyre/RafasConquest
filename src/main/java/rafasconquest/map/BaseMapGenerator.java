@@ -43,6 +43,83 @@ public final class BaseMapGenerator {
     static final int SANCTUM_DISTRICTS = 4;
     /** Heights are sampled every this many pixels; they change slowly and each sample is costly. */
     static final int HEIGHT_STEP = 4;
+    /** However slow the terrain, heights are read at least every this many pixels, and biomes every this many. */
+    static final int MAX_HEIGHT_STEP = 16;
+    static final int MAX_BIOME_STEP = 3;
+    /** The heights may take about this long in all before they are read more sparsely (the biomes half of it). */
+    static final double BUDGET_SECONDS = 40;
+
+    /** A grid of ground heights, a reading every {@code step} pixels (plus a border), and how many readings it took. */
+    private record Heights(int[] values, int width, int read) {
+    }
+
+    /**
+     * The ground's heights every {@code step} pixels (plus a border for the smoothing and the shading), keeping the
+     * readings of a grid twice as coarse where it has them (its point i is this one's 2i - 1).
+     */
+    private static Heights heights(@org.jetbrains.annotations.Nullable Heights coarser, int step, int size, int minX, int minZ, int bpp,
+                                   int visibleRadius, int sea, ChunkGenerator generator, ServerLevel level, RandomState random, long began) {
+        int hw = size / step + 3;
+        int[] values = new int[hw * hw];
+        boolean[] known = new boolean[hw * hw];
+        if (coarser != null) {
+            for (int j = 0; j < coarser.width(); j++) {
+                for (int i = 0; i < coarser.width(); i++) {
+                    int fi = 2 * i - 1;
+                    int fj = 2 * j - 1;
+                    if (fi >= 0 && fj >= 0 && fi < hw && fj < hw) {
+                        values[fj * hw + fi] = coarser.values()[j * coarser.width() + i];
+                        known[fj * hw + fi] = true;
+                    }
+                }
+            }
+        }
+        long reach = (long) (visibleRadius + 2L * step * bpp) * (visibleRadius + 2L * step * bpp);
+        java.util.concurrent.atomic.AtomicInteger read = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger rows = new java.util.concurrent.atomic.AtomicInteger();
+        IntStream.range(0, hw).parallel().forEach(j -> {
+            for (int i = 0; i < hw; i++) {
+                if (known[j * hw + i]) {
+                    continue;
+                }
+                int x = minX + (i - 1) * step * bpp;
+                int z = minZ + (j - 1) * step * bpp;
+                if ((long) x * x + (long) z * z <= reach) {
+                    values[j * hw + i] = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                    read.incrementAndGet();
+                } else {
+                    values[j * hw + i] = sea;
+                }
+            }
+            progress("heights every " + step * bpp + " blocks", rows.incrementAndGet(), hw, began);
+        });
+        return new Heights(values, hw, read.get());
+    }
+
+    /** The k-th trial point: spread over the known world, the same for every world. */
+    private static int[] probe(int k, int radius) {
+        double angle = k * 2.399963; // the golden angle: points spread evenly
+        double r = radius * 0.8 * Math.sqrt((k + 0.5) / 128.0);
+        return new int[]{(int) (Math.cos(angle) * r), (int) (Math.sin(angle) * r)};
+    }
+
+    /** Seconds per call of {@code read}, over {@code count} trial points. */
+    private static double timed(int count, java.util.function.IntConsumer read) {
+        long start = System.nanoTime();
+        for (int k = 0; k < count; k++) {
+            read.accept(k);
+        }
+        return (System.nanoTime() - start) / 1e9 / count;
+    }
+
+    /** Logs how far a step of the drawing has got, at each quarter. */
+    private static void progress(String what, int done, int of, long began) {
+        int quarter = Math.max(1, of / 4);
+        if (done % quarter == 0 && done < of) {
+            rafasconquest.RafasConquest.LOGGER.info("[world] drawing the world map: {} {}% ({} s)", what, done * 100 / of,
+                    (System.nanoTime() - began) / 1_000_000_000L);
+        }
+    }
 
     private BaseMapGenerator() {
     }
@@ -57,20 +134,43 @@ public final class BaseMapGenerator {
         BiomeSource biomes = generator.getBiomeSource();
         Climate.Sampler sampler = random.sampler();
         int sea = generator.getSeaLevel();
-        long reach = (long) (visibleRadius + 2L * HEIGHT_STEP * bpp) * (visibleRadius + 2L * HEIGHT_STEP * bpp);
-
-        // Coarse heights, one sample every HEIGHT_STEP pixels (plus a border for the smoothing and the shading).
-        int hw = size / HEIGHT_STEP + 3;
-        int[] coarse = new int[hw * hw];
-        IntStream.range(0, hw).parallel().forEach(j -> {
-            for (int i = 0; i < hw; i++) {
-                int x = minX + (i - 1) * HEIGHT_STEP * bpp;
-                int z = minZ + (j - 1) * HEIGHT_STEP * bpp;
-                coarse[j * hw + i] = (long) x * x + (long) z * z <= reach
-                        ? generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random)
-                        : sea;
+        long began = System.nanoTime();
+        java.util.concurrent.ForkJoinPool pool = java.util.concurrent.ForkJoinTask.getPool();
+        int threads = pool != null ? pool.getParallelism() : 1;
+        // Heights: a coarse grid first, then finer ones while the time they have taken says the next will fit (a terrain
+        // mod can make reading them ten times slower). Each finer grid keeps the coarser one's readings.
+        int step = MAX_HEIGHT_STEP;
+        long passStart = System.nanoTime();
+        Heights heightGrid = heights(null, step, size, minX, minZ, bpp, visibleRadius, sea, generator, level, random, began);
+        double passSeconds = (System.nanoTime() - passStart) / 1e9;
+        while (step > HEIGHT_STEP && heightGrid.read() > 0) {
+            int finer = step / 2;
+            double perRead = passSeconds / heightGrid.read();
+            double next = perRead * (Math.pow(size / (double) finer + 3, 2) - Math.pow(heightGrid.width(), 2)) * 0.8;
+            if ((System.nanoTime() - began) / 1e9 + next > BUDGET_SECONDS) {
+                break;
             }
-        });
+            step = finer;
+            passStart = System.nanoTime();
+            heightGrid = heights(heightGrid, step, size, minX, minZ, bpp, visibleRadius, sea, generator, level, random, began);
+            passSeconds = (System.nanoTime() - passStart) / 1e9;
+        }
+        final int heightStep = step;
+        int hw = heightGrid.width();
+        int[] coarse = heightGrid.values();
+        // Biomes: read every pixel, or every second or third if this world's are slow to read (timed once warmed up).
+        timed(64, k -> biomes.getNoiseBiome(QuartPos.fromBlock(probe(k, visibleRadius)[0]), QuartPos.fromBlock(sea),
+                QuartPos.fromBlock(probe(k, visibleRadius)[1]), sampler));
+        double perBiome = timed(128, k -> biomes.getNoiseBiome(QuartPos.fromBlock(probe(k, visibleRadius)[0]), QuartPos.fromBlock(sea),
+                QuartPos.fromBlock(probe(k, visibleRadius)[1]), sampler));
+        int biomeStep = 1;
+        while (biomeStep < MAX_BIOME_STEP && 0.8 * Math.pow(size / (double) biomeStep, 2) * perBiome / threads > BUDGET_SECONDS / 2) {
+            biomeStep++;
+        }
+        final int biomeEvery = biomeStep;
+        rafasconquest.RafasConquest.LOGGER.info("[world] drawing the world map: {} pixels a side; heights read every {} blocks in {} s, "
+                        + "biomes to read every {} blocks ({} µs each, on {} threads)", size, heightStep * bpp,
+                (System.nanoTime() - began) / 1_000_000_000L, biomeEvery * bpp, String.format("%.1f", perBiome * 1e6), threads);
 
         long visible2 = (long) visibleRadius * visibleRadius;
         int n = size * size;
@@ -82,6 +182,11 @@ public final class BaseMapGenerator {
         boolean[] wet = new boolean[n];
         byte[] hard = new byte[n];
         byte[] homeland = new byte[n];
+        // The biomes, read every biomeEvery pixels (each read kept for the pixels about it).
+        int bw = (size + biomeEvery - 1) / biomeEvery;
+        @SuppressWarnings("unchecked")
+        Holder<Biome>[] read = new Holder[bw * bw];
+        java.util.concurrent.atomic.AtomicInteger biomeRows = new java.util.concurrent.atomic.AtomicInteger();
         IntStream.range(0, size).parallel().forEach(pz -> {
             for (int px = 0; px < size; px++) {
                 int index = pz * size + px;
@@ -91,10 +196,19 @@ public final class BaseMapGenerator {
                     water[index] = true; // beyond the known world: transparent, and in no province
                     continue;
                 }
-                float h = height(coarse, hw, px, pz);
+                float h = height(coarse, hw, heightStep, px, pz);
                 heights[index] = h;
-                Holder<Biome> biome = biomes.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(Math.max((int) h, sea)),
-                        QuartPos.fromBlock(z), sampler);
+                int cell = pz / biomeEvery * bw + px / biomeEvery;
+                Holder<Biome> biome = read[cell];
+                if (biome == null) {
+                    // Read where that cell begins (the same answer whichever thread gets there first).
+                    int ax = px - px % biomeEvery;
+                    int az = pz - pz % biomeEvery;
+                    float ah = height(coarse, hw, heightStep, ax, az);
+                    biome = biomes.getNoiseBiome(QuartPos.fromBlock(minX + ax * bpp + bpp / 2), QuartPos.fromBlock(Math.max((int) ah, sea)),
+                            QuartPos.fromBlock(minZ + az * bpp + bpp / 2), sampler);
+                    read[cell] = biome;
+                }
                 biomeIds[index] = System.identityHashCode(biome.value());
                 water[index] = BiomePalette.isSea(biome);
                 wet[index] = water[index] || biome.is(net.minecraft.tags.BiomeTags.IS_RIVER);
@@ -106,15 +220,18 @@ public final class BaseMapGenerator {
                 if (!water[index] && h >= sea) {
                     // Light from the north-west, measured across a full height-sample step so the smoothing between
                     // samples doesn't show as facets. High ground a little paler.
-                    float slope = height(coarse, hw, px - HEIGHT_STEP / 2, pz - HEIGHT_STEP / 2)
-                            - height(coarse, hw, px + HEIGHT_STEP / 2, pz + HEIGHT_STEP / 2);
+                    float slope = (height(coarse, hw, heightStep, px - heightStep / 2, pz - heightStep / 2)
+                            - height(coarse, hw, heightStep, px + heightStep / 2, pz + heightStep / 2)) * HEIGHT_STEP / heightStep;
                     float light = 1 + Math.max(-0.25F, Math.min(0.25F, slope * 0.02F));
                     color = MapColors.shade(color, light);
                     color = MapColors.lerp(color, 0xE8E8E8, Math.max(0, Math.min(0.35F, (h - sea - 60) / 160F)));
                 }
                 pixels[index] = 0xFF000000 | color;
             }
+            progress("lands", biomeRows.incrementAndGet(), size, began);
         });
+        rafasconquest.RafasConquest.LOGGER.info("[world] the land read in {} s; now the provinces, titles, people and roads",
+                (System.nanoTime() - began) / 1_000_000_000L);
 
         // Provinces first, from the land alone: titles and their seat cities are drawn on them.
         ProvinceMap.Terrain terrain = new ProvinceMap.Terrain(minX, minZ, bpp, size, size, water, heights, biomeIds, rough);
@@ -334,9 +451,9 @@ public final class BaseMapGenerator {
     }
 
     /** Height at a pixel, smoothed (bilinear) between the coarse samples. */
-    private static float height(int[] heights, int hw, int px, int pz) {
-        float gx = (float) px / HEIGHT_STEP + 1;
-        float gz = (float) pz / HEIGHT_STEP + 1;
+    private static float height(int[] heights, int hw, int step, int px, int pz) {
+        float gx = (float) px / step + 1;
+        float gz = (float) pz / step + 1;
         int i = Math.max(0, Math.min(hw - 2, (int) Math.floor(gx)));
         int j = Math.max(0, Math.min(hw - 2, (int) Math.floor(gz)));
         float fx = Math.max(0, Math.min(1, gx - i));

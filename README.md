@@ -566,6 +566,14 @@ political map in the style of Crusader Kings 3, out to four or eight times the s
 all known from the start. Drag to pan and scroll to zoom. The legend is bottom left and the cursor's coordinates are
 bottom right. Double-click a faction's name to open its Faction Info, and ✕ (or Esc) goes back.
 
+**A new world's map is drawn before its first chunk** (cities stand at its titles' seats), while the world loads, and
+it reads the terrain generator a great deal, so a heavy terrain mod (Tectonic) can make it many times slower (6 minutes
+where the plain game takes half of one). So the ground's heights are read coarse to fine: every 16 pixels first, then
+8, then 4 (each grid keeping the readings of the one before), going finer only while the time taken says the next
+grid fits in about 40 s; a slow terrain stops at a coarser grid. The biomes are read every pixel, or every second or
+third pixel if a timed trial says reading all would take over 20 s. The log shows each step and its progress
+(`[world] drawing the world map: ...`), so a long load is plainly working.
+
 It is drawn as layers, bottom to top, each its own class, listed in order in `FactionMapScreen.layers`:
 
 1. **Base map** (`BaseMapLayer`): the world, washed to parchment with its relief and sea depth still faint. Beyond the
