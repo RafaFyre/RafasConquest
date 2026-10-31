@@ -174,7 +174,37 @@ public class NationScreen extends Screen {
 
     /** The lines beside the diamonds: each a line, and maybe a quieter one under it. */
     protected List<String[]> facts() {
-        return bullets(base.realm(), base.nations().get(nation), base.realm().demographics(nation));
+        List<String[]> lines = bullets(base.realm(), base.nations().get(nation), base.realm().demographics(nation));
+        lines.addAll(politics());
+        return lines;
+    }
+
+    /** Its wars, with how each goes, and its allies. */
+    private List<String[]> politics() {
+        List<String[]> lines = new ArrayList<>();
+        for (int[] w : ClientPolitics.wars()) {
+            boolean attacking = w[0] == nation;
+            if (!attacking && w[1] != nation) {
+                continue;
+            }
+            int score = attacking ? w[3] : -w[3];
+            String how = score >= 50 ? "winning" : score > 10 ? "ahead" : score >= -10 ? "even" : score > -50 ? "behind" : "losing";
+            lines.add(new String[]{"At war with " + base.nations().get(attacking ? w[1] : w[0]).name(),
+                    (attacking ? "Attacking" : "Defending") + " " + base.names().get(w[2]) + ", " + how + " (" + score + ")"});
+        }
+        List<String> allies = new ArrayList<>();
+        for (int[] a : ClientPolitics.alliances()) {
+            if (a[0] == nation || a[1] == nation) {
+                allies.add(base.nations().get(a[0] == nation ? a[1] : a[0]).name());
+            }
+        }
+        if (!allies.isEmpty()) {
+            lines.add(new String[]{"Allied with " + String.join(", ", allies)});
+        }
+        if (lines.isEmpty()) {
+            lines.add(new String[]{"At peace"});
+        }
+        return lines;
     }
 
     /** "and 4 more nobles": those with no room in the court. */

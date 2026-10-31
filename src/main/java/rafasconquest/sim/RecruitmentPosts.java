@@ -105,7 +105,9 @@ public final class RecruitmentPosts {
         for (int i = 0; i < map.realm().people().size(); i++) {
             rafasconquest.people.Person p = map.realm().people().get(i);
             rafasconquest.people.Person.Hold hold = p.hold();
-            if (p.nation() < 0 || peerage.replaced(hold.province()) && hold.kind() != rafasconquest.people.Person.Kind.LORD) {
+            // Not where a player has taken the hold, nor where it was conquered in war.
+            if (p.nation() < 0 || peerage.replaced(hold.province()) && hold.kind() != rafasconquest.people.Person.Kind.LORD
+                    || map.holders()[hold.province()] != p.nation()) {
                 continue;
             }
             int[] spot;

@@ -51,6 +51,7 @@ public final class ConquestEvents {
             ConquestServer.attach(level, data);
             // The map, and so the titles and their seat cities, before the first chunk is made.
             rafasconquest.map.BaseMap map = ConquestServer.get().mapStore().loadOrDrawNow();
+            rafasconquest.politics.Wars.restore(level, map); // the land as the wars have left it
             ConquestRuntime.publishMap(map);
             ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(map.cities()));
             ConquestRuntime.publishCountryside(new rafasconquest.worldgen.CountryIndex(map.settlements()));
@@ -76,6 +77,7 @@ public final class ConquestEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
             rafasconquest.peerage.PeerageSync.to(player);
+            rafasconquest.politics.PoliticsSync.to(player);
         }
     }
 

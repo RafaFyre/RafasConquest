@@ -87,6 +87,31 @@ public class TitleLayer implements MapLayer {
                 hoveredProvince = -1;
             }
         }
+        // The provinces fought over: a red cross on each, naming the war.
+        for (int[] war : rafasconquest.client.ClientPolitics.wars()) {
+            if (war[2] < 0 || war[2] >= map.base.centres().size()) {
+                continue;
+            }
+            ProvinceMap.Centre c = map.base.centres().get(war[2]);
+            int x = (int) view.screenX(c.x());
+            int y = (int) view.screenY(c.z());
+            if (!view.near(x, y, 10)) {
+                continue;
+            }
+            for (int d = -5; d <= 5; d++) {
+                g.fill(x + d - 1, y + d - 1, x + d + 2, y + d + 2, OUTLINE);
+                g.fill(x + d - 1, y - d - 1, x + d + 2, y - d + 2, OUTLINE);
+            }
+            for (int d = -4; d <= 4; d++) {
+                g.fill(x + d, y + d, x + d + 1, y + d + 1, 0xFFD02020);
+                g.fill(x + d, y - d, x + d + 1, y - d + 1, 0xFFD02020);
+            }
+            if (Math.abs(mouseX - x) <= 6 && Math.abs(mouseY - y) <= 6) {
+                hovered = "War over " + map.base.names().get(war[2]) + ": " + map.base.nations().get(war[0]).name() + " against "
+                        + map.base.nations().get(war[1]).name() + " (" + (war[3] > 0 ? "+" : "") + war[3] + ")";
+                hoveredProvince = -1;
+            }
+        }
         for (int p = 0; p < tiers.length; p++) {
             int tier = tiers[p];
             if (tier < 0) {

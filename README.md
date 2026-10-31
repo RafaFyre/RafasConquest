@@ -810,6 +810,38 @@ from one character to the next), the court dimmed behind the page on the right; 
 the left opens their page with a click. Their nation's banner hangs at the top right. A Sword King or Saint's page says
 which sanctum they trained at.
 
+## Wars
+
+The nations act on their own (`politics/`), day by day (each new day by the overworld's clock; at most three at once
+if the clock jumps; never for days caught up while the server was off). Kept with the world (`PoliticsData`).
+- **Each day**, every war fights, then every ruler not at war makes **one decision** (`Politics.decide`): war on a
+  neighbour, an alliance with one, or (most days) nothing. War is likelier for a warlike ruler (their Martial, and
+  Ambitious, Wrathful, Brave, Arrogant, Impatient, Zealous or Callous; Content, Craven, Calm, Compassionate, Patient
+  or Forgiving the other way), against a weaker neighbour (up to three times as likely), and one whose ruler they
+  dislike. An alliance is likelier for a diplomat, with a ruler they like, and is sworn if the other doesn't dislike them.
+  Sword sanctums never go to war.
+- **A war** is over one of the defender's provinces beside the attacker's land (never its seat). The defender's
+  allies come to its defence; the attacker's may join it. Each side fields a twentieth of its people (its leader's
+  whole army, half of each ally's), shrunk or grown with the land it has lost or won.
+- **Battles**: most days of a war (60 %) bring a battle on the border between the province fought over and the
+  attacker's land. **Far from players** it is settled by the armies' strength (the defender's counting 15 % more on
+  its own ground), moving the war's score 12 to 24. **Within 400 blocks of a player** it is **fought for real** with
+  the battle system (up to 1,000 a side; the armies deploy, and it begins when their countdown ends), and its result
+  moves the score 25.
+- **Peace**: a side whose score reaches 100 wins: the attacker takes the province (its city's guards, recruiters and
+  banners now its own; its nobles leave their nation's court, and their pages say they lost it); the defender throws
+  them back. A war still going after 30 days ends: the attacker takes the province if 50 ahead, else nothing changes
+  hands. Every peace brings a 15-day truce between the two sides.
+- **Muster**: when their nation goes to war, its enlisted players are told, and where its army musters (its capital).
+  Mustering itself (a day to gather, then a teleport) is still to come.
+- **Heralds**: each morning everyone hears the day before's news (a war declared, a battle, an alliance, a peace).
+- **On the map**, a red cross marks each province fought over (hovering names the war and its score), and conquered
+  provinces are drawn in their new nation's colour. **The nation page** lists its wars (attacking or defending, and
+  how each goes) and its allies, or that it is at peace.
+- `/pve politics` reports the wars, alliances, conquests and latest news; `/pve politics day [days]` runs that many
+  days of politics at once; `/pve politics war <attacker> <defender>` declares a war now (nation names; quote those
+  with spaces).
+
 ## Organizations: the sword sanctums
 
 Beside characters and nations, the world has **organizations** (`people/Organization`, kept with the realm): for now

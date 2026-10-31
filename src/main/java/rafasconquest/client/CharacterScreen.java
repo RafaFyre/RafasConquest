@@ -329,6 +329,10 @@ public class CharacterScreen extends Screen {
         if (!sword.isEmpty()) {
             text.append(" A ").append(sword).append(": ").append(Stat.superhumanMeaning(p.stat(Stat.PROWESS))).append('.');
         }
+        int owner = base.holders()[p.hold().province()];
+        if (p.nation() >= 0 && owner != p.nation()) {
+            text.append(" Lost ").append(place).append(owner >= 0 ? " to " + base.nations().get(owner).name() : "").append(" in war.");
+        }
         int school = realm.organizationOf(index);
         if (school >= 0) {
             rafasconquest.people.Organization o = realm.organizations().get(school);

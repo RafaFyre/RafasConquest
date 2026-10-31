@@ -131,6 +131,11 @@ public final class ConquestNetwork {
                 .decoder(PeerageView::read)
                 .consumerMainThread(ConquestNetwork::handlePeerageView)
                 .add();
+        CHANNEL.messageBuilder(PoliticsView.class, 18, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(PoliticsView::write)
+                .decoder(PoliticsView::read)
+                .consumerMainThread(ConquestNetwork::handlePoliticsView)
+                .add();
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -259,6 +264,33 @@ public final class ConquestNetwork {
 
     private static void handlePeerageView(PeerageView msg, Supplier<NetworkEvent.Context> context) {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates()));
+    }
+
+    /**
+     * Server → client: the nations' politics: each war (attacker, defender, the province fought over, its score), the
+     * alliances (pairs), the provinces conquered and by whom, and the latest news (day, text).
+     */
+    public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
+                               java.util.List<String> news) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeCollection(wars, FriendlyByteBuf::writeVarIntArray);
+            buf.writeCollection(alliances, FriendlyByteBuf::writeVarIntArray);
+            buf.writeMap(conquered, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeVarInt);
+            buf.writeCollection(news, FriendlyByteBuf::writeUtf);
+        }
+
+        static PoliticsView read(FriendlyByteBuf buf) {
+            return new PoliticsView(buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readVarIntArray),
+                    buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf));
+        }
+    }
+
+    public static void sendPolitics(ServerPlayer player, PoliticsView view) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), view);
+    }
+
+    private static void handlePoliticsView(PoliticsView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientPolitics.set(msg));
     }
 
     /** Server → client: how far the world is stretched (1: not at all), for the client's far-terrain quality. */

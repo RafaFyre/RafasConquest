@@ -41,6 +41,7 @@ public final class ClientMapCache {
         parts = null;
         try {
             map = BaseMap.decode(all.toByteArray());
+            rafasconquest.client.ClientPolitics.apply(map); // the land as it now lies
             return true;
         } catch (IOException e) {
             RafasConquest.LOGGER.error("Could not read the world map from the server", e);

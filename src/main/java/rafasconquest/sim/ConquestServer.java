@@ -167,10 +167,18 @@ public final class ConquestServer {
         }
     }
 
+    /** The most days of politics run at once, when the clock jumps ahead. */
+    private static final int POLITICAL_DAYS = 3;
+
     private void dayStep() {
         DayClock.Step step = DayClock.advance(data.lastProcessedDay(), DayClock.dayIndex(overworld.getDayTime()));
         for (long i = 0; i < step.daysToProcess(); i++) {
             EconomyTick.runDay(data);
+        }
+        // The nations act each day as it comes (a few at most, if the clock jumps), never for days caught up while away.
+        long first = Math.max(step.newLastProcessedDay() - step.daysToProcess() + 1, step.newLastProcessedDay() - POLITICAL_DAYS + 1);
+        for (long day = step.daysToProcess() > 0 ? first : step.newLastProcessedDay() + 1; day <= step.newLastProcessedDay(); day++) {
+            rafasconquest.politics.Wars.day(overworld.getServer(), day);
         }
         data.setLastProcessedDay(step.newLastProcessedDay());
     }

@@ -108,7 +108,9 @@ final class CourtView {
         int ruler = realm.ruler(nation);
         List<Integer> nobles = new ArrayList<>();
         for (int i = 0; i < realm.people().size(); i++) {
-            if (i != ruler && realm.people().get(i).nation() == nation) {
+            Person p = realm.people().get(i);
+            // Not those whose hold has been conquered: they have lost their place in its court.
+            if (i != ruler && p.nation() == nation && base.holders()[p.hold().province()] == nation) {
                 nobles.add(i);
             }
         }

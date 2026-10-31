@@ -93,6 +93,19 @@ public final class PveCommands {
                                 .then(Commands.argument("noble", com.mojang.brigadier.arguments.BoolArgumentType.bool())
                                         .executes(ctx -> nobleSet(ctx, EntityArgument.getPlayer(ctx, "player"),
                                                 com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "noble"))))))
+                .then(Commands.literal("politics")
+                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.report(ctx.getSource().getServer())))
+                        .then(Commands.literal("day").requires(source -> source.hasPermission(2))
+                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.runDays(ctx.getSource().getServer(), 1)))
+                                .then(Commands.argument("days", IntegerArgumentType.integer(1, 60))
+                                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.runDays(ctx.getSource().getServer(),
+                                                IntegerArgumentType.getInteger(ctx, "days"))))))
+                        .then(Commands.literal("war").requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                        .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.forceWar(ctx.getSource().getServer(),
+                                                        com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "attacker"),
+                                                        com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "defender"))))))))
                 .then(Commands.literal("poi")
                         .then(Commands.literal("list")
                                 .executes(ctx -> poiList(ctx, 500))
@@ -360,6 +373,12 @@ public final class PveCommands {
     }
 
     @Nullable
+    /** Replies with a line (or several). */
+    private static int say(CommandContext<CommandSourceStack> ctx, String text) {
+        ctx.getSource().sendSuccess(() -> Component.literal(text), false);
+        return 1;
+    }
+
     private static Faction byName(ConquestServer server, String name) {
         return server.data().factions().stream().filter(f -> f.name().equalsIgnoreCase(name.trim())).findFirst().orElse(null);
     }
