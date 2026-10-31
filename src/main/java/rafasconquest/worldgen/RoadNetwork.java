@@ -15,8 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The world map's roads, ready for building into the world ({@link RoadFeature}): which stretches cross each chunk,
- * and each road's height profile, worked out from the world generator along its whole length the first time any chunk
- * needs it (so every chunk agrees where the road runs, and no seams show):
+ * and each road's height profile, worked out from the world generator a stretch at a time as chunks along it need them
+ * (each from the ground a little past both its ends, so every chunk agrees where the road runs, and no seams show):
  * <ul>
  *   <li>The ground is read every {@link #STEP} blocks along the road.</li>
  *   <li>Where water stands over it (a river), or it falls {@link #RAVINE_DEPTH} or more below the ground on both sides of
@@ -43,19 +43,48 @@ public final class RoadNetwork {
     /** A deck at least this far above the ground beneath it is a bridge there; nearer, the road is built up to it instead. */
     static final int CLEAR = 3;
 
-    /** A road's height along it, every {@link #STEP} blocks, and where it is a bridge. */
-    public record Profile(float[] height, boolean[] bridge) {
+    /** Samples in each stretch of a road worked out at once (256 blocks). */
+    static final int WINDOW = 64;
+    /** Samples read past each end of a stretch (128 blocks), so neighbouring stretches agree where they meet. */
+    static final int HALO = 32;
+
+    /**
+     * A road's height along it, every {@link #STEP} blocks, and where it is a bridge: worked out a stretch at a time, as
+     * chunks along it ask, each stretch from the ground a little past both its ends, so the stretches meet without seams.
+     */
+    public final class Profile {
+        private final int road;
+        private final int samples;
+        private final ServerLevel level;
+
+        private Profile(int road, ServerLevel level) {
+            this.road = road;
+            this.level = level;
+            this.samples = (int) Math.ceil(along[road][along[road].length - 1] / STEP) + 1;
+        }
+
         public float heightAt(double along) {
             double f = along / STEP;
-            int i = (int) Math.max(0, Math.min(height.length - 1, Math.floor(f)));
-            int j = Math.min(height.length - 1, i + 1);
-            return (float) (height[i] + (height[j] - height[i]) * Math.max(0, Math.min(1, f - i)));
+            int i = (int) Math.max(0, Math.min(samples - 1, Math.floor(f)));
+            int j = Math.min(samples - 1, i + 1);
+            float hi = window(i).height()[i % WINDOW];
+            float hj = window(j).height()[j % WINDOW];
+            return (float) (hi + (hj - hi) * Math.max(0, Math.min(1, f - i)));
         }
 
         public boolean bridgeAt(double along) {
-            int i = (int) Math.max(0, Math.min(bridge.length - 1, Math.round(along / STEP)));
-            return bridge[i];
+            int i = (int) Math.max(0, Math.min(samples - 1, Math.round(along / STEP)));
+            return window(i).bridge()[i % WINDOW];
         }
+
+        private Stretch window(int sample) {
+            int w = sample / WINDOW;
+            return stretches.computeIfAbsent(((long) road << 32) | w, k -> stretch(road, w, samples, level));
+        }
+    }
+
+    /** One stretch of a road's profile: its samples' heights, and where it is a bridge. */
+    record Stretch(float[] height, boolean[] bridge) {
     }
 
     private static volatile RoadNetwork current;
@@ -65,7 +94,9 @@ public final class RoadNetwork {
     private final Map<Long, List<int[]>> byChunk = new HashMap<>();
     /** Each road's length up to each of its points. */
     private final double[][] along;
-    private final Map<Integer, Profile> profiles = new ConcurrentHashMap<>();
+    /** The stretches of profile worked out, by road and stretch; and the ground read, by road and block of samples. */
+    private final Map<Long, Stretch> stretches = new ConcurrentHashMap<>();
+    private final Map<Long, float[][]> readings = new ConcurrentHashMap<>();
 
     private RoadNetwork(BaseMap map) {
         this.map = map;
@@ -119,31 +150,75 @@ public final class RoadNetwork {
         return along[r][k];
     }
 
-    /** Road {@code r}'s profile, worked out on first asking. */
+    /** Road {@code r}'s profile (each stretch worked out on first asking). */
     public Profile profile(int r, ServerLevel level) {
-        return profiles.computeIfAbsent(r, i -> work(map.roads().roads().get(i), along[i], level));
+        return new Profile(r, level);
     }
 
-    private static Profile work(Roads.Road road, double[] cum, ServerLevel level) {
-        double length = cum[cum.length - 1];
-        int n = (int) Math.ceil(length / STEP) + 1;
-        ChunkGenerator generator = level.getChunkSource().getGenerator();
-        RandomState random = level.getChunkSource().randomState();
+    /** Works out stretch {@code w} of road {@code r} from the ground over it and a halo past both its ends. */
+    private Stretch stretch(int r, int w, int samples, ServerLevel level) {
+        int lo = Math.max(0, w * WINDOW - HALO);
+        int hi = Math.min(samples - 1, (w + 1) * WINDOW - 1 + HALO);
+        int n = hi - lo + 1;
         float[] ground = new float[n];
         float[] water = new float[n];
-        int k = 0;
         for (int i = 0; i < n; i++) {
-            double s = Math.min(length, i * STEP);
-            while (k < cum.length - 2 && cum[k + 1] < s) {
-                k++;
-            }
-            double seg = cum[k + 1] - cum[k];
-            double f = seg == 0 ? 0 : (s - cum[k]) / seg;
-            int x = (int) Math.floor(road.xs()[k] + (road.xs()[k + 1] - road.xs()[k]) * f);
-            int z = (int) Math.floor(road.zs()[k] + (road.zs()[k + 1] - road.zs()[k]) * f);
-            ground[i] = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
-            water[i] = generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random);
+            float[][] block = reading(r, (lo + i) / WINDOW, samples, level);
+            ground[i] = block[0][(lo + i) % WINDOW];
+            water[i] = block[1][(lo + i) % WINDOW];
         }
+        Stretch whole = work(ground, water);
+        int from = w * WINDOW - lo;
+        int count = Math.min(WINDOW, samples - w * WINDOW);
+        float[] height = new float[WINDOW];
+        boolean[] bridge = new boolean[WINDOW];
+        System.arraycopy(whole.height(), from, height, 0, count);
+        System.arraycopy(whole.bridge(), from, bridge, 0, count);
+        return new Stretch(height, bridge);
+    }
+
+    /** The ground (and the water's top) at block {@code b} of road {@code r}'s samples, read once. */
+    private float[][] reading(int r, int b, int samples, ServerLevel level) {
+        return readings.computeIfAbsent(((long) r << 32) | b, k -> {
+            Roads.Road road = map.roads().roads().get(r);
+            double[] cum = along[r];
+            double length = cum[cum.length - 1];
+            ChunkGenerator generator = level.getChunkSource().getGenerator();
+            RandomState random = level.getChunkSource().randomState();
+            float[] ground = new float[WINDOW];
+            float[] water = new float[WINDOW];
+            for (int j = 0; j < WINDOW && b * WINDOW + j < samples; j++) {
+                double s = Math.min(length, (b * WINDOW + j) * (double) STEP);
+                int seg = segment(cum, s);
+                double span = cum[seg + 1] - cum[seg];
+                double f = span == 0 ? 0 : (s - cum[seg]) / span;
+                int x = (int) Math.floor(road.xs()[seg] + (road.xs()[seg + 1] - road.xs()[seg]) * f);
+                int z = (int) Math.floor(road.zs()[seg] + (road.zs()[seg + 1] - road.zs()[seg]) * f);
+                ground[j] = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
+                water[j] = generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random);
+            }
+            return new float[][]{ground, water};
+        });
+    }
+
+    /** The segment of a road (its points k, k + 1) that {@code s} blocks along it falls in. */
+    static int segment(double[] cum, double s) {
+        int lo = 0;
+        int hi = cum.length - 2;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (cum[mid] <= s) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return Math.max(0, lo);
+    }
+
+    /** The heights and bridges of a run of samples, from the ground and the water's top over them. */
+    static Stretch work(float[] ground, float[] water) {
+        int n = ground.length;
         // Rivers and ravines: spans to bridge, each with its deck's height.
         boolean[] bridge = new boolean[n];
         for (int i = 0; i < n; i++) {
@@ -198,7 +273,7 @@ public final class RoadNetwork {
         for (int i = 0; i < n; i++) {
             height[i] = bridge[i] ? target[i] : average(target, i, SMOOTH);
         }
-        return new Profile(height, bridge);
+        return new Stretch(height, bridge);
     }
 
     /**
