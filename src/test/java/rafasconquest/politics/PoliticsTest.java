@@ -210,8 +210,8 @@ class PoliticsTest {
         p.advance(1.5, lands, new Random(2), FAR);
         p.advance(1.9, lands, new Random(2), FAR);
         assertEquals(3000, w.army(true).x(), 1e-9, "marched while mustering");
-        p.advance(2.1, lands, new Random(2), FAR);
-        assertEquals(3200, w.army(true).x(), 1e-6, "a tenth of a day's march");
+        p.advance(2.01, lands, new Random(2), FAR);
+        assertEquals(3000 + Politics.MARCH * 0.01, w.army(true).x(), 1e-6, "a hundredth of a day's march");
     }
 
     @Test
@@ -228,8 +228,8 @@ class PoliticsTest {
         w.attackerArmy = army;
         w.defenderArmy.readyAt = 100; // the defender stays home: no battle
         p.advance(2, lands, new Random(2), FAR);
-        p.advance(2.8, lands, new Random(2), FAR);
-        p.advance(3.6, lands, new Random(2), FAR); // 1.6 days: 3,200 blocks, by the castle and on
+        p.advance(2.08, lands, new Random(2), FAR);
+        p.advance(2.16, lands, new Random(2), FAR); // 0.16 days: 3,200 blocks, by the castle and on
         assertEquals(3200, army.x(), 1e-6);
         assertEquals(3500, army.heading(w)[0], 1e-9, "the castle not passed");
     }

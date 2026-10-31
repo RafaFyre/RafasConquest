@@ -861,7 +861,7 @@ the armies marching on every five seconds.
   they already hold.
 - **Armies**: a nation's **levy** is a twentieth of its people (shrunk or grown with the land it has lost or won); its
   **manpower** is its levy less its dead not yet made good, less its armies in the field. Each side raises an army of
-  all its leader's manpower and half of each ally's, **musters it a day**, then **marches** (2,000 blocks a day) to
+  all its leader's manpower and half of each ally's, **musters it a day**, then **marches** (20,000 blocks a day, about 17 a second) to
   the **battle site**: the border of the county to be taken next (the defender's county of the title nearest
   the attacker's land).
 - **Mustering** comes two ways (`Politics.Muster`). **Offensive**: at the nation's city or castle nearest the battle

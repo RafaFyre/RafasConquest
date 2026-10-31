@@ -34,7 +34,7 @@ public final class Politics {
     /** How likely doing nothing is, against each other choice's weight. */
     static final double NOTHING = 40;
     /** How far an army marches in a day, in blocks. */
-    static final double MARCH = 2000;
+    static final double MARCH = 20000;
     /** How long an army musters at its capital before it marches, in days. */
     static final double MUSTER = 1;
     /** How long a victorious army rests before marching on, in days. */
