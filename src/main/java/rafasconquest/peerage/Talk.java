@@ -145,6 +145,8 @@ public final class Talk {
         int mine = Retinues.level(peer.title);
         if (peer.vassals.contains(person)) {
             options.add(new Option("release", "Release them from your fealty"));
+            rafasconquest.character.Job job = peer.vassalJobs.getOrDefault(person, rafasconquest.character.Job.HEAVY_INFANTRY);
+            options.add(new Option("job", "Their troops fight as: " + job.title() + " (change)"));
         } else if (mine > theirs && theirs < Retinues.TOP) {
             options.add(new Option("vassalize", "Ask them to swear fealty to you"));
         }
@@ -194,8 +196,14 @@ public final class Talk {
             } else {
                 player.sendSystemMessage(Component.literal(name + ": I do not know you well enough to bend the knee. Serve me first."));
             }
+        } else if (key.equals("job")) {
+            rafasconquest.character.Job[] jobs = rafasconquest.character.Job.values();
+            rafasconquest.character.Job now = peer.vassalJobs.getOrDefault(npc.person(), rafasconquest.character.Job.HEAVY_INFANTRY);
+            peer.vassalJobs.put(npc.person(), jobs[(now.ordinal() + 1) % jobs.length]);
+            peerage.changed();
         } else if (key.equals("release")) {
             peer.vassals.remove(npc.person());
+            peer.vassalJobs.remove(npc.person());
             peerage.changed();
             player.sendSystemMessage(Component.literal("You release " + npc.getName().getString() + " from your fealty."));
         } else if (key.equals("swear")) {

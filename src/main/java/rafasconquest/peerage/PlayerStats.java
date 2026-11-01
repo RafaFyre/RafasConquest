@@ -55,7 +55,8 @@ public final class PlayerStats {
                 rows.add(new String[]{"Sworn to", map.realm().people().get(peer.liege).name()});
             }
             List<String> vassals = peer.vassals.stream().filter(v -> v >= 0 && v < map.realm().people().size())
-                    .map(v -> map.realm().people().get(v).name()).toList();
+                    .map(v -> map.realm().people().get(v).name() + " (" + Retinues.rank(map.realm(), v).title() + ", "
+                            + peer.vassalJobs.getOrDefault(v, rafasconquest.character.Job.HEAVY_INFANTRY).title().toLowerCase() + ")").toList();
             rows.add(new String[]{"Vassals", vassals.isEmpty() ? "None" : vassals.size() + ": " + String.join(", ", vassals)});
         }
         rows.add(new String[]{"Retinue", peer.retinue.size() + " of " + Retinues.size(Retinues.level(peer.title))

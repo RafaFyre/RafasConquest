@@ -3628,6 +3628,47 @@ public final class RecruitsBattle {
                     councillors.put(member.getUUID(), side);
                 }
             }
+            vassalOfficers(side, camp);
+        }
+    }
+
+    /** How many vassal officers stand in a command tent, in a row facing the general from the entrance side. */
+    private static final int VASSAL_OFFICERS = 9;
+
+    /**
+     * The officers among the vassals of this side's players (a town's lord or higher: Major to Marshal) stand in its
+     * command tent with the council, each as their job's kind of soldier. Enlisted vassals (castle lords, Captains) lead
+     * in the field and are not here.
+     */
+    private void vassalOfficers(int side, WarCamp camp) {
+        rafasconquest.map.BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return;
+        }
+        rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(level.getServer());
+        int n = 0;
+        for (ServerPlayer player : level.players()) {
+            if (player.getTeam() == null || !player.getTeam().getName().equals(sides[side].team.getName())) {
+                continue;
+            }
+            rafasconquest.peerage.Peerage.Peer peer = peerage.of(player.getUUID());
+            for (int v : peer.vassals) {
+                if (v < 0 || v >= map.realm().people().size() || n >= VASSAL_OFFICERS) {
+                    continue;
+                }
+                Rank rank = rafasconquest.peerage.Retinues.rank(map.realm(), v);
+                if (!rank.officer()) {
+                    continue;
+                }
+                Job job = peer.vassalJobs.getOrDefault(v, Job.HEAVY_INFANTRY);
+                int r = n - VASSAL_OFFICERS / 2; // -4 .. 4, a block apart
+                AbstractRecruitEntity officer = campFigure(jobType(job), side, Role.GUARD, camp.spot(r, 3), camp.yaw(2),
+                        rank.title() + " " + map.realm().people().get(v).name());
+                if (officer != null) {
+                    councillors.put(officer.getUUID(), side);
+                    n++;
+                }
+            }
         }
     }
 

@@ -109,6 +109,14 @@ public final class Retinues {
         return retinue;
     }
 
+    /**
+     * A vassal's rank in the army, by their standing: a castle's lord is a Captain (enlisted, leading in the field); a
+     * town's a Major, a city's a Colonel and a capital's lord a Marshal: officers, who sit in the war council's tent.
+     */
+    public static rafasconquest.character.Rank rank(Realm realm, int person) {
+        return rafasconquest.character.Rank.of(Math.min(7, 4 + level(realm, person)));
+    }
+
     /** The troops a character brings to war: by their standing, with all their vassals' (and theirs') besides. */
     public static int troops(Realm realm, int person) {
         return troops(realm, person, new HashSet<>());

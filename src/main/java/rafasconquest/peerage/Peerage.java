@@ -59,6 +59,8 @@ public final class Peerage extends SavedData {
         public final Set<Integer> known = new HashSet<>();
         /** The characters sworn to them as vassals. */
         public final Set<Integer> vassals = new HashSet<>();
+        /** Each vassal's job in battle, as the player assigned it (heavy infantry if none). */
+        public final Map<Integer, rafasconquest.character.Job> vassalJobs = new HashMap<>();
         /** Their retinue: the recruits they hired who became characters, following them (entity, name). */
         public final Map<UUID, String> retinue = new java.util.LinkedHashMap<>();
         /** The quests read on a board, not yet taken, by id. */
@@ -148,6 +150,9 @@ public final class Peerage extends SavedData {
             CompoundTag retinue = new CompoundTag();
             p.retinue.forEach((member, name) -> retinue.putString(member.toString(), name));
             t.put("retinue", retinue);
+            CompoundTag jobs = new CompoundTag();
+            p.vassalJobs.forEach((v, job) -> jobs.putString(String.valueOf(v), job.id()));
+            t.put("vassalJobs", jobs);
             ListTag read = new ListTag();
             p.read.values().forEach(q -> read.add(q.save()));
             t.put("read", read);
@@ -196,6 +201,10 @@ public final class Peerage extends SavedData {
             p.liege = t.getInt("liege");
             for (int v : t.getIntArray("vassals")) {
                 p.vassals.add(v);
+            }
+            CompoundTag jobs = t.getCompound("vassalJobs");
+            for (String v : jobs.getAllKeys()) {
+                p.vassalJobs.put(Integer.parseInt(v), rafasconquest.character.Job.byId(jobs.getString(v)));
             }
             CompoundTag retinue = t.getCompound("retinue");
             for (String id : retinue.getAllKeys()) {
