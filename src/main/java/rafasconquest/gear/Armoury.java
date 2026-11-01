@@ -192,7 +192,13 @@ public final class Armoury {
         Style s = STYLES.getOrDefault(land, STYLES.get(Homeland.PLAINS));
         Map<EquipmentSlot, ItemStack> slots = new EnumMap<>(EquipmentSlot.class);
         switch (kit) {
-            case HEAVY_INFANTRY, GUARD -> {
+            case HEAVY_INFANTRY -> {
+                // Knights on foot, in every land: a sallet and knightly harness, an iron zweihänder in both hands.
+                wear(slots, "sallet", body("knight_chestplate", "knight_leggings", "knight_boots"), colour, banner);
+                hold(slots, "iron_zweihander", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
+            case GUARD -> {
                 wear(slots, s.infantryHelmet(), s.infantryBody(), colour, banner);
                 hold(slots, s.infantryWeapon(), s.shield(), banner);
             }
@@ -311,6 +317,21 @@ public final class Armoury {
         if (stack != null) {
             slots.put(slot, stack);
         }
+    }
+
+    /**
+     * A support soldier's polearm: Better Weaponry's iron glaive, else Epic Knights' iron guisarme (the nearest it has);
+     * null with neither mod.
+     */
+    @Nullable
+    public static ItemStack glaive() {
+        for (ResourceLocation id : new ResourceLocation[]{new ResourceLocation("better_weaponry", "iron_glaive"), new ResourceLocation(MOD, "iron_guisarme")}) {
+            Item item = ForgeRegistries.ITEMS.getValue(id);
+            if (item != null && item != Items.AIR) {
+                return new ItemStack(item);
+            }
+        }
+        return null;
     }
 
     /** One of Epic Knights' items by name, dyed {@code colour} if it takes a dye (and colour is not -1); null if it has none such. */

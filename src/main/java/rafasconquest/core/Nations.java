@@ -211,6 +211,140 @@ public final class Nations {
         return new Plan(nations, holder, miniEyes);
     }
 
+    /**
+     * Gives the nations whole, thick land, once their titles are taken: each holds one piece round its seat (land cut off
+     * from it is let go); free land a nation mostly surrounds joins it, and its land reaching out thinly (less than a
+     * third of a province's neighbours its own) is let go or joins the nation that mostly surrounds it, over
+     * {@link #SMOOTHING_ROUNDS} rounds, never cutting a nation in two; last, free land wholly within one nation (a hole:
+     * touching no other nation, the map's edge or a calm) is filled. The calms stay nobody's, and the sword sanctums keep
+     * their county as it is.
+     */
+    public static void consolidate(Plan plan, List<? extends java.util.Set<Integer>> adjacent, boolean[] mapEdge, Seats seats, int eyeRadius) {
+        int[] holder = plan.holder();
+        List<Nation> nations = plan.nations();
+        boolean[] open = new boolean[holder.length];
+        for (int p = 0; p < holder.length; p++) {
+            int[] at = seats.at(p);
+            open[p] = distance(at) > eyeRadius && !calm(at, eyeRadius, plan.miniEyes());
+        }
+        for (int n = 0; n < nations.size(); n++) {
+            if (!nations.get(n).sanctum()) {
+                boolean[] reached = reach(holder, adjacent, n, nations.get(n).seat());
+                for (int p = 0; p < holder.length; p++) {
+                    if (holder[p] == n && !reached[p]) {
+                        holder[p] = -1;
+                    }
+                }
+            }
+        }
+        for (int round = 0; round < SMOOTHING_ROUNDS; round++) {
+            for (int p = 0; p < holder.length; p++) {
+                if (holder[p] < 0 && open[p]) {
+                    holder[p] = surrounding(holder, adjacent, nations, p, -1);
+                }
+            }
+            for (int p = 0; p < holder.length; p++) {
+                int n = holder[p];
+                if (n < 0 || nations.get(n).sanctum() || p == nations.get(n).seat()) {
+                    continue;
+                }
+                int own = 0;
+                for (int q : adjacent.get(p)) {
+                    if (holder[q] == n) {
+                        own++;
+                    }
+                }
+                if (own * 3 >= adjacent.get(p).size()) {
+                    continue;
+                }
+                holder[p] = surrounding(holder, adjacent, nations, p, n);
+                if (!whole(holder, adjacent, n, nations.get(n).seat())) {
+                    holder[p] = n; // it would cut its nation in two
+                }
+            }
+        }
+        // The holes: free land wholly within one nation.
+        boolean[] seen = new boolean[holder.length];
+        for (int start = 0; start < holder.length; start++) {
+            if (holder[start] >= 0 || !open[start] || seen[start]) {
+                continue;
+            }
+            List<Integer> hole = new ArrayList<>();
+            java.util.Set<Integer> around = new java.util.TreeSet<>();
+            boolean enclosed = true;
+            java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>(List.of(start));
+            seen[start] = true;
+            while (!queue.isEmpty()) {
+                int p = queue.poll();
+                hole.add(p);
+                enclosed &= !mapEdge[p];
+                for (int q : adjacent.get(p)) {
+                    if (holder[q] >= 0) {
+                        around.add(holder[q]);
+                    } else if (!open[q]) {
+                        enclosed = false; // it opens onto a calm
+                    } else if (!seen[q]) {
+                        seen[q] = true;
+                        queue.add(q);
+                    }
+                }
+            }
+            if (enclosed && around.size() == 1 && !nations.get(around.iterator().next()).sanctum()) {
+                int n = around.iterator().next();
+                hole.forEach(p -> holder[p] = n);
+            }
+        }
+    }
+
+    /** Rounds of thickening and thinning in {@link #consolidate}. */
+    static final int SMOOTHING_ROUNDS = 4;
+
+    /** The nation (not a sanctum, nor {@code not}) holding more than half of a province's neighbours, or -1. */
+    private static int surrounding(int[] holder, List<? extends java.util.Set<Integer>> adjacent, List<Nation> nations, int p, int not) {
+        java.util.Map<Integer, Integer> count = new java.util.HashMap<>();
+        for (int q : adjacent.get(p)) {
+            if (holder[q] >= 0 && holder[q] != not && !nations.get(holder[q]).sanctum()) {
+                count.merge(holder[q], 1, Integer::sum);
+            }
+        }
+        for (java.util.Map.Entry<Integer, Integer> e : count.entrySet()) {
+            if (e.getValue() * 2 > adjacent.get(p).size()) {
+                return e.getKey();
+            }
+        }
+        return -1;
+    }
+
+    /** The provinces of a nation's land reached from its seat through its own. */
+    private static boolean[] reach(int[] holder, List<? extends java.util.Set<Integer>> adjacent, int n, int seat) {
+        boolean[] reached = new boolean[holder.length];
+        if (holder[seat] != n) {
+            return reached;
+        }
+        java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>(List.of(seat));
+        reached[seat] = true;
+        while (!queue.isEmpty()) {
+            for (int q : adjacent.get(queue.poll())) {
+                if (holder[q] == n && !reached[q]) {
+                    reached[q] = true;
+                    queue.add(q);
+                }
+            }
+        }
+        return reached;
+    }
+
+    /** Whether a nation's land is one piece. */
+    static boolean whole(int[] holder, List<? extends java.util.Set<Integer>> adjacent, int n, int seat) {
+        boolean[] reached = reach(holder, adjacent, n, seat);
+        for (int p = 0; p < holder.length; p++) {
+            if (holder[p] == n && !reached[p]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** While the known world has too few nations, a title whose seat is free there becomes one. */
     private static void fill(TitleMap t, List<Nation> nations, int[] holder, TitleMap.Tier tier, int title, int seat, Seats seats,
                              int eyeRadius, int knownRadius, List<int[]> miniEyes) {

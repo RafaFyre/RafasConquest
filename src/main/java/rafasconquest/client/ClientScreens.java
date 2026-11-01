@@ -24,6 +24,11 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new RecruiterScreen(view));
     }
 
+    /** The player's stats, over the screen they were asked from (the inventory), which closing them goes back to. */
+    public static void openStats(rafasconquest.peerage.PlayerStats.View view) {
+        Minecraft.getInstance().setScreen(new StatsScreen(Minecraft.getInstance().screen, view));
+    }
+
     /** A quest board's notices. */
     public static void openBoard(rafasconquest.peerage.Boards.View view) {
         Minecraft.getInstance().setScreen(new BoardScreen(view));

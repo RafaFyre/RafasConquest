@@ -203,8 +203,24 @@ public final class Countryside {
         return false;
     }
 
+    /** Which provinces reach the edge of the map (land may lie beyond them that the map does not show). */
+    public static boolean[] onMapEdge(SeatCities.Grid g, int n) {
+        boolean[] edge = new boolean[n];
+        int w = g.width();
+        int h = g.height();
+        for (int z = 0; z < h; z++) {
+            for (int x = 0; x < w; x++) {
+                int p = g.provinces()[z * w + x];
+                if (p >= 0 && (x == 0 || z == 0 || x == w - 1 || z == h - 1)) {
+                    edge[p] = true;
+                }
+            }
+        }
+        return edge;
+    }
+
     /** Which provinces neighbour which, from the map's pixels. */
-    static List<TreeSet<Integer>> adjacency(SeatCities.Grid g, int n) {
+    public static List<TreeSet<Integer>> adjacency(SeatCities.Grid g, int n) {
         List<TreeSet<Integer>> adjacent = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             adjacent.add(new TreeSet<>());

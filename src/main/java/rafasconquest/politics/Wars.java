@@ -204,7 +204,15 @@ public final class Wars {
     }
 
     private static void teleport(ServerPlayer p, ServerLevel level, int x, int z) {
-        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        toSurface(p, level, x, z, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
+    }
+
+    /**
+     * Teleports a player onto the top block of a column of a heightmap's kind. The chunk is loaded (or generated) first:
+     * an unloaded chunk's height is the world's floor.
+     */
+    public static void toSurface(ServerPlayer p, ServerLevel level, int x, int z, Heightmap.Types type) {
+        int y = level.getChunk(x >> 4, z >> 4).getHeight(type, x & 15, z & 15) + 1;
         p.teleportTo(level, x + 0.5, y, z + 0.5, p.getYRot(), p.getXRot());
     }
 

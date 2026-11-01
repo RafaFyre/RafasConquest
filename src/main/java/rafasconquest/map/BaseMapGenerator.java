@@ -258,9 +258,12 @@ public final class BaseMapGenerator {
         for (SeatCities.City c : countryside.cities()) {
             seatAt.put(c.province(), new int[]{c.x(), c.z()});
         }
-        Nations.Plan plan = Nations.plan(level.getSeed(), titles,
-                p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()}),
+        Nations.Seats seatsAt = p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()});
+        Nations.Plan plan = Nations.plan(level.getSeed(), titles, seatsAt,
                 settings.eyeRadius(), settings.warZoneOuterEdge(), visibleRadius, WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0);
+        // Each nation's land whole and thick: no holes, no pieces cut off, no thin reaches.
+        Nations.consolidate(plan, Countryside.adjacency(grid, centres.size()), Countryside.onMapEdge(grid, centres.size()),
+                seatsAt, settings.eyeRadius());
         List<BaseMap.Nation> nations = new java.util.ArrayList<>();
         for (Nations.Nation nation : plan.nations()) {
             OriginRoller.Roll roll = OriginRoller.roll(level.getSeed(), nation.x(), nation.z(), settings);

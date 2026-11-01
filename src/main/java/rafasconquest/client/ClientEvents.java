@@ -35,6 +35,9 @@ public final class ClientEvents {
      */
     @SubscribeEvent
     public static void onScreenInit(ScreenEvent.Init.Post event) {
+        if (event.getScreen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen inventory) {
+            event.addListener(new InventoryStatsButton(inventory)); // the player's stats
+        }
         if (event.getScreen() instanceof FactionMainScreen menu) {
             int left = (menu.width - MENU_WIDTH) / 2;
             int top = (menu.height - MENU_HEIGHT) / 2;

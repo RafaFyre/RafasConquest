@@ -141,6 +141,22 @@ public final class ConquestNetwork {
                 .decoder(TeleportTo::read)
                 .consumerMainThread(ConquestNetwork::handleTeleportTo)
                 .add();
+        CHANNEL.messageBuilder(StatsRequest.class, 20, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                })
+                .decoder(b -> new StatsRequest())
+                .consumerMainThread(ConquestNetwork::handleStatsRequest)
+                .add();
+        CHANNEL.messageBuilder(StatsView.class, 21, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(StatsView::write)
+                .decoder(StatsView::read)
+                .consumerMainThread(ConquestNetwork::handleStatsView)
+                .add();
+        CHANNEL.messageBuilder(SetSetting.class, 22, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(SetSetting::write)
+                .decoder(SetSetting::read)
+                .consumerMainThread(ConquestNetwork::handleSetSetting)
+                .add();
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -293,6 +309,66 @@ public final class ConquestNetwork {
         }
     }
 
+    // ---- the player's stats and settings (from the inventory) ----
+
+    /** Client → server: show me my stats. */
+    public record StatsRequest() {
+    }
+
+    public static void requestStats() {
+        CHANNEL.sendToServer(new StatsRequest());
+    }
+
+    private static void handleStatsRequest(StatsRequest msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new StatsView(rafasconquest.peerage.PlayerStats.view(player)));
+        }
+    }
+
+    /** Server → client: the player's stats and settings ({@link rafasconquest.peerage.PlayerStats}). */
+    public record StatsView(rafasconquest.peerage.PlayerStats.View view) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeCollection(view.rows(), (b, row) -> {
+                b.writeUtf(row[0]);
+                b.writeUtf(row[1]);
+            });
+            buf.writeBoolean(view.teleportAtMuster());
+        }
+
+        static StatsView read(FriendlyByteBuf buf) {
+            return new StatsView(new rafasconquest.peerage.PlayerStats.View(buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}),
+                    buf.readBoolean()));
+        }
+    }
+
+    private static void handleStatsView(StatsView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openStats(msg.view()));
+    }
+
+    /** Client → server: change one of my settings. */
+    public record SetSetting(String key, boolean value) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeUtf(key);
+            buf.writeBoolean(value);
+        }
+
+        static SetSetting read(FriendlyByteBuf buf) {
+            return new SetSetting(buf.readUtf(64), buf.readBoolean());
+        }
+    }
+
+    public static void setSetting(String key, boolean value) {
+        CHANNEL.sendToServer(new SetSetting(key, value));
+    }
+
+    private static void handleSetSetting(SetSetting msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null) {
+            rafasconquest.peerage.PlayerStats.set(player, msg.key(), msg.value());
+        }
+    }
+
     /** Client → server: teleport me to the ground at (x, z), from the world map's menu. Creative mode only. */
     public record TeleportTo(int x, int z) {
         void write(FriendlyByteBuf buf) {
@@ -315,8 +391,8 @@ public final class ConquestNetwork {
             return; // only in creative
         }
         net.minecraft.server.level.ServerLevel level = player.server.overworld();
-        int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, msg.x(), msg.z());
-        player.teleportTo(level, msg.x() + 0.5, y, msg.z() + 0.5, player.getYRot(), player.getXRot());
+        // Onto the top block, trees and roofs included.
+        rafasconquest.politics.Wars.toSurface(player, level, msg.x(), msg.z(), net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
     }
 
     public static void sendPolitics(ServerPlayer player, PoliticsView view) {

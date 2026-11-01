@@ -44,6 +44,52 @@ class NationsTest {
     }
 
     @Test
+    void consolidatedNationsAreWholeWithoutHolesOrCalmLand() {
+        for (long seed = 1; seed <= 6; seed++) {
+            World w = world(seed);
+            int width = CELLS * CELL;
+            SeatCities.Grid grid = new SeatCities.Grid(0, 0, BPP, width, width, cellsOf(width), w.centres());
+            var adjacent = Countryside.adjacency(grid, w.centres().size());
+            boolean[] edge = Countryside.onMapEdge(grid, w.centres().size());
+            Nations.consolidate(w.plan(), adjacent, edge, w::at, EYE);
+            int[] holder = w.plan().holder();
+            for (int i = 0; i < w.plan().nations().size(); i++) {
+                Nations.Nation n = w.plan().nations().get(i);
+                assertEquals(i, holder[n.seat()], "a nation lost its seat, seed " + seed);
+                assertTrue(Nations.whole(holder, adjacent, i, n.seat()), "a nation in pieces, seed " + seed);
+            }
+            for (int p = 0; p < holder.length; p++) {
+                int[] at = w.at(p);
+                if (holder[p] >= 0 && !w.plan().nations().get(holder[p]).sanctum()) {
+                    assertTrue(Math.hypot(at[0], at[1]) > EYE, "a held province in the eye, seed " + seed);
+                    for (int[] e : w.plan().miniEyes()) {
+                        assertTrue(Math.hypot(e[0] - at[0], e[1] - at[1]) > EYE, "a held province in a mini-eye, seed " + seed);
+                    }
+                } else if (holder[p] < 0 && !edge[p] && Math.hypot(at[0], at[1]) > EYE) {
+                    // A lone free province with every neighbour one nation's is a hole.
+                    java.util.Set<Integer> around = new java.util.TreeSet<>();
+                    for (int q : adjacent.get(p)) {
+                        around.add(holder[q]);
+                    }
+                    boolean calm = w.plan().miniEyes().stream().anyMatch(e -> Math.hypot(e[0] - at[0], e[1] - at[1]) <= EYE);
+                    assertFalse(!calm && around.size() == 1 && around.iterator().next() >= 0
+                            && !w.plan().nations().get(around.iterator().next()).sanctum(), "a hole in a nation, seed " + seed);
+                }
+            }
+        }
+    }
+
+    private static int[] cellsOf(int width) {
+        int[] provinces = new int[width * width];
+        for (int z = 0; z < width; z++) {
+            for (int x = 0; x < width; x++) {
+                provinces[z * width + x] = (z / CELL) * CELLS + x / CELL;
+            }
+        }
+        return provinces;
+    }
+
+    @Test
     void nobodyHoldsTheEyeOrAMiniEye() {
         for (long seed = 0; seed < 5; seed++) {
             World w = world(seed);

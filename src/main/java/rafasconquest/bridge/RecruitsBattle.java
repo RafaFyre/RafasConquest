@@ -404,6 +404,8 @@ public final class RecruitsBattle {
         boolean briefed;
         int messengerLeaves;
         Job job = Job.HEAVY_INFANTRY;
+        /** Their role for the day: support carries a glaive. */
+        BattleRole role = BattleRole.FRONTLINE;
         /** The horse a cavalry player was given. */
         @Nullable
         UUID horse;
@@ -1878,6 +1880,7 @@ public final class RecruitsBattle {
                 taken.addAll(blocks);
                 Enlisted e = new Enlisted(player.getUUID(), side, rank, home, blocks, leads - 1);
                 e.job = job;
+                e.role = role;
                 for (FieldBlock b : blocks) {
                     field.assign(b, b == home || role != BattleRole.BAIT ? task(role) : FieldBlock.Task.NONE);
                 }
@@ -1894,8 +1897,8 @@ public final class RecruitsBattle {
                     tentsTaken.put(camp, used + 1);
                     return used;
                 });
-                if (day == 1) {
-                    // The first day, straight to their place; on later days they walk out of camp with their unit.
+                if (rafasconquest.peerage.PlayerStats.teleportAtMuster(player)) {
+                    // Each day, straight to their place (unless they chose to walk out of camp with their unit).
                     Point spot = home.line();
                     player.teleportTo(level, spot.x(), groundY(home, spot.x(), spot.z()), spot.z(),
                             yawOf(new Point(army.facingX(), army.facingZ())), 0);
@@ -1964,7 +1967,9 @@ public final class RecruitsBattle {
             case CAVALRY -> ModEntityTypes.HORSEMAN.get();
             case FOOTMAN -> ModEntityTypes.RECRUIT.get();
             case ARCHER -> ModEntityTypes.BOWMAN.get();
-            case SHIELDMAN, HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
+            case SHIELDMAN -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
+            // With Epic Knights they wield a zweihänder in both hands, and carry no shield.
+            case HEAVY_INFANTRY -> rafasconquest.gear.Armoury.available() ? ModEntityTypes.RECRUIT.get() : ModEntityTypes.RECRUIT_SHIELDMAN.get();
         };
     }
 
@@ -2011,6 +2016,10 @@ public final class RecruitsBattle {
             default -> {
             }
         }
+        ItemStack glaive = e.role == BattleRole.SUPPORT && e.job != Job.ARCHER && e.job != Job.CAVALRY ? rafasconquest.gear.Armoury.glaive() : null;
+        if (glaive != null) {
+            equip(soldier, EquipmentSlot.MAINHAND, glaive); // support fights with glaives
+        }
         return soldier;
     }
 
@@ -2028,7 +2037,7 @@ public final class RecruitsBattle {
     /**
      * The player's own kit for their job, taken back when the battle ends: a horse to ride (cavalry), an iron sword
      * with Sweeping Edge (footman), a bow with Infinity and Unbreaking II (archer), the nation's shield (shieldman),
-     * iron armour, an axe and the nation's shield (heavy infantry).
+     * iron armour, an axe and the nation's shield (heavy infantry; with Epic Knights a sallet, knightly harness and an iron zweihänder); and a glaive in support.
      */
     private void kitPlayer(ServerPlayer player, Enlisted e) {
         Side side = sides[e.side];
@@ -2062,13 +2071,24 @@ public final class RecruitsBattle {
             }
             case SHIELDMAN -> kit.add(bannerShield(side));
             case HEAVY_INFANTRY -> {
-                kit.add(new ItemStack(Items.IRON_AXE));
-                kit.add(bannerShield(side));
-                kit.add(new ItemStack(Items.IRON_HELMET));
-                kit.add(new ItemStack(Items.IRON_CHESTPLATE));
-                kit.add(new ItemStack(Items.IRON_LEGGINGS));
-                kit.add(new ItemStack(Items.IRON_BOOTS));
+                rafasconquest.gear.Armoury.Outfit knight = rafasconquest.gear.Armoury.outfit(rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY,
+                        rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), side.faction.id()), side.uniform, side.banner);
+                if (!knight.isEmpty()) {
+                    // With Epic Knights: a sallet, knightly harness and an iron zweihänder.
+                    knight.slots().values().stream().filter(s -> !s.isEmpty()).forEach(s -> kit.add(s.copy()));
+                } else {
+                    kit.add(new ItemStack(Items.IRON_AXE));
+                    kit.add(bannerShield(side));
+                    kit.add(new ItemStack(Items.IRON_HELMET));
+                    kit.add(new ItemStack(Items.IRON_CHESTPLATE));
+                    kit.add(new ItemStack(Items.IRON_LEGGINGS));
+                    kit.add(new ItemStack(Items.IRON_BOOTS));
+                }
             }
+        }
+        ItemStack glaive = e.role == BattleRole.SUPPORT ? rafasconquest.gear.Armoury.glaive() : null;
+        if (glaive != null) {
+            kit.add(glaive); // support fights with glaives
         }
         kit.add(WarHorn.make(side.horn)); // every enlisted player commands their units with it
         for (ItemStack stack : kit) {
@@ -3920,9 +3940,15 @@ public final class RecruitsBattle {
             if (player == null) {
                 continue;
             }
-            if (dayRoles.containsKey(e.player)) {
+            boolean placed = rafasconquest.peerage.PlayerStats.teleportAtMuster(player);
+            if (dayRoles.containsKey(e.player) && placed) {
+                hearMessenger(e, player); // already at their place: the general's word reaches them there
+                title(e, "In position");
+            } else if (dayRoles.containsKey(e.player)) {
                 spawnMessenger(e, player);
                 title(e, "A messenger waits at your tent");
+            } else if (placed) {
+                title(e, "In position");
             } else {
                 title(e, "Form up at your position!");
                 player.sendSystemMessage(Component.literal("Dawn. Lead your men out to your ring.")
