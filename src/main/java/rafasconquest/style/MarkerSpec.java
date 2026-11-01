@@ -26,7 +26,7 @@ import java.util.List;
 public record MarkerSpec(String type, int kit, boolean patrol, int count, String label, String rank, String relation, String other,
                          String trait, String stat, int statMin, boolean twoPlaces, String ifNone, String replace) {
     public static final List<String> TYPES = List.of("BOWMAN", "SHIELDMAN", "KNIGHT", "CAVALRY", "SWORD_GOD", "SWORD_KING", "SWORD_SAINT",
-            "RECRUITER", "CITY_MANAGER", "QUEST_GIVER", "SHOP_OWNER", "SHOP_AND_QUESTS", "NAMED");
+            "RECRUITER", "CITY_HOLDER", "QUEST_GIVER", "SHOP_OWNER", "SHOP_AND_QUESTS", "NAMED");
     public static final List<String> RANKS = List.of("ANY", "RULER", "CAPITAL_LORD", "CITY", "TOWN", "CASTLE");
     public static final List<String> RELATIONS = List.of("NONE", "LIEGE_OF", "VASSAL_OF", "FRIEND_OF", "RIVAL_OF");
     public static final MarkerSpec DEFAULT = new MarkerSpec("SHIELDMAN", 2, false, 1, "", "ANY", "NONE", "place", "", "", -1, false, "EMPTY", "");
@@ -41,7 +41,7 @@ public record MarkerSpec(String type, int kit, boolean patrol, int count, String
             case "SWORD_KING" -> "Character: Sword King";
             case "SWORD_SAINT" -> "Character: Sword Saint";
             case "RECRUITER" -> "NPC: Recruiter";
-            case "CITY_MANAGER" -> "NPC: City manager";
+            case "CITY_HOLDER" -> "Character: City holder";
             case "QUEST_GIVER" -> "NPC: Quest giver";
             case "SHOP_OWNER" -> "NPC: Shop owner";
             case "SHOP_AND_QUESTS" -> "NPC: Shop owner and quest giver";

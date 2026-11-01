@@ -94,9 +94,13 @@ public final class CharacterMarkers {
                     level.addFreshEntity(recruiter);
                 }
             }
-            case "SWORD_GOD", "SWORD_KING", "SWORD_SAINT", "NAMED" -> {
+            case "SWORD_GOD", "SWORD_KING", "SWORD_SAINT", "NAMED", "CITY_HOLDER" -> {
                 int person;
-                if (spec.type().equals("NAMED")) {
+                if (spec.type().equals("CITY_HOLDER")) {
+                    // Whoever holds this place: its ruler, duke, count or lord.
+                    int holder = province < 0 ? -1 : map.realm().holderOf(province);
+                    person = holder >= 0 && (spec.twoPlaces() || !placed.has(holder)) ? holder : -1;
+                } else if (spec.type().equals("NAMED")) {
                     Integer chosen = named(map, spec, pos, province, nation, placed, age);
                     if (chosen == null) {
                         return; // waiting on a marker it refers to
@@ -113,7 +117,7 @@ public final class CharacterMarkers {
                 }
             }
             default -> {
-                return; // City managers, quest givers and shop owners are yet to come: it waits for them, unseen
+                return; // Quest givers and shop owners are yet to come: it waits for them, unseen
             }
         }
         BlockState after = Blocks.AIR.defaultBlockState();
