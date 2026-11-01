@@ -62,6 +62,157 @@ final class WarCouncil {
 
     private final Map<UUID, Talk> talks = new HashMap<>();
 
+    /**
+     * A player right-clicked one of the council: the general briefs them (as below); a wing's Marshal speaks for their
+     * wing; a vassal officer answers to the player who is their lord, and to no one else.
+     */
+    void approach(ServerPlayer player, Facts facts, boolean sameArmy, long now, String who) {
+        if (who.startsWith("vassal:")) {
+            String[] parts = who.split(":");
+            vassal(player, facts, Integer.parseInt(parts[1]), UUID.fromString(parts[2]), now);
+        } else if (who.equals("left") || who.equals("right")) {
+            marshal(player, facts, who, sameArmy, now);
+        } else {
+            approach(player, facts, sameArmy, now);
+        }
+    }
+
+    /** A wing's Marshal: a greeting by their trait, and what they offer for their wing. */
+    private void marshal(ServerPlayer player, Facts facts, String wing, boolean sameArmy, long now) {
+        Officer m = wing.equals("left") ? facts.left() : facts.right();
+        Rank rank = Ranks.get(player.server).of(player.getUUID());
+        if (!sameArmy) {
+            player.sendSystemMessage(say(facts, m, "Out of my tent, stranger."));
+            return;
+        }
+        Talk talk = fresh(player, facts, now);
+        talk.queue.add(say(facts, m, switch (m.trait()) {
+            case BOLD -> "Come to fight, " + rank.title() + "? My wing goes in hard on the " + wing + ", and soon.";
+            case CAUTIOUS -> rank.title() + ". The " + wing + " wing holds, and I mean it to keep holding.";
+            default -> rank.title() + ". The " + wing + " wing is ready.";
+        }));
+        talk.queue.add(marshalOptions(m, wing, rank.officer()));
+    }
+
+    private static Component marshalOptions(Officer m, String wing, boolean officer) {
+        List<MutableComponent> choices = new ArrayList<>();
+        if (officer && m.trait() == Trait.BOLD) {
+            choices.add(choice("Join the attack on the " + wing, "flank_" + wing));
+        } else if (officer && m.trait() == Trait.CAUTIOUS) {
+            choices.add(choice("Back the " + wing + " wing in support", "support_" + wing));
+        } else if (officer) {
+            choices.add(choice("Offer your men to the " + wing + " wing", "wing_" + wing));
+        }
+        choices.add(choice("Take your leave", "leave_" + wing));
+        return line(choices);
+    }
+
+    /** A vassal officer: answers to their lord with their troops and their job, which the lord may change here. */
+    private void vassal(ServerPlayer player, Facts facts, int person, UUID lord, long now) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            return;
+        }
+        Officer me = vassalOfficer(map, facts, person);
+        if (!player.getUUID().equals(lord)) {
+            player.sendSystemMessage(say(facts, me, "I answer to my liege, not to you."));
+            return;
+        }
+        Talk talk = fresh(player, facts, now);
+        talk.queue.add(say(facts, me, "My liege. My men are in camp and ready for your word."));
+        talk.queue.add(vassalOptions(person));
+    }
+
+    private static Officer vassalOfficer(rafasconquest.map.BaseMap map, Facts facts, int person) {
+        return new Officer(rafasconquest.peerage.Retinues.rank(map.realm(), person).title(), map.realm().people().get(person).name(),
+                facts.general().trait());
+    }
+
+    private static Component vassalOptions(int person) {
+        return line(List.of(choice("Ask how many they bring", "vassal_report_" + person),
+                choice("Change what their troops fight as", "vassal_job_" + person),
+                choice("Take your leave", "vassal_leave_" + person)));
+    }
+
+    /** A talk begun afresh with one of the council: what was still to be said is dropped. */
+    private Talk fresh(ServerPlayer player, Facts facts, long now) {
+        Talk talk = talks.computeIfAbsent(player.getUUID(), id -> new Talk());
+        if (talk.side != facts.side()) {
+            talk.side = facts.side();
+            talk.briefed = false;
+        }
+        talk.queue.clear();
+        talk.nextAt = now;
+        return talk;
+    }
+
+    /** The choices of a Marshal or a vassal officer, which need no briefing first. */
+    private boolean aside(ServerPlayer player, Facts facts, String topic, long now) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (topic.startsWith("vassal_") && map != null) {
+            String[] parts = topic.split("_");
+            int person = Integer.parseInt(parts[2]);
+            rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(player.server);
+            rafasconquest.peerage.Peerage.Peer peer = peerage.of(player.getUUID());
+            if (!peer.vassals.contains(person) || person < 0 || person >= map.realm().people().size()) {
+                return true;
+            }
+            Officer me = vassalOfficer(map, facts, person);
+            Talk talk = fresh(player, facts, now);
+            rafasconquest.character.Job job = peer.vassalJobs.getOrDefault(person, rafasconquest.character.Job.HEAVY_INFANTRY);
+            switch (parts[1]) {
+                case "report" -> talk.queue.add(say(facts, me, "I bring " + rafasconquest.peerage.Retinues.troops(map.realm(), person)
+                        + " men, my vassals' with mine. They fight as " + job.title().toLowerCase(Locale.ROOT) + "."));
+                case "job" -> {
+                    rafasconquest.character.Job[] jobs = rafasconquest.character.Job.values();
+                    job = jobs[(job.ordinal() + 1) % jobs.length];
+                    peer.vassalJobs.put(person, job);
+                    peerage.changed();
+                    talk.queue.add(say(facts, me, "As you command. My men will fight as " + job.title().toLowerCase(Locale.ROOT) + "."));
+                }
+                default -> {
+                    talk.queue.add(say(facts, me, "My liege."));
+                    return true;
+                }
+            }
+            talk.queue.add(vassalOptions(person));
+            return true;
+        }
+        String wing = topic.endsWith("left") ? "left" : "right";
+        Officer m = wing.equals("left") ? facts.left() : facts.right();
+        if (topic.startsWith("flank_")) {
+            setRole(player, BattleRole.FLANKER);
+            fresh(player, facts, now).queue.add(say(facts, m, "Good! Ride with my wing, and we'll take them in the side."));
+            return true;
+        }
+        if (topic.startsWith("support_")) {
+            setRole(player, BattleRole.SUPPORT);
+            fresh(player, facts, now).queue.add(say(facts, m, "Hold your men back of my line and come where it bends. I'll count on you."));
+            return true;
+        }
+        if (topic.startsWith("wing_")) {
+            setRole(player, BattleRole.SUPPORT);
+            fresh(player, facts, now).queue.add(say(facts, m, "Glad of them. Keep close behind my line, and come where it bends."));
+            return true;
+        }
+        if (topic.startsWith("leave_")) {
+            fresh(player, facts, now).queue.add(say(facts, m, "Go well."));
+            return true;
+        }
+        return false;
+    }
+
+    private static Component line(List<MutableComponent> choices) {
+        MutableComponent line = Component.literal("  ");
+        for (int i = 0; i < choices.size(); i++) {
+            if (i > 0) {
+                line.append(Component.literal("  "));
+            }
+            line.append(choices.get(i));
+        }
+        return line;
+    }
+
     /** A player right-clicked a council member: only officers of its army are heard. */
     void approach(ServerPlayer player, Facts facts, boolean sameArmy, long now) {
         Rank rank = Ranks.get(player.server).of(player.getUUID());
@@ -94,6 +245,9 @@ final class WarCouncil {
 
     /** A choice the player clicked ({@code /council <topic>}). */
     void topic(ServerPlayer player, Facts facts, String topic, long now) {
+        if (aside(player, facts, topic, now)) {
+            return; // a Marshal's or a vassal's
+        }
         Talk talk = talks.get(player.getUUID());
         if (talk == null || !talk.briefed || talk.side != facts.side()) {
             player.sendSystemMessage(Component.literal("Speak to the general at the war council first."));

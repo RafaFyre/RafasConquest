@@ -282,6 +282,10 @@ public final class RecruitsBattle {
     /** Each camp's guards, by side; the war council in the tents, with their side. */
     private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
     private final Map<UUID, Integer> councillors = new HashMap<>();
+    /** Who each of the council is: "general", "left", "right", or "vassal:<person>:<their lord>". */
+    private final Map<UUID, String> councilRoles = new HashMap<>();
+    /** Those of the council talking to a player, who look at them while they do: the player, until when, and the way they faced. */
+    private final Map<UUID, Object[]> listening = new HashMap<>();
     private final WarCouncil council = new WarCouncil();
     /** The deployment's countdown bars: one per army, and one for players in neither. */
     private final ServerBossEvent[] deploymentBars = new ServerBossEvent[3];
@@ -1650,6 +1654,7 @@ public final class RecruitsBattle {
             battle.second();
         }
         battle.council.tick(battle.level.getServer(), battle.level.getGameTime());
+        battle.turnToListeners();
         if (battle.ticks % 2 == 0) {
             battle.driveUnits();
         }
@@ -3623,9 +3628,12 @@ public final class RecruitsBattle {
                     camp.yaw(1), "Marshal " + s.marshals[0]);
             AbstractRecruitEntity right = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GUARD, camp.rightMarshalSpot(),
                     camp.yaw(3), "Marshal " + s.marshals[2]);
-            for (AbstractRecruitEntity member : new AbstractRecruitEntity[]{general, left, right}) {
-                if (member != null) {
-                    councillors.put(member.getUUID(), side);
+            String[] roles = {"general", "left", "right"};
+            AbstractRecruitEntity[] council = {general, left, right};
+            for (int i = 0; i < council.length; i++) {
+                if (council[i] != null) {
+                    councillors.put(council[i].getUUID(), side);
+                    councilRoles.put(council[i].getUUID(), roles[i]);
                 }
             }
             vassalOfficers(side, camp);
@@ -3666,10 +3674,52 @@ public final class RecruitsBattle {
                         rank.title() + " " + map.realm().people().get(v).name());
                 if (officer != null) {
                     councillors.put(officer.getUUID(), side);
+                    councilRoles.put(officer.getUUID(), "vassal:" + v + ":" + player.getUUID());
                     n++;
                 }
             }
         }
+    }
+
+    /** How long one of the council keeps looking at a player who spoke to them, in ticks, and how near they must stay. */
+    private static final int LISTEN_TICKS = 600;
+    private static final double LISTEN_REACH = 8;
+
+    /** One of the council turns to the player speaking to them. */
+    private void listen(Entity figure, ServerPlayer player) {
+        Object[] before = listening.get(figure.getUUID());
+        float yaw = before != null ? (float) before[2] : figure.getYRot();
+        listening.put(figure.getUUID(), new Object[]{player.getUUID(), level.getGameTime() + LISTEN_TICKS, yaw});
+    }
+
+    /** Each of the council talking to a player looks at them; once they leave (or are done), turns back to the table. */
+    private void turnToListeners() {
+        listening.entrySet().removeIf(entry -> {
+            Entity figure = level.getEntity(entry.getKey());
+            if (figure == null) {
+                return true;
+            }
+            Object[] l = entry.getValue();
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer((UUID) l[0]);
+            if (player == null || level.getGameTime() > (long) l[1] || player.distanceTo(figure) > LISTEN_REACH) {
+                float yaw = (float) l[2];
+                figure.setYRot(yaw);
+                figure.setYHeadRot(yaw);
+                figure.setYBodyRot(yaw);
+                figure.setXRot(0);
+                return true;
+            }
+            double dx = player.getX() - figure.getX();
+            double dz = player.getZ() - figure.getZ();
+            double dy = player.getEyeY() - figure.getEyeY();
+            float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+            float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+            figure.setYRot(yaw);
+            figure.setYHeadRot(yaw);
+            figure.setYBodyRot(yaw);
+            figure.setXRot(pitch);
+            return false;
+        });
     }
 
     private void dismissCouncil() {
@@ -3680,6 +3730,8 @@ public final class RecruitsBattle {
             }
         }
         councillors.clear();
+        councilRoles.clear();
+        listening.clear();
         council.adjourn();
     }
 
@@ -3798,7 +3850,9 @@ public final class RecruitsBattle {
             return;
         }
         boolean sameArmy = player.getTeam() != null && player.getTeam().getName().equals(battle.sides[side].team.getName());
-        battle.council.approach(player, battle.councilFacts(side), sameArmy, battle.level.getGameTime());
+        battle.listen(target, player);
+        battle.council.approach(player, battle.councilFacts(side), sameArmy, battle.level.getGameTime(),
+                battle.councilRoles.getOrDefault(target.getUUID(), "general"));
     }
 
     /** A player chose something at the war council ({@code /council <topic>}). */
