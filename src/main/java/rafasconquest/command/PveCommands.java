@@ -127,6 +127,21 @@ public final class PveCommands {
                                                         .then(Commands.argument("defenderGeneral", com.mojang.brigadier.arguments.StringArgumentType.string())
                                                                 .suggests((ctx, b) -> suggestGenerals(ctx, b, "defender"))
                                                                 .executes(ctx -> war(ctx, arg(ctx, "attackerGeneral"), arg(ctx, "defenderGeneral")))))))))
+                .then(Commands.literal("style")
+                        // Reads the style folders (mods/RafasConquest/structures) again.
+                        .then(Commands.literal("reload").executes(ctx -> say(ctx, rafasconquest.style.StyleLibrary.reload())))
+                        // Moves a structure saved with a structure block (as rafasconquest:<name>) into a style's slot.
+                        .then(Commands.literal("save")
+                                .then(Commands.argument("style", StringArgumentType.word())
+                                        .suggests((ctx, b) -> SharedSuggestionProvider.suggest(List.of(rafasconquest.style.StyleLibrary.DEFAULT), b))
+                                        .then(Commands.argument("slot", StringArgumentType.string())
+                                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(rafasconquest.style.StyleLibrary.SLOTS.stream()
+                                                        .map(s -> "\"" + s + "\"").toList(), b))
+                                                .then(Commands.argument("name", StringArgumentType.word())
+                                                        .executes(ctx -> say(ctx, rafasconquest.style.StyleLibrary.save(
+                                                                ctx.getSource().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.GENERATED_DIR),
+                                                                StringArgumentType.getString(ctx, "style"), StringArgumentType.getString(ctx, "slot"),
+                                                                StringArgumentType.getString(ctx, "name")))))))))
                 .then(Commands.literal("poi")
                         .then(Commands.literal("list")
                                 .executes(ctx -> poiList(ctx, 500))

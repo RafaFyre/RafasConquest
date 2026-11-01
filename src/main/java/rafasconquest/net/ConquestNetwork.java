@@ -157,6 +157,16 @@ public final class ConquestNetwork {
                 .decoder(SetSetting::read)
                 .consumerMainThread(ConquestNetwork::handleSetSetting)
                 .add();
+        CHANNEL.messageBuilder(MarkerView.class, 23, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(MarkerView::write)
+                .decoder(MarkerView::read)
+                .consumerMainThread(ConquestNetwork::handleMarkerView)
+                .add();
+        CHANNEL.messageBuilder(MarkerSet.class, 24, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> new MarkerView(m.pos(), m.spec()).write(b))
+                .decoder(b -> { MarkerView v = MarkerView.read(b); return new MarkerSet(v.pos(), v.spec()); })
+                .consumerMainThread(ConquestNetwork::handleMarkerSet)
+                .add();
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -306,6 +316,46 @@ public final class ConquestNetwork {
             return new PoliticsView(buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf));
+        }
+    }
+
+    // ---- Character Markers ----
+
+    /** Both ways: a Character Marker's settings (to the client, to edit; back to the server, to keep). */
+    public record MarkerView(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeBlockPos(pos);
+            buf.writeNbt(spec.save());
+        }
+
+        static MarkerView read(FriendlyByteBuf buf) {
+            net.minecraft.core.BlockPos pos = buf.readBlockPos();
+            net.minecraft.nbt.CompoundTag tag = buf.readNbt();
+            return new MarkerView(pos, tag == null ? rafasconquest.style.MarkerSpec.DEFAULT : rafasconquest.style.MarkerSpec.load(tag));
+        }
+    }
+
+    public static void openMarker(ServerPlayer player, net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new MarkerView(pos, spec));
+    }
+
+    public static void setMarker(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
+        CHANNEL.sendToServer(new MarkerSet(pos, spec));
+    }
+
+    private static void handleMarkerView(MarkerView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openMarker(msg.pos(), msg.spec()));
+    }
+
+    /** Client → server: a Character Marker's settings, to keep (creative, within reach). */
+    public record MarkerSet(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
+    }
+
+    private static void handleMarkerSet(MarkerSet msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player != null && player.isCreative() && player.blockPosition().closerThan(msg.pos(), 16)
+                && player.level().getBlockEntity(msg.pos()) instanceof rafasconquest.style.MarkerBlockEntity marker) {
+            marker.setSpec(msg.spec());
         }
     }
 

@@ -29,6 +29,11 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new StatsScreen(Minecraft.getInstance().screen, view));
     }
 
+    /** A Character Marker's settings, to edit. */
+    public static void openMarker(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
+        Minecraft.getInstance().setScreen(new MarkerScreen(pos, spec));
+    }
+
     /** A quest board's notices. */
     public static void openBoard(rafasconquest.peerage.Boards.View view) {
         Minecraft.getInstance().setScreen(new BoardScreen(view));

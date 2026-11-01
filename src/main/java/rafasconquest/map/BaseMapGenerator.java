@@ -390,7 +390,7 @@ public final class BaseMapGenerator {
     }
 
     /** The kind of land a biome is, by the villagers who would live there; plains for any other mod's own kinds. */
-    private static rafasconquest.people.Homeland homeland(Holder<Biome> biome) {
+    public static rafasconquest.people.Homeland homeland(Holder<Biome> biome) {
         net.minecraft.world.entity.npc.VillagerType type = net.minecraft.world.entity.npc.VillagerType.byBiome(biome);
         if (type == net.minecraft.world.entity.npc.VillagerType.DESERT) {
             return rafasconquest.people.Homeland.DESERT;

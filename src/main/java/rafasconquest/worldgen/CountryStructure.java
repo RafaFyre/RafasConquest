@@ -33,6 +33,15 @@ public class CountryStructure extends Structure {
 
     private static void build(GenerationContext ctx, Countryside.Settlement s, StructurePiecesBuilder pieces) {
         int turns = Math.floorMod(s.x() * 31 + s.z() * 17, 4);
+        // A structure from the style folders, where its slot has one; else built as it always has been.
+        String styled = styled(ctx, s);
+        if (styled != null) {
+            rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.of(styled, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns);
+            if (piece != null) {
+                pieces.addPiece(piece);
+                return;
+            }
+        }
         switch (s.kind()) {
             case HAMLET -> pieces.addPiece(new CountryPiece(CountryPiece.Build.HAMLET, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
             case WATCHTOWER -> pieces.addPiece(new CountryPiece(CountryPiece.Build.TOWER, s.x(), ground(ctx, s.x(), s.z()), s.z(), turns));
@@ -50,6 +59,46 @@ public class CountryStructure extends Structure {
                 }
             }
         }
+    }
+
+    /**
+     * The style folders' structure for a settlement, if its slot has one: a castle of its size (by whose seat it is) in
+     * its holder's style; a hamlet in its holder's style, or the wild's of its land if no one holds it; a ruin of the
+     * wild's. Null for anything else, or an empty slot.
+     */
+    @org.jetbrains.annotations.Nullable
+    private static String styled(GenerationContext ctx, Countryside.Settlement s) {
+        rafasconquest.map.BaseMap map = ConquestRuntime.map();
+        int province = map == null ? -1 : map.provinceIndexAt(s.x(), s.z());
+        int nation = province < 0 ? -1 : map.holders()[province];
+        long seed = (long) s.x() * 341873128712L + (long) s.z() * 132897987541L;
+        rafasconquest.people.Homeland land = nation >= 0 ? rafasconquest.gear.Armoury.homeland(map, map.nations().get(nation).id())
+                : rafasconquest.map.BaseMapGenerator.homeland(ctx.biomeSource().getNoiseBiome(net.minecraft.core.QuartPos.fromBlock(s.x()),
+                        net.minecraft.core.QuartPos.fromBlock(64), net.minecraft.core.QuartPos.fromBlock(s.z()), ctx.randomState().sampler()));
+        return switch (s.kind()) {
+            case CASTLE -> {
+                String size = "small";
+                for (rafasconquest.map.BaseMap.Nation n : map == null ? java.util.List.<rafasconquest.map.BaseMap.Nation>of() : map.nations()) {
+                    if (n.seat() == province) {
+                        size = switch (n.tier()) {
+                            case EMPIRE, KINGDOM -> "grand";
+                            case DUCHY -> "large";
+                            case COUNTY -> "medium";
+                        };
+                    }
+                }
+                java.util.List<String> sizes = new java.util.ArrayList<>(java.util.List.of(size, "medium", "large", "small", "grand"));
+                String found = null;
+                for (String z : sizes) {
+                    found = found != null ? found : rafasconquest.style.StyleLibrary.pick(land, "lone/castles/" + z, seed);
+                }
+                yield found;
+            }
+            case HAMLET -> nation >= 0 ? rafasconquest.style.StyleLibrary.pick(land, "lone/hamlets", seed)
+                    : rafasconquest.style.StyleLibrary.pickWorld(land, "hamlets", seed);
+            case RUIN -> rafasconquest.style.StyleLibrary.pickWorld(land, "ruins", seed);
+            default -> null;
+        };
     }
 
     /** The first air above the noise terrain at (x, z): where a building's floor goes. */

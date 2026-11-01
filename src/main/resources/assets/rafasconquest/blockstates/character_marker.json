@@ -1,0 +1,9 @@
+{
+  "variants": {
+    "armed=false,facing=north": { "model": "rafasconquest:block/character_marker" },
+    "armed=false,facing=east": { "model": "rafasconquest:block/character_marker", "y": 90 },
+    "armed=false,facing=south": { "model": "rafasconquest:block/character_marker", "y": 180 },
+    "armed=false,facing=west": { "model": "rafasconquest:block/character_marker", "y": 270 },
+    "armed=true": { "model": "rafasconquest:block/character_marker" }
+  }
+}

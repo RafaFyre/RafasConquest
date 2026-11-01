@@ -200,6 +200,56 @@ public class RecruitsFactions implements RecruitsBridge {
         return true;
     }
 
+    /**
+     * A soldier set by a Character Marker: a bowman, shieldman, knight (a footman) or cavalryman (mounted) of the nation,
+     * in a kit of its land's style: 1 levy, 2 heavy infantry, 3 elite (knight's harness), 4 officer; standing guard at
+     * its place, or patrolling about it. No character: one of the nation's many soldiers.
+     */
+    public boolean spawnMarkerSoldier(Faction owner, String type, int kit, BlockPos feet, float yaw, boolean patrol) {
+        PlayerTeam team = team(owner);
+        var entityType = switch (type) {
+            case "BOWMAN" -> ModEntityTypes.BOWMAN.get();
+            case "SHIELDMAN" -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
+            case "CAVALRY" -> ModEntityTypes.HORSEMAN.get();
+            default -> ModEntityTypes.RECRUIT.get();
+        };
+        AbstractRecruitEntity soldier = entityType.create(overworld);
+        if (team == null || soldier == null) {
+            return false;
+        }
+        Vec3 post = Vec3.atBottomCenterOf(feet);
+        soldier.moveTo(post.x, post.y, post.z, yaw, 0);
+        soldier.setYHeadRot(yaw);
+        soldier.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        ItemStack held = soldier.getMainHandItem().copy();
+        rafasconquest.gear.Armoury.dressTier(soldier, kit, rafasconquest.worldgen.ConquestRuntime.map(), owner.id());
+        if (type.equals("BOWMAN")) {
+            soldier.setItemSlot(EquipmentSlot.MAINHAND, held.isEmpty() ? new ItemStack(Items.BOW) : held); // keeps its bow
+            soldier.getInventory().setItem(soldier.getInventorySlotIndex(EquipmentSlot.MAINHAND), soldier.getMainHandItem().copy());
+        }
+        AbstractRecruitEntity.applyBiomeAndVariant(soldier);
+        soldier.setPersistenceRequired();
+        soldier.setHunger(100);
+        soldier.setMoral(100);
+        soldier.setHoldPos(post);
+        soldier.setShouldHoldPos(!patrol);
+        soldier.setFollowState(patrol ? 0 : HOLD_POSITION); // 0: wanders about
+        overworld.addFreshEntity(soldier);
+        if (type.equals("CAVALRY")) {
+            net.minecraft.world.entity.animal.horse.Horse horse = net.minecraft.world.entity.EntityType.HORSE.create(overworld);
+            if (horse != null) {
+                horse.moveTo(post.x, post.y, post.z, yaw, 0);
+                horse.setTamed(true);
+                horse.equipSaddle(null);
+                horse.setPersistenceRequired();
+                overworld.addFreshEntity(horse);
+                soldier.startRiding(horse, true);
+            }
+        }
+        FactionEvents.addRecruitToTeam(soldier, team, overworld);
+        return true;
+    }
+
     /** Leaves the player's faction, if another, then joins them to the nation's, as Recruits adds a member. */
     @Override
     public boolean join(net.minecraft.server.level.ServerPlayer player, Faction nation) {

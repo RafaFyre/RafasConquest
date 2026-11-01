@@ -42,6 +42,8 @@ public final class ConquestWorldgen {
             () -> (context, tag) -> new RecruitmentPostPiece(tag));
     public static final RegistryObject<StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",
             () -> (context, tag) -> new GoldChurchPiece(tag));
+    public static final RegistryObject<StructurePieceType> STYLE_PIECE = PIECE_TYPES.register("style",
+            () -> (context, tag) -> new rafasconquest.style.StylePiece(tag));
 
     public static final ResourceKey<Structure> FARM = key("farm");
     public static final ResourceKey<Structure> CITY = key("city");

@@ -84,6 +84,7 @@ public final class ConquestEvents {
     /** Before the world's levels are made: its horizontal stretch, as chosen when it was created. */
     @SubscribeEvent
     public static void onServerAboutToStart(net.minecraftforge.event.server.ServerAboutToStartEvent event) {
+        rafasconquest.style.StyleLibrary.init(); // the style folders, before any land is built
         rafasconquest.worldgen.HorizontalStretch.onServerAboutToStart(event.getServer());
     }
 

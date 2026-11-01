@@ -19,6 +19,8 @@ public final class ConquestContent {
     private static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, RafasConquest.MOD_ID);
     private static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, RafasConquest.MOD_ID);
     private static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, RafasConquest.MOD_ID);
+    private static final DeferredRegister<net.minecraft.world.level.block.entity.BlockEntityType<?>> BLOCK_ENTITIES =
+            DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, RafasConquest.MOD_ID);
 
     public static final RegistryObject<Block> COMMAND_TABLE = BLOCKS.register("command_table",
             () -> new CommandTableBlock(BlockBehaviour.Properties.copy(Blocks.LECTERN)));
@@ -38,6 +40,14 @@ public final class ConquestContent {
             () -> new QuestBoardBlock(BlockBehaviour.Properties.copy(Blocks.CARTOGRAPHY_TABLE)));
     public static final RegistryObject<Item> QUEST_BOARD_ITEM = ITEMS.register("quest_board",
             () -> new BlockItem(QUEST_BOARD.get(), new Item.Properties()));
+    /** The Character Marker: blue bedrock, set in a style's structures where people are to stand. */
+    public static final RegistryObject<Block> MARKER = BLOCKS.register("character_marker",
+            () -> new rafasconquest.style.MarkerBlock(BlockBehaviour.Properties.copy(Blocks.BEDROCK).noLootTable()));
+    public static final RegistryObject<Item> MARKER_ITEM = ITEMS.register("character_marker",
+            () -> new BlockItem(MARKER.get(), new Item.Properties()));
+    public static final RegistryObject<net.minecraft.world.level.block.entity.BlockEntityType<rafasconquest.style.MarkerBlockEntity>> MARKER_ENTITY =
+            BLOCK_ENTITIES.register("character_marker", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(rafasconquest.style.MarkerBlockEntity::new, MARKER.get()).build(null));
     public static final RegistryObject<Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -50,6 +60,7 @@ public final class ConquestContent {
                 output.accept(QUEST_BOARD_ITEM.get());
                 output.accept(GRAVEL_SLAB_ITEM.get());
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
+                output.accept(MARKER_ITEM.get());
             })
             .build());
 
@@ -60,5 +71,6 @@ public final class ConquestContent {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         TABS.register(modBus);
+        BLOCK_ENTITIES.register(modBus);
     }
 }

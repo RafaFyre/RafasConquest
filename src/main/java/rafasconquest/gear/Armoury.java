@@ -141,6 +141,38 @@ public final class Armoury {
     }
 
     /**
+     * Dresses a soldier in one of a Character Marker's kits, in its nation's style: 1 levy (half harness), 2 heavy
+     * infantry, 3 elite (a sallet and knightly harness), 4 officer's plate. Iron, without Epic Knights.
+     */
+    public static void dressTier(com.talhanation.recruits.entities.AbstractRecruitEntity who, int tier, @Nullable rafasconquest.map.BaseMap map,
+                                 java.util.UUID nation) {
+        Map<EquipmentSlot, ItemStack> slots;
+        if (!available()) {
+            slots = new EnumMap<>(EquipmentSlot.class);
+            if (tier >= 2) {
+                slots.put(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+                slots.put(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                slots.put(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+                slots.put(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+            }
+            slots.put(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+        } else {
+            Homeland land = homeland(map, nation);
+            ItemStack banner = banner(who.level().registryAccess(), nation);
+            slots = switch (Math.max(1, Math.min(4, tier))) {
+                case 1 -> rankKit(1, land, colour(nation), banner).slots();
+                case 2 -> rankKit(3, land, colour(nation), banner).slots();
+                case 3 -> outfit(Kit.HEAVY_INFANTRY, land, colour(nation), banner).slots();
+                default -> rankKit(7, land, colour(nation), banner).slots();
+            };
+        }
+        slots.forEach((slot, stack) -> {
+            who.setItemSlot(slot, stack);
+            who.getInventory().setItem(who.getInventorySlotIndex(slot), stack.copy());
+        });
+    }
+
+    /**
      * What a character wears: the harness of their sword title if they have one (Saint, King, God), else a ruler's crown,
      * a duke's or capital lord's small crown, or a noble's ceremonial dress.
      */
