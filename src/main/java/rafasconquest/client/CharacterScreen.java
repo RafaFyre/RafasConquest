@@ -55,6 +55,8 @@ public class CharacterScreen extends Screen {
     private Portraits.Banner banner;
     private final List<Retainer> retainers = new ArrayList<>();
     private int unseenRetainers;
+    /** Whether the bottom shows their retinue (else their vassals). */
+    private boolean showRetinue;
     /** What can be hovered (icons) or clicked (people), laid out as the page is drawn. */
     private final List<Spot> spots = new ArrayList<>();
 
@@ -95,6 +97,11 @@ public class CharacterScreen extends Screen {
     @Override
     protected void init() {
         Portraits.buttons(this, width, this::onClose, this::addRenderableWidget);
+        // Vassals or retinue along the bottom: this swaps them.
+        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.literal(showRetinue ? "Show vassals" : "Show retinue"), b -> {
+            showRetinue = !showRetinue;
+            rebuildWidgets();
+        }).bounds((int) (width * 0.333) + 70, (int) (height * 0.726) - 5, 80, 16).build());
         Person p = base.realm().people().get(index);
         CourtView shown = CourtView.of(base, index, court);
         boolean fresh = shown != court;
@@ -111,8 +118,13 @@ public class CharacterScreen extends Screen {
     private void layOutRetainers() {
         retainers.clear();
         Realm realm = base.realm();
-        List<Integer> vassals = new ArrayList<>(realm.vassals(index));
-        vassals.sort(Comparator.comparingInt((Integer i) -> NationScreen.power(realm, i)).reversed());
+        List<Integer> vassals;
+        if (showRetinue) {
+            vassals = rafasconquest.peerage.Retinues.of(base, index); // in their order: a Sword God first, then the best fighters
+        } else {
+            vassals = new ArrayList<>(realm.vassals(index));
+            vassals.sort(Comparator.comparingInt((Integer i) -> NationScreen.power(realm, i)).reversed());
+        }
         int scale = Math.max(10, (int) (height * 0.17 / 1.95));
         int spacing = Math.max(scale * 2, (int) (width * 0.15));
         int feet = (int) (height * 0.955);
@@ -248,7 +260,8 @@ public class CharacterScreen extends Screen {
         }
 
         // The retainers, along the bottom.
-        label(g, "RETAINERS", middleX, (int) (height * 0.726));
+        label(g, showRetinue ? "RETINUE (" + rafasconquest.peerage.Retinues.size(rafasconquest.peerage.Retinues.level(base.realm(), index)) + ")" : "VASSALS",
+                middleX, (int) (height * 0.726));
         Retainer hovered = null;
         for (Retainer r : retainers) {
             if (r.contains(mouseX, mouseY)) {

@@ -100,6 +100,7 @@ public final class Talk {
                     lines.add("I have heard what you did in battle. Such service deserves land.");
                     options.add(new Option("land", "Ask for land"));
                 }
+                fealty(map, peer, npc.person(), options);
             }
         }
         options.add(new Option("bye", "Farewell"));
@@ -129,6 +130,29 @@ public final class Talk {
             return false;
         }
         return giver >= 0 || Math.abs(q.giverX() - npc.getBlockX()) <= 3 && Math.abs(q.giverZ() - npc.getBlockZ()) <= 3;
+    }
+
+    /** Noble renown enough for a character who doesn't know the player to swear fealty to them. */
+    static final int VASSAL_RENOWN = 20;
+
+    /**
+     * Fealty between the player and a character: one the player outranks (not a ruler) they may ask to swear to them,
+     * or release; one who outranks the player, the player may swear to (if they serve no one) or renounce (unless they
+     * hold land of them).
+     */
+    private static void fealty(BaseMap map, Peerage.Peer peer, int person, List<Option> options) {
+        int theirs = Retinues.level(map.realm(), person);
+        int mine = Retinues.level(peer.title);
+        if (peer.vassals.contains(person)) {
+            options.add(new Option("release", "Release them from your fealty"));
+        } else if (mine > theirs && theirs < Retinues.TOP) {
+            options.add(new Option("vassalize", "Ask them to swear fealty to you"));
+        }
+        if (peer.liege == person && peer.hold < 0) {
+            options.add(new Option("renounce", "Renounce your fealty to them"));
+        } else if (peer.liege < 0 && theirs > mine) {
+            options.add(new Option("swear", "Swear fealty to them"));
+        }
     }
 
     /** The player chooses. */
@@ -161,6 +185,27 @@ public final class Talk {
             peer.title = NobleTitle.KNIGHT;
             peerage.changed();
             player.sendSystemMessage(Component.literal(npc.getName().getString() + " knights you. Rise, " + Names.player(peer.name, peer.title) + "."));
+        } else if (key.equals("vassalize")) {
+            String name = npc.getName().getString();
+            if (peer.known.contains(npc.person()) || peer.nobleRenown >= VASSAL_RENOWN) {
+                peer.vassals.add(npc.person());
+                peerage.changed();
+                player.sendSystemMessage(Component.literal(name + " kneels and swears fealty to you. They will ride with you to war."));
+            } else {
+                player.sendSystemMessage(Component.literal(name + ": I do not know you well enough to bend the knee. Serve me first."));
+            }
+        } else if (key.equals("release")) {
+            peer.vassals.remove(npc.person());
+            peerage.changed();
+            player.sendSystemMessage(Component.literal("You release " + npc.getName().getString() + " from your fealty."));
+        } else if (key.equals("swear")) {
+            peer.liege = npc.person();
+            peerage.changed();
+            player.sendSystemMessage(Component.literal("You kneel and swear fealty to " + npc.getName().getString() + ". You are their vassal."));
+        } else if (key.equals("renounce")) {
+            peer.liege = -1;
+            peerage.changed();
+            player.sendSystemMessage(Component.literal("You renounce your fealty to " + npc.getName().getString() + "."));
         } else if (key.equals("land")) {
             land(player, npc, peerage, peer);
         } else if (key.equals("camp")) {

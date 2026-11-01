@@ -42,7 +42,7 @@ public record Culture(int id, String name, Homeland homeland, List<String> start
     }
 
     /** A given name of this culture. */
-    String givenName(boolean female, Random random) {
+    public String givenName(boolean female, Random random) {
         String start = starts.get(random.nextInt(starts.size()));
         String middle = middles.get(random.nextInt(middles.size()));
         List<String> ends = female ? femaleEnds : maleEnds;
@@ -50,7 +50,7 @@ public record Culture(int id, String name, Homeland homeland, List<String> start
     }
 
     /** A family name of this culture. */
-    String familyName(Random random) {
+    public String familyName(Random random) {
         String start = starts.get(random.nextInt(starts.size()));
         return start + middles.get(random.nextInt(middles.size())) + familyEnds.get(random.nextInt(familyEnds.size()));
     }

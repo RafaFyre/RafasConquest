@@ -160,6 +160,20 @@ public final class Wars {
         if (!near) {
             return false;
         }
+        // The players who mustered bring their vassals (with theirs, and their troops) and their retinues.
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            long[] answer = mustered.get(p.getUUID());
+            int brought = answer == null || answer[0] != war.id() ? 0 : rafasconquest.peerage.Retinues.playerTroops(p);
+            if (brought > 0) {
+                if (answer[1] == 1) {
+                    attackers += brought;
+                } else {
+                    defenders += brought;
+                }
+                server.getPlayerList().broadcastSystemMessage(Component.literal("[War] " + p.getName().getString() + " brings "
+                        + brought + " of their vassals' troops and retinue to the field.").withStyle(ChatFormatting.GOLD), false);
+            }
+        }
         double scale = Math.min(1, REAL_CAP / (double) Math.max(attackers, defenders));
         String county = MapLands.of(map).titleName(new Goal(false, war.target()));
         try {

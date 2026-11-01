@@ -50,6 +50,17 @@ public final class PlayerStats {
             rows.add(new String[]{"Land", "None"});
         }
         rows.add(new String[]{"Job in battle", ranks.job(player.getUUID()).title()});
+        if (map != null) {
+            if (peer.hold < 0 && peer.liege >= 0 && peer.liege < map.realm().people().size()) {
+                rows.add(new String[]{"Sworn to", map.realm().people().get(peer.liege).name()});
+            }
+            List<String> vassals = peer.vassals.stream().filter(v -> v >= 0 && v < map.realm().people().size())
+                    .map(v -> map.realm().people().get(v).name()).toList();
+            rows.add(new String[]{"Vassals", vassals.isEmpty() ? "None" : vassals.size() + ": " + String.join(", ", vassals)});
+        }
+        rows.add(new String[]{"Retinue", peer.retinue.size() + " of " + Retinues.size(Retinues.level(peer.title))
+                + (peer.retinue.isEmpty() ? "" : ": " + String.join(", ", peer.retinue.values()))});
+        rows.add(new String[]{"Brings to war", Retinues.playerTroops(player) + " troops"});
         rows.add(new String[]{"Battle role", ranks.role(player.getUUID()).title()});
         rows.add(new String[]{"Quests under way", String.valueOf(peer.taken.size())});
         return new View(rows, teleportAtMuster(player));

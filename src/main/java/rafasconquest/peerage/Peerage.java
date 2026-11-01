@@ -57,6 +57,10 @@ public final class Peerage extends SavedData {
         public int hold = -1;
         public int liege = -1;
         public final Set<Integer> known = new HashSet<>();
+        /** The characters sworn to them as vassals. */
+        public final Set<Integer> vassals = new HashSet<>();
+        /** Their retinue: the recruits they hired who became characters, following them (entity, name). */
+        public final Map<UUID, String> retinue = new java.util.LinkedHashMap<>();
         /** The quests read on a board, not yet taken, by id. */
         public final Map<Long, Quest> read = new HashMap<>();
         public final List<Taken> taken = new ArrayList<>();
@@ -140,6 +144,10 @@ public final class Peerage extends SavedData {
             t.putInt("hold", p.hold);
             t.putInt("liege", p.liege);
             t.putIntArray("known", p.known.stream().mapToInt(Integer::intValue).toArray());
+            t.putIntArray("vassals", p.vassals.stream().mapToInt(Integer::intValue).toArray());
+            CompoundTag retinue = new CompoundTag();
+            p.retinue.forEach((member, name) -> retinue.putString(member.toString(), name));
+            t.put("retinue", retinue);
             ListTag read = new ListTag();
             p.read.values().forEach(q -> read.add(q.save()));
             t.put("read", read);
@@ -186,6 +194,13 @@ public final class Peerage extends SavedData {
             p.militaryRenown = t.getInt("militaryRenown");
             p.hold = t.getInt("hold");
             p.liege = t.getInt("liege");
+            for (int v : t.getIntArray("vassals")) {
+                p.vassals.add(v);
+            }
+            CompoundTag retinue = t.getCompound("retinue");
+            for (String id : retinue.getAllKeys()) {
+                p.retinue.put(UUID.fromString(id), retinue.getString(id));
+            }
             for (int k : t.getIntArray("known")) {
                 p.known.add(k);
             }
