@@ -12,7 +12,8 @@ style/<name>/      A building style. Its style.json names the homelands that bui
   city/walls/corners, gates, watchtowers, walls
   city/buildings/common                              ordinary houses
   city/buildings/noble                               noble buildings
-  city/buildings/landmarks/mandatory/palace, barracks
+  city/buildings/landmarks/mandatory/palace          the Palace: the gold church the city's holder (and capital lord) stand in
+  city/buildings/landmarks/mandatory/barracks/small  the small Barracks: the recruitment post, its recruiter, guards and quest board
   city/buildings/landmarks/style/churches, monuments
   city/buildings/landmarks/unique
   lone/castles/small, medium, large, grand           small: a lord's castle; medium: a county nation's seat;

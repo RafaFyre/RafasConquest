@@ -66,7 +66,7 @@ public final class RecruitmentPosts {
                 }
             }
         }
-        return placed + nobles(level, chunk, data, precomputer);
+        return placed + nobles(level, chunk, data, precomputer) + sanctumMembers(level, chunk, data);
     }
 
     /** The chunks holding a castle's keep (its lord's place), for the map they were worked out for. */
@@ -150,6 +150,74 @@ public final class RecruitmentPosts {
             level.addFreshEntity(noble);
             data.markGuardSpawned(at);
             placed++;
+        }
+        return placed;
+    }
+
+    /** How many Sword Kings and Saints stand at each sanctum: 1 or 2 kings; 12 to 20 saints (all it has, if fewer). */
+    private static final int MIN_KINGS = 1;
+    private static final int MAX_KINGS = 2;
+    private static final int MIN_SAINTS = 12;
+    private static final int MAX_SAINTS = 20;
+    /** How far from the sanctum's middle its kings stand, and the two rings of its saints. */
+    private static final int KING_RING = 5;
+    private static final int[] SAINT_RINGS = {9, 13};
+
+    /**
+     * The sword sanctums' members, at their sanctum while it is still its own: its best Sword Kings (1 or 2) round its
+     * middle, and its best Sword Saints (12 to 20) in two rings about them, all facing in. The same each time for a
+     * world, by its seed; each set once, when its chunk is first in the world.
+     */
+    private static int sanctumMembers(ServerLevel level, LevelChunk chunk, ConquestSavedData data) {
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            return 0;
+        }
+        int placed = 0;
+        for (rafasconquest.people.Organization o : map.realm().organizations()) {
+            rafasconquest.map.BaseMap.Nation sanctum = map.nations().get(o.nation());
+            if (map.holders()[sanctum.seat()] != o.nation()) {
+                continue; // fallen
+            }
+            java.util.Random random = new java.util.Random(level.getSeed() ^ sanctum.seat() * 0x5A1C7L);
+            java.util.List<Integer> kings = o.kings().subList(0, Math.min(o.kings().size(), MIN_KINGS + random.nextInt(MAX_KINGS - MIN_KINGS + 1)));
+            java.util.List<Integer> saints = o.saints().subList(0, Math.min(o.saints().size(), MIN_SAINTS + random.nextInt(MAX_SAINTS - MIN_SAINTS + 1)));
+            java.util.List<int[]> spots = new java.util.ArrayList<>(); // person, x, z
+            for (int k = 0; k < kings.size(); k++) {
+                double angle = Math.PI * (k + 0.5) / Math.max(1, kings.size()) - Math.PI / 2;
+                spots.add(new int[]{kings.get(k), sanctum.x() + (int) Math.round(Math.cos(angle) * KING_RING),
+                        sanctum.z() + (int) Math.round(Math.sin(angle) * KING_RING)});
+            }
+            int inner = (saints.size() + 1) / 2;
+            for (int s = 0; s < saints.size(); s++) {
+                boolean first = s < inner;
+                int ring = first ? SAINT_RINGS[0] : SAINT_RINGS[1];
+                int count = first ? inner : saints.size() - inner;
+                double angle = 2 * Math.PI * ((first ? s : s - inner) + (first ? 0 : 0.5)) / Math.max(1, count);
+                spots.add(new int[]{saints.get(s), sanctum.x() + (int) Math.round(Math.cos(angle) * ring),
+                        sanctum.z() + (int) Math.round(Math.sin(angle) * ring)});
+            }
+            for (int[] spot : spots) {
+                if (spot[1] >> 4 != chunk.getPos().x || spot[2] >> 4 != chunk.getPos().z) {
+                    continue;
+                }
+                BlockPos at = floor(chunk, spot[1], spot[2]);
+                if (at == null || data.guardSpawned(at)) {
+                    continue;
+                }
+                Recruiter member = ConquestEntities.RECRUITER.get().create(level);
+                if (member == null) {
+                    continue;
+                }
+                rafasconquest.people.Person p = map.realm().people().get(spot[0]);
+                float yaw = (float) Math.toDegrees(Math.atan2(-(sanctum.x() - spot[1]), sanctum.z() - spot[2])); // toward the middle
+                member.noble(spot[0], rafasconquest.peerage.Names.styled(map, p), p.nation() >= 0 ? map.nations().get(p.nation()).id() : sanctum.id(), at.getX() + 0.5, at.getY(), at.getZ() + 0.5,
+                        yaw, Math.floorMod(spot[0] * 7, 20));
+                rafasconquest.gear.Armoury.dressCharacter(member, map, spot[0]); // the harness of their sword title
+                level.addFreshEntity(member);
+                data.markGuardSpawned(at);
+                placed++;
+            }
         }
         return placed;
     }

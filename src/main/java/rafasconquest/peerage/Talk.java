@@ -85,7 +85,7 @@ public final class Talk {
             if (peerage.replaced(p.hold().province())) {
                 lines.add("This land is no longer mine to give.");
             } else if (!serves) {
-                lines.add("I have no dealings with those who do not serve " + nationName + ". Enlist at the recruitment post first.");
+                lines.add("I have no dealings with those who do not serve " + nationName + ". Enlist at the barracks first.");
             } else {
                 lines.add("Well met, " + Names.player(peer.name, peer.title) + ".");
                 if (peer.known.contains(npc.person())) {
