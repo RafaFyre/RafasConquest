@@ -124,14 +124,22 @@
     document.getElementById("releases").href = base + "/releases";
     var download = document.getElementById("download");
     download.href = base + "/releases";
-    // Builds are pre-releases, which /releases/latest skips, so link the newest release's jar directly.
-    fetch("https://api.github.com/repos/" + owner + "/" + repo + "/releases?per_page=1")
+    // Builds are pre-releases, which /releases/latest skips, so link the newest release's jar directly. The API doesn't
+    // list them newest first, so pick the last published one that has a jar.
+    fetch("https://api.github.com/repos/" + owner + "/" + repo + "/releases?per_page=100")
       .then(function (r) { return r.json(); })
       .then(function (releases) {
-        var jar = releases[0] && releases[0].assets.filter(function (a) { return /\.jar$/.test(a.name); })[0];
+        var newest = null, jar = null;
+        releases.forEach(function (release) {
+          var j = release.assets.filter(function (a) { return /\.jar$/.test(a.name); })[0];
+          if (j && !release.draft && (!newest || release.published_at > newest.published_at)) {
+            newest = release;
+            jar = j;
+          }
+        });
         if (jar) {
           download.href = jar.browser_download_url;
-          download.textContent = "Download " + releases[0].tag_name;
+          download.textContent = "Download " + jar.name.replace(/^rafasconquestPREALPHA-|\.jar$/g, "");
         }
       })
       .catch(function () {});
