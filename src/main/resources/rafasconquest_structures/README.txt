@@ -25,7 +25,11 @@ world/<land>/      The wild of each land (plains, desert, jungle, savanna, snow,
 
 Building rules
 --------------
-- The floor is the template's y = 0; it is set on the ground, centred on the spot, turned a random quarter turn.
+- The template's y = 0 is its floor layer, set in place of the ground's top block, centred on the spot. Lone
+  structures are turned a random quarter turn; city buildings keep their door to the west (build it facing north).
+- City plots are 14 x 14 blocks: the Palace and small Barracks are centred on theirs. Put a Quest Board in the Barracks.
+- Where a style's Palace or Barracks stands, the mod places none of its own people there: use Character Markers
+  (City holder, and a Named Character of rank capital lord, for the Palace; Recruiter and guards for the Barracks).
 - Structure blocks are left out; air in the template clears what was there (use structure void to keep the ground).
 - Put Character Markers (blue bedrock, creative tab) where people should stand, facing the way they should face.
   Right-click one to choose who. Markers placed by hand only show a label; markers in generated structures

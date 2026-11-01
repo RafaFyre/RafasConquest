@@ -195,13 +195,21 @@ public final class CityGridBuilder {
                         for (int qz = 0; qz < 2; qz++) {
                             if (qx == 0 && qz == 0 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
                                     && heldByANation(site)) {
-                                pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                // The small Barracks: from the style folders where its slot has a file, else the mod's own.
+                                String barracks = rafasconquest.style.CityStyles.barracks(site);
+                                rafasconquest.style.StylePiece styled = barracks == null ? null : rafasconquest.style.StylePiece.of(barracks,
+                                        blockX + CityLayout.PLOT_SIZE / 2, plate, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
+                                pieces.addPiece(styled != null ? styled : new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
                                 continue; // the recruitment post has this plot
                             }
                             if (qx == 0 && qz == 1 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
                                     && heldByANation(site)) {
                                 int[] church = RecruitmentPost.of(site).church();
-                                pieces.addPiece(new GoldChurchPiece(church[0], church[1], plate));
+                                // The Palace: from the style folders where its slot has a file, else the gold church.
+                                String palace = rafasconquest.style.CityStyles.palace(site);
+                                rafasconquest.style.StylePiece styled = palace == null ? null : rafasconquest.style.StylePiece.of(palace,
+                                        church[0] + CityLayout.PLOT_SIZE / 2, plate, church[1] + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
+                                pieces.addPiece(styled != null ? styled : new GoldChurchPiece(church[0], church[1], plate));
                                 continue; // and the gold church, the one beside it
                             }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
