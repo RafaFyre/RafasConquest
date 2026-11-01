@@ -61,6 +61,17 @@ final class WarCouncil {
     }
 
     private final Map<UUID, Talk> talks = new HashMap<>();
+    /** Told who speaks each line as it is said (the player it is said to, and the speaker as they are called), so the council can look at them. */
+    java.util.function.BiConsumer<ServerPlayer, String> onSpeak;
+
+    /** Who says a line of the council ("General Aldric"), from how {@link #say} writes it; null for any other. */
+    private static String speaker(Component line) {
+        if (line.getSiblings().isEmpty()) {
+            return null;
+        }
+        String who = line.getSiblings().get(0).getString();
+        return who.endsWith(": ") ? who.substring(0, who.length() - 2) : null;
+    }
 
     /**
      * A player right-clicked one of the council: the general briefs them (as below); a wing's Marshal speaks for their
@@ -329,8 +340,13 @@ final class WarCouncil {
                 talk.queue.clear();
                 continue;
             }
-            player.sendSystemMessage(talk.queue.poll());
+            Component line = talk.queue.poll();
+            player.sendSystemMessage(line);
             talk.nextAt = now + LINE_TICKS;
+            String speaker = speaker(line);
+            if (speaker != null && onSpeak != null) {
+                onSpeak.accept(player, speaker);
+            }
         }
     }
 

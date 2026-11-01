@@ -284,8 +284,10 @@ public final class RecruitsBattle {
     private final Map<UUID, Integer> councillors = new HashMap<>();
     /** Who each of the council is: "general", "left", "right", or "vassal:<person>:<their lord>". */
     private final Map<UUID, String> councilRoles = new HashMap<>();
-    /** Those of the council talking to a player, who look at them while they do: the player, until when, and the way they faced. */
+    /** Those of the council in a talk with a player, one on one: the player, and until when. */
     private final Map<UUID, Object[]> listening = new HashMap<>();
+    /** The meeting in each command tent, by side: who last spoke, to which player, and until when the rest look at them. */
+    private final Map<Integer, Object[]> speaking = new HashMap<>();
     private final WarCouncil council = new WarCouncil();
     /** The deployment's countdown bars: one per army, and one for players in neither. */
     private final ServerBossEvent[] deploymentBars = new ServerBossEvent[3];
@@ -3616,6 +3618,7 @@ public final class RecruitsBattle {
      */
     private void spawnCouncil() {
         dismissCouncil();
+        council.onSpeak = this::spoke;
         for (int side = 0; side < 2; side++) {
             WarCamp camp = camps[side];
             if (camp == null) {
@@ -3684,42 +3687,93 @@ public final class RecruitsBattle {
     /** How long one of the council keeps looking at a player who spoke to them, in ticks, and how near they must stay. */
     private static final int LISTEN_TICKS = 600;
     private static final double LISTEN_REACH = 8;
+    /** How long the council keeps looking at whoever last spoke at the meeting, in ticks. */
+    private static final int SPEAKING_TICKS = 100;
 
-    /** One of the council turns to the player speaking to them. */
+    /** A player begins a talk with one of the council, one on one: only they look at the player. */
     private void listen(Entity figure, ServerPlayer player) {
-        Object[] before = listening.get(figure.getUUID());
-        float yaw = before != null ? (float) before[2] : figure.getYRot();
-        listening.put(figure.getUUID(), new Object[]{player.getUUID(), level.getGameTime() + LISTEN_TICKS, yaw});
+        Integer side = councillors.get(figure.getUUID());
+        if (side != null) {
+            speaking.remove(side);
+        }
+        listening.put(figure.getUUID(), new Object[]{player.getUUID(), level.getGameTime() + LISTEN_TICKS});
     }
 
-    /** Each of the council talking to a player looks at them; once they leave (or are done), turns back to the table. */
+    /**
+     * One of the council said a line to a player. Their own one-on-one talk goes on as it was; anyone else speaking
+     * makes it a meeting: the speaker looks at the player, and the rest of the council at the speaker.
+     */
+    private void spoke(ServerPlayer player, String name) {
+        for (Map.Entry<UUID, Integer> c : councillors.entrySet()) {
+            Entity figure = level.getEntity(c.getKey());
+            if (figure == null || figure.getCustomName() == null || !figure.getCustomName().getString().equals(name)) {
+                continue;
+            }
+            Object[] one = listening.get(c.getKey());
+            if (one != null && one[0].equals(player.getUUID())) {
+                one[1] = level.getGameTime() + LISTEN_TICKS;
+                return;
+            }
+            int side = c.getValue();
+            listening.keySet().removeIf(id -> side == councillors.getOrDefault(id, -1));
+            speaking.put(side, new Object[]{c.getKey(), player.getUUID(), level.getGameTime() + SPEAKING_TICKS});
+            return;
+        }
+    }
+
+    /**
+     * Where each of the council looks: one in a talk with a player, at them; at a meeting, the speaker at the player
+     * and the rest at the speaker; otherwise at the map on the command table between them.
+     */
     private void turnToListeners() {
-        listening.entrySet().removeIf(entry -> {
-            Entity figure = level.getEntity(entry.getKey());
-            if (figure == null) {
-                return true;
+        long now = level.getGameTime();
+        speaking.values().removeIf(s -> now > (long) s[2]);
+        for (Map.Entry<UUID, Integer> c : councillors.entrySet()) {
+            Entity figure = level.getEntity(c.getKey());
+            WarCamp camp = camps[c.getValue()];
+            if (figure == null || camp == null) {
+                continue;
             }
-            Object[] l = entry.getValue();
-            ServerPlayer player = level.getServer().getPlayerList().getPlayer((UUID) l[0]);
-            if (player == null || level.getGameTime() > (long) l[1] || player.distanceTo(figure) > LISTEN_REACH) {
-                float yaw = (float) l[2];
-                figure.setYRot(yaw);
-                figure.setYHeadRot(yaw);
-                figure.setYBodyRot(yaw);
-                figure.setXRot(0);
-                return true;
+            Vec3 target = null;
+            Object[] one = listening.get(c.getKey());
+            if (one != null) {
+                ServerPlayer player = level.getServer().getPlayerList().getPlayer((UUID) one[0]);
+                if (player == null || now > (long) one[1] || player.distanceTo(figure) > LISTEN_REACH) {
+                    listening.remove(c.getKey());
+                } else {
+                    target = player.getEyePosition();
+                }
             }
-            double dx = player.getX() - figure.getX();
-            double dz = player.getZ() - figure.getZ();
-            double dy = player.getEyeY() - figure.getEyeY();
-            float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
-            float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
-            figure.setYRot(yaw);
-            figure.setYHeadRot(yaw);
-            figure.setYBodyRot(yaw);
-            figure.setXRot(pitch);
-            return false;
-        });
+            Object[] meeting = speaking.get(c.getValue());
+            if (target == null && meeting != null) {
+                if (meeting[0].equals(c.getKey())) {
+                    ServerPlayer player = level.getServer().getPlayerList().getPlayer((UUID) meeting[1]);
+                    target = player == null ? null : player.getEyePosition();
+                } else {
+                    Entity speaker = level.getEntity((UUID) meeting[0]);
+                    target = speaker == null ? null : speaker.getEyePosition();
+                }
+            }
+            if (target == null) {
+                target = camp.spot(0, 0).add(0, 1, 0); // the map on the command table
+            }
+            lookAt(figure, target);
+        }
+    }
+
+    private static void lookAt(Entity figure, Vec3 target) {
+        double dx = target.x - figure.getX();
+        double dz = target.z - figure.getZ();
+        double dy = target.y - figure.getEyeY();
+        if (dx * dx + dz * dz < 0.01) {
+            return;
+        }
+        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+        figure.setYRot(yaw);
+        figure.setYHeadRot(yaw);
+        figure.setYBodyRot(yaw);
+        figure.setXRot(pitch);
     }
 
     private void dismissCouncil() {
@@ -3732,6 +3786,7 @@ public final class RecruitsBattle {
         councillors.clear();
         councilRoles.clear();
         listening.clear();
+        speaking.clear();
         council.adjourn();
     }
 
