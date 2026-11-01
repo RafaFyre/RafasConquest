@@ -16,8 +16,8 @@ public enum Stat {
     public static final int SUPERHUMAN = 21;
     public static final int SWORD_KING = 30;
     public static final int SWORD_GOD = 40;
-    /** How many of each martial title the world has: seven Sword Gods, and three times as many at each title below. */
-    public static final int MAX_SWORD_GODS = 7;
+    /** How many of each martial title the world has: nine Sword Gods, and three times as many at each title below (27, 81). */
+    public static final int MAX_SWORD_GODS = 9;
     public static final int MAX_SWORD_KINGS = 3 * MAX_SWORD_GODS;
     public static final int MAX_SWORD_SAINTS = 3 * MAX_SWORD_KINGS;
 

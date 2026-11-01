@@ -447,6 +447,8 @@ public final class BaseMapGenerator {
             }
         }
         realm = realm.withOrganizations(rafasconquest.people.Organizations.plan(new java.util.Random(seed ^ 0x53414E4354L), realm.people(), sanctums));
+        // Each sanctum filled to its Sword Kings and Saints, with retainers of its own where too few trained there.
+        realm = rafasconquest.people.Organizations.populate(new java.util.Random(seed ^ 0x46494C4CL), realm);
         long superhuman = realm.people().stream().filter(p -> p.stat(rafasconquest.people.Stat.PROWESS) >= rafasconquest.people.Stat.SUPERHUMAN).count();
         rafasconquest.RafasConquest.LOGGER.info("[world] {} holders ({} superhuman), {} cultures, {} faiths, {} friendships and rivalries",
                 realm.people().size(), superhuman, realm.cultures().size(), realm.faiths().size(), realm.bonds().size());

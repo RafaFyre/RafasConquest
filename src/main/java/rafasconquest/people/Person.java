@@ -17,7 +17,9 @@ public record Person(String given, String family, boolean female, int age, int c
     public enum Kind {
         CAPITAL, CITY, TOWN, CASTLE,
         /** The lord of a duchy's or a nation's capital city, sworn to its ruler, who holds the city above them. */
-        LORD
+        LORD,
+        /** One who lives at a sword sanctum, trained there, holding nothing: its Sword Kings and Saints. */
+        RETAINER
     }
 
     public int stat(Stat stat) {

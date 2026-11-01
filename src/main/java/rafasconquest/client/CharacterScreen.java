@@ -406,6 +406,7 @@ public class CharacterScreen extends Screen {
             case TOWN -> "holds the town of";
             case CASTLE -> "holds the castle of";
             case LORD -> "lord of the city of";
+            case RETAINER -> "lives at the sanctum of";
         };
     }
 

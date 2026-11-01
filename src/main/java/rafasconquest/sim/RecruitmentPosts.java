@@ -111,6 +111,9 @@ public final class RecruitmentPosts {
             rafasconquest.people.Person p = map.realm().people().get(i);
             rafasconquest.people.Person.Hold hold = p.hold();
             // Not where a player has taken the hold, nor where it was conquered in war.
+            if (hold.kind() == rafasconquest.people.Person.Kind.RETAINER) {
+                continue; // a sanctum's retainers stand at their sanctum (sanctumMembers)
+            }
             if (p.nation() < 0 || peerage.replaced(hold.province()) && hold.kind() != rafasconquest.people.Person.Kind.LORD
                     || map.holders()[hold.province()] != p.nation()) {
                 continue;
