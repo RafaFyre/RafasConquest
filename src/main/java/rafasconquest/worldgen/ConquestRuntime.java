@@ -53,5 +53,6 @@ public final class ConquestRuntime {
 
     public static void publishMap(@Nullable rafasconquest.map.BaseMap drawn) {
         map = drawn;
+        rafasconquest.style.CityStyles.forgetAll(); // a new world: its cities choose afresh
     }
 }

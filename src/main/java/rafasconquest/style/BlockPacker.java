@@ -25,18 +25,30 @@ public final class BlockPacker {
     public record Placed(int building, int x, int z, int turns) {
     }
 
-    private record Rect(int x, int z, int w, int d) {
+    /** Free room: its corner and its size along x and z. */
+    public record Rect(int x, int z, int w, int d) {
+        public boolean overlaps(Rect o) {
+            return x < o.x + o.w && o.x < x + w && z < o.z + o.d && o.z < z + d;
+        }
     }
 
     private BlockPacker() {
     }
 
     public static List<Placed> pack(int blockSize, List<Size> sizes, Random random) {
+        return pack(new ArrayList<>(List.of(new Rect(0, 0, blockSize, blockSize))), blockSize, blockSize, sizes, random);
+    }
+
+    /**
+     * Fills the free room of an area {@code width} by {@code depth} (corner at 0, 0), each building facing the area's
+     * nearer edge.
+     */
+    public static List<Placed> pack(List<Rect> free, int width, int depth, List<Size> sizes, Random random) {
         List<Placed> placed = new ArrayList<>();
         if (sizes.isEmpty()) {
             return placed;
         }
-        List<Rect> free = new ArrayList<>(List.of(new Rect(0, 0, blockSize, blockSize)));
+        free = new ArrayList<>(free);
         int misses = 0;
         while (misses < GIVE_UP && !free.isEmpty()) {
             int b = random.nextInt(sizes.size());
@@ -65,7 +77,7 @@ public final class BlockPacker {
                 }
                 double centreX = best.x() + w / 2.0;
                 double centreZ = best.z() + d / 2.0;
-                int turns = turned ? (centreX < blockSize / 2.0 ? 3 : 1) : (centreZ < blockSize / 2.0 ? 0 : 2);
+                int turns = turned ? (centreX < width / 2.0 ? 3 : 1) : (centreZ < depth / 2.0 ? 0 : 2);
                 placed.add(new Placed(b, best.x(), best.z(), turns));
                 done = true;
                 break;
@@ -73,5 +85,32 @@ public final class BlockPacker {
             misses = done ? 0 : misses + 1;
         }
         return placed;
+    }
+
+    /** The free room left once {@code taken} (and {@link #GAP} around it) is built on: each room it cuts, split around it. */
+    public static List<Rect> cut(List<Rect> free, Rect taken) {
+        Rect t = new Rect(taken.x() - GAP, taken.z() - GAP, taken.w() + 2 * GAP, taken.d() + 2 * GAP);
+        List<Rect> left = new ArrayList<>();
+        for (Rect r : free) {
+            if (!r.overlaps(t)) {
+                left.add(r);
+                continue;
+            }
+            int x0 = Math.max(r.x(), t.x());
+            int x1 = Math.min(r.x() + r.w(), t.x() + t.w());
+            if (t.x() > r.x()) {
+                left.add(new Rect(r.x(), r.z(), t.x() - r.x(), r.d()));
+            }
+            if (t.x() + t.w() < r.x() + r.w()) {
+                left.add(new Rect(t.x() + t.w(), r.z(), r.x() + r.w() - t.x() - t.w(), r.d()));
+            }
+            if (t.z() > r.z()) {
+                left.add(new Rect(x0, r.z(), x1 - x0, t.z() - r.z()));
+            }
+            if (t.z() + t.d() < r.z() + r.d()) {
+                left.add(new Rect(x0, t.z() + t.d(), x1 - x0, r.z() + r.d() - t.z() - t.d()));
+            }
+        }
+        return left;
     }
 }

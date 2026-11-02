@@ -24,6 +24,8 @@ import java.util.Random;
 public final class Townsfolk {
     /** A district within this many blocks of a player has its townsfolk. */
     static final int NEAR = 64;
+    /** At most this many districts have their townsfolk at once (the nearest), about 40 people each. */
+    static final int MAX_DISTRICTS = 2;
     /** Checked once a second. */
     private static final int EVERY = 20;
     private static final long SALT = 0x544F574E53L;
@@ -74,6 +76,7 @@ public final class Townsfolk {
         }
         // The districts near a player.
         Map<DistrictKey, CityLayout.Site> near = new HashMap<>();
+        Map<DistrictKey, Double> distance = new HashMap<>();
         for (ServerPlayer player : level.players()) {
             int px = player.getBlockX();
             int pz = player.getBlockZ();
@@ -87,12 +90,21 @@ public final class Townsfolk {
                         int z1 = city.originZ() + CityLayout.cellMax(cz);
                         double dx = Math.max(0, Math.max(x0 - px, px - x1));
                         double dz = Math.max(0, Math.max(z0 - pz, pz - z1));
-                        if (dx * dx + dz * dz <= NEAR * NEAR) {
-                            near.put(new DistrictKey(city.x(), city.z(), cx, cz), city);
+                        double d = dx * dx + dz * dz;
+                        DistrictKey k = new DistrictKey(city.x(), city.z(), cx, cz);
+                        if (d <= NEAR * NEAR && d < distance.getOrDefault(k, Double.MAX_VALUE)) {
+                            near.put(k, city);
+                            distance.put(k, d);
                         }
                     }
                 }
             }
+        }
+        // Only the nearest few: a capital's every district at once costs the server too much.
+        if (near.size() > MAX_DISTRICTS) {
+            java.util.Set<DistrictKey> keep = distance.entrySet().stream().sorted(Map.Entry.comparingByValue()).limit(MAX_DISTRICTS)
+                    .map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+            near.keySet().retainAll(keep);
         }
         // Districts nobody is near any more lose their townsfolk.
         for (Iterator<Map.Entry<DistrictKey, Townsperson[]>> it = peopled.entrySet().iterator(); it.hasNext(); ) {

@@ -90,15 +90,22 @@ public class CityTerrainPiece extends StructurePiece {
     public void postProcess(WorldGenLevel level, StructureManager structures, ChunkGenerator generator, RandomSource random,
                             BoundingBox chunkBox, ChunkPos chunkPos, BlockPos pivot) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        // A styled piece may reach into this cell from the next one, which may be built first: its columns are kept.
+        rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(originX, originZ, plan.cells());
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
                 CityTerrain.Column column = CityTerrain.column(plan, x - originX, z - originZ);
                 boolean wall = CityLayout.inWallBand(plan.size(), x - originX, z - originZ);
+                int keep = styled.pieces().isEmpty() ? -1 : styled.top(x - originX, z - originZ);
                 switch (column.kind()) {
-                    case PLATE -> flatten(level, pos, x, z, false, wall);
-                    case WALL_BASE -> flatten(level, pos, x, z, true, wall);
-                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, plan.plateY());
-                    case SLOPE -> slope(level, pos, x, z, column);
+                    case PLATE -> flatten(level, pos, x, z, false, wall, keep);
+                    case WALL_BASE -> flatten(level, pos, x, z, true, wall, keep);
+                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, keep > 0 ? plan.plateY() + keep - 1 : plan.plateY());
+                    case SLOPE -> {
+                        if (keep < 0) {
+                            slope(level, pos, x, z, column); // a wall piece standing out over the slope keeps its ground
+                        }
+                    }
                     case NONE -> {
                     }
                 }
@@ -112,14 +119,16 @@ public class CityTerrainPiece extends StructurePiece {
      * natural.
      * <p>
      * On the wall's footprint ({@code wall}), blocks of the wall itself are kept. Some segments reach a few blocks
-     * into the neighbouring cell, whose terrain may be laid after the wall, and must not erase it.
+     * into the neighbouring cell, whose terrain may be laid after the wall, and must not erase it. Under a styled piece
+     * {@code keep} blocks tall, only what is above it is cleared, and its floor is only filled where it is open.
      */
-    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, boolean bare, boolean wall) {
+    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, boolean bare, boolean wall, int keep) {
         int plate = plan.plateY();
         BlockState stone = Blocks.STONE.defaultBlockState();
-        clearAbove(level, pos, x, z, plate, wall);
+        clearAbove(level, pos, x, z, keep > 0 ? plate + keep - 1 : plate, wall);
         pos.set(x, plate, z);
-        if (!(wall && isWall(level.getBlockState(pos)))) {
+        BlockState floor = level.getBlockState(pos);
+        if (!(wall && isWall(floor)) && (keep < 0 || floor.isAir() || floor.canBeReplaced())) {
             level.setBlock(pos, bare ? stone : variant.ground(), 2);
         }
         for (int y = plate - 1; y > level.getMinBuildHeight(); y--) {

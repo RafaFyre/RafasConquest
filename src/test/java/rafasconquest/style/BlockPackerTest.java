@@ -35,4 +35,32 @@ class BlockPackerTest {
             }
         }
     }
+
+    @Test
+    void aCutLeavesTheRestFreeAndNoneOfTheTaken() {
+        int size = 100;
+        BlockPacker.Rect taken = new BlockPacker.Rect(30, 40, 25, 20);
+        List<BlockPacker.Rect> free = BlockPacker.cut(List.of(new BlockPacker.Rect(0, 0, size, size)), taken);
+        int[][] used = new int[size][size];
+        for (BlockPacker.Rect r : free) {
+            for (int x = r.x(); x < r.x() + r.w(); x++) {
+                for (int z = r.z(); z < r.z() + r.d(); z++) {
+                    assertTrue(used[x][z]++ == 0, "free room counted twice at " + x + ", " + z);
+                }
+            }
+        }
+        for (int x = 0; x < size; x++) {
+            for (int z = 0; z < size; z++) {
+                boolean near = x >= 29 && x < 56 && z >= 39 && z < 61;
+                assertTrue(near ? used[x][z] == 0 : used[x][z] == 1, "wrong at " + x + ", " + z);
+            }
+        }
+        // Packing what is left never builds on the taken room.
+        for (BlockPacker.Placed p : BlockPacker.pack(free, size, size, HOUSES, new Random(7))) {
+            BlockPacker.Size s = HOUSES.get(p.building());
+            int w = p.turns() % 2 == 1 ? s.z() : s.x();
+            int d = p.turns() % 2 == 1 ? s.x() : s.z();
+            assertFalse(new BlockPacker.Rect(p.x(), p.z(), w, d).overlaps(taken), "built on the taken room");
+        }
+    }
 }

@@ -101,6 +101,10 @@ public final class CityGridBuilder {
         return PLANS.computeIfAbsent(key, k -> planAndLog(ctx, site));
     }
 
+    /** The city survey's threads: a quarter of the CPU's (at least 2), never all of them. */
+    private static final java.util.concurrent.ForkJoinPool SURVEY = new java.util.concurrent.ForkJoinPool(
+            Math.max(2, Runtime.getRuntime().availableProcessors() / 4));
+
     private static CityTerrain.Plan planAndLog(Structure.GenerationContext ctx, CityLayout.Site site) {
         long start = System.nanoTime();
         // Where the survey reads the ground doesn't depend on what it finds: list those places first (each once), read
@@ -112,7 +116,8 @@ public final class CityGridBuilder {
             return sea;
         }, sea);
         java.util.Map<Long, Integer> read = new java.util.concurrent.ConcurrentHashMap<>();
-        wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)));
+        // On a pool of its own, a quarter of the threads: the rest stay free for the world generation going on meanwhile.
+        SURVEY.submit(() -> wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)))).join();
         CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea);
         int[] counts = new int[CityTerrain.Edge.values().length];
         for (CityTerrain.Edge[] side : plan.edges()) {
@@ -173,14 +178,26 @@ public final class CityGridBuilder {
         // The ground first: everything else in the cell is built on the flattened plate.
         pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY));
 
-        // Roads next, so buildings placed afterwards win wherever they touch.
+        // The styled walls and the noble district, laid out for the whole city.
+        rafasconquest.style.CityPlan.Plan styled = heldByANation(site) ? rafasconquest.style.CityPlan.of(site) : null;
+        boolean noble = styled != null && styled.noble();
+        int nobleMin = noble ? styled.areaMin() : 0;
+        int nobleMax = noble ? styled.areaMax() : -1;
+
+        // Roads next, so buildings placed afterwards win wherever they touch; none inside the noble district.
         for (int k : CityLayout.roadsInCell(site.cells(), cellX)) {
             int x = ox + CityLayout.roadStart(k);
-            pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, cellMinZ, x + CityLayout.ROAD_WIDTH - 1, plate, cellMaxZ), variant));
+            boolean cut = noble && k > styled.lo() && k < styled.hi();
+            for (int[] run : runs(cellMinZ - oz, cellMaxZ - oz, cut ? nobleMin : 0, cut ? nobleMax : -1)) {
+                pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), variant));
+            }
         }
         for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
-            pieces.addPiece(new CityRoadPiece(new BoundingBox(cellMinX, plate, z, cellMaxX, plate, z + CityLayout.ROAD_WIDTH - 1), variant));
+            boolean cut = noble && k > styled.lo() && k < styled.hi();
+            for (int[] run : runs(cellMinX - ox, cellMaxX - ox, cut ? nobleMin : 0, cut ? nobleMax : -1)) {
+                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), variant));
+            }
         }
 
         for (int bx : CityLayout.blocksInCell(cellX)) {
@@ -188,6 +205,9 @@ public final class CityGridBuilder {
                 int blockX = ox + CityLayout.blockStart(bx);
                 int blockZ = oz + CityLayout.blockStart(bz);
                 occupied.clear();
+                if (noble && styled.nobleBlock(bx, bz)) {
+                    continue; // the noble district's, below
+                }
                 if (bx == site.centerBlock() && bz == site.centerBlock()) {
                     townCenter(blockX, blockZ);
                 } else if (!(bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)) && styledHouses().any()) {
@@ -199,9 +219,9 @@ public final class CityGridBuilder {
                                     && heldByANation(site)) {
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
-                                rafasconquest.style.StylePiece styled = barracks == null ? null : rafasconquest.style.StylePiece.of(barracks,
+                                rafasconquest.style.StylePiece styledPiece = barracks == null ? null : rafasconquest.style.StylePiece.of(barracks,
                                         blockX + CityLayout.PLOT_SIZE / 2, plate, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
-                                pieces.addPiece(styled != null ? styled : new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                pieces.addPiece(styledPiece != null ? styledPiece : new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
                                 continue; // the recruitment post has this plot
                             }
                             if (qx == 0 && qz == 1 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
@@ -209,9 +229,9 @@ public final class CityGridBuilder {
                                 int[] church = RecruitmentPost.of(site).church();
                                 // The Palace: from the style folders where its slot has a file, else the gold church.
                                 String palace = rafasconquest.style.CityStyles.palace(site);
-                                rafasconquest.style.StylePiece styled = palace == null ? null : rafasconquest.style.StylePiece.of(palace,
+                                rafasconquest.style.StylePiece styledPiece = palace == null ? null : rafasconquest.style.StylePiece.of(palace,
                                         church[0] + CityLayout.PLOT_SIZE / 2, plate, church[1] + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
-                                pieces.addPiece(styled != null ? styled : new GoldChurchPiece(church[0], church[1], plate));
+                                pieces.addPiece(styledPiece != null ? styledPiece : new GoldChurchPiece(church[0], church[1], plate));
                                 continue; // and the gold church, the one beside it
                             }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
@@ -225,8 +245,39 @@ public final class CityGridBuilder {
             }
         }
 
-        // Walls last, so they stand on top of the edge road.
-        buildWalls(cellX, cellZ);
+        // The styled pieces this cell builds: the noble district's and the walls.
+        if (styled != null) {
+            for (rafasconquest.style.CityPlan.Piece p : styled.inCell(site.cells(), cellX, cellZ)) {
+                if (p.kind() == rafasconquest.style.CityPlan.Kind.POST) {
+                    pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                    continue;
+                }
+                rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), plate, oz + p.minZ(), p.turns());
+                if (piece != null) {
+                    pieces.addPiece(piece);
+                }
+            }
+        }
+
+        // Walls last, so they stand on top of the edge road (the mod's own, where the style has no walls of its own).
+        if (styled == null || !styled.styledWalls()) {
+            buildWalls(cellX, cellZ);
+        }
+    }
+
+    /** The stretches of [from, to] outside [cutFrom, cutTo] (all of it if the cut is empty). */
+    private static List<int[]> runs(int from, int to, int cutFrom, int cutTo) {
+        if (cutTo < cutFrom || cutTo < from || cutFrom > to) {
+            return List.of(new int[]{from, to});
+        }
+        List<int[]> runs = new java.util.ArrayList<>();
+        if (cutFrom > from) {
+            runs.add(new int[]{from, cutFrom - 1});
+        }
+        if (cutTo < to) {
+            runs.add(new int[]{cutTo + 1, to});
+        }
+        return runs;
     }
 
     /** Whether a nation holds the city's province (by the world map): only such a city has a recruitment post. */

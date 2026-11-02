@@ -45,9 +45,13 @@ public final class StyleLibrary {
     public static final List<String> SLOTS = List.of(
             "city/walls/corners", "city/walls/gates", "city/walls/watchtowers", "city/walls/walls",
             "city/buildings/common", "city/buildings/noble",
-            "city/buildings/landmarks/mandatory/palace", "city/buildings/landmarks/mandatory/barracks/small",
+            "city/buildings/landmarks/mandatory/palace/small", "city/buildings/landmarks/mandatory/palace/medium",
+            "city/buildings/landmarks/mandatory/palace/large", "city/buildings/landmarks/mandatory/palace/xlarge",
+            "city/buildings/landmarks/mandatory/palace/xxlarge",
+            "city/buildings/landmarks/mandatory/barracks/small", "city/buildings/landmarks/mandatory/barracks/medium",
+            "city/buildings/landmarks/mandatory/barracks/large", "city/buildings/landmarks/mandatory/barracks/xlarge",
             "city/buildings/landmarks/style/churches", "city/buildings/landmarks/style/monuments",
-            "city/buildings/landmarks/unique",
+            "city/buildings/landmarks/unique", "city/buildings/landmarks/unique/sword_sanctum",
             "lone/castles/small", "lone/castles/medium", "lone/castles/large", "lone/castles/grand",
             "lone/hamlets");
     /** Every slot of a land's wild. */
@@ -110,6 +114,8 @@ public final class StyleLibrary {
     /** Forgets the templates read, and reads again which homeland builds in which style. */
     public static String reload() {
         TEMPLATES.clear();
+        CityStyles.forget();
+        CityPlan.forget();
         Map<Homeland, String> styles = new java.util.EnumMap<>(Homeland.class);
         int count = 0;
         try (Stream<Path> dirs = Files.list(root().resolve("style"))) {
@@ -169,6 +175,22 @@ public final class StyleLibrary {
             }
         }
         return null;
+    }
+
+    /** A structure from one style's own slot (no default), chosen by {@code seed}; null if that slot is empty. */
+    @Nullable
+    public static String pickIn(String style, String slot, long seed) {
+        return choose("style/" + style + "/" + slot, seed);
+    }
+
+    /** Every structure of a homeland's own style in a slot (none if it builds in the default style). */
+    public static List<String> own(Homeland land, String slot) {
+        String style = styleOf(land);
+        if (style.equals(DEFAULT)) {
+            return List.of();
+        }
+        return files(root().resolve("style").resolve(style).resolve(slot)).stream()
+                .map(p -> root().relativize(p).toString().replace(java.io.File.separatorChar, '/')).toList();
     }
 
     /**

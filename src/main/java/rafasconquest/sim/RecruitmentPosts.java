@@ -188,14 +188,15 @@ public final class RecruitmentPosts {
             if (map.holders()[sanctum.seat()] != o.nation()) {
                 continue; // fallen
             }
+            int[] middle = sanctumMiddle(level, data, sanctum);
             java.util.Random random = new java.util.Random(level.getSeed() ^ sanctum.seat() * 0x5A1C7L);
             java.util.List<Integer> kings = o.kings().subList(0, Math.min(o.kings().size(), MIN_KINGS + random.nextInt(MAX_KINGS - MIN_KINGS + 1)));
             java.util.List<Integer> saints = o.saints().subList(0, Math.min(o.saints().size(), MIN_SAINTS + random.nextInt(MAX_SAINTS - MIN_SAINTS + 1)));
             java.util.List<int[]> spots = new java.util.ArrayList<>(); // person, x, z
             for (int k = 0; k < kings.size(); k++) {
                 double angle = Math.PI * (k + 0.5) / Math.max(1, kings.size()) - Math.PI / 2;
-                spots.add(new int[]{kings.get(k), sanctum.x() + (int) Math.round(Math.cos(angle) * KING_RING),
-                        sanctum.z() + (int) Math.round(Math.sin(angle) * KING_RING)});
+                spots.add(new int[]{kings.get(k), middle[0] + (int) Math.round(Math.cos(angle) * KING_RING),
+                        middle[1] + (int) Math.round(Math.sin(angle) * KING_RING)});
             }
             int inner = (saints.size() + 1) / 2;
             for (int s = 0; s < saints.size(); s++) {
@@ -203,14 +204,14 @@ public final class RecruitmentPosts {
                 int ring = first ? SAINT_RINGS[0] : SAINT_RINGS[1];
                 int count = first ? inner : saints.size() - inner;
                 double angle = 2 * Math.PI * ((first ? s : s - inner) + (first ? 0 : 0.5)) / Math.max(1, count);
-                spots.add(new int[]{saints.get(s), sanctum.x() + (int) Math.round(Math.cos(angle) * ring),
-                        sanctum.z() + (int) Math.round(Math.sin(angle) * ring)});
+                spots.add(new int[]{saints.get(s), middle[0] + (int) Math.round(Math.cos(angle) * ring),
+                        middle[1] + (int) Math.round(Math.sin(angle) * ring)});
             }
             for (int[] spot : spots) {
                 if (spot[1] >> 4 != chunk.getPos().x || spot[2] >> 4 != chunk.getPos().z) {
                     continue;
                 }
-                BlockPos at = floor(chunk, spot[1], spot[2]);
+                BlockPos at = floor(chunk, spot[1], spot[2], SANCTUM_SCAN);
                 if (at == null || data.guardSpawned(at)) {
                     continue;
                 }
@@ -219,7 +220,7 @@ public final class RecruitmentPosts {
                     continue;
                 }
                 rafasconquest.people.Person p = map.realm().people().get(spot[0]);
-                float yaw = (float) Math.toDegrees(Math.atan2(-(sanctum.x() - spot[1]), sanctum.z() - spot[2])); // toward the middle
+                float yaw = (float) Math.toDegrees(Math.atan2(-(middle[0] - spot[1]), middle[1] - spot[2])); // toward the middle
                 member.noble(spot[0], rafasconquest.peerage.Names.styled(map, p), p.nation() >= 0 ? map.nations().get(p.nation()).id() : sanctum.id(), at.getX() + 0.5, at.getY(), at.getZ() + 0.5,
                         yaw, Math.floorMod(spot[0] * 7, 20));
                 rafasconquest.gear.Armoury.dressCharacter(member, map, spot[0]); // the harness of their sword title
@@ -243,9 +244,14 @@ public final class RecruitmentPosts {
 
     /** The lowest standing room under the top of a column (within {@link #FLOOR_SCAN} blocks): a building's ground floor. */
     private static BlockPos floor(LevelChunk chunk, int x, int z) {
+        return floor(chunk, x, z, FLOOR_SCAN);
+    }
+
+    /** The lowest place to stand within {@code scan} blocks under the top of the column. */
+    private static BlockPos floor(LevelChunk chunk, int x, int z, int scan) {
         int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
         BlockPos found = null;
-        for (int y = top; y > top - FLOOR_SCAN; y--) {
+        for (int y = top; y > top - scan; y--) {
             BlockState below = chunk.getBlockState(new BlockPos(x, y - 1, z));
             if (chunk.getBlockState(new BlockPos(x, y, z)).isAir() && chunk.getBlockState(new BlockPos(x, y + 1, z)).isAir()
                     && !below.isAir() && below.getFluidState().isEmpty()) {
@@ -256,6 +262,30 @@ public final class RecruitmentPosts {
     }
 
     private static final int FLOOR_SCAN = 18;
+    /** Deep enough to reach a sanctum's ground floor from its roof. */
+    private static final int SANCTUM_SCAN = 64;
+    private static final java.util.Map<Integer, int[]> SANCTUM_MIDDLES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void forgetSanctums() {
+        SANCTUM_MIDDLES.clear();
+    }
+
+    /** Where a sanctum's people gather: the middle of its sanctum building, where its city has one; else its seat. */
+    private static int[] sanctumMiddle(ServerLevel level, ConquestSavedData data, rafasconquest.map.BaseMap.Nation sanctum) {
+        return SANCTUM_MIDDLES.computeIfAbsent(sanctum.seat(), k -> {
+            int r = CityLayout.MAX_HALF_EXTENT;
+            for (CityLayout.Site site : CityLayout.allSitesInBox(level.getSeed(), data.settings(), sanctum.x() - r, sanctum.z() - r, sanctum.x() + r, sanctum.z() + r)) {
+                if (Math.abs(site.x() - sanctum.x()) > site.halfExtent() || Math.abs(site.z() - sanctum.z()) > site.halfExtent()) {
+                    continue;
+                }
+                rafasconquest.style.CityPlan.Piece palace = rafasconquest.style.CityPlan.of(site).first(rafasconquest.style.CityPlan.Kind.PALACE);
+                if (palace != null) {
+                    return new int[]{site.originX() + palace.centreX(), site.originZ() + palace.centreZ()};
+                }
+            }
+            return new int[]{sanctum.x(), sanctum.z()};
+        });
+    }
 
     /**
      * Where someone stands at (x, z), if that column is in the chunk: on the floor under the post's roof, or on the
