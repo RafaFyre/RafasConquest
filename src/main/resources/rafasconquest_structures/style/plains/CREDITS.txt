@@ -1,0 +1,2 @@
+The houses in city/buildings/common are from mohawkypack (towns/house/empire),
+included under the pack's licence, which allows sharing. Credit to its author.
