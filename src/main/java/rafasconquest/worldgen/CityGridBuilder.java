@@ -190,6 +190,8 @@ public final class CityGridBuilder {
                 occupied.clear();
                 if (bx == site.centerBlock() && bz == site.centerBlock()) {
                     townCenter(blockX, blockZ);
+                } else if (!(bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)) && styledHouses().any()) {
+                    packBlock(blockX, blockZ); // the style's own houses, of any size
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
@@ -321,6 +323,30 @@ public final class CityGridBuilder {
     }
 
     /** Places a building on the plot with its entrance on the plot edge facing {@code toRoad}. */
+    /** This city's houses in its style, if it has any (worked out once). */
+    private rafasconquest.style.CityStyles.Houses styledHouses;
+
+    private rafasconquest.style.CityStyles.Houses styledHouses() {
+        if (styledHouses == null) {
+            styledHouses = rafasconquest.style.CityStyles.houses(site);
+        }
+        return styledHouses;
+    }
+
+    /** A block filled with the style's houses (BlockPacker): as many as fit, any size, each facing the nearer road. */
+    private void packBlock(int blockX, int blockZ) {
+        rafasconquest.style.CityStyles.Houses houses = styledHouses();
+        int size = 2 * CityLayout.PLOT_SIZE + 1;
+        java.util.Random packing = new java.util.Random(random.nextLong());
+        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(size, houses.sizes(), packing)) {
+            rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.at(houses.files().get(p.building()),
+                    blockX + p.x(), plate, blockZ + p.z(), p.turns());
+            if (piece != null) {
+                pieces.addPiece(piece);
+            }
+        }
+    }
+
     private void house(BoundingBox plot, Direction toRoad) {
         int half = CityLayout.PLOT_SIZE / 2;
         int ex = switch (toRoad) {

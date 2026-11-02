@@ -35,6 +35,18 @@ public class StylePiece extends StructurePiece {
         return template == null ? null : new StylePiece(file, new BlockPos(x, y, z), turns, template.getSize());
     }
 
+    /** The piece with its footprint's corner (whichever way it is turned) at (minX, minZ); null if its file can't be read. */
+    @Nullable
+    public static StylePiece at(String file, int minX, int y, int minZ, int turns) {
+        StructureTemplate template = StyleLibrary.template(file);
+        if (template == null) {
+            return null;
+        }
+        Vec3i size = template.getSize();
+        BoundingBox atZero = box(new BlockPos(0, y, 0), turns, size);
+        return new StylePiece(file, new BlockPos(minX - atZero.minX(), y, minZ - atZero.minZ()), turns, size);
+    }
+
     private StylePiece(String file, BlockPos centre, int turns, Vec3i size) {
         super(ConquestWorldgen.STYLE_PIECE.get(), 0, box(centre, turns, size));
         this.file = file;

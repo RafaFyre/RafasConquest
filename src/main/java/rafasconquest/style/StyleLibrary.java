@@ -171,7 +171,22 @@ public final class StyleLibrary {
         return null;
     }
 
-    /** A structure for the wild of a land ({@link #WORLD_SLOTS}), chosen by {@code seed}; null if it has none. */
+    /**
+     * Every structure of a style slot of a homeland: its style's, else (if it has none there) the default style's. Paths
+     * relative to {@link #root()}.
+     */
+    public static List<String> all(Homeland land, String slot) {
+        for (String style : new String[]{styleOf(land), DEFAULT}) {
+            List<Path> found = files(root().resolve("style").resolve(style).resolve(slot));
+            if (!found.isEmpty()) {
+                return found.stream().map(p -> root().relativize(p).toString().replace(java.io.File.separatorChar, '/')).toList();
+            }
+        }
+        return List.of();
+    }
+
+    /** A structure for the wild of a land
+ ({@link #WORLD_SLOTS}), chosen by {@code seed}; null if it has none. */
     @Nullable
     public static String pickWorld(Homeland land, String slot, long seed) {
         return choose("world/" + land.name().toLowerCase(Locale.ROOT) + "/" + slot, seed);
