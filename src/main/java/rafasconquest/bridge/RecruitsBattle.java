@@ -1213,6 +1213,15 @@ public final class RecruitsBattle {
         }
     }
 
+    /** A warhorse's armour: Epic Knights barding under the side's caparison, else iron (heavy) or leather in its colour. */
+    private static ItemStack horseArmour(Side side, boolean heavy) {
+        ItemStack barding = rafasconquest.gear.Armoury.barding(heavy, side.banner);
+        if (barding != null) {
+            return barding;
+        }
+        return heavy ? new ItemStack(Items.IRON_HORSE_ARMOR) : dyed(Items.LEATHER_HORSE_ARMOR, side.uniform);
+    }
+
     private static ItemStack dyed(Item item, int rgb) {
         ItemStack stack = new ItemStack(item);
         if (item instanceof DyeableLeatherItem leather) {
@@ -1632,8 +1641,7 @@ public final class RecruitsBattle {
         for (AbstractRecruitEntity rider : l.living()) {
             if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
                 boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL;
-                horse.getSlot(401).set(iron ? new ItemStack(Items.IRON_HORSE_ARMOR) // 401: the horse's armour slot
-                        : dyed(Items.LEATHER_HORSE_ARMOR, sides[l.block.side()].uniform));
+                horse.getSlot(401).set(horseArmour(sides[l.block.side()], iron)); // 401: the horse's armour slot
             }
         }
     }
@@ -2057,7 +2065,7 @@ public final class RecruitsBattle {
                     horse.setTamed(true);
                     horse.setOwnerUUID(player.getUUID());
                     horse.equipSaddle(null);
-                    horse.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, side.uniform)); // 401: the armour slot
+                    horse.getSlot(401).set(horseArmour(side, false)); // 401: the armour slot
                     horse.setPersistenceRequired();
                     level.addFreshEntity(horse);
                     player.startRiding(horse, true);
@@ -2152,7 +2160,7 @@ public final class RecruitsBattle {
                 continue;
             }
             if (horse instanceof Horse h && ours.add(h.getUUID())) {
-                h.getSlot(401).set(dyed(Items.LEATHER_HORSE_ARMOR, sides[e.side].uniform));
+                h.getSlot(401).set(horseArmour(sides[e.side], false));
             }
             x += horse.getX();
             z += horse.getZ();

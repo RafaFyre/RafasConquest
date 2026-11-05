@@ -25,6 +25,22 @@ class ArmouryTest {
     }
 
     @Test
+    void decorationsSitInTheirOwnSlot() throws ReflectiveOperationException {
+        // Epic Knights' chestplate decorations; every other decoration goes on a helmet
+        java.util.Set<String> chest = java.util.Set.of("hood_decoration", "ecranche_decoration", "rondel_decoration");
+        Field f = Armoury.class.getDeclaredField("STYLES");
+        f.setAccessible(true);
+        for (Object looks : ((Map<?, ?>) f.get(null)).values()) {
+            for (Object o : (java.util.List<?>) looks) {
+                Armoury.Style s = (Armoury.Style) o;
+                org.junit.jupiter.api.Assertions.assertTrue(chest.contains(s.officerChest()), s.officerChest());
+                org.junit.jupiter.api.Assertions.assertFalse(chest.contains(s.crest()), s.crest());
+                org.junit.jupiter.api.Assertions.assertFalse(chest.contains(s.troopCrest()), s.troopCrest());
+            }
+        }
+    }
+
+    @Test
     void ranksComeInFourGradesOfHarness() {
         assertEquals(0, RankKits.grade(Rank.SOLDIER));
         assertEquals(0, RankKits.grade(Rank.CORPORAL));
