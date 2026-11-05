@@ -38,6 +38,7 @@ public class StylePiece extends StructurePiece {
     /** The pieces of a structure centred on (x, z); none if its file can't be read. */
     public static List<StylePiece> of(String file, int x, int y, int z, int turns) {
         Vec3i size = StyleLibrary.size(file);
+        y += StyleLibrary.yOffset(file);
         return size == null ? List.of() : tiles(file, new BlockPos(x, y, z), turns, size);
     }
 
@@ -47,6 +48,7 @@ public class StylePiece extends StructurePiece {
         if (size == null) {
             return List.of();
         }
+        y += StyleLibrary.yOffset(file);
         BoundingBox atZero = box(new BlockPos(0, y, 0), turns, size, -1, -1);
         return tiles(file, new BlockPos(minX - atZero.minX(), y, minZ - atZero.minZ()), turns, size);
     }

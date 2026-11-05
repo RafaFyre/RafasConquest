@@ -43,7 +43,7 @@ public final class StyleLibrary {
     public static final String DEFAULT = "default";
     /** Every slot of a style, as its folder's path. */
     public static final List<String> SLOTS = List.of(
-            "city/walls/corners", "city/walls/gates", "city/walls/watchtowers", "city/walls/walls",
+            "city/walls/corners", "city/walls/gates", "city/walls/watchtowers", "city/walls/walls", "city/walls/junctions",
             "city/buildings/common", "city/buildings/noble",
             "city/buildings/landmarks/mandatory/palace/small", "city/buildings/landmarks/mandatory/palace/medium",
             "city/buildings/landmarks/mandatory/palace/large", "city/buildings/landmarks/mandatory/palace/xlarge",
@@ -122,6 +122,8 @@ public final class StyleLibrary {
     /** Forgets the templates read, and reads again which homeland builds in which style. */
     public static String reload() {
         TEMPLATES.clear();
+        OFFSETS.clear();
+        writePlacements();
         CityStyles.forget();
         CityPlan.forget();
         Map<Homeland, String> styles = new java.util.EnumMap<>(Homeland.class);
@@ -149,6 +151,95 @@ public final class StyleLibrary {
         }
         styleOf = styles;
         return count + " style(s) in " + root() + "; " + styles.size() + " homeland(s) with their own";
+    }
+
+    /** The file in every structure folder that moves its structures up or down. */
+    public static final String PLACEMENT = "placement.toml";
+    private record Offsets(long modified, Map<String, Integer> byName) {
+    }
+    private static final Map<Path, Offsets> OFFSETS = new ConcurrentHashMap<>();
+
+    /** Writes a {@link #PLACEMENT} into every slot folder of every style and land that has none, naming its structures. */
+    private static void writePlacements() {
+        List<Path> folders = new ArrayList<>();
+        for (String kind : new String[]{"style", "world"}) {
+            Path parent = root().resolve(kind);
+            if (!Files.isDirectory(parent)) {
+                continue;
+            }
+            try (Stream<Path> dirs = Files.list(parent)) {
+                for (Path dir : (Iterable<Path>) dirs.filter(Files::isDirectory)::iterator) {
+                    for (String slot : kind.equals("style") ? SLOTS : WORLD_SLOTS) {
+                        if (Files.isDirectory(dir.resolve(slot))) {
+                            folders.add(dir.resolve(slot));
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                RafasConquest.LOGGER.warn("[style] Could not list {}: {}", parent, e.toString());
+            }
+        }
+        for (Path folder : folders) {
+            Path toml = folder.resolve(PLACEMENT);
+            if (Files.exists(toml)) {
+                continue;
+            }
+            StringBuilder text = new StringBuilder("""
+                    # How far up (+) or down (-) each structure in this folder is built, from where its .nbt would stand.
+                    # Name a structure by its file name without .nbt, e.g.  "Example House" = { y = -10 }
+                    # Read when the structure is next placed (or after /pve style reload).
+                    """);
+            for (Path nbt : files(folder)) {
+                String name = nbt.getFileName().toString();
+                text.append('"').append(name, 0, name.length() - 4).append("\" = { y = 0 }\n");
+            }
+            try {
+                Files.writeString(toml, text, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                RafasConquest.LOGGER.warn("[style] Could not write {}: {}", toml, e.toString());
+            }
+        }
+    }
+
+    /** How far up or down a structure is built, from its folder's {@link #PLACEMENT}; 0 if it names it not. */
+    public static int yOffset(String relative) {
+        Path file = root().resolve(relative);
+        String name = file.getFileName().toString().replaceFirst("\\.nbt$", "");
+        Path toml = file.resolveSibling(PLACEMENT);
+        try {
+            if (!Files.exists(toml)) {
+                return 0;
+            }
+            long modified = Files.getLastModifiedTime(toml).toMillis();
+            Offsets offsets = OFFSETS.get(toml);
+            if (offsets == null || offsets.modified() != modified) {
+                offsets = new Offsets(modified, readOffsets(Files.readString(toml, StandardCharsets.UTF_8)));
+                OFFSETS.put(toml, offsets);
+            }
+            return offsets.byName().getOrDefault(name, 0);
+        } catch (IOException | RuntimeException e) {
+            RafasConquest.LOGGER.warn("[style] Could not read {}: {}", toml, e.toString());
+            OFFSETS.put(toml, new Offsets(-1, Map.of()));
+            return 0;
+        }
+    }
+
+    /** A placement file's offsets: {@code "Name" = { y = -10 }}, or just {@code "Name" = -10}. */
+    static Map<String, Integer> readOffsets(String toml) {
+        Map<String, Integer> byName = new java.util.HashMap<>();
+        com.electronwill.nightconfig.core.Config config = new com.electronwill.nightconfig.toml.TomlParser().parse(toml);
+        for (com.electronwill.nightconfig.core.Config.Entry e : config.entrySet()) {
+            Object v = e.getValue();
+            if (v instanceof com.electronwill.nightconfig.core.Config table) {
+                v = table.contains("y") ? table.get("y") : table.get("Y");
+            }
+            if (v instanceof Number n) {
+                byName.put(e.getKey(), n.intValue());
+            } else if (v != null) {
+                RafasConquest.LOGGER.warn("[style] {} in a {} is not a number of blocks: {}", e.getKey(), PLACEMENT, v);
+            }
+        }
+        return byName;
     }
 
     /** The style a homeland builds in. */
