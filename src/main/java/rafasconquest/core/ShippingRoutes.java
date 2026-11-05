@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
@@ -20,7 +19,7 @@ public final class ShippingRoutes {
     static final int MOUTH = 64;
     private static final int MOUTH_SEARCH = 8;
     /** Lanes keep this many blocks off land where they can. */
-    public static final int BERTH = 100;
+    public static final int BERTH = 300;
     /** Extra cost of a sea pixel right beside land, falling to none at the berth's edge. */
     private static final double SHORE_COST = 8;
 
@@ -33,7 +32,8 @@ public final class ShippingRoutes {
      */
     public static List<Roads.Road> plan(Roads.Land land, boolean[] ocean, List<SeatCities.City> cities, List<String> names) {
         int w = land.width();
-        int n = w * land.height();
+        int h = land.height();
+        int n = w * h;
         // Which sea each pixel lies in, so ports only link across water that joins them.
         int[] sea = new int[n];
         Arrays.fill(sea, -1);
@@ -49,7 +49,8 @@ public final class ShippingRoutes {
             sea[i] = seas;
             while (head < tail) {
                 int p = queue[head++];
-                for (int q : neighbours(p, w, land.height())) {
+                for (int k = 0; k < 8; k++) {
+                    int q = neighbour(p, k, w, h);
                     if (q >= 0 && ocean[q] && sea[q] < 0) {
                         sea[q] = seas;
                         queue[tail++] = q;
@@ -72,7 +73,8 @@ public final class ShippingRoutes {
         }
         while (head < tail) {
             int p = queue[head++];
-            for (int q : neighbours(p, w, land.height())) {
+            for (int k = 0; k < 8; k++) {
+                int q = neighbour(p, k, w, h);
                 if (q >= 0 && fromLand[q] > fromLand[p] + 1) {
                     fromLand[q] = fromLand[p] + 1;
                     queue[tail++] = q;
@@ -163,22 +165,15 @@ public final class ShippingRoutes {
         return best;
     }
 
-    /** The 8 pixels about {@code p}, -1 for those off the map. */
-    private static int[] neighbours(int p, int w, int h) {
-        int x = p % w;
-        int z = p / w;
-        int[] out = new int[8];
-        int k = 0;
-        for (int dz = -1; dz <= 1; dz++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                if (dx != 0 || dz != 0) {
-                    int nx = x + dx;
-                    int nz = z + dz;
-                    out[k++] = nx < 0 || nz < 0 || nx >= w || nz >= h ? -1 : nz * w + nx;
-                }
-            }
-        }
-        return out;
+    /** The 8 steps about a pixel; the diagonals at 0, 2, 5 and 7. */
+    private static final int[] DX = {-1, 0, 1, -1, 1, -1, 0, 1};
+    private static final int[] DZ = {-1, -1, -1, 0, 0, 1, 1, 1};
+
+    /** The {@code k}th of the 8 pixels about {@code p}, -1 if off the map. */
+    private static int neighbour(int p, int k, int w, int h) {
+        int nx = p % w + DX[k];
+        int nz = p / w + DZ[k];
+        return nx < 0 || nz < 0 || nx >= w || nz >= h ? -1 : nz * w + nx;
     }
 
     /** A* over the ocean pixels; its arrays kept between searches, each search stamping the pixels it touches. */
@@ -190,6 +185,7 @@ public final class ShippingRoutes {
         private final int[] from;
         private final int[] stamp;
         private int search;
+        private final Roads.Heap open = new Roads.Heap();
 
         Search(Roads.Land land, boolean[] ocean, double[] shore) {
             this.land = land;
@@ -206,15 +202,16 @@ public final class ShippingRoutes {
             int w = land.width();
             int gx = goal % w;
             int gz = goal / w;
-            PriorityQueue<double[]> open = new PriorityQueue<>((p, q) -> Double.compare(p[0], q[0]));
+            int h = land.height();
+            open.clear();
             stamp[start] = search;
             best[start] = 0;
             from[start] = -1;
-            open.add(new double[]{heuristic(start, gx, gz), start});
+            open.push(heuristic(start, gx, gz), start);
             while (!open.isEmpty()) {
-                double[] top = open.poll();
-                int at = (int) top[1];
-                if (top[0] - heuristic(at, gx, gz) > best[at] + 1e-9) {
+                double key = open.topKey();
+                int at = open.pop();
+                if (key - heuristic(at, gx, gz) > best[at] + 1e-9) {
                     continue;
                 }
                 if (at == goal) {
@@ -225,19 +222,17 @@ public final class ShippingRoutes {
                     java.util.Collections.reverse(path);
                     return path;
                 }
-                int[] next = neighbours(at, w, land.height());
-                for (int i = 0; i < next.length; i++) {
-                    int q = next[i];
+                for (int i = 0; i < 8; i++) {
+                    int q = neighbour(at, i, w, h);
                     if (q < 0 || !ocean[q]) {
                         continue;
                     }
-                    boolean diagonal = i == 0 || i == 2 || i == 5 || i == 7;
-                    double g = best[at] + (diagonal ? Math.sqrt(2) : 1) * (1 + shore[q]);
+                    double g = best[at] + (DX[i] != 0 && DZ[i] != 0 ? Roads.SQRT2 : 1) * (1 + shore[q]);
                     if (stamp[q] != search || g < best[q]) {
                         stamp[q] = search;
                         best[q] = g;
                         from[q] = at;
-                        open.add(new double[]{g + heuristic(q, gx, gz), q});
+                        open.push(g + heuristic(q, gx, gz), q);
                     }
                 }
             }
@@ -247,7 +242,7 @@ public final class ShippingRoutes {
         private double heuristic(int p, int gx, int gz) {
             int dx = Math.abs(p % land.width() - gx);
             int dz = Math.abs(p / land.width() - gz);
-            return Math.max(dx, dz) + (Math.sqrt(2) - 1) * Math.min(dx, dz);
+            return Math.max(dx, dz) + (Roads.SQRT2 - 1) * Math.min(dx, dz);
         }
     }
 }

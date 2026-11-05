@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Set;
 
 /**
@@ -99,6 +98,7 @@ public final class Roads {
     private static final double CLIMB_COST = 0.6;
     private static final double HIGH_GROUND_COST = 0.05;
     private static final double REUSE = 0.35;
+    static final double SQRT2 = Math.sqrt(2);
 
     private Roads() {
     }
@@ -264,6 +264,12 @@ public final class Roads {
         private final byte[] laid;
         private final String[] near;
         private final Set<Integer> forks = new HashSet<>();
+        /** The search's arrays, kept between searches; each search stamps the pixels it touches. */
+        private final double[] best;
+        private final int[] from;
+        private final int[] stamp;
+        private int search;
+        private final Heap open = new Heap();
 
         Router(Land land, List<Place> cities) {
             this.land = land;
@@ -271,6 +277,9 @@ public final class Roads {
             cost = new double[n];
             laid = new byte[n];
             near = new String[n];
+            best = new double[n];
+            from = new int[n];
+            stamp = new int[n];
             for (int i = 0; i < n; i++) {
                 double c = 1;
                 if (land.sea()[i]) {
@@ -322,55 +331,48 @@ public final class Roads {
             int x1 = Math.min(w - 1, Math.max(sx, gx) + margin);
             int z0 = Math.max(0, Math.min(sz, gz) - margin);
             int z1 = Math.min(land.height() - 1, Math.max(sz, gz) + margin);
-            int bw = x1 - x0 + 1;
-            int bh = z1 - z0 + 1;
-            double[] best = new double[bw * bh];
-            int[] from = new int[bw * bh];
-            Arrays.fill(best, Double.MAX_VALUE);
-            PriorityQueue<double[]> open = new PriorityQueue<>((p, q) -> Double.compare(p[0], q[0]));
-            int s = (sz - z0) * bw + (sx - x0);
-            best[s] = 0;
-            from[s] = -1;
-            open.add(new double[]{0, s});
+            int[] ground = land.ground();
+            search++;
+            open.clear();
+            stamp[start] = search;
+            best[start] = 0;
+            from[start] = -1;
+            open.push(heuristic(sx, sz, gx, gz, goal), start);
             while (!open.isEmpty()) {
-                double[] top = open.poll();
-                int at = (int) top[1];
-                int lx = at % bw;
-                int lz = at / bw;
-                int pixel = land.index(x0 + lx, z0 + lz);
+                double key = open.topKey();
+                int at = open.pop();
+                int ax = at % w;
+                int az = at / w;
                 double g = best[at];
-                if (top[0] - heuristic(x0 + lx, z0 + lz, gx, gz, goal) > g + 1e-9) {
+                if (key - heuristic(ax, az, gx, gz, goal) > g + 1e-9) {
                     continue;
                 }
-                boolean arrived = goal >= 0 ? pixel == goal
-                        : at != s && (toFork ? forks.contains(pixel) : laid[pixel] > 0);
+                boolean arrived = goal >= 0 ? at == goal
+                        : at != start && (toFork ? forks.contains(at) : laid[at] > 0);
                 if (arrived) {
                     List<Integer> path = new ArrayList<>();
                     for (int c = at; c >= 0; c = from[c]) {
-                        path.add(land.index(x0 + c % bw, z0 + c / bw));
+                        path.add(c);
                     }
                     java.util.Collections.reverse(path);
                     return path;
                 }
                 for (int dz = -1; dz <= 1; dz++) {
                     for (int dx = -1; dx <= 1; dx++) {
-                        if (dx == 0 && dz == 0) {
+                        int nx = ax + dx;
+                        int nz = az + dz;
+                        if ((dx == 0 && dz == 0) || nx < x0 || nz < z0 || nx > x1 || nz > z1) {
                             continue;
                         }
-                        int nx = lx + dx;
-                        int nz = lz + dz;
-                        if (nx < 0 || nz < 0 || nx >= bw || nz >= bh) {
-                            continue;
-                        }
-                        int next = land.index(x0 + nx, z0 + nz);
-                        double step = (dx != 0 && dz != 0 ? Math.sqrt(2) : 1)
-                                * (cost[next] + Math.abs(land.ground()[next] - land.ground()[pixel]) * CLIMB_COST)
+                        int next = nz * w + nx;
+                        double ng = g + (dx != 0 && dz != 0 ? SQRT2 : 1)
+                                * (cost[next] + Math.abs(ground[next] - ground[at]) * CLIMB_COST)
                                 * (laid[next] > 0 ? REUSE : 1);
-                        int ni = nz * bw + nx;
-                        if (g + step < best[ni]) {
-                            best[ni] = g + step;
-                            from[ni] = at;
-                            open.add(new double[]{g + step + heuristic(x0 + nx, z0 + nz, gx, gz, goal), ni});
+                        if (stamp[next] != search || ng < best[next]) {
+                            stamp[next] = search;
+                            best[next] = ng;
+                            from[next] = at;
+                            open.push(ng + heuristic(nx, nz, gx, gz, goal), next);
                         }
                     }
                 }
@@ -384,7 +386,7 @@ public final class Roads {
             }
             int dx = Math.abs(x - gx);
             int dz = Math.abs(z - gz);
-            return (Math.max(dx, dz) + (Math.sqrt(2) - 1) * Math.min(dx, dz)) * REUSE;
+            return (Math.max(dx, dz) + (SQRT2 - 1) * Math.min(dx, dz)) * REUSE;
         }
 
         /** Lays a road along a found path: marks its pixels (and its forks), and smooths it into points. */
@@ -431,32 +433,55 @@ public final class Roads {
 
         /** The forks, each with the places of the roads that pass it. */
         List<Junction> junctions(List<Road> roads) {
+            // The road points by pixel (road and point index packed), so each fork looks only at the pixels about it.
+            java.util.Map<Integer, List<Long>> byPixel = new java.util.HashMap<>();
+            for (int r = 0; r < roads.size(); r++) {
+                Road road = roads.get(r);
+                for (int i = 0; i < road.points(); i++) {
+                    byPixel.computeIfAbsent(land.pixel(road.xs()[i], road.zs()[i]), k -> new ArrayList<>()).add((long) r << 32 | i);
+                }
+            }
             List<Junction> junctions = new ArrayList<>();
+            int w = land.width();
             for (int fork : forks) {
                 int[] at = land.centre(fork);
-                // The road points nearest the fork's pixel: the fork stands where they come closest.
+                // The road points nearest the fork's pixel: the fork stands where they come closest (first road, first
+                // point on ties). A point within a pixel's width of the centre lies in the 3x3 pixels about it.
                 double bestDistance = Double.MAX_VALUE;
+                long bestKey = Long.MAX_VALUE;
                 int jx = at[0];
                 int jz = at[1];
-                List<String> names = new ArrayList<>();
-                for (Road road : roads) {
-                    boolean passes = false;
-                    for (int i = 0; i < road.points(); i++) {
-                        double d = Math.hypot(road.xs()[i] - at[0], road.zs()[i] - at[1]);
-                        if (d <= land.bpp()) {
-                            passes = true;
-                            if (d < bestDistance) {
-                                bestDistance = d;
-                                jx = road.xs()[i];
-                                jz = road.zs()[i];
+                java.util.TreeSet<Integer> passing = new java.util.TreeSet<>();
+                int fx = fork % w;
+                int fz = fork / w;
+                for (int dz = -1; dz <= 1; dz++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int px = fx + dx;
+                        int pz = fz + dz;
+                        if (px < 0 || pz < 0 || px >= w || pz >= land.height()) {
+                            continue;
+                        }
+                        for (long key : byPixel.getOrDefault(pz * w + px, List.of())) {
+                            Road road = roads.get((int) (key >>> 32));
+                            int i = (int) key;
+                            double d = Math.hypot(road.xs()[i] - at[0], road.zs()[i] - at[1]);
+                            if (d <= land.bpp()) {
+                                passing.add((int) (key >>> 32));
+                                if (d < bestDistance || (d == bestDistance && key < bestKey)) {
+                                    bestDistance = d;
+                                    bestKey = key;
+                                    jx = road.xs()[i];
+                                    jz = road.zs()[i];
+                                }
                             }
                         }
                     }
-                    if (passes) {
-                        for (String name : new String[]{road.from(), road.to()}) {
-                            if (!names.contains(name) && !name.equals("the road")) {
-                                names.add(name);
-                            }
+                }
+                List<String> names = new ArrayList<>();
+                for (int r : passing) {
+                    for (String name : new String[]{roads.get(r).from(), roads.get(r).to()}) {
+                        if (!names.contains(name) && !name.equals("the road")) {
+                            names.add(name);
                         }
                     }
                 }
@@ -465,6 +490,68 @@ public final class Roads {
                 }
             }
             return junctions;
+        }
+    }
+
+    /** A min-heap of pixels by cost, for the route searches (roads and {@link ShippingRoutes}), with nothing boxed. */
+    static final class Heap {
+        private double[] keys = new double[1024];
+        private int[] values = new int[1024];
+        private int size;
+
+        boolean isEmpty() {
+            return size == 0;
+        }
+
+        void clear() {
+            size = 0;
+        }
+
+        /** The cheapest's cost. */
+        double topKey() {
+            return keys[0];
+        }
+
+        void push(double key, int value) {
+            if (size == keys.length) {
+                keys = Arrays.copyOf(keys, size * 2);
+                values = Arrays.copyOf(values, size * 2);
+            }
+            int i = size++;
+            while (i > 0 && keys[(i - 1) >>> 1] > key) {
+                int parent = (i - 1) >>> 1;
+                keys[i] = keys[parent];
+                values[i] = values[parent];
+                i = parent;
+            }
+            keys[i] = key;
+            values[i] = value;
+        }
+
+        /** Takes the cheapest off; its pixel. */
+        int pop() {
+            int top = values[0];
+            double key = keys[--size];
+            int value = values[size];
+            int i = 0;
+            while (true) {
+                int c = 2 * i + 1;
+                if (c >= size) {
+                    break;
+                }
+                if (c + 1 < size && keys[c + 1] < keys[c]) {
+                    c++;
+                }
+                if (keys[c] >= key) {
+                    break;
+                }
+                keys[i] = keys[c];
+                values[i] = values[c];
+                i = c;
+            }
+            keys[i] = key;
+            values[i] = value;
+            return top;
         }
     }
 

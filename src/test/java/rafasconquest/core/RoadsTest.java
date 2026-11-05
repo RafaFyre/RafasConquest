@@ -82,4 +82,21 @@ class RoadsTest {
         assertFalse(plan.junctions().isEmpty(), "no fork where the spur meets the road");
         assertTrue(plan.junctions().stream().anyMatch(j -> j.leadsTo().contains("Village of Mill") && j.leadsTo().contains("Westford")));
     }
+
+    @Test
+    void theHeapGivesTheCheapestFirst() {
+        Roads.Heap heap = new Roads.Heap();
+        java.util.Random random = new java.util.Random(7);
+        double[] keys = new double[5000];
+        for (int i = 0; i < keys.length; i++) {
+            keys[i] = random.nextDouble();
+            heap.push(keys[i], i);
+        }
+        java.util.Arrays.sort(keys);
+        for (double key : keys) {
+            assertEquals(key, heap.topKey());
+            heap.pop();
+        }
+        assertTrue(heap.isEmpty());
+    }
 }
