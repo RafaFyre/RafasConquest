@@ -349,10 +349,60 @@ public final class Armoury {
             return;
         }
         rafasconquest.people.Person p = map.realm().people().get(person);
+        Kit kit = kitOf(map, person);
+        Outfit outfit;
+        int colour;
         if (p.nation() >= 0) {
-            dress(who, kitOf(map, person), map, map.nations().get(p.nation()).id());
+            java.util.UUID nation = map.nations().get(p.nation()).id();
+            colour = colour(nation);
+            outfit = outfit(kit, style(map, nation), colour, banner(who.level().registryAccess(), nation));
         } else {
-            outfit(kitOf(map, person), style(map.realm().cultures().get(p.culture()).homeland(), 0), 0x6B5A44, null).slots().forEach(who::setItemSlot);
+            colour = 0x6B5A44;
+            outfit = outfit(kit, style(map.realm().cultures().get(p.culture()).homeland(), 0), colour, null);
+        }
+        Map<EquipmentSlot, ItemStack> slots = new EnumMap<>(EquipmentSlot.class);
+        slots.putAll(outfit.slots());
+        personalise(slots, kit, colour, new java.util.Random(person * 0x9E3779B97F4A7C15L + 17));
+        slots.forEach((slot, stack) -> {
+            who.setItemSlot(slot, stack);
+            if (who instanceof com.talhanation.recruits.entities.AbstractRecruitEntity recruit) {
+                recruit.getInventory().setItem(recruit.getInventorySlotIndex(slot), stack.copy());
+            }
+        });
+    }
+
+    private static final String[] TASTE_HELMETS = {"armet", "armet_with_plume", "grand_bascinet", "greathelm", "bascinet",
+            "sallet", "barbute", "face_helmet", "shishak", "norman_helmet", "kettlehat"};
+    private static final String[] TASTE_WEAPONS = {"steel_bastardsword", "steel_estoc", "steel_claymore", "steel_zweihander",
+            "steel_lochaberaxe", "steel_katzbalger", "steel_flamebladedsword", "steel_lucernhammer", "messer_sword", "noble_sword"};
+    private static final String[] HEAD_TRIMS = {"big_plume_decoration", "plume_middle_decoration", "plume_left_decoration",
+            "plume_right_decoration", "two_plumes_decoration", "feathers_decoration", "torse_decoration", "torse_and_mantle_decoration",
+            "lion_decoration", "griffin_decoration", "dragon_decoration", "bear_decoration", "bullhorns_decoration",
+            "viking_horns_decoration", "antlers_decoration", "gazelle_horns_decoration", "horse_decoration", "lily_decoration"};
+    private static final String[] CHEST_TRIMS = {"hood_decoration", "ecranche_decoration", "rondel_decoration",
+            "antiquelegacy:antique_cloak_decoration", "antiquelegacy:fur_cloak_decoration", "antiquelegacy:subarmalis_decoration"};
+    /** Accessory dyes besides the side's own: gold, silver, black, crimson, royal blue, green, purple, white. */
+    private static final int[] TRIM_COLOURS = {0xD4AF37, 0xC0C0C0, 0x1E1B18, 0x9B1B1B, 0x1F3F8F, 0x2E6B2E, 0x5B2A86, 0xEDE8DC};
+
+    /**
+     * A character's own taste on top of their kit, the same each time for the same person: some swap the helmet or the
+     * weapon for one they prefer, some nobles carry a sword, and each wears none to three accessories in a colour of their own.
+     */
+    static void personalise(Map<EquipmentSlot, ItemStack> slots, Kit kit, int colour, java.util.Random r) {
+        boolean armoured = kit == Kit.SWORD_SAINT || kit == Kit.SWORD_KING || kit == Kit.SWORD_GOD;
+        if (armoured && r.nextInt(5) < 2) {
+            put(slots, EquipmentSlot.HEAD, stack(TASTE_HELMETS[r.nextInt(TASTE_HELMETS.length)], colour));
+        }
+        if (r.nextInt(5) < 2) { // a preferred blade, or a sword for an unarmed noble
+            put(slots, EquipmentSlot.MAINHAND, stack(TASTE_WEAPONS[r.nextInt(TASTE_WEAPONS.length)], -1));
+        }
+        int trim = r.nextBoolean() ? colour : TRIM_COLOURS[r.nextInt(TRIM_COLOURS.length)];
+        for (int n = r.nextInt(4); n > 0; n--) {
+            if (armoured && r.nextBoolean()) {
+                decorate(slots, EquipmentSlot.HEAD, HEAD_TRIMS[r.nextInt(HEAD_TRIMS.length)], trim);
+            } else {
+                decorate(slots, EquipmentSlot.CHEST, CHEST_TRIMS[r.nextInt(CHEST_TRIMS.length)], trim);
+            }
         }
     }
 
