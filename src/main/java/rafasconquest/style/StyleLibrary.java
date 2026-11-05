@@ -53,7 +53,9 @@ public final class StyleLibrary {
             "city/buildings/landmarks/style/churches", "city/buildings/landmarks/style/monuments",
             "city/buildings/landmarks/unique", "city/buildings/landmarks/unique/sword_sanctum",
             "lone/castles/small", "lone/castles/medium", "lone/castles/large", "lone/castles/grand",
-            "lone/hamlets");
+            "lone/hamlets",
+            "ships/warships/small", "ships/warships/medium", "ships/warships/large", "ships/warships/xlarge",
+            "ships/merchant/small", "ships/merchant/medium", "ships/merchant/large", "ships/merchant/xlarge");
     /** Every slot of a land's wild. */
     public static final List<String> WORLD_SLOTS = List.of("ruins", "hamlets", "dungeons");
 

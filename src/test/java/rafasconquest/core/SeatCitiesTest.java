@@ -64,13 +64,45 @@ class SeatCitiesTest {
         List<SeatCities.City> cities = SeatCities.plan(5, w.grid(), w.titles());
         assertFalse(cities.isEmpty());
         for (SeatCities.City c : cities) {
-            int half = c.size() / 2;
-            assertTrue(c.x() - half >= CELL * BPP, "a city stands in the sea: " + c);
+            int half = c.size() / 2 + (c.port() ? SeatCities.WALL_FOOT : 0);
+            assertTrue(c.x() - half >= CELL * BPP - (c.port() ? BPP : 0), "a city stands in the sea: " + c);
             for (SeatCities.City o : cities) {
                 if (o != c) {
                     int apart = c.size() / 2 + o.size() / 2;
                     assertTrue(Math.abs(c.x() - o.x()) > apart || Math.abs(c.z() - o.z()) > apart, "cities overlap: " + c + " " + o);
                 }
+            }
+        }
+    }
+
+    @Test
+    void coastalSeatsBecomePortsFacingTheSea() {
+        World w = world(21);
+        List<SeatCities.City> cities = SeatCities.plan(21, w.grid(), w.titles());
+        List<SeatCities.City> ports = cities.stream().filter(SeatCities.City::port).toList();
+        assertFalse(ports.isEmpty(), "no ports on the west coast");
+        for (SeatCities.City c : ports) {
+            // The sea is the west column of provinces: every port faces it, wall on land, the water just past it.
+            assertEquals(CityLayout.Side.WEST.ordinal(), c.harbour(), c.toString());
+            int wallFoot = c.x() - c.size() / 2 - SeatCities.WALL_FOOT;
+            assertTrue(wallFoot >= CELL * BPP - BPP, "a port's wall stands in the sea: " + c);
+            assertTrue(wallFoot - SeatCities.HARBOUR_SEA < CELL * BPP, "a port far from the sea: " + c);
+        }
+        assertTrue(cities.stream().anyMatch(c -> !c.port()), "inland cities became ports");
+        // The ports' shipping routes keep to the sea, and join them.
+        int width = CELLS * CELL;
+        boolean[] ocean = new boolean[width * width];
+        for (int i = 0; i < ocean.length; i++) {
+            ocean[i] = w.grid().provinces()[i] == ProvinceMap.WATER;
+        }
+        Roads.Land land = new Roads.Land(0, 0, BPP, width, width, new int[width * width], ocean, ocean, new byte[width * width], 63);
+        List<String> names = java.util.stream.IntStream.range(0, w.grid().centres().size()).mapToObj(i -> "P" + i).toList();
+        List<Roads.Road> lanes = ShippingRoutes.plan(land, ocean, cities, names);
+        assertTrue(ports.size() < 2 || !lanes.isEmpty(), "no shipping routes between " + ports.size() + " ports");
+        for (Roads.Road r : lanes) {
+            assertEquals(Roads.Grade.SEA, r.grade());
+            for (int i = 0; i < r.points(); i++) {
+                assertTrue(r.xs()[i] < CELL * BPP, "a shipping route crosses land at " + r.xs()[i] + ", " + r.zs()[i]);
             }
         }
     }

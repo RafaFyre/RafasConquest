@@ -24,7 +24,9 @@ import java.util.Set;
  */
 public final class Roads {
     public enum Grade {
-        TOWN(3), CITY(4), HIGH(5), DOJO(3);
+        TOWN(3), CITY(4), HIGH(5), DOJO(3),
+        /** A shipping route ({@link ShippingRoutes}): no blocks, only the way ships sail. */
+        SEA(0);
 
         private final int width;
 
@@ -48,8 +50,13 @@ public final class Roads {
     public record Junction(int x, int z, List<String> leadsTo) {
     }
 
-    public record Plan(List<Road> roads, List<Junction> junctions) {
-        public static final Plan EMPTY = new Plan(List.of(), List.of());
+    /** The roads and their forks, and the shipping routes between ports ({@link ShippingRoutes}), which are never built. */
+    public record Plan(List<Road> roads, List<Junction> junctions, List<Road> shipping) {
+        public static final Plan EMPTY = new Plan(List.of(), List.of(), List.of());
+
+        public Plan withShipping(List<Road> routes) {
+            return new Plan(roads, junctions, routes);
+        }
     }
 
     /**
@@ -203,7 +210,7 @@ public final class Roads {
                         router.nameAt(end)));
             }
         }
-        return new Plan(roads, router.junctions(roads));
+        return new Plan(roads, router.junctions(roads), List.of());
     }
 
     private static int rank(Grade g) {
@@ -211,7 +218,7 @@ public final class Roads {
             case HIGH -> 3;
             case CITY -> 2;
             case TOWN -> 1;
-            case DOJO -> 0;
+            case DOJO, SEA -> 0;
         };
     }
 

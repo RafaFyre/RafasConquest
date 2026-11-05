@@ -269,6 +269,8 @@ public final class CityGridBuilder {
         if (!styled.styledWalls()) {
             buildWalls(cellX, cellZ);
         }
+        // A port's wharf and piers, outside its harbour wall.
+        Harbour.build(ctx, site, cellX, cellZ, plate, pieces);
     }
 
     /** The stretches of [from, to] outside [cutFrom, cutTo] (all of it if the cut is empty). */

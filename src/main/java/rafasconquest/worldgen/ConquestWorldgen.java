@@ -37,7 +37,8 @@ public final class ConquestWorldgen {
     public static final DeferredHolder<StructurePieceType, StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
 
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
-    public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_TERRAIN_PIECE = PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> HARBOUR_PIECE = PIECE_TYPES.register("harbour", () -> (context, tag) -> new HarbourPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_TERRAIN_PIECE =PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> RECRUITMENT_POST_PIECE = PIECE_TYPES.register("recruitment_post",
             () -> (context, tag) -> new RecruitmentPostPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",

@@ -35,7 +35,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm,
                       List<rafasconquest.core.Dojos.Dojo> dojos, rafasconquest.core.Roads.Plan roads) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 20;
+    private static final int FORMAT = 21;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {
@@ -131,6 +131,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeByte(c.districts());
                 out.writeByte(c.tier().ordinal());
                 out.writeShort(c.province());
+                out.writeByte(c.harbour());
             }
             out.writeInt(settlements.size());
             for (Countryside.Settlement s : settlements) {
@@ -175,10 +176,25 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
         return bytes.toByteArray();
     }
 
-    /** The roads: each its grade, ends' names, and points as steps from the last; then the forks. */
+    /** The roads, then the forks, then the shipping routes. */
     private static void writeRoads(DataOutputStream out, rafasconquest.core.Roads.Plan plan) throws IOException {
-        out.writeInt(plan.roads().size());
-        for (rafasconquest.core.Roads.Road r : plan.roads()) {
+        writeRoadList(out, plan.roads());
+        out.writeInt(plan.junctions().size());
+        for (rafasconquest.core.Roads.Junction j : plan.junctions()) {
+            out.writeInt(j.x());
+            out.writeInt(j.z());
+            out.writeByte(j.leadsTo().size());
+            for (String name : j.leadsTo()) {
+                out.writeUTF(name);
+            }
+        }
+        writeRoadList(out, plan.shipping());
+    }
+
+    /** Roads, each its grade, ends' names, and points as steps from the last. */
+    private static void writeRoadList(DataOutputStream out, List<rafasconquest.core.Roads.Road> list) throws IOException {
+        out.writeInt(list.size());
+        for (rafasconquest.core.Roads.Road r : list) {
             out.writeByte(r.grade().ordinal());
             out.writeUTF(r.from());
             out.writeUTF(r.to());
@@ -190,18 +206,26 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeShort(r.zs()[i] - r.zs()[i - 1]);
             }
         }
-        out.writeInt(plan.junctions().size());
-        for (rafasconquest.core.Roads.Junction j : plan.junctions()) {
-            out.writeInt(j.x());
-            out.writeInt(j.z());
-            out.writeByte(j.leadsTo().size());
-            for (String name : j.leadsTo()) {
-                out.writeUTF(name);
-            }
-        }
     }
 
     private static rafasconquest.core.Roads.Plan readRoads(DataInputStream in) throws IOException {
+        List<rafasconquest.core.Roads.Road> roads = readRoadList(in);
+        int forks = in.readInt();
+        List<rafasconquest.core.Roads.Junction> junctions = new ArrayList<>(forks);
+        for (int i = 0; i < forks; i++) {
+            int x = in.readInt();
+            int z = in.readInt();
+            int names = in.readUnsignedByte();
+            List<String> leadsTo = new ArrayList<>(names);
+            for (int k = 0; k < names; k++) {
+                leadsTo.add(in.readUTF());
+            }
+            junctions.add(new rafasconquest.core.Roads.Junction(x, z, List.copyOf(leadsTo)));
+        }
+        return new rafasconquest.core.Roads.Plan(roads, junctions, readRoadList(in));
+    }
+
+    private static List<rafasconquest.core.Roads.Road> readRoadList(DataInputStream in) throws IOException {
         int count = in.readInt();
         List<rafasconquest.core.Roads.Road> roads = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
@@ -219,19 +243,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             }
             roads.add(new rafasconquest.core.Roads.Road(grade, xs, zs, from, to));
         }
-        int forks = in.readInt();
-        List<rafasconquest.core.Roads.Junction> junctions = new ArrayList<>(forks);
-        for (int i = 0; i < forks; i++) {
-            int x = in.readInt();
-            int z = in.readInt();
-            int names = in.readUnsignedByte();
-            List<String> leadsTo = new ArrayList<>(names);
-            for (int k = 0; k < names; k++) {
-                leadsTo.add(in.readUTF());
-            }
-            junctions.add(new rafasconquest.core.Roads.Junction(x, z, List.copyOf(leadsTo)));
-        }
-        return new rafasconquest.core.Roads.Plan(roads, junctions);
+        return roads;
     }
 
     private static void writeShorts(DataOutputStream out, int[] values) throws IOException {
@@ -300,7 +312,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             List<SeatCities.City> cities = new ArrayList<>(cityCount);
             for (int i = 0; i < cityCount; i++) {
                 cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
-                        in.readShort()));
+                        in.readShort(), in.readByte()));
             }
             int settlementCount = in.readInt();
             if (settlementCount < 0 || settlementCount > Short.MAX_VALUE) {

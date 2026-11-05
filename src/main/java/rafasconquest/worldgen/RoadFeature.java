@@ -177,13 +177,13 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
             case HIGH -> mossy ? Blocks.MOSSY_COBBLESTONE : Blocks.COBBLESTONE;
             case DOJO -> Blocks.COBBLESTONE;
             case CITY -> fromMiddle <= 1.0 ? Blocks.GRAVEL : Blocks.DIRT_PATH;
-            case TOWN -> Blocks.DIRT_PATH;
+            case TOWN, SEA -> Blocks.DIRT_PATH; // SEA: never laid, its routes are not in roads()
         };
         Block half = switch (grade) {
             case HIGH -> mossy ? Blocks.MOSSY_COBBLESTONE_SLAB : Blocks.COBBLESTONE_SLAB;
             case DOJO -> Blocks.COBBLESTONE_SLAB;
             case CITY -> fromMiddle <= 1.0 ? ConquestContent.GRAVEL_SLAB.get() : ConquestContent.DIRT_PATH_SLAB.get();
-            case TOWN -> ConquestContent.DIRT_PATH_SLAB.get();
+            case TOWN, SEA -> ConquestContent.DIRT_PATH_SLAB.get();
         };
         fill(level, x, base - 2, z);
         level.setBlock(new BlockPos(x, base - 1, z), full.defaultBlockState(), 2);
@@ -310,7 +310,7 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
             case HIGH -> 3;
             case CITY -> 2;
             case TOWN -> 1;
-            case DOJO -> 0;
+            case DOJO, SEA -> 0;
         };
     }
 

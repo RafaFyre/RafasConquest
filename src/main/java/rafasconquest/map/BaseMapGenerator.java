@@ -329,8 +329,13 @@ public final class BaseMapGenerator {
         List<Dojos.Dojo> dojos = WorldFeatures.mantraSchools()
                 ? dojos(level.getSeed(), minX, minZ, bpp, size, visibleRadius, settings.eyeRadius(), provinces, wet, cities, nations)
                 : List.of();
-        Roads.Plan roads = roads(new Roads.Land(minX, minZ, bpp, size, size, ground, wet, water, hard, sea), titles, names, cities,
-                settlements, dojos);
+        Roads.Land roadLand = new Roads.Land(minX, minZ, bpp, size, size, ground, wet, water, hard, sea);
+        Roads.Plan roads = roads(roadLand, titles, names, cities, settlements, dojos);
+        long shippingStarted = System.nanoTime();
+        // Over the sea within the known world only.
+        roads = roads.withShipping(rafasconquest.core.ShippingRoutes.plan(roadLand, ocean, cities, names));
+        rafasconquest.RafasConquest.LOGGER.info("[world] {} ports, {} shipping routes, planned in {} ms", cities.stream().filter(SeatCities.City::port).count(),
+                roads.shipping().size(), (System.nanoTime() - shippingStarted) / 1_000_000);
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
                 cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
                         lands, plan.holder(), styles), dojos, roads);

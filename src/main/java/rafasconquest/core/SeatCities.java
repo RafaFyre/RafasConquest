@@ -17,6 +17,10 @@ import java.util.Random;
  * moved to another province the title could have seated (one of the seats of the titles it is made of), so seats stay
  * nested; a title with no room anywhere has no city. A big city may spread over the provinces around its own: they are
  * {@link City#covered} by it, and have it as their structure.
+ * <p>
+ * <b>Ports</b>: a seat with the sea within its reach is drawn to the shore instead, so that one side of the city (its
+ * {@link City#harbour}) stands with its wall on land and the sea just past it, for its wharf and piers. Of the spots
+ * that make a port, the one nearest the province's centre; a seat with none is an inland city as before.
  */
 public final class SeatCities {
     /** One district: 5 × 5 city blocks of 32. */
@@ -24,10 +28,25 @@ public final class SeatCities {
     /** Cities keep at least this far apart (blocks), and this much land is kept about each beyond its wall. */
     public static final int CLEARANCE = 64;
     private static final int MARGIN = 10;
+    /** A port's harbour side has land this far past its square (its wall's foot), then the sea within {@link #HARBOUR_SEA}. */
+    static final int WALL_FOOT = 8;
+    static final int HARBOUR_SEA = 40;
     private static final long SALT = 0x5345415443495459L;
 
-    /** A seat city: its centre, how many districts a side, the highest title it seats, and its seat province. */
-    public record City(int x, int z, int districts, TitleMap.Tier tier, int province) {
+    /**
+     * A seat city: its centre, how many districts a side, the highest title it seats, its seat province, and the side
+     * its harbour faces (a {@link CityLayout.Side}'s ordinal), or -1 for an inland city.
+     */
+    public record City(int x, int z, int districts, TitleMap.Tier tier, int province, int harbour) {
+        /** An inland city. */
+        public City(int x, int z, int districts, TitleMap.Tier tier, int province) {
+            this(x, z, districts, tier, province, -1);
+        }
+
+        public boolean port() {
+            return harbour >= 0;
+        }
+
         /** Its side in blocks, edge roads included. */
         public int size() {
             return districts * DISTRICT + 3;
@@ -66,16 +85,8 @@ public final class SeatCities {
     public static List<City> plan(long seed, Grid g, TitleMap titles) {
         Random random = new Random(seed ^ SALT);
         // Land, for squares wholly on it: a summed-area table of pixels that aren't (so a square is checked at once).
-        int w = g.width();
-        int h = g.height();
-        int[] notLand = new int[(w + 1) * (h + 1)];
-        for (int z = 0; z < h; z++) {
-            for (int x = 0; x < w; x++) {
-                int bad = g.provinces()[z * w + x] < 0 ? 1 : 0;
-                notLand[(z + 1) * (w + 1) + x + 1] = bad + notLand[z * (w + 1) + x + 1] + notLand[(z + 1) * (w + 1) + x]
-                        - notLand[z * (w + 1) + x];
-            }
-        }
+        int[] notLand = summed(g, p -> p < 0);
+        int[] sea = summed(g, p -> p == ProvinceMap.WATER);
         List<City> cities = new ArrayList<>();
         int[][] seats = {titles.countySeat(), titles.duchySeat(), titles.kingdomSeat(), titles.empireSeat()};
         for (int tier = 3; tier >= 0; tier--) {
@@ -98,7 +109,7 @@ public final class SeatCities {
                 List<Integer> candidates = candidates(titles, tier, title, seat[title]);
                 City city = null;
                 for (int province : candidates) {
-                    city = fit(g, notLand, cities, province, sizes[title], t);
+                    city = fit(g, notLand, sea, cities, province, sizes[title], t);
                     if (city != null) {
                         moveSeat(titles, tier, title, province);
                         break;
@@ -154,45 +165,93 @@ public final class SeatCities {
     }
 
     /**
-     * A city of {@code districts} a side for a seat in {@code province}: the spot nearest its centre where the whole
-     * city (and its margin) is on land and clear of the others, searched within the province's reach; null if none.
+     * A city of {@code districts} a side for a seat in {@code province}, searched within the province's reach: the port
+     * nearest its centre, if any spot makes one; else the spot nearest its centre where the whole city (and its margin)
+     * is on land. Clear of the others either way; null if none.
      */
-    private static City fit(Grid g, int[] notLand, List<City> cities, int province, int districts, TitleMap.Tier tier) {
+    private static City fit(Grid g, int[] notLand, int[] sea, List<City> cities, int province, int districts, TitleMap.Tier tier) {
         ProvinceMap.Centre centre = g.centres().get(province);
         City probe = new City(centre.x(), centre.z(), districts, tier, province);
         int reach = probe.reach() + g.bpp();
+        int half = probe.size() / 2;
         int search = Math.max(ProvinceMap.spacing(), probe.reach());
         City best = null;
+        City port = null;
         double bestDistance = Double.MAX_VALUE;
+        double portDistance = Double.MAX_VALUE;
         for (int dz = -search; dz <= search; dz += g.bpp()) {
             for (int dx = -search; dx <= search; dx += g.bpp()) {
                 double d = Math.hypot(dx, dz);
-                if (d >= bestDistance || d > search) {
+                if (d >= portDistance || d > search) {
                     continue;
                 }
                 int x = centre.x() + dx;
                 int z = centre.z() + dz;
-                if (!onLand(g, notLand, x, z, reach) || crowded(cities, x, z, probe.reach())) {
+                if (crowded(cities, x, z, probe.reach())) {
                     continue;
                 }
-                bestDistance = d;
-                best = new City(x, z, districts, tier, province);
+                int px = Math.floorDiv(x - g.minX(), g.bpp());
+                int pz = Math.floorDiv(z - g.minZ(), g.bpp());
+                boolean own = px >= 0 && pz >= 0 && px < g.width() && pz < g.height() && g.provinces()[pz * g.width() + px] == province;
+                for (CityLayout.Side side : CityLayout.Side.values()) {
+                    if (own && harbourAt(g, notLand, sea, x, z, half, reach, side)) {
+                        portDistance = d;
+                        port = new City(x, z, districts, tier, province, side.ordinal());
+                        break;
+                    }
+                }
+                if (port == null && d < bestDistance && box(g, notLand, x - reach, z - reach, x + reach, z + reach) == 0) {
+                    bestDistance = d;
+                    best = new City(x, z, districts, tier, province);
+                }
             }
         }
-        return best;
+        return port != null ? port : best;
     }
 
-    private static boolean onLand(Grid g, int[] notLand, int x, int z, int reach) {
-        int x0 = Math.floorDiv(x - reach - g.minX(), g.bpp());
-        int z0 = Math.floorDiv(z - reach - g.minZ(), g.bpp());
-        int x1 = Math.floorDiv(x + reach - g.minX(), g.bpp());
-        int z1 = Math.floorDiv(z + reach - g.minZ(), g.bpp());
+    /**
+     * Whether a city at (x, z) makes a port facing {@code side}: on land with its margin, except that on that side the
+     * land need only reach its wall's foot, and the sea lies within {@link #HARBOUR_SEA} past that, off the side's middle.
+     */
+    static boolean harbourAt(Grid g, int[] notLand, int[] sea, int x, int z, int half, int reach, CityLayout.Side side) {
+        int foot = half + WALL_FOOT;
+        int along = half / 2;
+        return switch (side) {
+            case NORTH -> box(g, notLand, x - reach, z - foot, x + reach, z + reach) == 0
+                    && box(g, sea, x - along, z - half - HARBOUR_SEA, x + along, z - foot - 1) > 0;
+            case SOUTH -> box(g, notLand, x - reach, z - reach, x + reach, z + foot) == 0
+                    && box(g, sea, x - along, z + foot + 1, x + along, z + half + HARBOUR_SEA) > 0;
+            case WEST -> box(g, notLand, x - foot, z - reach, x + reach, z + reach) == 0
+                    && box(g, sea, x - half - HARBOUR_SEA, z - along, x - foot - 1, z + along) > 0;
+            case EAST -> box(g, notLand, x - reach, z - reach, x + foot, z + reach) == 0
+                    && box(g, sea, x + foot + 1, z - along, x + half + HARBOUR_SEA, z + along) > 0;
+        };
+    }
+
+    /** A summed-area table of the pixels whose province matches. */
+    private static int[] summed(Grid g, java.util.function.IntPredicate counts) {
+        int w = g.width();
+        int[] t = new int[(w + 1) * (g.height() + 1)];
+        for (int z = 0; z < g.height(); z++) {
+            for (int x = 0; x < w; x++) {
+                int one = counts.test(g.provinces()[z * w + x]) ? 1 : 0;
+                t[(z + 1) * (w + 1) + x + 1] = one + t[z * (w + 1) + x + 1] + t[(z + 1) * (w + 1) + x] - t[z * (w + 1) + x];
+            }
+        }
+        return t;
+    }
+
+    /** How many counted pixels lie under the block box; -1 if it runs off the map (neither land nor sea). */
+    private static int box(Grid g, int[] table, int minX, int minZ, int maxX, int maxZ) {
+        int x0 = Math.floorDiv(minX - g.minX(), g.bpp());
+        int z0 = Math.floorDiv(minZ - g.minZ(), g.bpp());
+        int x1 = Math.floorDiv(maxX - g.minX(), g.bpp());
+        int z1 = Math.floorDiv(maxZ - g.minZ(), g.bpp());
         if (x0 < 0 || z0 < 0 || x1 >= g.width() || z1 >= g.height()) {
-            return false;
+            return -1;
         }
         int w = g.width() + 1;
-        int bad = notLand[(z1 + 1) * w + x1 + 1] - notLand[z0 * w + x1 + 1] - notLand[(z1 + 1) * w + x0] + notLand[z0 * w + x0];
-        return bad == 0;
+        return table[(z1 + 1) * w + x1 + 1] - table[z0 * w + x1 + 1] - table[(z1 + 1) * w + x0] + table[z0 * w + x0];
     }
 
     private static boolean crowded(List<City> cities, int x, int z, int reach) {

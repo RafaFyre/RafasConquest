@@ -22,6 +22,8 @@ style/<name>/      A building style. Its style.json names the homelands that bui
   lone/castles/small, medium, large, grand           small: a lord's castle; medium: a county nation's seat;
                                                      large: a duchy's; grand: a kingdom's or an empire's
   lone/hamlets                                       hamlets in a nation's land
+  ships/warships/small, medium, large, xlarge        warships (folders only: not built yet)
+  ships/merchant/small, medium, large, xlarge        merchant ships (folders only: not built yet)
 
 world/<land>/      The wild of each land (plains, desert, jungle, savanna, snow, swamp, taiga):
   ruins, hamlets (in no nation's land), dungeons
