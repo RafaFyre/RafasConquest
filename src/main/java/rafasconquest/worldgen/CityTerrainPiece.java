@@ -37,8 +37,9 @@ public class CityTerrainPiece extends StructurePiece {
 
     public CityTerrainPiece(CityLayout.Site site, int cellX, int cellZ, CityVariant variant, CityTerrain.Plan plan, int minY, int maxY) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, new BoundingBox(
-                site.originX() + CityTerrain.ownedMin(cellX), minY, site.originZ() + CityTerrain.ownedMin(cellZ),
-                site.originX() + CityTerrain.ownedMax(site.cells(), cellX), maxY, site.originZ() + CityTerrain.ownedMax(site.cells(), cellZ)));
+                site.originX() + CityTerrain.ownedMin(site.cells(), cellX, plan.outset()), minY, site.originZ() + CityTerrain.ownedMin(site.cells(), cellZ, plan.outset()),
+                site.originX() + CityTerrain.ownedMax(site.cells(), cellX, plan.outset()), maxY,
+                site.originZ() + CityTerrain.ownedMax(site.cells(), cellZ, plan.outset())));
         this.originX = site.originX();
         this.originZ = site.originZ();
         this.variant = variant;
@@ -53,7 +54,8 @@ public class CityTerrainPiece extends StructurePiece {
         this.variant = CityVariant.valueOf(tag.getString("variant"));
         int sides = CityTerrain.Side.values().length;
         int cells = tag.contains("cells") ? tag.getInt("cells") : CityLayout.CELLS_PER_SIDE;
-        int segments = CityTerrain.segments(cells);
+        int outset = tag.contains("outset") ? tag.getInt("outset") : CityLayout.WALL_OUTSET;
+        int segments = CityTerrain.segments(cells, outset);
         String encoded = tag.getString("edges");
         int[] carve = tag.getIntArray("carveTo");
         CityTerrain.Edge[][] edges = new CityTerrain.Edge[sides][segments];
@@ -63,7 +65,7 @@ public class CityTerrainPiece extends StructurePiece {
                     ? CityTerrain.Edge.values()[encoded.charAt(i) - '0'] : CityTerrain.Edge.CARVE;
             carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
-        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo, cells);
+        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo, cells, outset);
     }
 
     @Override
@@ -73,8 +75,9 @@ public class CityTerrainPiece extends StructurePiece {
         tag.putString("variant", variant.name());
         tag.putInt("plateY", plan.plateY());
         tag.putInt("cells", plan.cells());
+        tag.putInt("outset", plan.outset());
         StringBuilder edges = new StringBuilder();
-        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.segments(plan.cells())];
+        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.segments(plan.cells(), plan.outset())];
         int i = 0;
         for (int side = 0; side < plan.edges().length; side++) {
             for (int seg = 0; seg < plan.edges()[side].length; seg++) {

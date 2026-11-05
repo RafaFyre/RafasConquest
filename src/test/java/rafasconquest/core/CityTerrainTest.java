@@ -25,6 +25,20 @@ class CityTerrainTest {
     }
 
     @Test
+    void easingStartsTwiceTheCitySizePastTheWall() {
+        int outset = 12;
+        for (int cells : new int[]{4, 9}) {
+            CityLayout.Site site = new CityLayout.Site(5000, -3000, false, cells);
+            CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> 80, SEA, outset);
+            int lastFlat = -outset - 2 * cells;
+            assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, lastFlat).kind(), cells + ": flat out to the margin");
+            assertEquals(CityTerrain.Kind.SLOPE, CityTerrain.column(plan, MID, lastFlat - 1).kind(), cells + ": easing starts past it");
+            assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(plan, MID, lastFlat - CityTerrain.SLOPE_REACH - 1).kind(),
+                    cells + ": the slope keeps its length");
+        }
+    }
+
+    @Test
     void plateIsTheMedianOfTheWholeBox() {
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> x < 200 ? 70 : 100), SEA);
         assertEquals(100, plan.plateY());
@@ -131,14 +145,14 @@ class CityTerrainTest {
         Set<Long> seen = new HashSet<>();
         for (int cx = 0; cx < CityLayout.CELLS_PER_SIDE; cx++) {
             for (int cz = 0; cz < CityLayout.CELLS_PER_SIDE; cz++) {
-                int startX = (cx - 1) * CityLayout.DISTRICT_SPACING + CityLayout.HALF_EXTENT;
-                int startZ = (cz - 1) * CityLayout.DISTRICT_SPACING + CityLayout.HALF_EXTENT;
+                int startX = CityLayout.start(CityLayout.CELLS_PER_SIDE, cx, 0, CityLayout.WALL_OUTSET) >> 4;
+                int startZ = CityLayout.start(CityLayout.CELLS_PER_SIDE, cz, 0, CityLayout.WALL_OUTSET) >> 4;
                 for (int lx = CityTerrain.ownedMin(cx); lx <= CityTerrain.ownedMax(cx); lx += 3) {
                     for (int lz = CityTerrain.ownedMin(cz); lz <= CityTerrain.ownedMax(cz); lz += 3) {
                         assertEquals(cx, CityTerrain.cellOf(lx));
                         assertEquals(cz, CityTerrain.cellOf(lz));
                         assertTrue(seen.add(((long) lx << 32) | (lz & 0xFFFFFFFFL)));
-                        assertTrue(Math.abs(lx - startX) <= 128 && Math.abs(lz - startZ) <= 128,
+                        assertTrue(Math.abs((lx >> 4) - startX) <= 8 && Math.abs((lz >> 4) - startZ) <= 8,
                                 "column " + lx + "," + lz + " out of reach of cell " + cx + "," + cz);
                     }
                 }

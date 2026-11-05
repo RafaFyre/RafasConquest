@@ -119,12 +119,40 @@ public final class CityLayout {
      */
     public record District(Site city, int cellX, int cellZ) {
         public int x() {
-            return city.originX() + cellX * DISTRICT_SPACING + DISTRICT_SPACING / 2 + 1;
+            return start(city.cells(), cellX, city.originX(), wallOutsets.applyAsInt(city));
         }
 
         public int z() {
-            return city.originZ() + cellZ * DISTRICT_SPACING + DISTRICT_SPACING / 2 + 1;
+            return start(city.cells(), cellZ, city.originZ(), wallOutsets.applyAsInt(city));
         }
+    }
+
+    /** How far each city's wall stands out past its square; set from the style folders when the overworld loads. */
+    private static volatile java.util.function.ToIntFunction<Site> wallOutsets = site -> WALL_OUTSET;
+
+    public static void publishWallOutsets(java.util.function.ToIntFunction<Site> outsets) {
+        wallOutsets = outsets;
+    }
+
+    /**
+     * World coordinate, along one axis, of the start of a cell: its middle, except that an edge cell's start moves
+     * outward, by whole chunks, until its terrain's slope is within the engine's 8-chunk reach of it, as long as the
+     * cell's own far road stays in reach too.
+     */
+    static int start(int cells, int cell, int origin, int outset) {
+        int middle = origin + cell * DISTRICT_SPACING + DISTRICT_SPACING / 2 + 1;
+        int chunk = middle >> 4;
+        int reach = 8;
+        if (cells >= 2 && cell == 0) {
+            int slopeEnd = (origin + CityTerrain.ownedMin(cells, 0, outset)) >> 4;
+            int farRoad = (origin + cellMax(0)) >> 4;
+            chunk = Math.max(farRoad - reach, Math.min(chunk, slopeEnd + reach));
+        } else if (cells >= 2 && cell == cells - 1) {
+            int slopeEnd = (origin + CityTerrain.ownedMax(cells, cell, outset)) >> 4;
+            int nearRoad = (origin + cellMin(cell)) >> 4;
+            chunk = Math.min(nearRoad + reach, Math.max(chunk, slopeEnd - reach));
+        }
+        return chunk == middle >> 4 ? middle : (chunk << 4) + 8;
     }
 
     /** Road indices (0 .. BLOCKS_PER_SIDE) a cell builds along one axis. The last cell also builds the far edge road. */
@@ -376,7 +404,7 @@ public final class CityLayout {
     public static Optional<Site> siteInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        int r = MAX_HALF_EXTENT;
+        int r = MAX_HALF_EXTENT + 8 * 16; // an edge cell's start may stand out past the square
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             District centre = new District(city, city.centerCell(), city.centerCell());
             if (centre.x() >= minX && centre.x() <= minX + 15 && centre.z() >= minZ && centre.z() <= minZ + 15) {
@@ -403,7 +431,7 @@ public final class CityLayout {
     public static Optional<District> districtInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
-        int r = MAX_HALF_EXTENT;
+        int r = MAX_HALF_EXTENT + 8 * 16; // an edge cell's start may stand out past the square
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (District d : districts(city)) {
                 if (d.x() >= minX && d.x() <= minX + 15 && d.z() >= minZ && d.z() <= minZ + 15) {

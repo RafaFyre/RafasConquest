@@ -45,13 +45,20 @@ class CitySizesTest {
     @Test
     void eachColumnIsFlattenedByOneCellWhoseStartIsWithinReach() {
         for (int cells : SIZES) {
-            CityLayout.Site site = new CityLayout.Site(0, 0, false, cells);
-            for (int cx = 0; cx < cells; cx++) {
-                CityLayout.District d = new CityLayout.District(site, cx, 0);
-                int start = d.x() - site.originX();
-                for (int l = CityTerrain.ownedMin(cx); l <= CityTerrain.ownedMax(cells, cx); l += 5) {
-                    assertEquals(cx, CityTerrain.cellOf(cells, l), cells + "×" + cells + " column " + l);
-                    assertTrue(Math.abs(l - start) <= 128, "a column beyond the engine's reach from its cell's start");
+            for (int outset : new int[]{CityLayout.WALL_OUTSET, 12}) {
+                for (int origin = 0; origin < 16; origin++) { // every alignment with the chunk grid
+                    for (int cx = 0; cx < cells; cx++) {
+                        int startChunk = CityLayout.start(cells, cx, origin, outset) >> 4;
+                        int from = Math.min(CityTerrain.ownedMin(cells, cx, outset), CityLayout.cellMin(cx));
+                        int to = Math.max(CityTerrain.ownedMax(cells, cx, outset), CityLayout.cellMax(cx));
+                        for (int l = from; l <= to; l++) {
+                            if (l >= CityTerrain.ownedMin(cells, cx, outset) && l <= CityTerrain.ownedMax(cells, cx, outset)) {
+                                assertEquals(cx, CityTerrain.cellOf(cells, l), cells + "×" + cells + " column " + l);
+                            }
+                            assertTrue(Math.abs(((origin + l) >> 4) - startChunk) <= 8,
+                                    cells + "×" + cells + ", wall " + outset + " out: column " + l + " beyond the engine's reach from cell " + cx);
+                        }
+                    }
                 }
             }
         }

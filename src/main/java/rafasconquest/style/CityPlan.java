@@ -29,7 +29,7 @@ public final class CityPlan {
     /** What a piece is. The mod's own post has no file. */
     public enum Kind { WALL, PALACE, BARRACKS, POST, CHURCH, NOBLE }
 
-    /** A piece: its file, its footprint's corner and size (as turned), its height, and its quarter turns. */
+    /** A piece: its file, its footprint's corner and size (as turned), its top above the plate, and its quarter turns. */
     public record Piece(Kind kind, @Nullable String file, int minX, int minZ, int w, int d, int h, int turns) {
         public int centreX() {
             return minX + w / 2;
@@ -121,6 +121,7 @@ public final class CityPlan {
 
     static void forget() {
         PLANS.clear();
+        OUTSETS.clear();
     }
 
     /** The plan of a city (none until the world map is known). */
@@ -164,7 +165,8 @@ public final class CityPlan {
         int avenue = CityLayout.roadStart(site.blocksPerSide() / 2) + 1;
         int[] outer = {inner, site.size() - inner, inner, site.size() - inner};
         if (CityStyles.palace(site) == null) {
-            return new Plan(0, 0, 0, 0, walls(site, outer, avenue, avenue, -1, -1, null, random, pieces), pieces);
+            boolean styledWalls = walls(site, outer, avenue, avenue, -1, -1, null, random, pieces);
+            return new Plan(0, 0, 0, 0, styledWalls, lifted(pieces));
         }
         int edge = random.nextBoolean() ? -1 : random.nextInt(4);
         int bps = site.blocksPerSide();
@@ -208,7 +210,13 @@ public final class CityPlan {
             }
         }
         noble(site, area[0], area[1] - 1, area[2], area[3] - 1, random, pieces);
-        return new Plan(d[0], x1, d[1], z1, walls, pieces);
+        return new Plan(d[0], x1, d[1], z1, walls, lifted(pieces));
+    }
+
+    /** The pieces with their height counted from the plate, their folder's y offset included (read once here, not per column). */
+    private static List<Piece> lifted(List<Piece> pieces) {
+        return pieces.stream().map(p -> p.file() == null ? p : new Piece(p.kind(), p.file(), p.minX(), p.minZ(), p.w(), p.d(),
+                Math.max(0, p.h() + StyleLibrary.yOffset(p.file())), p.turns())).toList();
     }
 
     /**
@@ -248,6 +256,20 @@ public final class CityPlan {
             default -> box[0] += by;
         }
     }
+
+    /**
+     * How far a city's wall stands out past its square: the deepest file in its style's wall folders, less the 3 blocks
+     * it stands in from the square's edge; the mod's own wall's where the style has no walls of its own.
+     */
+    public static int wallOutset(CityLayout.Site site) {
+        if (ConquestRuntime.map() == null) {
+            return CityLayout.WALL_OUTSET; // no styles known yet; not cached
+        }
+        int inner = CityLayout.WALL_WIDTH - CityLayout.WALL_OUTSET; // as make() lays the outer ring
+        return OUTSETS.computeIfAbsent(site, s -> Math.max(CityLayout.WALL_OUTSET, wallDepth(s) - inner));
+    }
+
+    private static final Map<CityLayout.Site, Integer> OUTSETS = new ConcurrentHashMap<>();
 
     /** The deepest of the style's own wall pieces (corners either way), or 0 if it has no wall segments of its own. */
     private static int wallDepth(CityLayout.Site site) {
@@ -459,8 +481,9 @@ public final class CityPlan {
     /** Whether every chunk of the piece lies within reach of the start of the cell that builds it. */
     private static boolean reachable(CityLayout.Site site, Piece p) {
         int cells = site.cells();
-        int startX = site.originX() + cellOf(cells, p.centreX()) * CityLayout.DISTRICT_SPACING + CityLayout.DISTRICT_SPACING / 2 + 1;
-        int startZ = site.originZ() + cellOf(cells, p.centreZ()) * CityLayout.DISTRICT_SPACING + CityLayout.DISTRICT_SPACING / 2 + 1;
+        CityLayout.District start = new CityLayout.District(site, cellOf(cells, p.centreX()), cellOf(cells, p.centreZ()));
+        int startX = start.x();
+        int startZ = start.z();
         int x0 = site.originX() + p.minX();
         int z0 = site.originZ() + p.minZ();
         return (x0 >> 4) >= (startX >> 4) - REACH_CHUNKS && ((x0 + p.w() - 1) >> 4) <= (startX >> 4) + REACH_CHUNKS

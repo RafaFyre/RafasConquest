@@ -172,7 +172,7 @@ public final class CityStats {
         for (CityTerrain.Side side : CityTerrain.Side.values()) {
             StringBuilder sb = new StringBuilder();
             StringBuilder carve = new StringBuilder();
-            for (int s = 0; s < CityTerrain.segments(site.cells()); s++) {
+            for (int s = 0; s < plan.edges()[side.ordinal()].length; s++) {
                 sb.append(plan.edge(side, s).name().charAt(0));
                 carve.append(' ').append(plan.carveTo()[side.ordinal()][s]);
             }

@@ -7,6 +7,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -132,6 +133,17 @@ public class StylePiece extends StructurePiece {
         Vec3i size = template.getSize();
         BlockPos origin = origin(centre, size);
         StructurePlaceSettings settings = settings(turns, size).setBoundingBox(chunk).addProcessor(BlockIgnoreProcessor.STRUCTURE_BLOCK);
+        // Hollow out its own volume above its floor first, so a file saved without air still stands in open space.
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int x = Math.max(boundingBox.minX(), chunk.minX()); x <= Math.min(boundingBox.maxX(), chunk.maxX()); x++) {
+            for (int z = Math.max(boundingBox.minZ(), chunk.minZ()); z <= Math.min(boundingBox.maxZ(), chunk.maxZ()); z++) {
+                for (int y = boundingBox.minY() + 1; y <= boundingBox.maxY(); y++) {
+                    if (!level.getBlockState(pos.set(x, y, z)).isAir()) {
+                        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                    }
+                }
+            }
+        }
         template.placeInWorld(level, origin, origin, settings, random, 2);
         CharacterMarkers.arm(level, template, origin, settings, chunk);
     }

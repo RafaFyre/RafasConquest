@@ -58,6 +58,7 @@ public final class ConquestEvents {
             ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(map.cities()));
             ConquestRuntime.publishCountryside(new rafasconquest.worldgen.CountryIndex(map.settlements()));
             rafasconquest.core.CityLayout.publishBuilt((min, max) -> ConquestRuntime.cities().inBox(min[0], min[1], max[0], max[1]));
+            rafasconquest.core.CityLayout.publishWallOutsets(rafasconquest.style.CityPlan::wallOutset);
         }
     }
 

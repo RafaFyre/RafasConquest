@@ -111,14 +111,16 @@ public final class CityGridBuilder {
         // them all at once on every core, then survey from the readings. A heavy terrain mod makes each reading slow.
         java.util.Set<Long> wanted = java.util.concurrent.ConcurrentHashMap.newKeySet();
         int sea = ctx.chunkGenerator().getSeaLevel();
+        // The box reaches past the walls: a style's own may stand further out than the mod's.
+        int outset = rafasconquest.style.CityPlan.wallOutset(site);
         CityTerrain.plan(site, (x, z) -> {
             wanted.add(xz(x, z));
             return sea;
-        }, sea);
+        }, sea, outset);
         java.util.Map<Long, Integer> read = new java.util.concurrent.ConcurrentHashMap<>();
         // On a pool of its own, a quarter of the threads: the rest stay free for the world generation going on meanwhile.
         SURVEY.submit(() -> wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)))).join();
-        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea);
+        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea, outset);
         int[] counts = new int[CityTerrain.Edge.values().length];
         for (CityTerrain.Edge[] side : plan.edges()) {
             for (CityTerrain.Edge e : side) {
