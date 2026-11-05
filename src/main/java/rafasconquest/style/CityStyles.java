@@ -36,6 +36,8 @@ public final class CityStyles {
     public static final String GATES = "city/walls/gates";
     public static final String CORNERS = "city/walls/corners";
     public static final String TOWERS = "city/walls/watchtowers";
+    /** The Wall Tower Junction: a piece of the outer wall, in place of a segment, where the noble district's U of walls meets it. */
+    public static final String JUNCTIONS = "city/walls/junctions";
     /** Templates face north; the mod's own post and church have their doors west. */
     public static final int TURNS_TO_WEST = 3;
 

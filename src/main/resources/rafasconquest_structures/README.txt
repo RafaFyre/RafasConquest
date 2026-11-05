@@ -10,6 +10,9 @@ style/<name>/      A building style. Its style.json names the homelands that bui
                    A slot this style leaves empty uses the default style's; one empty in both is built
                    the way the mod builds it itself.
   city/walls/corners, gates, watchtowers, walls
+  city/walls/junctions                               the Wall Tower Junction: an outer wall piece, built like a wall
+                                                     segment, set where a noble district against the city's edge has
+                                                     its walls meet the outer wall, at its middle (else corner towers)
   city/buildings/common                              ordinary houses
   city/buildings/noble                               noble buildings
   city/buildings/landmarks/mandatory/palace          the Palace: the gold church the city's holder (and capital lord) stand in

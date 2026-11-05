@@ -181,21 +181,19 @@ public final class CityGridBuilder {
         // The styled walls and the noble district, laid out for the whole city.
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site); // by its founder, held or not
         boolean noble = styled.noble();
-        int nobleMin = noble ? styled.areaMin() : 0;
-        int nobleMax = noble ? styled.areaMax() : -1;
 
         // Roads next, so buildings placed afterwards win wherever they touch; none inside the noble district.
         for (int k : CityLayout.roadsInCell(site.cells(), cellX)) {
             int x = ox + CityLayout.roadStart(k);
-            boolean cut = noble && k > styled.lo() && k < styled.hi();
-            for (int[] run : runs(cellMinZ - oz, cellMaxZ - oz, cut ? nobleMin : 0, cut ? nobleMax : -1)) {
+            boolean cut = noble && k > styled.x0() && k < styled.x1();
+            for (int[] run : runs(cellMinZ - oz, cellMaxZ - oz, cut ? styled.areaMinZ() : 0, cut ? styled.areaMaxZ() : -1)) {
                 pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), variant));
             }
         }
         for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
-            boolean cut = noble && k > styled.lo() && k < styled.hi();
-            for (int[] run : runs(cellMinX - ox, cellMaxX - ox, cut ? nobleMin : 0, cut ? nobleMax : -1)) {
+            boolean cut = noble && k > styled.z0() && k < styled.z1();
+            for (int[] run : runs(cellMinX - ox, cellMaxX - ox, cut ? styled.areaMinX() : 0, cut ? styled.areaMaxX() : -1)) {
                 pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), variant));
             }
         }
@@ -215,8 +213,14 @@ public final class CityGridBuilder {
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
-                            if (qx == 0 && qz == 0 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
-                                    && heldByANation(site)) {
+                            boolean postBlock = bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site);
+                            if (noble && postBlock) {
+                                // A noble district against a wall leaves the post's block outside it: the plan has the
+                                // Palace and Barracks, and the mod's post where it stands.
+                                if (qx == 0 && qz == 0 && styled.has(rafasconquest.style.CityPlan.Kind.POST)) {
+                                    continue;
+                                }
+                            } else if (qx == 0 && qz == 0 && postBlock && heldByANation(site)) {
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = barracks == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(barracks,
@@ -227,8 +231,7 @@ public final class CityGridBuilder {
                                 styledPiece.forEach(pieces::addPiece);
                                 continue; // the recruitment post has this plot
                             }
-                            if (qx == 0 && qz == 1 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
-                                    && heldByANation(site)) {
+                            if (!noble && qx == 0 && qz == 1 && postBlock && heldByANation(site)) {
                                 int[] church = RecruitmentPost.of(site).church();
                                 // The Palace: from the style folders where its slot has a file, else the gold church.
                                 String palace = rafasconquest.style.CityStyles.palace(site);

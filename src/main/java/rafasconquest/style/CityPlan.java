@@ -17,9 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li>its walls from its style's wall files (corners, a gate on each side's avenue, segments with watchtowers
  *   between), where its style has its own;</li>
- *   <li>its noble district, the middle third of its blocks with no streets inside, where its style has a Palace: the
- *   Palace in the middle, the Barracks (or the mod's own post) and the church beside it, the rest filled with the
- *   style's noble buildings.</li>
+ *   <li>its noble district, a quarter of its blocks with no streets inside, in the middle or against one wall, where
+ *   its style has a Palace: the Palace in the middle, the Barracks (or the mod's own post) and the church beside it,
+ *   the rest filled with the style's noble buildings; in cities of 3+ districts a side, a second ring of the style's
+ *   walls around it (a U meeting the outer wall, with corner towers there, when it stands against one).</li>
  * </ul>
  * Each piece is built by the cell holding its middle, and is kept within reach of that cell's start (a start's pieces
  * reach at most 8 chunks from it). Coordinates are city-local.
@@ -43,24 +44,32 @@ public final class CityPlan {
         }
     }
 
-    /** A city's plan; {@code lo == hi} when it has no noble district. */
-    public record Plan(int lo, int hi, boolean styledWalls, List<Piece> pieces) {
+    /** A city's plan: its noble district's blocks [x0, x1) × [z0, z1), empty when it has none. */
+    public record Plan(int x0, int x1, int z0, int z1, boolean styledWalls, List<Piece> pieces) {
         public boolean noble() {
-            return hi > lo;
+            return x1 > x0;
         }
 
         /** Whether block (bx, bz) lies in the noble district. */
         public boolean nobleBlock(int bx, int bz) {
-            return noble() && bx >= lo && bx < hi && bz >= lo && bz < hi;
+            return noble() && bx >= x0 && bx < x1 && bz >= z0 && bz < z1;
         }
 
-        /** The district's first and last local coordinate along either axis (inside its bounding roads). */
-        public int areaMin() {
-            return CityLayout.blockStart(lo);
+        /** The district's first and last local coordinates along each axis (inside its bounding roads). */
+        public int areaMinX() {
+            return CityLayout.blockStart(x0);
         }
 
-        public int areaMax() {
-            return CityLayout.roadStart(hi) - 1;
+        public int areaMaxX() {
+            return CityLayout.roadStart(x1) - 1;
+        }
+
+        public int areaMinZ() {
+            return CityLayout.blockStart(z0);
+        }
+
+        public int areaMaxZ() {
+            return CityLayout.roadStart(z1) - 1;
         }
 
         /** The height of the tallest styled piece standing over local (x, z), or -1 if none does. */
@@ -95,7 +104,7 @@ public final class CityPlan {
         }
     }
 
-    private static final Plan NONE = new Plan(0, 0, false, List.of());
+    private static final Plan NONE = new Plan(0, 0, 0, 0, false, List.of());
     /** Chunks a structure start's pieces may reach from its own chunk. */
     private static final int REACH_CHUNKS = 8;
     /** Blocks kept clear around the Palace, Barracks and church. */
@@ -151,19 +160,122 @@ public final class CityPlan {
         }
         Random random = new Random((long) site.x() * 341873128712L ^ (long) site.z() * 132897987541L ^ 0xC17EL);
         List<Piece> pieces = new ArrayList<>();
-        boolean walls = walls(site, random, pieces);
-        int bps = site.blocksPerSide();
-        int lo = bps / 3;
-        int hi = (2 * bps + 2) / 3;
-        if (hi <= lo || CityStyles.palace(site) == null) {
-            return new Plan(0, 0, walls, pieces);
+        int inner = CityLayout.WALL_WIDTH - CityLayout.WALL_OUTSET; // the outer band's inner edge, 3 in from its outer one
+        int avenue = CityLayout.roadStart(site.blocksPerSide() / 2) + 1;
+        int[] outer = {inner, site.size() - inner, inner, site.size() - inner};
+        if (CityStyles.palace(site) == null) {
+            return new Plan(0, 0, 0, 0, walls(site, outer, avenue, avenue, -1, -1, null, random, pieces), pieces);
         }
-        noble(site, lo, hi, random, pieces);
-        return new Plan(lo, hi, walls, pieces);
+        int edge = random.nextBoolean() ? -1 : random.nextInt(4);
+        int bps = site.blocksPerSide();
+        int[] d = district(bps, edge);
+        // Cities of 3+ districts a side wall their noble district too, just inside its edge; along the city's edge the
+        // ring is a U whose open side is the outer wall. The buildings keep clear.
+        int depth = site.cells() >= 3 ? wallDepth(site) : 0;
+        List<CityStyles.Building> junctions = depth == 0 || edge < 0 ? List.of() : CityStyles.own(site, CityStyles.JUNCTIONS);
+        int[] area;
+        int[] box;
+        int[] joins;
+        for (boolean shifted = false; ; shifted = true) {
+            // Its area, inside its bounding roads: west, east, north, south edges, as the wall ring's box is.
+            area = new int[]{CityLayout.blockStart(d[0]), CityLayout.roadStart(d[0] + d[2]), CityLayout.blockStart(d[1]), CityLayout.roadStart(d[1] + d[2])};
+            box = area.clone();
+            for (int s = 0; s < 4; s++) {
+                if (s != edge) {
+                    shrink(box, s, depth);
+                }
+            }
+            // Where the U meets the outer wall, the outer wall has a Wall Tower Junction in place of a segment, centred on the U's arms.
+            joins = junctions.isEmpty() ? null
+                    : edge % 2 == 0 ? new int[]{box[0] - depth / 2, box[1] + depth / 2} : new int[]{box[2] - depth / 2, box[3] + depth / 2};
+            if (shifted || !hitsGate(site, joins, avenue, junctions)) {
+                break;
+            }
+            // A junction on the gate: the district moves along the wall by two wall segments, in whole blocks, staying in the city.
+            int segment = CityStyles.own(site, CityStyles.WALLS).stream().mapToInt(CityStyles.Building::x).max().orElse(0);
+            int shift = Math.max(1, (2 * segment + CityLayout.ROAD_PERIOD - 1) / CityLayout.ROAD_PERIOD);
+            int axis = edge % 2 == 0 ? 0 : 1; // north and south districts run along x
+            d[axis] = d[axis] + d[2] + shift <= bps ? d[axis] + shift : Math.max(0, d[axis] - shift);
+        }
+        int x1 = d[0] + d[2];
+        int z1 = d[1] + d[2];
+        boolean walls = walls(site, outer, avenue, avenue, -1, edge, joins, random, pieces);
+        if (depth > 0 && walls(site, box, CityLayout.roadStart((d[0] + x1) / 2) + 1, CityLayout.roadStart((d[1] + z1) / 2) + 1,
+                edge, -1, null, random, pieces)) {
+            area = box;
+            for (int s = 0; s < 4; s++) {
+                shrink(area, s, CLEARANCE);
+            }
+        }
+        noble(site, area[0], area[1] - 1, area[2], area[3] - 1, random, pieces);
+        return new Plan(d[0], x1, d[1], z1, walls, pieces);
     }
 
-    /** The walls from the style's own wall files; false (and none) if it has no wall segments of its own. */
-    private static boolean walls(CityLayout.Site site, Random random, List<Piece> pieces) {
+    /**
+     * The noble district's first block along x and z and its side, in blocks: half the city's side, a quarter of its
+     * area, in the middle ({@code edge} -1) or along the middle of its north, east, south or west edge (0 to 3).
+     */
+    static int[] district(int blocksPerSide, int edge) {
+        int side = Math.max(1, blocksPerSide / 2);
+        int middle = (blocksPerSide - side) / 2;
+        int x = edge == 3 ? 0 : edge == 1 ? blocksPerSide - side : middle;
+        int z = edge == 0 ? 0 : edge == 2 ? blocksPerSide - side : middle;
+        return new int[]{x, z, side};
+    }
+
+    /** Whether a junction centred on any of {@code joins} would overlap the outer wall's gate at {@code avenue}, the widest of each counted. */
+    static boolean hitsGate(CityLayout.Site site, int @Nullable [] joins, int avenue, List<CityStyles.Building> junctions) {
+        if (joins == null) {
+            return false;
+        }
+        int gate = orElse(CityStyles.own(site, CityStyles.GATES), CityStyles.own(site, CityStyles.WALLS)).stream()
+                .mapToInt(CityStyles.Building::x).max().orElse(0);
+        int junction = junctions.stream().mapToInt(CityStyles.Building::x).max().orElse(0);
+        for (int at : joins) {
+            if (Math.abs(at - avenue) < (gate + junction) / 2 + 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Moves a box's side (north, east, south, west) in by {@code by}; the box is {west, east, north, south}, east and south exclusive. */
+    private static void shrink(int[] box, int side, int by) {
+        switch (side) {
+            case 0 -> box[2] += by;
+            case 1 -> box[1] -= by;
+            case 2 -> box[3] -= by;
+            default -> box[0] += by;
+        }
+    }
+
+    /** The deepest of the style's own wall pieces (corners either way), or 0 if it has no wall segments of its own. */
+    private static int wallDepth(CityLayout.Site site) {
+        if (CityStyles.own(site, CityStyles.WALLS).isEmpty()) {
+            return 0;
+        }
+        int depth = 0;
+        for (String kind : List.of(CityStyles.WALLS, CityStyles.GATES, CityStyles.TOWERS)) {
+            for (CityStyles.Building b : CityStyles.own(site, kind)) {
+                depth = Math.max(depth, b.z());
+            }
+        }
+        for (CityStyles.Building b : CityStyles.own(site, CityStyles.CORNERS)) {
+            depth = Math.max(depth, Math.max(b.x(), b.z()));
+        }
+        return depth;
+    }
+
+    /**
+     * A ring of walls from the style's own wall files around a box {west, east, north, south} (east and south
+     * exclusive), standing just outside it, with a gate on each side at {@code gateX} along the north and south sides and
+     * {@code gateZ} along the others. Side {@code open} (north, east, south, west; -1 for none) is left out; where the
+     * style has a Wall Tower Junction its two corners are too, the junctions standing in the outer wall instead. Side
+     * {@code joinSide} has a junction centred on each of {@code joins} in place of its segments there. False (and none)
+     * if the style has no wall segments of its own.
+     */
+    private static boolean walls(CityLayout.Site site, int[] box, int gateX, int gateZ, int open, int joinSide, int @Nullable [] joins,
+                                 Random random, List<Piece> pieces) {
         List<CityStyles.Building> segments = CityStyles.own(site, CityStyles.WALLS);
         if (segments.isEmpty()) {
             return false;
@@ -171,25 +283,41 @@ public final class CityPlan {
         List<CityStyles.Building> gates = orElse(CityStyles.own(site, CityStyles.GATES), segments);
         List<CityStyles.Building> towers = CityStyles.own(site, CityStyles.TOWERS);
         List<CityStyles.Building> corners = orElse(CityStyles.own(site, CityStyles.CORNERS), orElse(towers, segments));
-        int size = site.size();
-        int inner = CityLayout.WALL_WIDTH - CityLayout.WALL_OUTSET; // the band's inner edge, 3 in from its outer one
-        int far = size - inner;                                     // where the far sides' band begins
+        List<CityStyles.Building> junctions = CityStyles.own(site, CityStyles.JUNCTIONS);
         // The corners, each over its corner of the band, turned with the side it starts.
         for (int c = 0; c < 4; c++) {
+            if (!junctions.isEmpty() && (open == c || open == (c + 3) % 4)) {
+                continue;
+            }
             CityStyles.Building b = corners.get(random.nextInt(corners.size()));
             int w = c % 2 == 0 ? b.x() : b.z();
             int d = c % 2 == 0 ? b.z() : b.x();
-            int minX = c == 0 || c == 3 ? inner - w : far;
-            int minZ = c < 2 ? inner - d : far;
+            int minX = c == 0 || c == 3 ? box[0] - w : box[1];
+            int minZ = c < 2 ? box[2] - d : box[3];
             pieces.add(new Piece(Kind.WALL, b.file(), minX, minZ, w, d, b.y(), c));
         }
-        int gateMiddle = CityLayout.roadStart(site.blocksPerSide() / 2) + 1;
         for (int side = 0; side < 4; side++) {
+            if (side == open) {
+                continue;
+            }
+            boolean alongX = side % 2 == 0;
+            // The pieces set in the side (its gate, and any junctions), by where they start; segments fill between them.
+            java.util.TreeMap<Integer, CityStyles.Building> fixed = new java.util.TreeMap<>();
             CityStyles.Building gate = gates.get(random.nextInt(gates.size()));
-            int gateFrom = gateMiddle - gate.x() / 2;
-            along(side, size, gate, gateFrom, pieces);
-            run(side, size, inner, gateFrom - 1, segments, towers, random, pieces);
-            run(side, size, gateFrom + gate.x(), far - 1, segments, towers, random, pieces);
+            fixed.put((alongX ? gateX : gateZ) - gate.x() / 2, gate);
+            if (side == joinSide && joins != null) {
+                for (int at : joins) {
+                    CityStyles.Building j = junctions.get(random.nextInt(junctions.size()));
+                    fixed.put(at - j.x() / 2, j);
+                }
+            }
+            int t = alongX ? box[0] : box[2];
+            for (Map.Entry<Integer, CityStyles.Building> f : fixed.entrySet()) {
+                along(side, box, f.getValue(), f.getKey(), pieces);
+                run(side, box, t, f.getKey() - 1, segments, towers, random, pieces);
+                t = f.getKey() + f.getValue().x();
+            }
+            run(side, box, t, (alongX ? box[1] : box[3]) - 1, segments, towers, random, pieces);
         }
         return true;
     }
@@ -199,7 +327,7 @@ public final class CityPlan {
     }
 
     /** Fills a side from {@code from} to {@code to} (inclusive) with segments, a watchtower after every few; the last flush with the end. */
-    private static void run(int side, int size, int from, int to, List<CityStyles.Building> segments, List<CityStyles.Building> towers,
+    private static void run(int side, int[] box, int from, int to, List<CityStyles.Building> segments, List<CityStyles.Building> towers,
                             Random random, List<Piece> pieces) {
         int t = from;
         int n = 0;
@@ -207,35 +335,35 @@ public final class CityPlan {
             boolean tower = !towers.isEmpty() && n % (TOWER_EVERY + 1) == TOWER_EVERY;
             CityStyles.Building b = tower ? towers.get(random.nextInt(towers.size())) : segments.get(random.nextInt(segments.size()));
             if (t + b.x() - 1 > to) {
-                along(side, size, b, to - b.x() + 1, pieces);
+                along(side, box, b, to - b.x() + 1, pieces);
                 return;
             }
-            along(side, size, b, t, pieces);
+            along(side, box, b, t, pieces);
             t += b.x();
             n++;
         }
     }
 
-    /** A wall piece along a side, starting {@code t} along it: north, east, south, west, facing out. */
-    private static void along(int side, int size, CityStyles.Building b, int t, List<Piece> pieces) {
-        int inner = CityLayout.WALL_WIDTH - CityLayout.WALL_OUTSET;
-        int far = size - inner;
+    /** A wall piece along a side of the box, starting {@code t} along it: north, east, south, west, facing out. */
+    private static void along(int side, int[] box, CityStyles.Building b, int t, List<Piece> pieces) {
         int len = b.x();
         int depth = b.z();
         Piece p = switch (side) {
-            case 0 -> new Piece(Kind.WALL, b.file(), t, inner - depth, len, depth, b.y(), 0);
-            case 1 -> new Piece(Kind.WALL, b.file(), far, t, depth, len, b.y(), 1);
-            case 2 -> new Piece(Kind.WALL, b.file(), t, far, len, depth, b.y(), 2);
-            default -> new Piece(Kind.WALL, b.file(), inner - depth, t, depth, len, b.y(), 3);
+            case 0 -> new Piece(Kind.WALL, b.file(), t, box[2] - depth, len, depth, b.y(), 0);
+            case 1 -> new Piece(Kind.WALL, b.file(), box[1], t, depth, len, b.y(), 1);
+            case 2 -> new Piece(Kind.WALL, b.file(), t, box[3], len, depth, b.y(), 2);
+            default -> new Piece(Kind.WALL, b.file(), box[0] - depth, t, depth, len, b.y(), 3);
         };
         pieces.add(p);
     }
 
-    /** The noble district: the Palace, the Barracks (or the mod's post), the church, then the noble buildings. */
-    private static void noble(CityLayout.Site site, int lo, int hi, Random random, List<Piece> pieces) {
-        int a0 = CityLayout.blockStart(lo);
-        int a1 = CityLayout.roadStart(hi) - 1;
-        int middle = site.size() / 2;
+    /**
+     * The noble district within [x0, x1] × [z0, z1] (inclusive): the Palace, the Barracks (or the mod's post), the
+     * church, then the noble buildings.
+     */
+    private static void noble(CityLayout.Site site, int x0, int x1, int z0, int z1, Random random, List<Piece> pieces) {
+        int middleX = (x0 + x1) / 2;
+        int middleZ = (z0 + z1) / 2;
         List<Piece> taken = new ArrayList<>();
         String barracks = CityStyles.barracks(site);
         RecruitmentPost post = RecruitmentPost.of(site);
@@ -248,21 +376,21 @@ public final class CityPlan {
         // The first Palace that fits, the wanted size first.
         Piece palace = null;
         for (String file : CityStyles.palaces(site)) {
-            palace = place(site, Kind.PALACE, CityStyles.building(file), middle, middle, a0, a1, taken);
+            palace = place(site, Kind.PALACE, CityStyles.building(file), middleX, middleZ, x0, x1, z0, z1, taken);
             if (palace != null) {
                 taken.add(palace);
                 break;
             }
         }
-        int nearX = palace == null ? middle : palace.centreX();
-        int nearZ = palace == null ? middle : palace.centreZ();
-        Piece b = place(site, Kind.BARRACKS, CityStyles.building(barracks), nearX, nearZ, a0, a1, taken);
+        int nearX = palace == null ? middleX : palace.centreX();
+        int nearZ = palace == null ? middleZ : palace.centreZ();
+        Piece b = place(site, Kind.BARRACKS, CityStyles.building(barracks), nearX, nearZ, x0, x1, z0, z1, taken);
         if (b != null) {
             taken.add(b);
         } else if (barracks != null && clear(ownPost, taken)) {
             taken.add(ownPost);
         }
-        Piece church = place(site, Kind.CHURCH, CityStyles.building(CityStyles.church(site)), nearX, nearZ, a0, a1, taken);
+        Piece church = place(site, Kind.CHURCH, CityStyles.building(CityStyles.church(site)), nearX, nearZ, x0, x1, z0, z1, taken);
         if (church != null) {
             taken.add(church);
         }
@@ -272,17 +400,18 @@ public final class CityPlan {
         if (noble.isEmpty()) {
             return;
         }
-        int span = a1 - a0 + 1;
-        List<BlockPacker.Rect> free = new ArrayList<>(List.of(new BlockPacker.Rect(0, 0, span, span)));
+        int spanX = x1 - x0 + 1;
+        int spanZ = z1 - z0 + 1;
+        List<BlockPacker.Rect> free = new ArrayList<>(List.of(new BlockPacker.Rect(0, 0, spanX, spanZ)));
         for (Piece p : taken) {
-            free = BlockPacker.cut(free, new BlockPacker.Rect(p.minX() - a0 - CLEARANCE, p.minZ() - a0 - CLEARANCE,
+            free = BlockPacker.cut(free, new BlockPacker.Rect(p.minX() - x0 - CLEARANCE, p.minZ() - z0 - CLEARANCE,
                     p.w() + 2 * CLEARANCE, p.d() + 2 * CLEARANCE));
         }
         List<BlockPacker.Size> sizes = noble.stream().map(n -> new BlockPacker.Size(n.x(), n.z())).toList();
-        for (BlockPacker.Placed p : BlockPacker.pack(free, span, span, sizes, random)) {
+        for (BlockPacker.Placed p : BlockPacker.pack(free, spanX, spanZ, sizes, random)) {
             CityStyles.Building n = noble.get(p.building());
             boolean turned = p.turns() % 2 == 1;
-            Piece piece = new Piece(Kind.NOBLE, n.file(), a0 + p.x(), a0 + p.z(), turned ? n.z() : n.x(), turned ? n.x() : n.z(), n.y(), p.turns());
+            Piece piece = new Piece(Kind.NOBLE, n.file(), x0 + p.x(), z0 + p.z(), turned ? n.z() : n.x(), turned ? n.x() : n.z(), n.y(), p.turns());
             if (reachable(site, piece)) {
                 pieces.add(piece);
             }
@@ -294,17 +423,17 @@ public final class CityPlan {
      * start of the cell holding its middle. Null if it has no file or nowhere fits.
      */
     @Nullable
-    private static Piece place(CityLayout.Site site, Kind kind, @Nullable CityStyles.Building b, int x, int z, int a0, int a1, List<Piece> taken) {
-        if (b == null || b.x() > a1 - a0 + 1 || b.z() > a1 - a0 + 1) {
+    private static Piece place(CityLayout.Site site, Kind kind, @Nullable CityStyles.Building b, int x, int z, int x0, int x1, int z0, int z1, List<Piece> taken) {
+        if (b == null || b.x() > x1 - x0 + 1 || b.z() > z1 - z0 + 1) {
             return null;
         }
-        int reach = a1 - a0;
+        int reach = Math.max(x1 - x0, z1 - z0);
         for (int r = 0; r <= reach; r += SEARCH_STEP) {
             // The ring r out: its top and bottom rows, then its sides between them.
             for (int i = -r; i <= r; i += SEARCH_STEP) {
                 for (int[] d : r == 0 ? new int[][]{{0, 0}} : new int[][]{{i, -r}, {i, r}, {-r, i}, {r, i}}) {
                     Piece p = new Piece(kind, b.file(), x + d[0] - b.x() / 2, z + d[1] - b.z() / 2, b.x(), b.z(), b.y(), 0);
-                    if (p.minX() >= a0 && p.minZ() >= a0 && p.minX() + p.w() - 1 <= a1 && p.minZ() + p.d() - 1 <= a1
+                    if (p.minX() >= x0 && p.minZ() >= z0 && p.minX() + p.w() - 1 <= x1 && p.minZ() + p.d() - 1 <= z1
                             && clear(p, taken) && reachable(site, p)) {
                         return p;
                     }
