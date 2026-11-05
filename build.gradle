@@ -68,17 +68,32 @@ repositories {
         }
         filter { includeGroup 'maven.modrinth' }
     }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'FirstDark'
+                url = 'https://maven.firstdark.dev/snapshots'
+            }
+        }
+        filter { includeGroup 'com.lowdragmc.ldlib2' }
+    }
 }
 
 dependencies {
     implementation "maven.modrinth:villager-recruits:${recruits_version}"
 
     // Recommended client mods: present in dev runs, but not dependencies of this mod.
-    runtimeOnly "maven.modrinth:embeddium:${embeddium_version}"
+    // Sodium, not Embeddium: Veil (inside Sable) refuses to load next to Embeddium.
+    runtimeOnly "maven.modrinth:sodium:${sodium_version}"
     runtimeOnly "maven.modrinth:epic-knights-shields-armor-and-weapons:${epic_knights_version}"
     runtimeOnly "maven.modrinth:epic-knights-antique-legacy:${antique_legacy_version}"
     runtimeOnly "maven.modrinth:architectury-api:${architectury_version}"
     runtimeOnly "maven.modrinth:cloth-config:${cloth_config_version}"
+    runtimeOnly "maven.modrinth:sable:${sable_version}"
+    runtimeOnly "maven.modrinth:photon-editor:${photon_version}"
+    runtimeOnly "maven.modrinth:kilagraph:${kilagraph_version}"
+    // LDLib2 is not on Modrinth. The -all jar bundles its own libraries.
+    runtimeOnly("com.lowdragmc.ldlib2:ldlib2-neoforge-1.21.1:${ldlib2_version}:all") { transitive = false }
     // Distant Horizons is also compiled against, to draw battles in its terrain. Only client/DistantHorizonsArmies
     // touches it, and only when it is installed.
     implementation "maven.modrinth:distanthorizons:${distant_horizons_version}"
