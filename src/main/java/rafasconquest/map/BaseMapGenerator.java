@@ -259,8 +259,19 @@ public final class BaseMapGenerator {
             seatAt.put(c.province(), new int[]{c.x(), c.z()});
         }
         Nations.Seats seatsAt = p -> seatAt.getOrDefault(p, new int[]{centres.get(p).x(), centres.get(p).z()});
+        int[] lands = homelands(provinces, homeland, centres.size());
+        List<List<rafasconquest.people.Homeland>> styles = rafasconquest.style.StyleLibrary.styleLands();
+        int[] styleAt = new int[lands.length];
+        for (int p = 0; p < lands.length; p++) {
+            rafasconquest.people.Homeland land = rafasconquest.people.Homeland.values()[lands[p]];
+            for (int s = 0; s < styles.size(); s++) {
+                if (styles.get(s).contains(land)) {
+                    styleAt[p] = s;
+                }
+            }
+        }
         Nations.Plan plan = Nations.plan(level.getSeed(), titles, seatsAt,
-                settings.eyeRadius(), settings.warZoneOuterEdge(), visibleRadius, WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0);
+                settings.eyeRadius(), settings.warZoneOuterEdge(), visibleRadius, WorldFeatures.martialTitles() ? Nations.SANCTUMS : 0, styleAt);
         // Each nation's land whole and thick: no holes, no pieces cut off, no thin reaches.
         Nations.consolidate(plan, Countryside.adjacency(grid, centres.size()), Countryside.onMapEdge(grid, centres.size()),
                 seatsAt, settings.eyeRadius());
@@ -322,8 +333,7 @@ public final class BaseMapGenerator {
                 settlements, dojos);
         return new BaseMap(minX, minZ, bpp, size, size, visibleRadius, stormWallRadius, pixels, provinces, centres, names, titles,
                 cities, settlements, nations, plan.holder(), ground, wet, realm(level.getSeed(), titles, centres, cities, settlements, nations,
-                        homelands(provinces, homeland, centres.size()),
-                        plan.holder()), dojos, roads);
+                        lands, plan.holder(), styles), dojos, roads);
     }
 
     /**
@@ -433,11 +443,11 @@ public final class BaseMapGenerator {
     /** The world's people, planned on the finished map: its holds' holders, their cultures, faiths and bonds. */
     private static rafasconquest.people.Realm realm(long seed, TitleMap titles, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
                                                     List<Countryside.Settlement> settlements, List<BaseMap.Nation> nations, int[] homeland,
-                                                    int[] holder) {
+                                                    int[] holder, List<List<rafasconquest.people.Homeland>> styles) {
         List<rafasconquest.people.RealmPlanner.Seat> seats = nations.stream()
                 .map(n -> new rafasconquest.people.RealmPlanner.Seat(n.tier().ordinal(), n.seat(), n.x(), n.z(), n.sanctum())).toList();
         rafasconquest.people.Realm realm = rafasconquest.people.RealmPlanner.plan(seed, titles, centres, cities, settlements, seats, holder, homeland,
-                WorldFeatures.martialTitles());
+                WorldFeatures.martialTitles(), styles);
         // The sword sanctums, as organizations: each its Sword God's, with the kings and saints trained there.
         List<rafasconquest.people.Organizations.Sanctum> sanctums = new java.util.ArrayList<>();
         for (int n = 0; n < nations.size(); n++) {

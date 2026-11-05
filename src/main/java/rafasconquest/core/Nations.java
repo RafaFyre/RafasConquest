@@ -69,6 +69,17 @@ public final class Nations {
      * sanctums (none where the world has no martial titles).
      */
     public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int knownRadius, int sanctumCount) {
+        int[] none = new int[t.county().length];
+        java.util.Arrays.fill(none, -1);
+        return plan(seed, t, seats, eyeRadius, warZoneEdge, knownRadius, sanctumCount, none);
+    }
+
+    /**
+     * The same, with each province's building style (an index; -1 for none): once the titles are rolled, each style no
+     * nation is seated in gets a nation seated in its land in the known world, where one is free.
+     */
+    public static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int knownRadius, int sanctumCount,
+                            int[] style) {
         // Empires and kingdoms, rolled or topped up, can take so much land that too little is left free for the rest;
         // then the plan is drawn again topping up with duchies alone, then with one empire fewer each time, then (no
         // empires left) one rolled kingdom fewer.
@@ -77,7 +88,7 @@ public final class Nations {
         while (true) {
             Plan plan = null;
             for (boolean topUpKingdoms : new boolean[]{true, false}) {
-                plan = plan(seed, t, seats, eyeRadius, warZoneEdge, knownRadius, sanctumCount, maxEmpires, maxKingdoms, topUpKingdoms);
+                plan = plan(seed, t, seats, eyeRadius, warZoneEdge, knownRadius, sanctumCount, maxEmpires, maxKingdoms, topUpKingdoms, style);
                 if (known(plan.nations(), knownRadius) >= MIN_NATIONS) {
                     return plan;
                 }
@@ -99,7 +110,7 @@ public final class Nations {
     }
 
     private static Plan plan(long seed, TitleMap t, Seats seats, int eyeRadius, int warZoneEdge, int knownRadius, int sanctumCount,
-                             int maxEmpires, int maxKingdoms, boolean topUpKingdoms) {
+                             int maxEmpires, int maxKingdoms, boolean topUpKingdoms, int[] style) {
         Random random = new Random(seed ^ SALT);
         int provinces = t.county().length;
         int[] holder = new int[provinces];
@@ -190,6 +201,8 @@ public final class Nations {
                 }
             }
         }
+
+        styled(seed, t, nations, holder, style, seats, eyeRadius, knownRadius, miniEyes);
 
         // Too few nations in the known world: free kingdoms there become nations, then free duchies.
         List<Integer> kingdoms = new ArrayList<>();
@@ -343,6 +356,40 @@ public final class Nations {
             }
         }
         return true;
+    }
+
+    /**
+     * Every building style seated: for each style no nation's seat stands in, a free title seated in its land in the
+     * known world becomes a nation, kingdoms before duchies before counties (City-states within their limit).
+     */
+    private static void styled(long seed, TitleMap t, List<Nation> nations, int[] holder, int[] style, Seats seats,
+                               int eyeRadius, int knownRadius, List<int[]> miniEyes) {
+        boolean[] seated = new boolean[java.util.Arrays.stream(style).max().orElse(-1) + 1];
+        for (Nation n : nations) {
+            if (style[n.seat()] >= 0) {
+                seated[style[n.seat()]] = true;
+            }
+        }
+        Random random = new Random(seed ^ SALT ^ 0x5354594C45L); // its own, so a world of one style plans as before
+        for (TitleMap.Tier tier : new TitleMap.Tier[]{TitleMap.Tier.KINGDOM, TitleMap.Tier.DUCHY, TitleMap.Tier.COUNTY}) {
+            int[] titleSeats = tier == TitleMap.Tier.KINGDOM ? t.kingdomSeat() : tier == TitleMap.Tier.DUCHY ? t.duchySeat() : t.countySeat();
+            List<Integer> order = new ArrayList<>();
+            for (int i = 0; i < titleSeats.length; i++) {
+                order.add(i);
+            }
+            java.util.Collections.shuffle(order, random);
+            for (int title : order) {
+                int seat = titleSeats[title];
+                int s = style[seat];
+                int[] at = seats.at(seat);
+                if (s < 0 || seated[s] || held(t, holder, seat) || calm(at, eyeRadius, miniEyes) || distance(at) <= eyeRadius
+                        || distance(at) > knownRadius || tier == TitleMap.Tier.COUNTY && cityStates(nations) >= MAX_CITY_STATES) {
+                    continue;
+                }
+                take(t, nations, holder, new Nation(tier, title, seat, at[0], at[1]), seats, eyeRadius, miniEyes);
+                seated[s] = true;
+            }
+        }
     }
 
     /** While the known world has too few nations, a title whose seat is free there becomes one. */

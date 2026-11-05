@@ -87,6 +87,16 @@ public final class RealmPlanner {
     public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
                              List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder, int[] homeland,
                              boolean martialTitles) {
+        return plan(seed, t, centres, cities, settlements, nations, holder, homeland, martialTitles, List.of());
+    }
+
+    /**
+     * The same, with the building styles as the homelands that build in each: every nation keeps its seat's culture, but
+     * for a style no nation is seated in, which the next nation whose style another shares takes instead.
+     */
+    public static Realm plan(long seed, TitleMap t, List<ProvinceMap.Centre> centres, List<SeatCities.City> cities,
+                             List<Countryside.Settlement> settlements, List<Seat> nations, int[] holder, int[] homeland,
+                             boolean martialTitles, List<List<Homeland>> styles) {
         Random random = new Random(seed ^ SALT);
         int empires = t.empires();
 
@@ -134,6 +144,36 @@ public final class RealmPlanner {
             nationCulture[n] = homeland[nations.get(n).province()];
             nationFaith[n] = empireFaith[e];
             nationPiety[n] = random.nextFloat();
+        }
+        // A style no nation's seat stands in (its land all taken or out of reach): the next nation sharing its style with
+        // another takes it instead, in turn.
+        int[] styleOf = new int[Homeland.values().length];
+        java.util.Arrays.fill(styleOf, -1);
+        for (int s = 0; s < styles.size(); s++) {
+            for (Homeland h : styles.get(s)) {
+                styleOf[h.ordinal()] = s;
+            }
+        }
+        int[] users = new int[styles.size()];
+        for (int c : nationCulture) {
+            if (styleOf[c] >= 0) {
+                users[styleOf[c]]++;
+            }
+        }
+        int next = 0;
+        for (int s = 0; s < styles.size(); s++) {
+            if (users[s] > 0) {
+                continue;
+            }
+            while (next < nationCulture.length && (styleOf[nationCulture[next]] < 0 || users[styleOf[nationCulture[next]]] < 2)) {
+                next++;
+            }
+            if (next == nationCulture.length) {
+                break;
+            }
+            users[styleOf[nationCulture[next]]]--;
+            nationCulture[next++] = styles.get(s).get(0).ordinal();
+            users[s]++;
         }
 
         // The holds: every seat city and castle; a nation whose seat has neither keeps one at its seat all the same.

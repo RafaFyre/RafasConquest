@@ -190,6 +190,23 @@ class NationsTest {
     }
 
     @Test
+    void everyStyleIsSeatedWhereItsLandIsFree() {
+        int known = 11_000;
+        for (long seed = 0; seed < 6; seed++) {
+            World w = world(seed);
+            List<ProvinceMap.Centre> centres = w.centres();
+            int[] style = new int[centres.size()];
+            for (int p = 0; p < style.length; p++) {
+                style[p] = (centres.get(p).x() / (CELL * BPP * 3)) % 7; // bands of land, west to east
+            }
+            Nations.Plan plan = Nations.plan(seed, w.titles(), w::at, EYE, WAR_ZONE, known, Nations.SANCTUMS, style);
+            java.util.Set<Integer> seated = new java.util.HashSet<>();
+            plan.nations().forEach(n -> seated.add(style[n.seat()]));
+            assertEquals(7, seated.size(), "a style with no nation, seed " + seed);
+            assertTrue(Nations.cityStates(plan.nations()) <= Nations.MAX_CITY_STATES, "too many City-states, seed " + seed);        }
+    }
+
+    @Test
     void someOfTheLandIsNobodys() {
         World w = world(1);
         long unheld = java.util.Arrays.stream(w.plan().holder()).filter(h -> h < 0).count();

@@ -156,6 +156,15 @@ public final class StyleLibrary {
         return styleOf.getOrDefault(land, DEFAULT);
     }
 
+    /** Every style in use, as the homelands that build in it (the default style's: those with none of their own). */
+    public static List<List<Homeland>> styleLands() {
+        Map<String, List<Homeland>> by = new java.util.TreeMap<>();
+        for (Homeland land : Homeland.values()) {
+            by.computeIfAbsent(styleOf(land), k -> new ArrayList<>()).add(land);
+        }
+        return List.copyOf(by.values());
+    }
+
     /** The structure files of a folder, in name order (the same choice for the same seed). */
     public static List<Path> files(Path folder) {
         if (!Files.isDirectory(folder)) {

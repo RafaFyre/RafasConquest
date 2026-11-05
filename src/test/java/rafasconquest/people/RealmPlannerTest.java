@@ -32,6 +32,10 @@ class RealmPlannerTest {
 
     /** A land of square provinces 1,536 blocks a side, the sea along the west, centred on spawn. */
     private static World world(long seed) {
+        return world(seed, List.of());
+    }
+
+    private static World world(long seed, List<List<Homeland>> styles) {
         int width = CELLS * CELL;
         int origin = -width * BPP / 2;
         int[] provinces = new int[width * width];
@@ -64,8 +68,50 @@ class RealmPlannerTest {
         for (int p = 0; p < homeland.length; p++) {
             homeland[p] = Math.floorMod((centres.get(p).z() - origin) / (CELL * BPP * 4) + Homeland.SNOW.ordinal(), Homeland.values().length);
         }
-        Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder(), homeland, true);
+        Realm realm = RealmPlanner.plan(seed, titles, centres, country.cities(), country.settlements(), seats, nations.holder(), homeland, true, styles);
         return new World(titles, country.cities(), country, nations, realm, homeland);
+    }
+
+    @Test
+    void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
+        // Every homeland its own style but the last two, which share one.
+        List<List<Homeland>> styles = new ArrayList<>();
+        Homeland[] lands = Homeland.values();
+        for (int i = 0; i < lands.length - 2; i++) {
+            styles.add(List.of(lands[i]));
+        }
+        styles.add(List.of(lands[lands.length - 2], lands[lands.length - 1]));
+        World w = world(5, styles);
+        int nations = w.nations().nations().size();
+        assertTrue(nations > styles.size(), "too few nations to test");
+        int[] styleOf = new int[lands.length];
+        for (int s = 0; s < styles.size(); s++) {
+            for (Homeland h : styles.get(s)) {
+                styleOf[h.ordinal()] = s;
+            }
+        }
+        Set<Integer> seated = new HashSet<>();
+        int[] seatedBy = new int[styles.size()];
+        for (int n = 0; n < nations; n++) {
+            int s = styleOf[w.homeland()[w.nations().nations().get(n).seat()]];
+            seated.add(s);
+            seatedBy[s]++;
+        }
+        assertTrue(seated.size() < styles.size(), "every style already seated: nothing to test");
+        Set<Integer> used = new HashSet<>();
+        int moved = 0;
+        for (int n = 0; n < nations; n++) {
+            int culture = w.realm().nationCulture()[n];
+            int seat = w.homeland()[w.nations().nations().get(n).seat()];
+            used.add(styleOf[culture]);
+            if (culture != seat) {
+                moved++;
+                assertTrue(seatedBy[styleOf[seat]] > 1, "a nation left the only seat of its style");
+                assertFalse(seated.contains(styleOf[culture]), "a nation moved to a style already seated");
+            }
+        }
+        assertEquals(styles.size(), used.size(), "a style no nation builds in");
+        assertEquals(styles.size() - seated.size(), moved, "more nations moved than styles missing");
     }
 
     @Test
