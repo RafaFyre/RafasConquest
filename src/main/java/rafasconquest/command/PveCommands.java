@@ -116,6 +116,14 @@ public final class PveCommands {
                                                 .suggests(PveCommands::suggestNations)
                                                 .executes(ctx -> say(ctx, rafasconquest.politics.Wars.toField(ctx.getSource().getServer(),
                                                         arg(ctx, "nation")))))))
+                        // Armies on the march (or one nation's) arrive at their battle sites now.
+                        .then(Commands.literal("march").requires(source -> source.hasPermission(2))
+                                .then(Commands.literal("finish")
+                                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.finishMarch(ctx.getSource().getServer(), null)))
+                                        .then(Commands.argument("nation", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                .suggests(PveCommands::suggestNations)
+                                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.finishMarch(ctx.getSource().getServer(),
+                                                        arg(ctx, "nation")))))))
                         .then(Commands.literal("war").requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
                                         .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)

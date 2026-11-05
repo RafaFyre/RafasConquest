@@ -382,8 +382,12 @@ public final class RecruitsBattle {
         FieldBlock lastStrike;
         boolean toldHold;
         boolean toldKill;
-        /** Their soldiers, a unit per block, each its own group in Recruits and its own formation. */
+        /** Their soldiers, a unit per block, each its own group in Recruits, grouped into cards. */
         final List<Unit> units = new ArrayList<>();
+        int nextCard = 1;
+        /** When they may rally, and lead a charge, again (game ticks). */
+        long rallyAt;
+        long leadAt;
         /** Which way their following units face (the player's, until they fight), and when they last fought. */
         float formYaw;
         long lastCombat = Long.MIN_VALUE / 2;
@@ -1872,6 +1876,7 @@ public final class RecruitsBattle {
                 if (enlisted.containsKey(player.getUUID())) {
                     continue; // enlisted already, for the day
                 }
+                rafasconquest.peerage.CityManager.muster(player); // out of the city manager first, back as they were
                 FieldArmy army = field.army(side);
                 Job job = ranks.job(player.getUUID());
                 BattleRole role = dayRoles.containsKey(player.getUUID()) ? dayRoles.get(player.getUUID()).role()
@@ -1902,6 +1907,9 @@ public final class RecruitsBattle {
                 e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
+                for (FieldBlock b : blocks) {
+                    unitFor(e, b, player); // every formation on the dash from the start, before its soldiers are real
+                }
                 WarCamp camp = tentCamps.computeIfAbsent(player.getUUID(), id -> campOf(e.side, home.wing()));
                 e.tentCamp = camp;
                 e.tent = tents.computeIfAbsent(player.getUUID(), id -> {
@@ -2539,30 +2547,54 @@ public final class RecruitsBattle {
         FOLLOW, HOLD, MOVE, CHARGE, RECRUITS
     }
 
-    /** A unit's formation: a square, or a line {@link #LINE_FILES} wide. */
+    /** A card's formation: a square, a line, a wedge (point forward) or a V (wide row forward). */
     public enum Shape {
-        SQUARE, LINE
+        SQUARE, LINE, WEDGE, V
     }
 
-    /** A war horn order, given in the horn's screen. */
+    /** An order given in the battle screen (the war horn's or the strategy board's). New ones go last: the client sends ordinals. */
     public enum UnitOrder {
-        FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN
+        FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN, WEDGE, V, BRACE, GO, REFORM, RALLY, LEAD_CHARGE
     }
 
-    /** One block's worth of a player's soldiers: its own group in Recruits, its own formation, its own orders. */
+    /** How many units (blocks) a card starts with at most: 200 soldiers. */
+    private static final int CARD_UNITS = 10;
+    /** How near a right-click must fall to an enemy block's middle to attack it rather than move there. */
+    private static final double ATTACK_PICK = 10;
+    private static final double RALLY_REACH = 24;
+    private static final int RALLY_COOLDOWN = 60 * 20;
+    private static final int LEAD_COOLDOWN = 45 * 20;
+
+    /**
+     * A card in the battle screen: some of a player's units standing as one formation, where it holds and which way it
+     * faces, and whom it was sent to attack. A card split off another remembers it ({@code parent}), to reform with it.
+     */
+    static final class Card {
+        final int id;
+        int parent;
+        Shape shape = Shape.SQUARE;
+        @Nullable
+        Vec3 at;
+        float yaw;
+        @Nullable
+        FieldBlock target;
+
+        Card(int id, int parent) {
+            this.id = id;
+            this.parent = parent;
+        }
+    }
+
+    /** One block's worth of a player's soldiers: its own group in Recruits, its own orders, in a {@link Card}. */
     static final class Unit {
         final FieldBlock block;
         final int number;
         @Nullable
         UUID group;
         final Set<Integer> ids = new LinkedHashSet<>();
-        UnitMode mode = UnitMode.FOLLOW;
-        Shape shape = Shape.SQUARE;
+        UnitMode mode = UnitMode.HOLD; // they hold where the battle placed them until ordered
         boolean shields;
-        /** Where it holds, and which way it faces (held or sent somewhere). */
-        @Nullable
-        Vec3 at;
-        float yaw;
+        Card card;
         /** Where the battle last put each soldier, to tell the player's own Recruits orders from ours. */
         final Map<Integer, Vec3> placed = new HashMap<>();
         /** Soldiers whose places must be set again (new, or the unit was given another order). */
@@ -2582,6 +2614,14 @@ public final class RecruitsBattle {
             }
         }
         Unit u = new Unit(block, e.units.size() + 1);
+        u.card = cardFor(e, block);
+        for (Unit o : e.units) {
+            if (o.card == u.card) { // join the card as its units stand
+                u.mode = o.mode;
+                u.shields = o.shields;
+                break;
+            }
+        }
         if (RecruitEvents.recruitsGroupsManager != null) {
             RecruitsGroup group = new RecruitsGroup(capitalised(e.job.title()) + " " + u.number, player, 0);
             RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
@@ -2605,9 +2645,48 @@ public final class RecruitsBattle {
         return soldiers;
     }
 
-    /** How many files a unit stands in. */
+    /** The card a new unit joins: an unsplit card of its wing and arm with room, else a new one. */
+    private static Card cardFor(Enlisted e, FieldBlock block) {
+        Map<Card, Integer> counts = new LinkedHashMap<>();
+        for (Unit o : e.units) {
+            if (o.card.parent < 0 && o.block.wing() == block.wing() && o.block.arm() == block.arm()) {
+                counts.merge(o.card, 1, Integer::sum);
+            }
+        }
+        for (Map.Entry<Card, Integer> c : counts.entrySet()) {
+            if (c.getValue() < CARD_UNITS) {
+                return c.getKey();
+            }
+        }
+        return new Card(e.nextCard++, -1);
+    }
+
+    /** How many files a unit stands in, following its player (wedges and Vs follow as squares). */
     private static int files(Unit u, int soldiers) {
-        return u.shape == Shape.LINE ? Math.max(1, Math.min(soldiers, LINE_FILES)) : Math.max(1, (int) Math.ceil(Math.sqrt(soldiers)));
+        return u.card.shape == Shape.LINE ? Math.max(1, Math.min(soldiers, LINE_FILES)) : Math.max(1, (int) Math.ceil(Math.sqrt(soldiers)));
+    }
+
+    /** Soldier {@code j} of {@code n}'s place in a formation, in spacings: {right of the middle, back from the front}. */
+    static double[] slot(Shape shape, int j, int n) {
+        switch (shape) {
+            case LINE -> {
+                int files = Math.max(Math.min(n, LINE_FILES), (int) Math.ceil(n / 4.0));
+                return new double[]{j % files - (files - 1) / 2.0, j / files};
+            }
+            case WEDGE -> { // row r holds 2r + 1, the point in front
+                int r = (int) Math.sqrt(j);
+                return new double[]{j - r * r - r, r};
+            }
+            case V -> { // the same rows turned about: the widest in front
+                int rows = (int) Math.ceil(Math.sqrt(n));
+                int r = (int) Math.sqrt(j);
+                return new double[]{j - r * r - r, rows - 1 - r};
+            }
+            default -> {
+                int files = Math.max(1, (int) Math.ceil(Math.sqrt(n)));
+                return new double[]{j % files - (files - 1) / 2.0, j / files};
+            }
+        }
     }
 
     private static double spacing(Enlisted e) {
@@ -2713,10 +2792,12 @@ public final class RecruitsBattle {
     }
 
     /**
-     * Each second, for units not following: a held or sent unit stands in its formation where it was told (placed
-     * again when soldiers join it); a charging unit goes after the nearest enemy; every unit's shields are as ordered.
+     * Each second, for units not following: a held or sent card stands in its formation where it was told (placed
+     * again when soldiers join it, all its units as one); a charging unit goes after its card's target, or the nearest
+     * enemy; every unit's shields are as ordered.
      */
     private void unitOrders(Enlisted e) {
+        Set<Card> placedCards = new HashSet<>();
         for (Unit u : e.units) {
             List<AbstractRecruitEntity> soldiers = soldiersOf(u);
             if (soldiers.isEmpty()) {
@@ -2730,44 +2811,92 @@ public final class RecruitsBattle {
             }
             switch (u.mode) {
                 case HOLD, MOVE -> {
-                    boolean newcomer = soldiers.stream().anyMatch(s -> !u.placed.containsKey(s.getId()));
-                    if (!u.replace && !newcomer) {
-                        for (AbstractRecruitEntity s : soldiers) {
-                            if (takenOver(u, s)) {
-                                break;
+                    Card c = u.card;
+                    if (c.at == null) {
+                        holdWherePlaced(e, c);
+                    }
+                    if (!placedCards.add(c)) {
+                        continue;
+                    }
+                    List<Unit> members = new ArrayList<>();
+                    List<List<AbstractRecruitEntity>> each = new ArrayList<>();
+                    int total = 0;
+                    boolean replace = false;
+                    for (Unit o : e.units) {
+                        if (o.card == c && (o.mode == UnitMode.HOLD || o.mode == UnitMode.MOVE)) {
+                            List<AbstractRecruitEntity> s = soldiersOf(o);
+                            members.add(o);
+                            each.add(s);
+                            total += s.size();
+                            replace |= o.replace || s.stream().anyMatch(x -> !o.placed.containsKey(x.getId()));
+                        }
+                    }
+                    if (!replace) {
+                        for (int k = 0; k < members.size(); k++) {
+                            for (AbstractRecruitEntity s : each.get(k)) {
+                                if (takenOver(members.get(k), s)) {
+                                    break;
+                                }
                             }
                         }
                         continue;
                     }
-                    u.replace = false;
                     double sp = spacing(e);
-                    int files = files(u, soldiers.size());
-                    double yaw = Math.toRadians(u.yaw);
+                    double yaw = Math.toRadians(c.yaw);
                     double fx = -Math.sin(yaw);
                     double fz = Math.cos(yaw);
-                    for (int j = 0; j < soldiers.size(); j++) {
-                        double right = (j % files - (files - 1) / 2.0) * sp;
-                        double back = (j / files) * sp;
-                        double x = u.at.x - fz * right - fx * back;
-                        double z = u.at.z + fx * right - fz * back;
-                        double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
-                        AbstractRecruitEntity s = soldiers.get(j);
-                        Vec3 place = new Vec3(x, y, z);
-                        s.setHoldPos(place);
-                        s.setFollowState(3);
-                        s.holdFormation = false;
-                        u.placed.put(s.getId(), place);
+                    int j = 0;
+                    for (int k = 0; k < members.size(); k++) {
+                        Unit o = members.get(k);
+                        o.replace = false;
+                        for (AbstractRecruitEntity s : each.get(k)) {
+                            double[] slot = slot(c.shape, j++, total);
+                            double right = slot[0] * sp;
+                            double back = slot[1] * sp;
+                            double x = c.at.x - fz * right - fx * back;
+                            double z = c.at.z + fx * right - fz * back;
+                            double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z));
+                            Vec3 place = new Vec3(x, y, z);
+                            s.setHoldPos(place);
+                            s.setFollowState(3);
+                            s.holdFormation = false;
+                            o.placed.put(s.getId(), place);
+                        }
                     }
                 }
                 case CHARGE -> {
                     List<AbstractRecruitEntity> foes = enemiesOf(u.block.side(), true);
+                    FieldBlock target = u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null;
                     for (AbstractRecruitEntity s : soldiers) {
-                        LivingEntity target = s.getTarget();
-                        if (target == null || !target.isAlive()) {
+                        LivingEntity aimed = s.getTarget();
+                        if (aimed != null && aimed.isAlive()) {
+                            continue;
+                        }
+                        if (target == null) {
                             nearestTo(s, foes).filter(f -> f.distanceTo(s) <= CHARGE_REACH).ifPresent(f -> {
                                 s.setTarget(f);
                                 s.getNavigation().moveTo(f, 1.2);
                             });
+                            continue;
+                        }
+                        // Sent at one formation: the nearest of its foes standing about it, else on to where it stands.
+                        double tx = target.pos().x();
+                        double tz = target.pos().z();
+                        AbstractRecruitEntity best = null;
+                        double bestD = ATTACK_PICK * ATTACK_PICK;
+                        for (AbstractRecruitEntity f : foes) {
+                            double d = (f.getX() - tx) * (f.getX() - tx) + (f.getZ() - tz) * (f.getZ() - tz);
+                            if (d < bestD) {
+                                bestD = d;
+                                best = f;
+                            }
+                        }
+                        if (best != null) {
+                            s.setTarget(best);
+                            s.getNavigation().moveTo(best, 1.2);
+                        } else {
+                            double ty = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(tx), Mth.floor(tz));
+                            s.getNavigation().moveTo(tx, ty, tz, 1.2);
                         }
                     }
                 }
@@ -2777,7 +2906,10 @@ public final class RecruitsBattle {
         }
     }
 
-    /** War horn orders, given in the horn's screen to some of a player's units; the horn blows if any were. */
+    /**
+     * Orders given in the battle screen to some of a player's units, each order to its own units; the horn blows. Units
+     * ordered apart from the rest of their card split off into a card of their own.
+     */
     public static void hornOrders(ServerPlayer player, List<int[]> units, List<UnitOrder> orders, List<Vec3> places) {
         RecruitsBattle battle = current;
         if (battle == null) {
@@ -2788,35 +2920,260 @@ public final class RecruitsBattle {
             return;
         }
         for (int k = 0; k < orders.size(); k++) {
+            List<Unit> us = new ArrayList<>();
             for (int number : units.get(k)) {
-                if (number >= 1 && number <= e.units.size()) {
-                    battle.order(e, e.units.get(number - 1), orders.get(k), places.get(k), player);
+                if (number >= 1 && number <= e.units.size() && !us.contains(e.units.get(number - 1))) {
+                    us.add(e.units.get(number - 1));
                 }
             }
+            battle.command(e, us, orders.get(k), places.get(k), player);
         }
         Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(battle.sides[e.side].horn);
         battle.level.playSound(null, player.getX(), player.getEyeY(), player.getZ(), horn.value(), SoundSource.RECORDS, HORN_VOLUME, 1);
     }
 
-    private void order(Enlisted e, Unit u, UnitOrder order, Vec3 place, ServerPlayer player) {
+    private void command(Enlisted e, List<Unit> us, UnitOrder order, Vec3 place, ServerPlayer player) {
+        if (order == UnitOrder.RALLY) {
+            rally(e, player);
+            return;
+        }
+        if (order == UnitOrder.REFORM) {
+            reform(e, us);
+            return;
+        }
+        if (us.isEmpty()) {
+            return;
+        }
+        List<Card> cards = split(e, us);
+        switch (order) {
+            case GO, LEAD_CHARGE -> {
+                if (order == UnitOrder.LEAD_CHARGE && !lead(e, us, player)) {
+                    return;
+                }
+                FieldBlock target = enemyBlockAt(e.side, place);
+                if (target == null) {
+                    move(e, cards, place);
+                } else {
+                    for (Unit u : us) {
+                        order(e, u, UnitOrder.CHARGE, player);
+                    }
+                    cards.forEach(c -> c.target = target);
+                }
+            }
+            case MOVE -> move(e, cards, place);
+            case BRACE -> {
+                for (Unit u : us) {
+                    order(e, u, UnitOrder.HOLD, player);
+                    u.shields = true;
+                }
+            }
+            case SQUARE, LINE, WEDGE, V -> {
+                Shape shape = Shape.valueOf(order.name());
+                for (Card c : cards) {
+                    c.shape = shape;
+                }
+                us.forEach(u -> u.replace = true);
+            }
+            default -> {
+                for (Unit u : us) {
+                    order(e, u, order, player);
+                }
+            }
+        }
+    }
+
+    /** The cards these units make: whole cards stay as they are, the rest split off their cards into new ones. */
+    private List<Card> split(Enlisted e, List<Unit> us) {
+        Map<Card, List<Unit>> byCard = new LinkedHashMap<>();
+        for (Unit u : us) {
+            byCard.computeIfAbsent(u.card, c -> new ArrayList<>()).add(u);
+        }
+        List<Card> cards = new ArrayList<>();
+        for (Map.Entry<Card, List<Unit>> entry : byCard.entrySet()) {
+            Card old = entry.getKey();
+            if (e.units.stream().filter(o -> o.card == old).allMatch(us::contains)) {
+                cards.add(old);
+                continue;
+            }
+            Card card = new Card(e.nextCard++, old.id);
+            card.shape = old.shape;
+            card.at = old.at;
+            card.yaw = old.yaw;
+            card.target = old.target;
+            entry.getValue().forEach(u -> u.card = card);
+            e.units.stream().filter(o -> o.card == old).forEach(o -> o.replace = true); // the rest close up
+            cards.add(card);
+        }
+        return cards;
+    }
+
+    /** Split cards go back into the cards they split from, standing and fighting as those do. */
+    private void reform(Enlisted e, List<Unit> us) {
+        Set<Card> cards = new LinkedHashSet<>();
+        us.forEach(u -> cards.add(u.card));
+        for (Card c : cards) {
+            if (c.parent < 0) {
+                continue;
+            }
+            Unit into = e.units.stream().filter(o -> o.card.id == c.parent).findFirst().orElse(null);
+            if (into == null) {
+                c.parent = -1; // its old card is gone: it stands on its own now
+                continue;
+            }
+            for (Unit u : e.units) {
+                if (u.card == c) {
+                    u.card = into.card;
+                    u.mode = into.mode;
+                    u.shields = into.shields;
+                    u.placed.clear();
+                }
+                if (u.card == into.card) {
+                    u.replace = true;
+                }
+            }
+        }
+    }
+
+    /** Cards sent to a place, each keeping where it stands from the others; all face the way they go. */
+    private void move(Enlisted e, List<Card> cards, Vec3 place) {
+        List<Vec3> centres = new ArrayList<>();
+        double mx = 0;
+        double mz = 0;
+        for (Card c : cards) {
+            Vec3 centre = centreOf(cardSoldiers(e, c), place);
+            centres.add(centre);
+            mx += centre.x / cards.size();
+            mz += centre.z / cards.size();
+        }
+        float yaw = (float) Math.toDegrees(Math.atan2(-(place.x - mx), place.z - mz));
+        for (int k = 0; k < cards.size(); k++) {
+            Card c = cards.get(k);
+            c.at = new Vec3(place.x + centres.get(k).x - mx, place.y, place.z + centres.get(k).z - mz);
+            c.yaw = yaw;
+            c.target = null;
+            for (Unit u : e.units) {
+                if (u.card == c) {
+                    u.mode = UnitMode.MOVE;
+                    u.replace = true;
+                    u.placed.clear();
+                    soldiersOf(u).forEach(s -> s.setAggroState(0));
+                }
+            }
+        }
+    }
+
+    /** A card not yet given a place holds where the battle put its blocks: the middle of their lines, facing as they face. */
+    private void holdWherePlaced(Enlisted e, Card c) {
+        double x = 0;
+        double z = 0;
+        double fx = 0;
+        double fz = 0;
+        int n = 0;
+        for (Unit u : e.units) {
+            if (u.card == c) {
+                x += u.block.line().x();
+                z += u.block.line().z();
+                fx += u.block.facingX();
+                fz += u.block.facingZ();
+                n++;
+            }
+        }
+        x /= n;
+        z /= n;
+        c.at = new Vec3(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z)), z);
+        c.yaw = (float) Math.toDegrees(Math.atan2(-fx, fz));
+    }
+
+    private List<AbstractRecruitEntity> cardSoldiers(Enlisted e, Card c) {
+        List<AbstractRecruitEntity> soldiers = new ArrayList<>();
+        for (Unit u : e.units) {
+            if (u.card == c) {
+                soldiers.addAll(soldiersOf(u));
+            }
+        }
+        return soldiers;
+    }
+
+    /** The living enemy block whose middle is nearest a place, if one is within {@link #ATTACK_PICK}. */
+    @Nullable
+    private FieldBlock enemyBlockAt(int side, Vec3 place) {
+        FieldBlock best = null;
+        double bestD = ATTACK_PICK;
+        Point at = new Point(place.x, place.z);
+        for (FieldBlock b : field.army(1 - side).blocks()) {
+            double d = b.pos().distanceTo(at);
+            if (b.alive() > 0 && d <= bestD) {
+                bestD = d;
+                best = b;
+            }
+        }
+        return best;
+    }
+
+    /** Rally: every soldier of the player's side about them takes heart, and the blocks about them can't rout a while. */
+    private void rally(Enlisted e, ServerPlayer player) {
+        long now = level.getGameTime();
+        if (now < e.rallyAt) {
+            player.displayClientMessage(Component.literal("You can rally again in " + (e.rallyAt - now) / 20 + "s"), true);
+            return;
+        }
+        e.rallyAt = now + RALLY_COOLDOWN;
+        hearten(e.side, player.position(), RALLY_REACH);
+        player.displayClientMessage(Component.literal("You rally the soldiers about you"), true);
+    }
+
+    /** Lead charge, off cooldown: these units take heart and can't rout a while, and the player gets a burst of speed. */
+    private boolean lead(Enlisted e, List<Unit> us, ServerPlayer player) {
+        long now = level.getGameTime();
+        if (now < e.leadAt) {
+            player.displayClientMessage(Component.literal("You can lead a charge again in " + (e.leadAt - now) / 20 + "s"), true);
+            return false;
+        }
+        e.leadAt = now + LEAD_COOLDOWN;
+        player.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED, 200, 1));
+        for (Unit u : us) {
+            u.block.rally(field.seconds() + FieldRules.RALLIED_SECONDS);
+            soldiersOf(u).forEach(s -> s.setMoral(100));
+        }
+        player.displayClientMessage(Component.literal("You lead the charge!"), true);
+        return true;
+    }
+
+    /** The side's soldiers (real ones in morale, every block by its middle) within reach of a place take heart. */
+    private void hearten(int side, Vec3 at, double reach) {
+        for (Live l : live.values()) {
+            if (l.block.side() != side) {
+                continue;
+            }
+            for (AbstractRecruitEntity s : l.soldiers) {
+                if (s != null && s.isAlive() && s.position().distanceTo(at) <= reach) {
+                    s.setMoral(Math.min(100, s.getMorale() + 40));
+                }
+            }
+        }
+        for (FieldBlock b : field.army(side).blocks()) {
+            if (b.alive() > 0 && b.pos().distanceTo(new Point(at.x, at.z)) <= reach) {
+                b.rally(field.seconds() + FieldRules.RALLIED_SECONDS);
+            }
+        }
+    }
+
+    private void order(Enlisted e, Unit u, UnitOrder order, ServerPlayer player) {
         List<AbstractRecruitEntity> soldiers = soldiersOf(u);
+        if (order != UnitOrder.SHIELDS_UP && order != UnitOrder.SHIELDS_DOWN) {
+            u.card.target = null;
+        }
         switch (order) {
             case FOLLOW -> {
                 u.mode = UnitMode.FOLLOW;
                 u.placed.clear();
             }
             case HOLD -> {
+                if (u.mode != UnitMode.HOLD || u.card.at == null) {
+                    u.card.at = centreOf(cardSoldiers(e, u.card), player.position());
+                    u.card.yaw = u.mode == UnitMode.MOVE ? u.card.yaw : e.formYaw;
+                }
                 u.mode = UnitMode.HOLD;
-                u.at = centreOf(soldiers, player.position());
-                u.yaw = e.formYaw;
-                u.replace = true;
-                u.placed.clear();
-            }
-            case MOVE -> {
-                u.mode = UnitMode.MOVE;
-                Vec3 from = centreOf(soldiers, player.position());
-                u.at = place;
-                u.yaw = (float) Math.toDegrees(Math.atan2(-(place.x - from.x), place.z - from.z));
                 u.replace = true;
                 u.placed.clear();
             }
@@ -2830,11 +3187,9 @@ public final class RecruitsBattle {
                     s.setAggroState(1);
                 }
             }
-            case SQUARE, LINE -> {
-                u.shape = order == UnitOrder.SQUARE ? Shape.SQUARE : Shape.LINE;
-                u.replace = true;
-            }
             case SHIELDS_UP, SHIELDS_DOWN -> u.shields = order == UnitOrder.SHIELDS_UP;
+            default -> {
+            }
         }
         if (u.mode != UnitMode.CHARGE) {
             for (AbstractRecruitEntity s : soldiers) {
@@ -2856,7 +3211,7 @@ public final class RecruitsBattle {
         return new Vec3(x / soldiers.size(), soldiers.get(0).getY(), z / soldiers.size());
     }
 
-    /** What the war horn's screen shows of a player's units: number, size, where, how. */
+    /** What the battle screen shows of a player's units: number, size, where, how, and their card. */
     public static List<ConquestNetwork.UnitInfo> unitInfo(ServerPlayer player) {
         RecruitsBattle battle = current;
         List<ConquestNetwork.UnitInfo> info = new ArrayList<>();
@@ -2866,9 +3221,15 @@ public final class RecruitsBattle {
         }
         for (Unit u : e.units) {
             List<AbstractRecruitEntity> soldiers = battle.soldiersOf(u);
-            Vec3 c = centreOf(soldiers, player.position());
-            info.add(new ConquestNetwork.UnitInfo(u.number, soldiers.size(), c.x, c.z, u.mode.ordinal(), u.shape.ordinal(), u.shields,
-                    battle.mainColorOf(e.side)));
+            // Before its soldiers are real (or given), a unit is shown as its block: where it stands, how many it has.
+            boolean real = !u.ids.isEmpty();
+            Vec3 c = centreOf(soldiers, new Vec3(u.block.pos().x(), player.getY(), u.block.pos().z()));
+            boolean fighting = u.block.inMelee() || soldiers.stream().anyMatch(s -> s.getTarget() != null && s.getTarget().isAlive()
+                    && s.getTarget().distanceToSqr(s) < 16);
+            boolean tired = u.block.fightSeconds() >= FieldRules.ROTATE_SECONDS / 2;
+            info.add(new ConquestNetwork.UnitInfo(u.number, real ? soldiers.size() : u.block.alive(), real ? u.ids.size() : u.block.started(), c.x, c.z, u.mode.ordinal(),
+                    u.card.shape.ordinal(), u.shields, battle.mainColorOf(e.side), u.card.id, u.card.parent >= 0, u.block.wing(),
+                    u.block.arm().ordinal(), fighting, tired, soldiers.stream().mapToInt(AbstractRecruitEntity::getId).toArray()));
         }
         return info;
     }

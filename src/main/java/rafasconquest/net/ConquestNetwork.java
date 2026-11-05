@@ -167,6 +167,22 @@ public final class ConquestNetwork {
                 .decoder(b -> { MarkerView v = MarkerView.read(b); return new MarkerSet(v.pos(), v.spec()); })
                 .consumerMainThread(ConquestNetwork::handleMarkerSet)
                 .add();
+        CHANNEL.messageBuilder(GrandStrategyView.class, 25, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(GrandStrategyView::write)
+                .decoder(GrandStrategyView::read)
+                .consumerMainThread(ConquestNetwork::handleGrandStrategyView)
+                .add();
+        CHANNEL.messageBuilder(CityView.class, 26, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> b.writeInt(m.province()))
+                .decoder(b -> new CityView(b.readInt()))
+                .consumerMainThread(ConquestNetwork::handleCityView)
+                .add();
+        CHANNEL.messageBuilder(CityClose.class, 27, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                })
+                .decoder(b -> new CityClose())
+                .consumerMainThread((m, c) -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> rafasconquest.client.ClientScreens::closeCityManager))
+                .add();
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -359,6 +375,67 @@ public final class ConquestNetwork {
         }
     }
 
+    /** Server → client: the player's fief, for the grand strategy screen ({@link rafasconquest.peerage.GrandStrategy}). */
+    public record GrandStrategyView(rafasconquest.peerage.GrandStrategy.View view) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeCollection(view.rows(), (b, row) -> {
+                b.writeUtf(row[0]);
+                b.writeUtf(row[1]);
+            });
+            buf.writeInt(view.seat());
+        }
+
+        static GrandStrategyView read(FriendlyByteBuf buf) {
+            return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(
+                    buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}), buf.readInt()));
+        }
+    }
+
+    public static void sendGrandStrategy(ServerPlayer player, rafasconquest.peerage.GrandStrategy.View view) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new GrandStrategyView(view));
+    }
+
+    private static void handleGrandStrategyView(GrandStrategyView msg, Supplier<NetworkEvent.Context> context) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openGrandStrategy(msg.view()));
+    }
+
+    /**
+     * Client → server: the city manager. A province (≥ 0) opens it on the city seating it; {@link #CITY_LEAVE} leaves it
+     * for the game, {@link #CITY_BACK} back to the fief menu.
+     */
+    public record CityView(int province) {
+    }
+
+    public static final int CITY_LEAVE = -1;
+    public static final int CITY_BACK = -2;
+
+    /** Server → client: shut the city manager (a battle muster called the player away). */
+    public record CityClose() {
+    }
+
+    public static void closeCityView(ServerPlayer player) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CityClose());
+    }
+
+    public static void cityView(int province) {
+        CHANNEL.sendToServer(new CityView(province));
+    }
+
+    private static void handleCityView(CityView msg, Supplier<NetworkEvent.Context> context) {
+        ServerPlayer player = context.get().getSender();
+        if (player == null) {
+            return;
+        }
+        if (msg.province() >= 0) {
+            rafasconquest.peerage.CityManager.open(player, msg.province());
+        } else {
+            rafasconquest.peerage.CityManager.close(player);
+            if (msg.province() == CITY_BACK) {
+                rafasconquest.peerage.GrandStrategy.open(player);
+            }
+        }
+    }
+
     // ---- the player's stats and settings (from the inventory) ----
 
     /** Client → server: show me my stats. */
@@ -474,8 +551,13 @@ public final class ConquestNetwork {
 
     // ---- the war horn: a player's units ----
 
-    /** One of a player's units, as the war horn's screen shows it. */
-    public record UnitInfo(int number, int soldiers, double x, double z, int mode, int shape, boolean shields, int rgb) {
+    /**
+     * One of a player's units (a block's worth), as the battle screen shows it: how many stand of how many it had, where
+     * its middle is, its mode ({@code RecruitsBattle.UnitMode}), its card's formation, id and whether that card split off
+     * another, its wing, its arm ({@code BattlePlan.Arm}), and whether it is fighting, or tired; its soldiers (entity ids).
+     */
+    public record UnitInfo(int number, int soldiers, int started, double x, double z, int mode, int shape, boolean shields, int rgb,
+                           int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids) {
     }
 
     /** Client → server: the war horn's screen wants the player's units. */
@@ -506,12 +588,20 @@ public final class ConquestNetwork {
             for (UnitInfo u : units) {
                 buf.writeVarInt(u.number());
                 buf.writeVarInt(u.soldiers());
+                buf.writeVarInt(u.started());
                 buf.writeDouble(u.x());
                 buf.writeDouble(u.z());
                 buf.writeVarInt(u.mode());
                 buf.writeVarInt(u.shape());
                 buf.writeBoolean(u.shields());
                 buf.writeInt(u.rgb());
+                buf.writeVarInt(u.card());
+                buf.writeBoolean(u.split());
+                buf.writeVarInt(u.wing());
+                buf.writeVarInt(u.arm());
+                buf.writeBoolean(u.fighting());
+                buf.writeBoolean(u.tired());
+                buf.writeVarIntArray(u.ids());
             }
         }
 
@@ -519,15 +609,16 @@ public final class ConquestNetwork {
             int n = buf.readVarInt();
             List<UnitInfo> units = new ArrayList<>(n);
             for (int i = 0; i < n; i++) {
-                units.add(new UnitInfo(buf.readVarInt(), buf.readVarInt(), buf.readDouble(), buf.readDouble(), buf.readVarInt(),
-                        buf.readVarInt(), buf.readBoolean(), buf.readInt()));
+                units.add(new UnitInfo(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readDouble(), buf.readDouble(),
+                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readInt(), buf.readVarInt(), buf.readBoolean(),
+                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256)));
             }
             return new UnitsState(units);
         }
     }
 
     private static void handleUnitsState(UnitsState msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.HornScreen.receive(msg.units()));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleScreen.receive(msg.units()));
     }
 
     /** Client → server: the orders given in the war horn's screen, each to some units, with a place for a move. */

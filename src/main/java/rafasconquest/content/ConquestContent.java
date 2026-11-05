@@ -40,6 +40,16 @@ public final class ConquestContent {
             () -> new QuestBoardBlock(BlockBehaviour.Properties.copy(Blocks.CARTOGRAPHY_TABLE)));
     public static final RegistryObject<Item> QUEST_BOARD_ITEM = ITEMS.register("quest_board",
             () -> new BlockItem(QUEST_BOARD.get(), new Item.Properties()));
+    /** The Grand Strategy table: the player's fief over the world map. */
+    public static final RegistryObject<Block> GRAND_STRATEGY = BLOCKS.register("grand_strategy",
+            () -> new GrandStrategyBlock(BlockBehaviour.Properties.copy(Blocks.CARTOGRAPHY_TABLE)));
+    public static final RegistryObject<Item> GRAND_STRATEGY_ITEM = ITEMS.register("grand_strategy",
+            () -> new BlockItem(GRAND_STRATEGY.get(), new Item.Properties()));
+    /** The Strategy Board: a red cartography table that opens the battle screen. */
+    public static final RegistryObject<Block> STRATEGY_BOARD = BLOCKS.register("strategy_board",
+            () -> new StrategyBoardBlock(BlockBehaviour.Properties.copy(Blocks.CARTOGRAPHY_TABLE)));
+    public static final RegistryObject<Item> STRATEGY_BOARD_ITEM = ITEMS.register("strategy_board",
+            () -> new BlockItem(STRATEGY_BOARD.get(), new Item.Properties()));
     /** The Character Marker: blue bedrock, set in a style's structures where people are to stand. */
     public static final RegistryObject<Block> MARKER = BLOCKS.register("character_marker",
             () -> new rafasconquest.style.MarkerBlock(BlockBehaviour.Properties.copy(Blocks.BEDROCK).noLootTable()));
@@ -58,6 +68,8 @@ public final class ConquestContent {
                 output.accept(COMMAND_TABLE_ITEM.get());
                 output.accept(WORLD_MAP.get());
                 output.accept(QUEST_BOARD_ITEM.get());
+                output.accept(GRAND_STRATEGY_ITEM.get());
+                output.accept(STRATEGY_BOARD_ITEM.get());
                 output.accept(GRAVEL_SLAB_ITEM.get());
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
                 output.accept(MARKER_ITEM.get());

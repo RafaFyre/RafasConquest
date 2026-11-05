@@ -289,6 +289,12 @@ public final class FieldBlock {
         return now < rallyUntil;
     }
 
+    /** Rallied by a leader: it shakes off any fright, and can't rout until {@code until} (battle seconds). */
+    public void rally(int until) {
+        rallyUntil = Math.max(rallyUntil, until);
+        shakenUntil = 0;
+    }
+
     /** The enemy block it fought this second, or null. */
     @Nullable
     public FieldBlock contactFoe() {

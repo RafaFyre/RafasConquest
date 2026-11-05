@@ -1,0 +1,789 @@
+package rafasconquest.client;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Camera;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Marker;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import rafasconquest.bridge.RecruitsBattle.UnitOrder;
+import rafasconquest.net.ConquestNetwork;
+import rafasconquest.net.ConquestNetwork.UnitInfo;
+
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * The battle screen, opened by the war horn or the strategy board. The player's body stays where it is; the view leaves
+ * it for a free camera over the field (WASD to move, space and shift to rise and sink, right- or middle-drag to turn,
+ * scroll to come nearer). Along the bottom: the player (gold ring) with their nation and abilities, buttons for their
+ * other wings, and a track of cards, one per formation of the shown wing. Left-click or drag to select units (blocks),
+ * right-click the ground to send them there in formation or an enemy to attack it; right-click a card for its orders.
+ * Orders go out at once. Client thread only.
+ */
+public final class BattleScreen extends Screen {
+    private static final String[] ARMS = {"INFANTRY", "HVY INF", "ARCHERS", "CAVALRY"};
+    private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
+    private static final String[] WINGS = {"L", "C", "R"};
+    private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};
+    private static final double REACH = 96;
+    private static final double TURN = 0.35;
+    private static final int PICK = 18;
+    private static final int TEXT = 0xFF3A2A10;
+    private static final int GOLD = 0xFFFFB000;
+
+    private static List<UnitInfo> units = List.of();
+    private static boolean heard;
+    /** Where the player's own body is walking to, sent like any other unit; null when it stands. */
+    @Nullable
+    static Vec3 walkTo;
+
+    private Marker camera;
+    private boolean hidGui;
+    private double camX;
+    private double camY;
+    private double camZ;
+    private float yaw;
+    private float pitch = 50;
+    private int ticks;
+
+    private final Set<Integer> selected = new HashSet<>();
+    private final Set<Integer> glowing = new HashSet<>();
+    private boolean playerSelected;
+    private int wing = -1;
+    private int pinned = -1;
+    private int hovered = -1;
+    /** A press of the left or right button: where, and whether it has become a drag. */
+    private double pressX;
+    private double pressY;
+    private int pressButton = -1;
+    private boolean dragged;
+    private boolean leading;
+    @Nullable
+    private Menu menu;
+
+    private record Entry(String label, Runnable action) {
+    }
+
+    private record Menu(int x, int y, List<Entry> entries) {
+        int width() {
+            return 96;
+        }
+    }
+
+    public BattleScreen() {
+        super(Component.literal("Battle"));
+    }
+
+    public static void open() {
+        units = List.of();
+        heard = false;
+        ConquestNetwork.requestUnits();
+        Minecraft.getInstance().setScreen(new BattleScreen());
+    }
+
+    /** The server's answer: the player's units now (none: no battle for them). */
+    public static void receive(List<UnitInfo> latest) {
+        units = latest;
+        heard = true;
+    }
+
+    private boolean inBattle() {
+        return !units.isEmpty();
+    }
+
+    // ---- the camera ----
+
+    @Override
+    public void tick() {
+        if (++ticks % 5 == 0) {
+            ConquestNetwork.requestUnits();
+        }
+        if (minecraft == null || minecraft.player == null || minecraft.level == null) {
+            return;
+        }
+        glow();
+        if (!inBattle()) {
+            letGo();
+            return;
+        }
+        if (camera == null || camera.level() != minecraft.level) {
+            hidGui = minecraft.options.hideGui;
+            minecraft.options.hideGui = true;
+            camera = new Marker(EntityType.MARKER, minecraft.level);
+            yaw = minecraft.player.getYRot();
+            double r = Math.toRadians(yaw);
+            camX = minecraft.player.getX() + Math.sin(r) * 16;
+            camZ = minecraft.player.getZ() - Math.cos(r) * 16;
+            camY = minecraft.player.getY() + 18;
+            camera.setPos(camX, camY, camZ);
+            camera.setOldPosAndRot();
+        }
+        if (minecraft.getCameraEntity() != camera) {
+            minecraft.setCameraEntity(camera);
+        }
+        camera.setOldPosAndRot();
+        fly();
+        camera.setPos(camX, camY, camZ);
+        camera.setYRot(yaw);
+        camera.setXRot(pitch);
+    }
+
+    /** Moves the camera by the player's own movement keys, within reach of their body and above the ground. */
+    private void fly() {
+        double speed = down(minecraft.options.keySprint) ? 3 : 1.2;
+        double r = Math.toRadians(yaw);
+        double fx = -Math.sin(r);
+        double fz = Math.cos(r);
+        double f = (down(minecraft.options.keyUp) ? 1 : 0) - (down(minecraft.options.keyDown) ? 1 : 0);
+        double s = (down(minecraft.options.keyLeft) ? 1 : 0) - (down(minecraft.options.keyRight) ? 1 : 0);
+        camX += (fx * f + fz * s) * speed;
+        camZ += (fz * f - fx * s) * speed;
+        camY += ((down(minecraft.options.keyJump) ? 1 : 0) - (down(minecraft.options.keyShift) ? 1 : 0)) * speed;
+        double px = minecraft.player.getX();
+        double pz = minecraft.player.getZ();
+        double d = Math.hypot(camX - px, camZ - pz);
+        if (d > REACH) { // chunks are only loaded about the body
+            camX = px + (camX - px) * REACH / d;
+            camZ = pz + (camZ - pz) * REACH / d;
+        }
+        double ground = minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(camX), Mth.floor(camZ));
+        camY = Mth.clamp(camY, ground + 2, ground + 120);
+    }
+
+    private boolean down(KeyMapping key) {
+        return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), key.getKey().getValue());
+    }
+
+    /** Back to the player's own eyes. */
+    private void letGo() {
+        if (camera != null && minecraft != null) {
+            minecraft.setCameraEntity(minecraft.player);
+            minecraft.options.hideGui = hidGui;
+            camera = null;
+        }
+    }
+
+    @Override
+    public void removed() {
+        deselect();
+        letGo();
+        super.removed();
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    // ---- the view: rays and projection ----
+
+    private double[] basis() {
+        Camera cam = minecraft.gameRenderer.getMainCamera();
+        double y = Math.toRadians(cam.getYRot());
+        double p = Math.toRadians(cam.getXRot());
+        double[] fwd = {-Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p)};
+        double[] right = {-Math.cos(y), 0, -Math.sin(y)};
+        double[] up = {right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]};
+        return new double[]{fwd[0], fwd[1], fwd[2], right[0], right[1], right[2], up[0], up[1], up[2],
+                Math.tan(Math.toRadians(minecraft.options.fov().get()) / 2), (double) width / height};
+    }
+
+    /** Where a point of the world falls on the screen, or null behind the camera. */
+    @Nullable
+    private double[] project(Vec3 at) {
+        Vec3 eye = minecraft.gameRenderer.getMainCamera().getPosition();
+        double[] b = basis();
+        double rx = at.x - eye.x;
+        double ry = at.y - eye.y;
+        double rz = at.z - eye.z;
+        double z = rx * b[0] + ry * b[1] + rz * b[2];
+        if (z < 0.5) {
+            return null;
+        }
+        double x = (rx * b[3] + ry * b[4] + rz * b[5]) / (z * b[9] * b[10]);
+        double y = (rx * b[6] + ry * b[7] + rz * b[8]) / (z * b[9]);
+        return new double[]{(x + 1) / 2 * width, (1 - y) / 2 * height};
+    }
+
+    /** The ground under the mouse, or null. */
+    @Nullable
+    private Vec3 ground(double mouseX, double mouseY) {
+        Vec3 eye = minecraft.gameRenderer.getMainCamera().getPosition();
+        double[] b = basis();
+        double nx = (mouseX / width * 2 - 1) * b[9] * b[10];
+        double ny = (1 - mouseY / height * 2) * b[9];
+        Vec3 dir = new Vec3(b[0] + b[3] * nx + b[6] * ny, b[1] + b[4] * nx + b[7] * ny, b[2] + b[5] * nx + b[8] * ny).normalize();
+        BlockHitResult hit = minecraft.level.clip(new ClipContext(eye, eye.add(dir.scale(256)), ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.ANY, minecraft.player));
+        return hit.getType() == HitResult.Type.MISS ? null : hit.getLocation();
+    }
+
+    private Vec3 onGround(double x, double z) {
+        return new Vec3(x, minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z)) + 1, z);
+    }
+
+    // ---- cards and wings ----
+
+    /** The cards of a wing, by card id, each its units. */
+    private Map<Integer, List<UnitInfo>> cards(int wing) {
+        Map<Integer, List<UnitInfo>> cards = new LinkedHashMap<>();
+        for (UnitInfo u : units) {
+            cards.computeIfAbsent(u.card(), c -> new ArrayList<>()).add(u);
+        }
+        cards.values().removeIf(c -> c.get(0).wing() != wing);
+        return cards;
+    }
+
+    private boolean hasWing(int w) {
+        return units.stream().anyMatch(u -> u.wing() == w);
+    }
+
+    private int shownWing() {
+        if (wing < 0 || !hasWing(wing)) {
+            int[] counts = new int[3];
+            units.forEach(u -> counts[Mth.clamp(u.wing(), 0, 2)]++);
+            wing = counts[0] > counts[1] && counts[0] > counts[2] ? 0 : counts[2] > counts[1] ? 2 : 1;
+        }
+        return wing;
+    }
+
+    /** The two wings on the buttons left of the track: the ones not shown, in order. */
+    private int[] otherWings() {
+        int shown = shownWing();
+        int[] others = new int[2];
+        int k = 0;
+        for (int w = 0; w < 3; w++) {
+            if (w != shown) {
+                others[k++] = w;
+            }
+        }
+        return others;
+    }
+
+    private int trackLeft() {
+        return (int) (width * 0.234);
+    }
+
+    private int trackRight() {
+        return (int) (width * 0.822);
+    }
+
+    private int cardW() {
+        return Math.max(30, (int) (width * 0.05));
+    }
+
+    private int cardH() {
+        return (int) (cardW() * 1.55);
+    }
+
+    private int cardTop() {
+        return (int) (height * 0.955) - cardH();
+    }
+
+    /** Each card's left edge on the track: side by side, or overlaid when they no longer fit. */
+    private int[] cardXs(int n) {
+        int w = cardW();
+        int span = trackRight() - trackLeft();
+        double step = n > 1 ? Math.min(w + 6, (span - w) / (double) (n - 1)) : 0;
+        int left = trackLeft() + (int) ((span - (step * (n - 1) + w)) / 2);
+        int[] xs = new int[n];
+        for (int i = 0; i < n; i++) {
+            xs[i] = left + (int) (i * step);
+        }
+        return xs;
+    }
+
+    /** The card under the mouse: the pinned and hovered cards lie on top, then later cards over earlier ones. */
+    private int cardAt(double mx, double my, List<Integer> ids, int[] xs) {
+        if (my < cardTop() || my > cardTop() + cardH()) {
+            return -1;
+        }
+        for (int top : new int[]{hovered, pinned}) {
+            int i = ids.indexOf(top);
+            if (i >= 0 && mx >= xs[i] && mx <= xs[i] + cardW()) {
+                return top;
+            }
+        }
+        for (int i = ids.size() - 1; i >= 0; i--) {
+            if (mx >= xs[i] && mx <= xs[i] + cardW()) {
+                return ids.get(i);
+            }
+        }
+        return -1;
+    }
+
+    private int ringX() {
+        return (int) (width * 0.08);
+    }
+
+    private int ringY() {
+        return (int) (height * 0.86);
+    }
+
+    private int ringR() {
+        return Math.max(18, (int) (width * 0.04));
+    }
+
+    private int[] ability(int i) {
+        return i == 0 ? new int[]{(int) (width * 0.1), (int) (height * 0.955)} : new int[]{(int) (width * 0.125), (int) (height * 0.93)};
+    }
+
+    private int abilityR() {
+        return Math.max(8, (int) (width * 0.012));
+    }
+
+    private int[] wingButton(int i) {
+        int size = Math.max(14, (int) (width * 0.024));
+        return new int[]{(int) (width * (i == 0 ? 0.178 : 0.207)), (int) (height * 0.98) - size, size};
+    }
+
+    // ---- drawing ----
+
+    @Override
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (minecraft == null || minecraft.player == null) {
+            return;
+        }
+        if (!inBattle()) {
+            if (heard) {
+                g.drawCenteredString(font, "There is no battle to plan for", width / 2, height / 2, 0xFFF4EEDC);
+            }
+            return;
+        }
+        if (pressButton == 0 && dragged) {
+            int x0 = (int) Math.min(pressX, mouseX);
+            int y0 = (int) Math.min(pressY, mouseY);
+            int x1 = (int) Math.max(pressX, mouseX);
+            int y1 = (int) Math.max(pressY, mouseY);
+            g.fill(x0, y0, x1, y1, 0x30FFD700);
+            g.renderOutline(x0, y0, x1 - x0, y1 - y0, GOLD);
+        }
+        g.drawString(font, "WASD move · space/shift rise/sink · right-drag turn · scroll zoom · drag to select · right-click to order",
+                6, 6, 0xFFF4EEDC);
+        if (leading) {
+            g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
+        }
+        drawTrack(g, mouseX, mouseY);
+        drawPlayer(g, mouseX, mouseY);
+        if (menu != null) {
+            drawMenu(g, mouseX, mouseY);
+        }
+    }
+
+    private void drawTrack(GuiGraphics g, int mouseX, int mouseY) {
+        int barTop = (int) (height * 0.91);
+        int barBottom = (int) (height * 0.98);
+        g.fill(trackLeft(), barTop, trackRight(), barBottom, 0xCC4A4A4A);
+        int[] others = otherWings();
+        for (int i = 0; i < 2; i++) {
+            int[] b = wingButton(i);
+            boolean has = hasWing(others[i]);
+            boolean over = has && mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[2];
+            g.fill(b[0], b[1], b[0] + b[2], b[1] + b[2], has ? over ? 0xFF6A6A6A : 0xFF4A4A4A : 0x704A4A4A);
+            g.drawCenteredString(font, WINGS[others[i]], b[0] + b[2] / 2, b[1] + (b[2] - 8) / 2, has ? 0xFFFFFFFF : 0xFF888888);
+        }
+        g.drawString(font, WING_NAMES[shownWing()], trackLeft() + 2, barBottom - 10, 0xFFE0E0E0);
+        Map<Integer, List<UnitInfo>> cards = cards(shownWing());
+        List<Integer> ids = new ArrayList<>(cards.keySet());
+        int[] xs = cardXs(ids.size());
+        hovered = menu == null ? cardAt(mouseX, mouseY, ids, xs) : hovered;
+        List<Integer> order = new ArrayList<>(ids);
+        for (int top : new int[]{pinned, hovered}) { // drawn last: on top
+            if (order.remove((Integer) top)) {
+                order.add(top);
+            }
+        }
+        for (int id : order) {
+            drawCard(g, xs[ids.indexOf(id)], cards.get(id));
+        }
+    }
+
+    private void drawCard(GuiGraphics g, int x, List<UnitInfo> card) {
+        int w = cardW();
+        int h = cardH();
+        int y = cardTop();
+        boolean all = card.stream().allMatch(u -> selected.contains(u.number()));
+        boolean some = card.stream().anyMatch(u -> selected.contains(u.number()));
+        g.fill(x - 1, y - 1, x + w + 1, y + h + 1, all ? GOLD : some ? 0xFFFFE080 : 0xFFC8C8C8);
+        g.fill(x, y, x + w, y + h, 0xFFFFF2B0);
+        UnitInfo first = card.get(0);
+        int[] arms = new int[ARMS.length];
+        int alive = 0;
+        int started = 0;
+        boolean fighting = false;
+        boolean tired = false;
+        for (UnitInfo u : card) {
+            arms[Mth.clamp(u.arm(), 0, ARMS.length - 1)] += u.soldiers();
+            alive += u.soldiers();
+            started += u.started();
+            fighting |= u.fighting();
+            tired |= u.tired();
+        }
+        int arm = 0;
+        for (int i = 1; i < arms.length; i++) {
+            arm = arms[i] > arms[arm] ? i : arm;
+        }
+        String status = (fighting ? "FIGHTING" : MODES[Mth.clamp(first.mode(), 0, MODES.length - 1)]) + (tired ? ", TIRED" : "");
+        g.fill(x, y + 9, x + w, y + 10, 0xFFE0D090);
+        small(g, ARMS[arm] + (first.split() ? "*" : ""), x + w / 2, y + 3, 0.6F);
+        g.fill(x, y + h - 17, x + w, y + h - 16, 0xFFE0D090);
+        small(g, status, x + w / 2, y + h - 15, 0.45F);
+        small(g, alive + "/" + started, x + w / 2, y + h - 8, 0.6F);
+    }
+
+    /** Text centred on {@code cx}, shrunk to {@code scale}, and further to fit a card. */
+    private void small(GuiGraphics g, String s, int cx, int y, float scale) {
+        float fit = Math.min(scale, (cardW() - 2) / (float) Math.max(1, font.width(s)));
+        g.pose().pushPose();
+        g.pose().translate(cx, y, 0);
+        g.pose().scale(fit, fit, 1);
+        g.drawString(font, s, -font.width(s) / 2, 0, TEXT, false);
+        g.pose().popPose();
+    }
+
+    private void drawPlayer(GuiGraphics g, int mouseX, int mouseY) {
+        int cx = ringX();
+        int cy = ringY();
+        int r = ringR();
+        g.fill(cx - r / 2 - 4, (int) (height * 0.895), (int) (width * 0.135), (int) (height * 0.96), 0xCC4A4A4A);
+        disc(g, cx, cy, r - 2, playerSelected ? 0x60FFD700 : 0x40000000);
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + r * 3 / 4, (int) (r * 0.75), cx - mouseX, cy - mouseY,
+                minecraft.player);
+        ring(g, cx, cy, r, r - 2, GOLD);
+        // The nation: shortcut: a square in its colour; draw its banner once the client knows it.
+        int n = Math.max(12, (int) (width * 0.03));
+        int nx = cx + r + 6;
+        int ny = cy - n / 2;
+        g.fill(nx - 1, ny - 1, nx + n + 1, ny + n + 1, 0xFFE8E8E8);
+        g.fill(nx, ny, nx + n, ny + n, 0xFF000000 | units.get(0).rgb() & 0xFFFFFF);
+        ItemStack[] icons = {new ItemStack(Items.GOAT_HORN), new ItemStack(Items.IRON_SWORD)};
+        String[] names = {"Rally: everyone about you takes heart", "Lead charge: select units, then right-click an enemy"};
+        for (int i = 0; i < 2; i++) {
+            int[] a = ability(i);
+            boolean over = Math.hypot(mouseX - a[0], mouseY - a[1]) <= abilityR();
+            disc(g, a[0], a[1], abilityR(), i == 1 && leading ? GOLD : over ? 0xFF9AF0FF : 0xFF66E0FF);
+            g.renderItem(icons[i], a[0] - 8, a[1] - 8);
+            if (over) {
+                g.renderTooltip(font, Component.literal(names[i]), mouseX, mouseY);
+            }
+        }
+    }
+
+    private static void disc(GuiGraphics g, int cx, int cy, int r, int color) {
+        for (int dy = -r; dy <= r; dy++) {
+            int half = (int) Math.sqrt(r * r - dy * dy);
+            g.fill(cx - half, cy + dy, cx + half + 1, cy + dy + 1, color);
+        }
+    }
+
+    private static void ring(GuiGraphics g, int cx, int cy, int outer, int inner, int color) {
+        for (int dy = -outer; dy <= outer; dy++) {
+            int o = (int) Math.sqrt(outer * outer - dy * dy);
+            int i = Math.abs(dy) < inner ? (int) Math.sqrt(inner * inner - dy * dy) : -1;
+            if (i < 0) {
+                g.fill(cx - o, cy + dy, cx + o + 1, cy + dy + 1, color);
+            } else {
+                g.fill(cx - o, cy + dy, cx - i, cy + dy + 1, color);
+                g.fill(cx + i + 1, cy + dy, cx + o + 1, cy + dy + 1, color);
+            }
+        }
+    }
+
+    private void drawMenu(GuiGraphics g, int mouseX, int mouseY) {
+        int w = menu.width();
+        g.fill(menu.x(), menu.y(), menu.x() + w, menu.y() + menu.entries().size() * 12 + 2, 0xEE202020);
+        for (int i = 0; i < menu.entries().size(); i++) {
+            int y = menu.y() + 1 + i * 12;
+            if (mouseX >= menu.x() && mouseX < menu.x() + w && mouseY >= y && mouseY < y + 12) {
+                g.fill(menu.x(), y, menu.x() + w, y + 12, 0xFF505050);
+            }
+            g.drawString(font, menu.entries().get(i).label(), menu.x() + 4, y + 2, 0xFFFFFFFF);
+        }
+    }
+
+    // ---- input ----
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!inBattle()) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        if (menu != null) {
+            int i = (int) ((mouseY - menu.y() - 1) / 12);
+            boolean inside = mouseX >= menu.x() && mouseX < menu.x() + menu.width() && mouseY >= menu.y() && i < menu.entries().size();
+            Menu was = menu;
+            menu = null;
+            if (inside && button == 0) {
+                was.entries().get(i).action().run();
+            }
+            return true;
+        }
+        pressX = mouseX;
+        pressY = mouseY;
+        pressButton = button;
+        dragged = false;
+        return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        if (button == pressButton && Math.hypot(mouseX - pressX, mouseY - pressY) > 4) {
+            dragged = true;
+        }
+        if (dragged && (button == 1 || button == 2)) {
+            yaw += (float) (dx * TURN);
+            pitch = Mth.clamp(pitch + (float) (dy * TURN), 5, 89);
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button != pressButton) {
+            return super.mouseReleased(mouseX, mouseY, button);
+        }
+        pressButton = -1;
+        if (button == 0) {
+            if (dragged) {
+                boxSelect(pressX, pressY, mouseX, mouseY);
+            } else {
+                leftClick(mouseX, mouseY);
+            }
+        } else if (button == 1 && !dragged) {
+            rightClick(mouseX, mouseY);
+        }
+        return true;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        double[] b = basis();
+        camX += b[0] * delta * 4;
+        camY += b[1] * delta * 4;
+        camZ += b[2] * delta * 4;
+        return true;
+    }
+
+    private boolean onRing(double mx, double my) {
+        return Math.hypot(mx - ringX(), my - ringY()) <= ringR();
+    }
+
+    private void leftClick(double mx, double my) {
+        boolean add = hasShiftDown();
+        for (int i = 0; i < 2; i++) {
+            int[] a = ability(i);
+            if (Math.hypot(mx - a[0], my - a[1]) <= abilityR()) {
+                if (i == 0) {
+                    send(List.of(), UnitOrder.RALLY, null);
+                } else {
+                    leading = !leading;
+                }
+                return;
+            }
+        }
+        int[] others = otherWings();
+        for (int i = 0; i < 2; i++) {
+            int[] b = wingButton(i);
+            if (mx >= b[0] && mx < b[0] + b[2] && my >= b[1] && my < b[1] + b[2]) {
+                if (hasWing(others[i])) {
+                    wing = others[i];
+                    pinned = -1;
+                }
+                return;
+            }
+        }
+        if (onRing(mx, my)) {
+            if (!add) {
+                selected.clear();
+            }
+            playerSelected = !add || !playerSelected;
+            return;
+        }
+        Map<Integer, List<UnitInfo>> cards = cards(shownWing());
+        List<Integer> ids = new ArrayList<>(cards.keySet());
+        int card = cardAt(mx, my, ids, cardXs(ids.size()));
+        if (card >= 0) {
+            if (!add) {
+                selected.clear();
+                playerSelected = false;
+            }
+            cards.get(card).forEach(u -> selected.add(u.number()));
+            pinned = card;
+            return;
+        }
+        // On the field: the unit whose mark is nearest the click, or the player's body; else nothing.
+        UnitInfo best = null;
+        double bestD = PICK;
+        for (UnitInfo u : units) {
+            double[] at = project(onGround(u.x(), u.z()));
+            if (at != null && Math.hypot(at[0] - mx, at[1] - my) < bestD) {
+                bestD = Math.hypot(at[0] - mx, at[1] - my);
+                best = u;
+            }
+        }
+        double[] me = project(minecraft.player.position().add(0, 1, 0));
+        boolean onMe = me != null && Math.hypot(me[0] - mx, me[1] - my) < Math.min(bestD, PICK);
+        if (!add) {
+            selected.clear();
+            playerSelected = false;
+            pinned = -1;
+        }
+        if (onMe) {
+            playerSelected = true;
+        } else if (best != null) {
+            selected.add(best.number());
+        }
+    }
+
+    private void boxSelect(double x0, double y0, double x1, double y1) {
+        if (!hasShiftDown()) {
+            selected.clear();
+            playerSelected = false;
+            pinned = -1;
+        }
+        double lx = Math.min(x0, x1);
+        double hx = Math.max(x0, x1);
+        double ly = Math.min(y0, y1);
+        double hy = Math.max(y0, y1);
+        for (UnitInfo u : units) {
+            double[] at = project(onGround(u.x(), u.z()));
+            if (at != null && at[0] >= lx && at[0] <= hx && at[1] >= ly && at[1] <= hy) {
+                selected.add(u.number());
+            }
+        }
+        double[] me = project(minecraft.player.position().add(0, 1, 0));
+        if (me != null && me[0] >= lx && me[0] <= hx && me[1] >= ly && me[1] <= hy) {
+            playerSelected = true;
+        }
+    }
+
+    private void rightClick(double mx, double my) {
+        if (onRing(mx, my)) {
+            menu = menuAt(mx, my, List.of(new Entry("Hold", () -> walkTo = null)));
+            return;
+        }
+        Map<Integer, List<UnitInfo>> cards = cards(shownWing());
+        List<Integer> ids = new ArrayList<>(cards.keySet());
+        int card = cardAt(mx, my, ids, cardXs(ids.size()));
+        if (card >= 0) {
+            menu = cardMenu(mx, my, cards.get(card));
+            return;
+        }
+        Vec3 at = ground(mx, my);
+        if (at == null) {
+            return;
+        }
+        List<Integer> chosen = new ArrayList<>(selected);
+        boolean me = playerSelected;
+        if (leading || !chosen.isEmpty() || me) {
+            BattleSpotRing.flash(at);
+        }
+        if (leading) {
+            leading = false;
+            send(chosen, UnitOrder.LEAD_CHARGE, at);
+            walkTo = at; // the player goes in at their head
+            deselect();
+            return;
+        }
+        if (!chosen.isEmpty()) {
+            send(chosen, UnitOrder.GO, at);
+        }
+        if (me) {
+            walkTo = at;
+            deselect();
+        }
+    }
+
+    private Menu cardMenu(double mx, double my, List<UnitInfo> card) {
+        List<Integer> numbers = card.stream().map(UnitInfo::number).toList();
+        List<Entry> entries = new ArrayList<>();
+        if (card.get(0).split()) {
+            entries.add(new Entry("Reform formation", () -> send(numbers, UnitOrder.REFORM, null)));
+        }
+        entries.add(new Entry("Change formation ▸", () -> menu = menuAt(mx, my, List.of(
+                new Entry("Line", () -> send(numbers, UnitOrder.LINE, null)),
+                new Entry("Wedge", () -> send(numbers, UnitOrder.WEDGE, null)),
+                new Entry("Square", () -> send(numbers, UnitOrder.SQUARE, null)),
+                new Entry("V", () -> send(numbers, UnitOrder.V, null))))));
+        entries.add(new Entry("Hold", () -> send(numbers, UnitOrder.HOLD, null)));
+        entries.add(new Entry("Charge", () -> send(numbers, UnitOrder.CHARGE, null)));
+        entries.add(new Entry("Brace", () -> send(numbers, UnitOrder.BRACE, null)));
+        entries.add(new Entry("Follow me", () -> send(numbers, UnitOrder.FOLLOW, null)));
+        return menuAt(mx, my, entries);
+    }
+
+    private Menu menuAt(double mx, double my, List<Entry> entries) {
+        int h = entries.size() * 12 + 2;
+        return new Menu((int) Math.min(mx, width - 97), (int) Math.max(0, Math.min(my, height - h) - h), entries);
+    }
+
+    private void send(List<Integer> numbers, UnitOrder order, @Nullable Vec3 at) {
+        double x = at == null ? 0 : at.x;
+        double z = at == null ? 0 : at.z;
+        ConquestNetwork.sendHornOrders(new ConquestNetwork.HornOrders(List.of(numbers.stream().mapToInt(Integer::intValue).toArray()),
+                new int[]{order.ordinal()}, new double[]{x}, new double[]{z}));
+        if (!numbers.isEmpty()) {
+            deselect();
+        }
+        ConquestNetwork.requestUnits();
+    }
+
+    /** Ordered units (and the player) are let go: unselected, no longer glowing. */
+    private void deselect() {
+        selected.clear();
+        playerSelected = false;
+        pinned = -1;
+        glow();
+    }
+
+    /** The selected soldiers, and the player if selected, glow (here only); the rest don't. Kept up each tick: the server's
+     * own updates of an entity's flags would put it out. */
+    private void glow() {
+        Set<Integer> now = new HashSet<>();
+        for (UnitInfo u : units) {
+            if (selected.contains(u.number())) {
+                for (int id : u.ids()) {
+                    now.add(id);
+                }
+            }
+        }
+        if (playerSelected && minecraft.player != null) {
+            now.add(minecraft.player.getId());
+        }
+        for (int id : glowing) {
+            if (!now.contains(id)) {
+                net.minecraft.world.entity.Entity e = minecraft.level == null ? null : minecraft.level.getEntity(id);
+                if (e != null) {
+                    e.setGlowingTag(false);
+                }
+            }
+        }
+        for (int id : now) {
+            net.minecraft.world.entity.Entity e = minecraft.level == null ? null : minecraft.level.getEntity(id);
+            if (e != null) {
+                e.setGlowingTag(true);
+            }
+        }
+        glowing.clear();
+        glowing.addAll(now);
+    }
+}

@@ -79,6 +79,15 @@ public final class ConquestEvents {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
             rafasconquest.peerage.PeerageSync.to(player);
             rafasconquest.politics.PoliticsSync.to(player);
+            rafasconquest.peerage.CityManager.close(player); // left mid city view (a crash): put them back
+        }
+    }
+
+    /** A player leaves mid city view: back where they were, before they are saved. */
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            rafasconquest.peerage.CityManager.close(player);
         }
     }
 

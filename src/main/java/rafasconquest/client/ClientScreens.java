@@ -44,6 +44,18 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new FactionMapScreen(null));
     }
 
+    /** The grand strategy screen: the world map with the player's fief over it. */
+    public static void openGrandStrategy(rafasconquest.peerage.GrandStrategy.View view) {
+        Minecraft.getInstance().setScreen(new rafasconquest.client.map.GrandStrategyScreen(view));
+    }
+
+    /** The server called the player out of the city manager (a battle muster). */
+    public static void closeCityManager() {
+        if (Minecraft.getInstance().screen instanceof CityManagerScreen) {
+            Minecraft.getInstance().setScreen(null);
+        }
+    }
+
     public static void receiveFactionInfo(List<FactionInfo> factions) {
         if (Minecraft.getInstance().screen instanceof FactionInfoScreen screen) {
             screen.setFactions(factions);

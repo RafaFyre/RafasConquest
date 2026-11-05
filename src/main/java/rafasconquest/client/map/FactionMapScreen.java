@@ -28,7 +28,7 @@ public class FactionMapScreen extends Screen {
     private static final int LEGEND_BACK = 0xD0101214;
 
     private final Screen parent;
-    private final MapView view = new MapView();
+    protected final MapView view = new MapView();
     /**
      * The layers, bottom to top. Each draws one kind of thing over the ones before it; reorder, add or swap them here.
      */
@@ -52,8 +52,20 @@ public class FactionMapScreen extends Screen {
     private boolean toFactionInfo;
 
     public FactionMapScreen(Screen parent) {
-        super(Component.translatable("gui.rafasconquest.map"));
+        this(parent, Component.translatable("gui.rafasconquest.map"));
+    }
+
+    protected FactionMapScreen(Screen parent, Component title) {
+        super(title);
         this.parent = parent;
+    }
+
+    /** Where the map first looks: the player, unless a screen built on this one says otherwise. */
+    protected void centre(BaseMap base) {
+        if (minecraft != null && minecraft.player != null) {
+            view.centerX = minecraft.player.getX();
+            view.centerZ = minecraft.player.getZ();
+        }
     }
 
     @Override
@@ -90,8 +102,7 @@ public class FactionMapScreen extends Screen {
         double whole = 2.3 * base.visibleRadius();
         view.minScale = Math.min(view.width(), view.height()) / whole;
         if (!centred && minecraft != null && minecraft.player != null) {
-            view.centerX = minecraft.player.getX();
-            view.centerZ = minecraft.player.getZ();
+            centre(base);
             view.scale = Math.max(view.minScale, view.width() / 3000.0);
             centred = true;
         }

@@ -434,8 +434,51 @@ public final class Politics {
             return false;
         }
         w.target = best;
-        w.siteX = bestSite[0];
-        w.siteZ = bestSite[1];
+        double[] land = onLand(bestSite, lands);
+        w.siteX = land[0];
+        w.siteZ = land[1];
+        return true;
+    }
+
+    /** How far about a battle site the ground must be dry, how far to look for such a site, and in what steps. */
+    static final int SITE_ROOM = 96;
+    static final int SITE_SEARCH = 1024;
+    static final int SITE_STEP = 32;
+
+    /**
+     * The nearest place to a site with dry land all about it ({@link #SITE_ROOM}), by the world map's sea and rivers; the
+     * site itself if it is dry, or if no such place is within {@link #SITE_SEARCH}.
+     */
+    static double[] onLand(double[] site, Lands lands) {
+        for (int r = 0; r <= SITE_SEARCH; r += SITE_STEP) {
+            double[] best = null;
+            double bestD = Double.MAX_VALUE;
+            for (int dx = -r; dx <= r; dx += SITE_STEP) {
+                for (int dz = -r; dz <= r; dz += SITE_STEP) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r || Math.hypot(dx, dz) >= bestD) {
+                        continue; // this ring only, nearest first
+                    }
+                    if (dryAbout(site[0] + dx, site[1] + dz, lands)) {
+                        bestD = Math.hypot(dx, dz);
+                        best = new double[]{site[0] + dx, site[1] + dz};
+                    }
+                }
+            }
+            if (best != null) {
+                return best;
+            }
+        }
+        return site;
+    }
+
+    private static boolean dryAbout(double x, double z, Lands lands) {
+        for (int dx = -SITE_ROOM; dx <= SITE_ROOM; dx += 16) {
+            for (int dz = -SITE_ROOM; dz <= SITE_ROOM; dz += 16) {
+                if (dx * dx + dz * dz <= SITE_ROOM * SITE_ROOM && lands.wet(x + dx, z + dz)) {
+                    return false;
+                }
+            }
+        }
         return true;
     }
 

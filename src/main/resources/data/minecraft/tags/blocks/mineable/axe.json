@@ -1,4 +1,4 @@
 {
   "replace": false,
-  "values": [ "rafasconquest:command_table" ]
+  "values": [ "rafasconquest:command_table", "rafasconquest:grand_strategy", "rafasconquest:strategy_board" ]
 }

@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "minecraft:block/dark_oak_planks",
+    "east": "rafasconquest:block/strategy_board_side3",
+    "north": "rafasconquest:block/strategy_board_side3",
+    "particle": "rafasconquest:block/strategy_board_side3",
+    "south": "rafasconquest:block/strategy_board_side1",
+    "up": "rafasconquest:block/strategy_board_top",
+    "west": "rafasconquest:block/strategy_board_side2"
+  }
+}

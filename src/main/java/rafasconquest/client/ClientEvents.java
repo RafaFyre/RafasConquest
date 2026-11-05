@@ -103,19 +103,22 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onRenderLiving(RenderLivingEvent.Pre<?, ?> event) {
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        if (DistantArmyRenderer.hides(event.getEntity(), eye, event.getPartialTick())) {
+        Minecraft mc = Minecraft.getInstance();
+        // In the city manager the player, held above the city as a spectator, would float in view as a head.
+        if (DistantArmyRenderer.hides(event.getEntity(), eye, event.getPartialTick())
+                || event.getEntity() == mc.player && mc.screen instanceof CityManagerScreen) {
             event.setCanceled(true);
         }
     }
 
-    /** Right-clicking the war horn opens its screen instead of blowing it. */
+    /** Right-clicking the war horn opens the battle screen instead of blowing it. */
     @SubscribeEvent
     public static void onRightClickItem(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem event) {
         if (event.getLevel().isClientSide() && rafasconquest.bridge.WarHorn.is(event.getItemStack())) {
             event.setCanceled(true);
             event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
             if (Minecraft.getInstance().screen == null) {
-                HornScreen.open();
+                BattleScreen.open();
             }
         }
     }
@@ -170,5 +173,45 @@ public final class ClientEvents {
         if (event.getLevel().isClientSide()) {
             BackBanners.remove(event.getEntity().getId());
         }
+    }
+
+    /** In the battle screen the field of view is the plain setting, so the screen's picking matches what is drawn. */
+    @SubscribeEvent
+    public static void onComputeFov(net.minecraftforge.client.event.ViewportEvent.ComputeFov event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (event.usedConfiguredFov() && mc.screen instanceof BattleScreen) {
+            event.setFOV(mc.options.fov().get());
+        }
+    }
+
+    /**
+     * The player's body, ordered in the battle screen like any unit, walks itself straight to where it was sent (jumping
+     * what it bumps into); any movement key of their own takes it back.
+     */
+    @SubscribeEvent
+    public static void onMovementInput(net.minecraftforge.client.event.MovementInputUpdateEvent event) {
+        net.minecraft.world.phys.Vec3 to = BattleScreen.walkTo;
+        Minecraft mc = Minecraft.getInstance();
+        if (to == null || event.getEntity() != mc.player) {
+            return;
+        }
+        var in = event.getInput();
+        if (mc.screen == null && (in.up || in.down || in.left || in.right)) {
+            BattleScreen.walkTo = null;
+            return;
+        }
+        double dx = to.x - mc.player.getX();
+        double dz = to.z - mc.player.getZ();
+        if (dx * dx + dz * dz < 2.25) {
+            BattleScreen.walkTo = null;
+            return;
+        }
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+        mc.player.setYRot(yaw);
+        mc.player.setYHeadRot(yaw);
+        in.forwardImpulse = 1;
+        in.leftImpulse = 0;
+        in.up = true;
+        in.jumping = mc.player.horizontalCollision;
     }
 }

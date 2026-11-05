@@ -172,6 +172,12 @@ public final class MapLands implements Lands {
         return new int[]{map.centres().get(province).x(), map.centres().get(province).z()};
     }
 
+    @Override
+    public boolean wet(double x, double z) {
+        int i = map.pixelAt(x, z);
+        return i < 0 || map.wet()[i];
+    }
+
     /** Which provinces touch which, from the map's pixels. */
     private static List<Set<Integer>> adjacency(BaseMap map) {
         int n = map.centres().size();

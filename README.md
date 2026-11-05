@@ -872,8 +872,8 @@ the armies marching on every five seconds.
   site, then to it (in straight lines for now; along the roads is to come). For now every army musters offensively.
 - **Battles**: when both armies have arrived they fight. **Far from players** the battle is settled by the armies'
   strength (the defender's counting 15 % more on its own ground): the loser loses 35 to 65 % of its army, the winner 10
-  to 25 %. **Within 400 blocks of a player** it is **fought for real** with the battle system (up to 1,000 a side,
-  scaled), and the share of each army left standing is the share that survives. The dead are lost to the nation's
+  to 25 %. **Within 400 blocks of a player** it is **fought for real** with the battle system at the armies' full
+  size (up to 100,000 a side), and the share of each army left standing is the share that survives. The dead are lost to the nation's
   manpower; 2 % of its levy is made good each day.
 - **Each attacker victory takes that county**. Then each ruler decides:
   - **The beaten defender** may **sue for peace**, giving up the rest of the title rather than raise another army and

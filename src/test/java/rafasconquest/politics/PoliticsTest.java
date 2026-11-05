@@ -140,6 +140,14 @@ class PoliticsTest {
         public int[] centre(int province) {
             return new int[]{province * 1000, 0};
         }
+
+        /** Sea wherever this says, for battle sites. */
+        java.util.function.BiPredicate<Double, Double> water = (x, z) -> false;
+
+        @Override
+        public boolean wet(double x, double z) {
+            return water.test(x, z);
+        }
     }
 
     static final Politics.Front FAR = new Politics.Front() {
@@ -158,6 +166,18 @@ class PoliticsTest {
         stats[Stat.MARTIAL.ordinal()] = martial;
         stats[Stat.DIPLOMACY.ordinal()] = 10;
         return new Person("R", "X", false, 40, 0, 0, 0, stats, List.of(traits), new Person.Hold(Person.Kind.CAPITAL, 0, 0, 0), -1, 0, false);
+    }
+
+    @Test
+    void battleSitesMoveOntoDryLand() {
+        Row lands = row();
+        lands.water = (x, z) -> x < 500; // sea west of x = 500
+        double[] site = Politics.onLand(new double[]{0, 0}, lands);
+        assertTrue(site[0] - Politics.SITE_ROOM >= 500, "dry all about: " + site[0]);
+        assertTrue(site[0] < 500 + Politics.SITE_ROOM + 2 * Politics.SITE_STEP, "and the nearest such: " + site[0]);
+        assertTrue(Math.abs(site[1]) < 1e-9, "straight across: " + site[1]);
+        double[] dry = Politics.onLand(new double[]{2000, 0}, lands);
+        assertTrue(dry[0] == 2000 && dry[1] == 0, "a dry site stays");
     }
 
     static Row row() {

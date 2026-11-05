@@ -62,4 +62,9 @@ public interface Lands {
 
     /** A province's middle, (x, z) in blocks. */
     int[] centre(int province);
+
+    /** Whether a place (x, z) lies in sea or river by the world map, from the world's seed; off the map counts as water. */
+    default boolean wet(double x, double z) {
+        return false;
+    }
 }

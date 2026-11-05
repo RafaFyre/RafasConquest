@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
+import net.minecraft.util.Mth;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.bridge.RecruitsBattle;
 import rafasconquest.faction.Faction;
@@ -36,8 +37,6 @@ import java.util.UUID;
 public final class Wars {
     /** A war's battle within this many blocks of a player is fought for real. */
     static final int REAL_RANGE = 400;
-    /** The most soldiers a side brings to a real battle (the rest are elsewhere): the server's limit, not the war's. */
-    static final int REAL_CAP = 1000;
     /** How often the armies march on, in ticks. */
     static final int MARCH_TICKS = 100;
     /** How far behind its lines a mustered player is brought to the battle. */
@@ -174,10 +173,11 @@ public final class Wars {
                         + brought + " of their vassals' troops and retinue to the field.").withStyle(ChatFormatting.GOLD), false);
             }
         }
-        double scale = Math.min(1, REAL_CAP / (double) Math.max(attackers, defenders));
         String county = MapLands.of(map).titleName(new Goal(false, war.target()));
         try {
-            RecruitsBattle.start(server.overworld(), a, Math.max(20, (int) (attackers * scale)), d, Math.max(20, (int) (defenders * scale)),
+            // Fought at full size: the field battle is numbers, only blocks near players are real soldiers.
+            RecruitsBattle.start(server.overworld(), a, Mth.clamp(attackers, 20, BattlePlan.MAX_SOLDIERS), d,
+                    Mth.clamp(defenders, 20, BattlePlan.MAX_SOLDIERS),
                     new BattlePlan.Point(war.siteX(), war.siteZ()), axis[0], axis[1], general(map, war, true), general(map, war, false),
                     line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] The armies of " + a.name() + " and "
                             + d.name() + " meet in battle for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
@@ -364,6 +364,39 @@ public final class Wars {
         MusterBars.update(server, map, data.politics);
         PoliticsSync.toAll(server);
         return ended == 0 ? "No army is mustering" : ended + " army(ies) done mustering: they march now";
+    }
+
+    /**
+     * Ends the march of every army on the march now, or only those of the sides {@code nation} fights on: each skips its
+     * stops and stands on its war's battle site. Armies still mustering stay (for {@code /pve politics march finish}).
+     */
+    public static String finishMarch(MinecraftServer server, @Nullable String nation) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return "No world map yet";
+        }
+        int only = nation == null ? -1 : nationNamed(map, nation);
+        if (nation != null && only < 0) {
+            return "No such nation";
+        }
+        PoliticsData data = PoliticsData.get(server);
+        double now = now(server);
+        int ended = 0;
+        for (War war : data.politics.wars()) {
+            for (boolean attacking : new boolean[]{true, false}) {
+                Army army = war.army(attacking);
+                if (army != null && !army.mustering(now) && (only < 0 || war.side(attacking).contains(only))) {
+                    army.stops.clear();
+                    army.x = war.siteX();
+                    army.z = war.siteZ();
+                    ended++;
+                }
+            }
+        }
+        data.setDirty();
+        MusterBars.update(server, map, data.politics);
+        PoliticsSync.toAll(server);
+        return ended == 0 ? "No army is on the march" : ended + " army(ies) done marching: they stand on their battle sites";
     }
 
     /**

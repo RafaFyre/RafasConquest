@@ -89,13 +89,30 @@ final class Terrain implements GroundPlan.Ground {
         long started = System.nanoTime();
         List<long[]> unloaded = area[0] <= area[2] ? readLoaded(area[0], area[1], area[2], area[3]) : List.of();
         int loaded = cells.size();
-        return CompletableFuture.supplyAsync(() -> unloaded.parallelStream().map(c -> generated((int) c[1], (int) c[2])).toArray(Cell[]::new))
+        // shortcut: shores are read on a grid twice as coarse (each 2 x 2 of cells shares one reading from the generator,
+        // still finer than the map's 16-block pixels); read every cell if shorelines need to be sharper.
+        Map<Long, int[]> coarse = new HashMap<>();
+        for (long[] c : unloaded) {
+            int x = Math.floorDiv((int) c[1], step * 2) * step * 2 + step;
+            int z = Math.floorDiv((int) c[2], step * 2) * step * 2 + step;
+            coarse.putIfAbsent(((long) x << 32) ^ (z & 0xffffffffL), new int[]{x, z});
+        }
+        List<Map.Entry<Long, int[]>> readings = new ArrayList<>(coarse.entrySet());
+        return CompletableFuture.supplyAsync(() -> readings.parallelStream().map(r -> generated(r.getValue()[0], r.getValue()[1]))
+                        .toArray(Cell[]::new))
                 .thenAcceptAsync(generated -> {
+                    Map<Long, Cell> byCoarse = new HashMap<>();
                     for (int i = 0; i < generated.length; i++) {
-                        cells.put(unloaded.get(i)[0], generated[i]);
+                        byCoarse.put(readings.get(i).getKey(), generated[i]);
+                    }
+                    for (long[] c : unloaded) {
+                        int x = Math.floorDiv((int) c[1], step * 2) * step * 2 + step;
+                        int z = Math.floorDiv((int) c[2], step * 2) * step * 2 + step;
+                        cells.put(c[0], byCoarse.get(((long) x << 32) ^ (z & 0xffffffffL)));
                     }
                     RafasConquest.LOGGER.info("[battle] surveyed the ground in the background: {} cells from the world and the map, {} "
-                            + "shore cells from the world generator, in {} ms", loaded, generated.length, (System.nanoTime() - started) / 1_000_000);
+                                    + "shore cells from {} readings of the world generator, in {} ms", loaded, unloaded.size(), generated.length,
+                            (System.nanoTime() - started) / 1_000_000);
                 }, level.getServer());
     }
 
@@ -181,11 +198,12 @@ final class Terrain implements GroundPlan.Ground {
     private Cell generated(int x, int z) {
         ChunkGenerator generator = level.getChunkSource().getGenerator();
         RandomState random = level.getChunkSource().randomState();
+        // One height column per cell, not two: with heavy world generation (Tectonic, Continents) each costs ~10 ms.
         int floor = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
-        int surface = generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random);
         Holder<Biome> biome = generator.getBiomeSource().getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(floor),
                 QuartPos.fromBlock(z), random.sampler());
         boolean forest = biome.is(BiomeTags.IS_FOREST) || biome.is(BiomeTags.IS_TAIGA) || biome.is(BiomeTags.IS_JUNGLE);
-        return new Cell(floor, surface > floor, forest);
+        // shortcut: wet means ground below sea level, so a lake above it reads as dry; read the surface too if that matters.
+        return new Cell(floor, floor < generator.getSeaLevel(), forest);
     }
 }
