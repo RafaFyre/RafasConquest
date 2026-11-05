@@ -51,8 +51,25 @@ public final class ConquestRuntime {
         return map;
     }
 
+    /** Each province's holder when the world began, before any conquest: who builds its city. */
+    @Nullable
+    private static volatile int[] founders;
+
+    @Nullable
+    public static int[] founders() {
+        return founders;
+    }
+
+    /** Keeps the map's holders as drawn, before the wars are put back on it. */
+    public static void publishFounders(@Nullable int[] holders) {
+        founders = holders;
+    }
+
     public static void publishMap(@Nullable rafasconquest.map.BaseMap drawn) {
         map = drawn;
+        if (drawn == null) {
+            founders = null;
+        }
         rafasconquest.style.CityStyles.forgetAll(); // a new world: its cities choose afresh
     }
 }

@@ -51,6 +51,7 @@ public final class ConquestEvents {
             ConquestServer.attach(level, data);
             // The map, and so the titles and their seat cities, before the first chunk is made.
             rafasconquest.map.BaseMap map = ConquestServer.get().mapStore().loadOrDrawNow();
+            ConquestRuntime.publishFounders(map.holders().clone()); // who founded each city, before the wars
             rafasconquest.politics.Wars.restore(level, map); // the land as the wars have left it
             ConquestRuntime.publishMap(map);
             ConquestRuntime.publishCities(new rafasconquest.worldgen.CityIndex(map.cities()));

@@ -36,9 +36,9 @@ public class CountryStructure extends Structure {
         // A structure from the style folders, where its slot has one; else built as it always has been.
         String styled = styled(ctx, s);
         if (styled != null) {
-            rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.of(styled, s.x(), ground(ctx, s.x(), s.z()) - 1, s.z(), turns);
-            if (piece != null) {
-                pieces.addPiece(piece);
+            java.util.List<rafasconquest.style.StylePiece> styledPieces = rafasconquest.style.StylePiece.of(styled, s.x(), ground(ctx, s.x(), s.z()) - 1, s.z(), turns);
+            if (!styledPieces.isEmpty()) {
+                styledPieces.forEach(pieces::addPiece);
                 return;
             }
         }

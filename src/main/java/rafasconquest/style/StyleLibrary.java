@@ -64,8 +64,16 @@ public final class StyleLibrary {
     /** Each homeland's style, from the styles' {@code style.json}. */
     private static volatile Map<Homeland, String> styleOf = Map.of();
 
-    private record Loaded(long modified, StructureTemplate template) {
+    /**
+     * A structure file read: its size, and either the whole template (a file of one tile) or its tiles, by
+     * {@link #tileKey}. Placing a template walks every block in it for each chunk it is built in, so a big file is held
+     * in {@link #TILE}-block squares, each placed on its own.
+     */
+    private record Loaded(long modified, net.minecraft.core.Vec3i size, @Nullable StructureTemplate whole, Map<Long, StructureTemplate> tiles) {
     }
+
+    /** The side of a tile, in blocks of the template. */
+    public static final int TILE = 32;
 
     private StyleLibrary() {
     }
@@ -224,25 +232,86 @@ public final class StyleLibrary {
         return root().relativize(chosen).toString().replace('\\', '/');
     }
 
-    /** A structure file read (once, until it changes or the library reloads); null if it can't be. */
+    /** A structure file of one tile (no more than {@link #TILE} blocks across), whole; null if it is bigger or can't be read. */
     @Nullable
     public static StructureTemplate template(String relative) {
+        Loaded loaded = read(relative);
+        return loaded == null ? null : loaded.whole();
+    }
+
+    /** A structure file's size; null if it can't be read. */
+    @Nullable
+    public static net.minecraft.core.Vec3i size(String relative) {
+        Loaded loaded = read(relative);
+        return loaded == null ? null : loaded.size();
+    }
+
+    /** Tile (i, j) of a structure file: only its blocks, at their places in the whole; null if it can't be read. */
+    @Nullable
+    public static StructureTemplate tile(String relative, int i, int j) {
+        Loaded loaded = read(relative);
+        return loaded == null ? null : loaded.whole() != null ? loaded.whole() : loaded.tiles().get(tileKey(i, j));
+    }
+
+    private static long tileKey(int i, int j) {
+        return (long) i << 32 | (j & 0xffffffffL);
+    }
+
+    /** A structure file read (once, until it changes or the library reloads); null if it can't be. */
+    @Nullable
+    private static Loaded read(String relative) {
         Path file = root().resolve(relative);
         try {
             long modified = Files.getLastModifiedTime(file).toMillis();
             Loaded loaded = TEMPLATES.get(file);
             if (loaded != null && loaded.modified() == modified) {
-                return loaded.template();
+                return loaded;
             }
             CompoundTag tag = NbtIo.readCompressed(file.toFile());
-            StructureTemplate template = new StructureTemplate();
-            template.load(BuiltInRegistries.BLOCK.asLookup(), tag);
-            TEMPLATES.put(file, new Loaded(modified, template));
-            return template;
+            net.minecraft.nbt.ListTag s = tag.getList("size", net.minecraft.nbt.Tag.TAG_INT);
+            net.minecraft.core.Vec3i size = new net.minecraft.core.Vec3i(s.getInt(0), s.getInt(1), s.getInt(2));
+            if (size.getX() <= TILE && size.getZ() <= TILE) {
+                StructureTemplate whole = new StructureTemplate();
+                whole.load(BuiltInRegistries.BLOCK.asLookup(), tag);
+                loaded = new Loaded(modified, size, whole, Map.of());
+            } else {
+                loaded = new Loaded(modified, size, null, tiles(tag, size));
+            }
+            TEMPLATES.put(file, loaded);
+            return loaded;
         } catch (IOException | RuntimeException e) {
             RafasConquest.LOGGER.warn("[style] Could not read {}: {}", file, e.toString());
             return null;
         }
+    }
+
+    /** A big file cut into tiles: each the whole file's size and palette, with only its own blocks and entities. */
+    private static Map<Long, StructureTemplate> tiles(CompoundTag tag, net.minecraft.core.Vec3i size) {
+        Map<Long, net.minecraft.nbt.ListTag> blocks = new java.util.HashMap<>();
+        for (net.minecraft.nbt.Tag t : tag.getList("blocks", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            net.minecraft.nbt.ListTag pos = ((CompoundTag) t).getList("pos", net.minecraft.nbt.Tag.TAG_INT);
+            blocks.computeIfAbsent(tileKey(pos.getInt(0) / TILE, pos.getInt(2) / TILE), k -> new net.minecraft.nbt.ListTag()).add(t);
+        }
+        Map<Long, net.minecraft.nbt.ListTag> entities = new java.util.HashMap<>();
+        for (net.minecraft.nbt.Tag t : tag.getList("entities", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            net.minecraft.nbt.ListTag pos = ((CompoundTag) t).getList("blockPos", net.minecraft.nbt.Tag.TAG_INT);
+            entities.computeIfAbsent(tileKey(pos.getInt(0) / TILE, pos.getInt(2) / TILE), k -> new net.minecraft.nbt.ListTag()).add(t);
+        }
+        CompoundTag base = tag.copy();
+        base.remove("blocks");
+        base.remove("entities");
+        Map<Long, StructureTemplate> tiles = new java.util.HashMap<>();
+        for (int i = 0; i * TILE < size.getX(); i++) {
+            for (int j = 0; j * TILE < size.getZ(); j++) {
+                CompoundTag one = base.copy();
+                one.put("blocks", blocks.getOrDefault(tileKey(i, j), new net.minecraft.nbt.ListTag()));
+                one.put("entities", entities.getOrDefault(tileKey(i, j), new net.minecraft.nbt.ListTag()));
+                StructureTemplate t = new StructureTemplate();
+                t.load(BuiltInRegistries.BLOCK.asLookup(), one);
+                tiles.put(tileKey(i, j), t);
+            }
+        }
+        return tiles;
     }
 
     /**

@@ -129,6 +129,18 @@ public final class CityPlan {
         return of(new CityLayout.Site(originX + half, originZ + half, false, cells));
     }
 
+    /** Whether a style's Palace stands in the city in place of the gold church: then its markers bring its people. */
+    public static boolean palaceStands(CityLayout.Site site) {
+        Plan plan = of(site);
+        return plan.noble() ? plan.has(Kind.PALACE) : CityStyles.palace(site) != null;
+    }
+
+    /** Whether a style's Barracks stands in the city in place of the mod's post: then its markers bring its people. */
+    public static boolean barracksStands(CityLayout.Site site) {
+        Plan plan = of(site);
+        return plan.noble() ? !plan.has(Kind.POST) : CityStyles.barracks(site) != null;
+    }
+
     private static int cellOf(int cells, int local) {
         return Math.max(0, Math.min(cells - 1, Math.floorDiv(local, CityLayout.DISTRICT_SPACING)));
     }
@@ -226,22 +238,29 @@ public final class CityPlan {
         int middle = site.size() / 2;
         List<Piece> taken = new ArrayList<>();
         String barracks = CityStyles.barracks(site);
+        RecruitmentPost post = RecruitmentPost.of(site);
+        // The mod's own post, on its own plot, where the style has no Barracks or its Barracks finds no room.
+        Piece ownPost = new Piece(Kind.POST, null, post.plotX() - site.originX(), post.plotZ() - site.originZ(),
+                CityLayout.PLOT_SIZE, CityLayout.PLOT_SIZE, 0, 0);
         if (barracks == null) {
-            // No Barracks in the style: the mod's own post keeps its plot (its people stand by it).
-            RecruitmentPost post = RecruitmentPost.of(site);
-            int px = post.plotX() - site.originX();
-            int pz = post.plotZ() - site.originZ();
-            taken.add(new Piece(Kind.POST, null, px, pz, CityLayout.PLOT_SIZE, CityLayout.PLOT_SIZE, 0, 0));
+            taken.add(ownPost); // its people stand by it
         }
-        Piece palace = place(site, Kind.PALACE, CityStyles.building(CityStyles.palace(site)), middle, middle, a0, a1, taken);
-        if (palace != null) {
-            taken.add(palace);
+        // The first Palace that fits, the wanted size first.
+        Piece palace = null;
+        for (String file : CityStyles.palaces(site)) {
+            palace = place(site, Kind.PALACE, CityStyles.building(file), middle, middle, a0, a1, taken);
+            if (palace != null) {
+                taken.add(palace);
+                break;
+            }
         }
         int nearX = palace == null ? middle : palace.centreX();
         int nearZ = palace == null ? middle : palace.centreZ();
         Piece b = place(site, Kind.BARRACKS, CityStyles.building(barracks), nearX, nearZ, a0, a1, taken);
         if (b != null) {
             taken.add(b);
+        } else if (barracks != null && clear(ownPost, taken)) {
+            taken.add(ownPost);
         }
         Piece church = place(site, Kind.CHURCH, CityStyles.building(CityStyles.church(site)), nearX, nearZ, a0, a1, taken);
         if (church != null) {

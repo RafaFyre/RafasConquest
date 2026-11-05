@@ -41,35 +41,44 @@ public final class CityStyles {
 
     /** Choices made, by slot and city, until the library reloads. */
     private static final Map<String, Optional<String>> CHOSEN = new ConcurrentHashMap<>();
+    private static final Map<String, List<String>> PALACES = new ConcurrentHashMap<>();
 
     private CityStyles() {
     }
 
     static void forget() {
         CHOSEN.clear();
+        PALACES.clear();
     }
 
     /** Forgets every choice and plan made for the cities of the world before. */
     public static void forgetAll() {
         CHOSEN.clear();
+        PALACES.clear();
         CityPlan.forget();
         rafasconquest.sim.RecruitmentPosts.forgetSanctums();
     }
 
-    /** The homeland of the nation holding a city, or null if none holds it. */
+    /** The homeland of the nation that founded a city, or null if no nation did. */
     @Nullable
     public static Homeland homeland(CityLayout.Site site) {
         BaseMap map = ConquestRuntime.map();
-        int province = map == null ? -1 : map.provinceIndexAt(site.x(), site.z());
-        int nation = province < 0 ? -1 : map.holders()[province];
+        int nation = holder(site);
         return nation < 0 ? null : rafasconquest.gear.Armoury.homeland(map, map.nations().get(nation).id());
     }
 
-    /** The nation holding a city (its index), or -1. */
+    /**
+     * The nation that held a city when the world began (its index), or -1. A city is built, and its people placed, by
+     * its founder's style however the wars have gone since: a city half built when it changes hands is finished as begun.
+     */
     private static int holder(CityLayout.Site site) {
         BaseMap map = ConquestRuntime.map();
         int province = map == null ? -1 : map.provinceIndexAt(site.x(), site.z());
-        return province < 0 ? -1 : map.holders()[province];
+        if (province < 0) {
+            return -1;
+        }
+        int[] founders = ConquestRuntime.founders();
+        return founders != null && province < founders.length ? founders[province] : map.holders()[province];
     }
 
     /** The city's size, 0 (two districts a side) to 3 (six or more). */
@@ -100,16 +109,33 @@ public final class CityStyles {
         return nation >= 0 && map.nations().get(nation).sanctum();
     }
 
-    /**
-     * The Palace: at a sword sanctum, the sanctum; else the hold of the city's highest title (an empire's xxlarge down
-     * to small), the next size down where the style has none, then up; the style's own before the default style's.
-     */
+    /** The city's Palace: the first of {@link #palaces}, or null if it has none. */
     @Nullable
     public static String palace(CityLayout.Site site) {
-        return chosen("palace", site, () -> {
+        List<String> palaces = palaces(site);
+        return palaces.isEmpty() ? null : palaces.get(0);
+    }
+
+    /**
+     * Every Palace the city could build, best first: at a sword sanctum, the sanctum; then the hold of the city's
+     * highest title (an empire's xxlarge down to small), then each size down, then up; the style's own before the
+     * default style's. The city builds the first that fits its noble district.
+     */
+    public static List<String> palaces(CityLayout.Site site) {
+        if (ConquestRuntime.map() == null) {
+            return List.of();
+        }
+        return PALACES.computeIfAbsent(site.x() + "|" + site.z() + "|" + site.cells(), k -> {
+            Homeland land = homeland(site);
+            if (land == null) {
+                return List.of();
+            }
+            List<String> palaces = new ArrayList<>();
             if (sanctum(site)) {
-                Homeland land = homeland(site);
-                return land == null ? null : StyleLibrary.pick(land, SWORD_SANCTUM, seed(site));
+                String sanctum = StyleLibrary.pick(land, SWORD_SANCTUM, seed(site));
+                if (sanctum != null) {
+                    palaces.add(sanctum);
+                }
             }
             TitleMap.Tier tier = tier(site);
             int wanted = tier == null ? 0 : switch (tier) {
@@ -118,14 +144,15 @@ public final class CityStyles {
                 case KINGDOM -> 3;
                 case EMPIRE -> 4;
             };
-            return sized(site, "palace", PALACE_SIZES, wanted);
+            palaces.addAll(sized(site, "palace", PALACE_SIZES, wanted));
+            return List.copyOf(palaces);
         });
     }
 
     /** The Barracks, sized by the city: the next size down where the style has none, then up. */
     @Nullable
     public static String barracks(CityLayout.Site site) {
-        return chosen("barracks", site, () -> sized(site, "barracks", BARRACKS_SIZES, sizeRank(site)));
+        return chosen("barracks", site, () -> sized(site, "barracks", BARRACKS_SIZES, sizeRank(site)).stream().findFirst().orElse(null));
     }
 
     /**
@@ -141,12 +168,12 @@ public final class CityStyles {
                 return null;
             }
             List<String> churches = new ArrayList<>(StyleLibrary.all(homeland(site), CHURCHES));
-            churches.removeIf(f -> StyleLibrary.template(f) == null);
+            churches.removeIf(f -> StyleLibrary.size(f) == null);
             if (churches.isEmpty()) {
                 return null;
             }
             churches.sort(Comparator.comparingInt(f -> {
-                net.minecraft.core.Vec3i s = StyleLibrary.template(f).getSize();
+                net.minecraft.core.Vec3i s = StyleLibrary.size(f);
                 return s.getX() * s.getZ();
             }));
             return churches.get(Math.min(sizeRank(site), churches.size() - 1));
@@ -174,8 +201,8 @@ public final class CityStyles {
         if (file == null) {
             return null;
         }
-        net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate t = StyleLibrary.template(file);
-        return t == null ? null : new Building(file, t.getSize().getX(), t.getSize().getY(), t.getSize().getZ());
+        net.minecraft.core.Vec3i s = StyleLibrary.size(file);
+        return s == null ? null : new Building(file, s.getX(), s.getY(), s.getZ());
     }
 
     private static List<Building> read(List<String> files) {
@@ -207,12 +234,12 @@ public final class CityStyles {
         return new Houses(files, sizes);
     }
 
-    /** A sized slot's file: the wanted size, then smaller, then larger; in the holder's style, then the default style. */
-    @Nullable
-    private static String sized(CityLayout.Site site, String kind, List<String> sizes, int wanted) {
+    /** A sized slot's files, one per size: the wanted size, then smaller, then larger; in the founder's style, then the default style. */
+    private static List<String> sized(CityLayout.Site site, String kind, List<String> sizes, int wanted) {
         Homeland land = homeland(site);
+        List<String> found = new ArrayList<>();
         if (land == null) {
-            return null;
+            return found;
         }
         List<Integer> order = new ArrayList<>();
         for (int i = Math.min(wanted, sizes.size() - 1); i >= 0; i--) {
@@ -223,13 +250,13 @@ public final class CityStyles {
         }
         for (String style : new String[]{StyleLibrary.styleOf(land), StyleLibrary.DEFAULT}) {
             for (int i : order) {
-                String found = StyleLibrary.pickIn(style, MANDATORY + kind + "/" + sizes.get(i), seed(site));
-                if (found != null) {
-                    return found;
+                String file = StyleLibrary.pickIn(style, MANDATORY + kind + "/" + sizes.get(i), seed(site));
+                if (file != null) {
+                    found.add(file);
                 }
             }
         }
-        return null;
+        return found;
     }
 
     private static long seed(CityLayout.Site site) {

@@ -38,7 +38,7 @@ public final class RecruitmentPosts {
             if (post.x1() < minX || post.plotX() > minX + 15 || post.z1() < minZ || post.z0() > minZ + 15 || !CityGridBuilder.heldByANation(site)) {
                 continue;
             }
-            if (rafasconquest.style.CityStyles.barracks(site) != null) {
+            if (rafasconquest.style.CityPlan.barracksStands(site)) {
                 continue; // a style's Barracks stands here: its Character Markers bring its people
             }
             Faction owner = null;
@@ -126,7 +126,7 @@ public final class RecruitmentPosts {
                 yaw = 0;
             } else {
                 CityLayout.Site site = new CityLayout.Site(hold.x(), hold.z(), false, cells);
-                if (rafasconquest.style.CityStyles.palace(site) != null) {
+                if (rafasconquest.style.CityPlan.palaceStands(site)) {
                     continue; // a style's Palace stands here: its Character Markers bring its people
                 }
                 int[] plot = RecruitmentPost.of(site).church();

@@ -179,8 +179,8 @@ public final class CityGridBuilder {
         pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY));
 
         // The styled walls and the noble district, laid out for the whole city.
-        rafasconquest.style.CityPlan.Plan styled = heldByANation(site) ? rafasconquest.style.CityPlan.of(site) : null;
-        boolean noble = styled != null && styled.noble();
+        rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site); // by its founder, held or not
+        boolean noble = styled.noble();
         int nobleMin = noble ? styled.areaMin() : 0;
         int nobleMax = noble ? styled.areaMax() : -1;
 
@@ -219,9 +219,12 @@ public final class CityGridBuilder {
                                     && heldByANation(site)) {
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
-                                rafasconquest.style.StylePiece styledPiece = barracks == null ? null : rafasconquest.style.StylePiece.of(barracks,
+                                java.util.List<rafasconquest.style.StylePiece> styledPiece = barracks == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(barracks,
                                         blockX + CityLayout.PLOT_SIZE / 2, plate, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
-                                pieces.addPiece(styledPiece != null ? styledPiece : new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                if (styledPiece.isEmpty()) {
+                                    pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                }
+                                styledPiece.forEach(pieces::addPiece);
                                 continue; // the recruitment post has this plot
                             }
                             if (qx == 0 && qz == 1 && bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)
@@ -229,9 +232,12 @@ public final class CityGridBuilder {
                                 int[] church = RecruitmentPost.of(site).church();
                                 // The Palace: from the style folders where its slot has a file, else the gold church.
                                 String palace = rafasconquest.style.CityStyles.palace(site);
-                                rafasconquest.style.StylePiece styledPiece = palace == null ? null : rafasconquest.style.StylePiece.of(palace,
+                                java.util.List<rafasconquest.style.StylePiece> styledPiece = palace == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(palace,
                                         church[0] + CityLayout.PLOT_SIZE / 2, plate, church[1] + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
-                                pieces.addPiece(styledPiece != null ? styledPiece : new GoldChurchPiece(church[0], church[1], plate));
+                                if (styledPiece.isEmpty()) {
+                                    pieces.addPiece(new GoldChurchPiece(church[0], church[1], plate));
+                                }
+                                styledPiece.forEach(pieces::addPiece);
                                 continue; // and the gold church, the one beside it
                             }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
@@ -246,21 +252,16 @@ public final class CityGridBuilder {
         }
 
         // The styled pieces this cell builds: the noble district's and the walls.
-        if (styled != null) {
-            for (rafasconquest.style.CityPlan.Piece p : styled.inCell(site.cells(), cellX, cellZ)) {
-                if (p.kind() == rafasconquest.style.CityPlan.Kind.POST) {
-                    pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
-                    continue;
-                }
-                rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), plate, oz + p.minZ(), p.turns());
-                if (piece != null) {
-                    pieces.addPiece(piece);
-                }
+        for (rafasconquest.style.CityPlan.Piece p : styled.inCell(site.cells(), cellX, cellZ)) {
+            if (p.kind() == rafasconquest.style.CityPlan.Kind.POST) {
+                pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                continue;
             }
+            rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), plate, oz + p.minZ(), p.turns()).forEach(pieces::addPiece);
         }
 
         // Walls last, so they stand on top of the edge road (the mod's own, where the style has no walls of its own).
-        if (styled == null || !styled.styledWalls()) {
+        if (!styled.styledWalls()) {
             buildWalls(cellX, cellZ);
         }
     }
@@ -390,11 +391,8 @@ public final class CityGridBuilder {
         int size = 2 * CityLayout.PLOT_SIZE + 1;
         java.util.Random packing = new java.util.Random(random.nextLong());
         for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(size, houses.sizes(), packing)) {
-            rafasconquest.style.StylePiece piece = rafasconquest.style.StylePiece.at(houses.files().get(p.building()),
-                    blockX + p.x(), plate, blockZ + p.z(), p.turns());
-            if (piece != null) {
-                pieces.addPiece(piece);
-            }
+            rafasconquest.style.StylePiece.at(houses.files().get(p.building()), blockX + p.x(), plate, blockZ + p.z(), p.turns())
+                    .forEach(pieces::addPiece);
         }
     }
 
