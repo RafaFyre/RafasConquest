@@ -89,7 +89,11 @@ dependencies {
     runtimeOnly "maven.modrinth:epic-knights-antique-legacy:${antique_legacy_version}"
     runtimeOnly "maven.modrinth:architectury-api:${architectury_version}"
     runtimeOnly "maven.modrinth:cloth-config:${cloth_config_version}"
-    runtimeOnly "maven.modrinth:sable:${sable_version}"
+    // Sable is also compiled against, to sail real ships on the sea lanes; only bridge/SableShips touches it, and only
+    // when it is installed. Its pose and box types are in a companion jar nested inside it.
+    implementation "maven.modrinth:sable:${sable_version}"
+    def sableJar = configurations.detachedConfiguration(dependencies.create("maven.modrinth:sable:${sable_version}")).singleFile
+    compileOnly zipTree(sableJar).matching { include 'META-INF/jarjar/sable-companion-common-*.jar' }
     runtimeOnly "maven.modrinth:photon-editor:${photon_version}"
     runtimeOnly "maven.modrinth:kilagraph:${kilagraph_version}"
     // LDLib2 is not on Modrinth. The -all jar bundles its own libraries.

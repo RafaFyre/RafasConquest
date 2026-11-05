@@ -20,6 +20,10 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.battle.FormationSnapshot.Sprite;
+import rafasconquest.core.SeaLanes;
+import rafasconquest.style.ShipHulls;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.EmptyBlockGetter;
 
 
 import java.awt.Color;
@@ -189,6 +193,26 @@ final class DistantHorizonsArmies {
                     continue;
                 }
                 new Figure(group, formation, sprite).build();
+            }
+        }
+        // The sea lanes' ships between the real ones and the sprites, each block of the hull a box, turned to its heading.
+        double keel = DistantShips.keel();
+        for (SeaLanes.Ship ship : DistantShips.now(mc.getTimer().getGameTimeDeltaPartialTick(false))) {
+            double flat = Math.hypot(ship.x() - eye.x, ship.z() - eye.z);
+            if (flat <= renderBlocks || flat > DistantShips.SPRITE_PAST) {
+                continue;
+            }
+            double cos = Math.cos(ship.yaw());
+            double sin = Math.sin(ship.yaw());
+            for (ShipHulls.Part part : ShipHulls.of(ship)) {
+                int rgb = part.state().getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).col;
+                if (rgb == 0) {
+                    continue; // glass and the like
+                }
+                double x = ship.x() + part.x() * cos + part.z() * sin;
+                double z = ship.z() - part.x() * sin + part.z() * cos;
+                group.add(new DhApiRenderableBox(new DhApiVec3d(x - 0.5, keel + part.y(), z - 0.5),
+                        new DhApiVec3d(x + 0.5, keel + part.y() + 1, z + 0.5), new Color(rgb), EDhApiBlockMaterial.WOOD));
             }
         }
     }

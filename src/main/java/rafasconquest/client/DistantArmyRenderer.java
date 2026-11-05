@@ -23,6 +23,7 @@ import org.joml.Vector3f;
 import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.battle.FormationSnapshot.Sprite;
+import rafasconquest.core.SeaLanes;
 
 import java.util.List;
 
@@ -45,6 +46,9 @@ public final class DistantArmyRenderer {
     private static final int GOLD = 0xF9D84A;
     private static final int POLE = 0x6B4A2B;
     private static final int HOOVES = 0x3B2A1C;
+    private static final int HULL = 0x5A3A22;
+    private static final int SAIL = 0xEDE6D6;
+    private static final int PENNANT = 0xB02E26;
     /**
      * Figures face the camera like the side of a block, so they are shaded like one (as Distant Horizons shades its
      * box figures' sides), on top of the light where they stand.
@@ -121,6 +125,51 @@ public final class DistantArmyRenderer {
                 drawn++;
             }
         }
+        finish(mc, buffer, drawn);
+    }
+
+    /**
+     * The sea lanes' ships beyond the real ones (the render distance): a flat ship turned to face the camera, a hull
+     * under a mast and sail, wherever Distant Horizons doesn't draw them as boxes ({@link DistantShips}).
+     */
+    public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
+        List<SeaLanes.Ship> ships = DistantShips.now(partialTick);
+        Vector3f left = camera.getLeftVector();
+        double length = Math.hypot(left.x(), left.z());
+        if (ships.isEmpty() || length < 1e-6) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
+        Vec3 eye = camera.getPosition();
+        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
+        Figure f = new Figure(buffer, pose.last().pose(), (float) (-left.x() / length), (float) (-left.z() / length));
+        boolean inDistantHorizons = DistantHorizonsLink.drawsFarSoldiers();
+        double dy = DistantShips.keel() - eye.y;
+        int drawn = 0;
+        for (SeaLanes.Ship ship : ships) {
+            double dx = ship.x() - eye.x;
+            double dz = ship.z() - eye.z;
+            double flat = Math.hypot(dx, dz);
+            if (flat <= renderBlocks || inDistantHorizons && flat <= DistantShips.SPRITE_PAST) {
+                continue; // a real ship, or boxes in Distant Horizons' terrain
+            }
+            double distance = Math.hypot(flat, dy);
+            double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
+            f.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, LightTexture.FULL_SKY);
+            float hull = ship.size().length;
+            f.rect(0, 0, hull, 3, HULL);
+            f.rect(0, 3, 0.6F, hull / 2 + 1, POLE);
+            f.rect(0, 4.5F, hull * 0.55F, hull / 2 - 2, SAIL);
+            if (ship.warship()) {
+                f.rect(1.2F, hull / 2 + 2.5F, 2.4F, 1, PENNANT);
+            }
+            drawn++;
+        }
+        finish(mc, buffer, drawn);
+    }
+
+    private static void finish(Minecraft mc, BufferBuilder buffer, int drawn) {
         if (drawn == 0) {
             try (com.mojang.blaze3d.vertex.MeshData unused = buffer.build()) { // nothing to draw: let the buffer go
             }

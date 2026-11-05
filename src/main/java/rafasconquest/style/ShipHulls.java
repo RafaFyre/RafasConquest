@@ -1,0 +1,112 @@
+package rafasconquest.style;
+
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import rafasconquest.core.SeaLanes;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+/**
+ * The blocks of a ship on the sea lanes ({@link SeaLanes}), in its own frame: x across, y up from its keel, z from
+ * stern to bow (bow towards +z), centred on x = z = 0. A ship is a structure from the default style's
+ * {@code ships/warships|merchant/<size>} slot, or, while that slot is empty, a plain built-in hull of its size. The server builds
+ * the real ship from these blocks and Distant Horizons draws them as its far version, so both look alike.
+ */
+public final class ShipHulls {
+    public record Part(int x, int y, int z, BlockState state) {
+    }
+
+    private static final Map<StructureTemplate, List<Part>> READ = new WeakHashMap<>();
+    private static final Map<SeaLanes.Size, List<Part>> PLAIN = new java.util.EnumMap<>(SeaLanes.Size.class);
+
+    static {
+        for (SeaLanes.Size size : SeaLanes.Size.values()) {
+            PLAIN.put(size, plain(size.length, size.width));
+        }
+    }
+
+    private ShipHulls() {
+    }
+
+    public static List<Part> of(SeaLanes.Ship ship) {
+        String slot = (ship.warship() ? "ships/warships/" : "ships/merchant/") + ship.size().slot();
+        String file = StyleLibrary.pickIn(StyleLibrary.DEFAULT, slot, ship.id().hashCode());
+        // shortcut: a ship file wider than one style tile (32 blocks) is not read, and the plain hull sails instead.
+        StructureTemplate template = file == null ? null : StyleLibrary.template(file);
+        if (template == null) {
+            return PLAIN.get(ship.size());
+        }
+        synchronized (READ) {
+            return READ.computeIfAbsent(template, ShipHulls::read);
+        }
+    }
+
+    /** A structure's solid blocks, turned so its longer side runs along z. */
+    private static List<Part> read(StructureTemplate template) {
+        CompoundTag tag = template.save(new CompoundTag());
+        List<BlockState> palette = new ArrayList<>();
+        for (Tag t : tag.getList("palette", Tag.TAG_COMPOUND)) {
+            palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), (CompoundTag) t));
+        }
+        int sx = template.getSize().getX();
+        int sz = template.getSize().getZ();
+        boolean turn = sx > sz;
+        List<Part> parts = new ArrayList<>();
+        for (Tag t : tag.getList("blocks", Tag.TAG_COMPOUND)) {
+            CompoundTag b = (CompoundTag) t;
+            BlockState state = palette.get(b.getInt("state"));
+            if (state.isAir() || state.is(Blocks.STRUCTURE_VOID) || state.is(Blocks.STRUCTURE_BLOCK)) {
+                continue;
+            }
+            ListTag pos = b.getList("pos", Tag.TAG_INT);
+            int x = pos.getInt(0) - sx / 2;
+            int z = pos.getInt(2) - sz / 2;
+            parts.add(turn ? new Part(z, pos.getInt(1), x, state) : new Part(x, pos.getInt(1), z, state));
+        }
+        return parts.isEmpty() ? PLAIN.get(SeaLanes.Size.MEDIUM) : List.copyOf(parts);
+    }
+
+    /** A plain open boat: a keel, planked sides narrowing to bow and stern, a deck, and one mast with a sail. */
+    private static List<Part> plain(int length, int width) {
+        BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
+        BlockState side = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState mast = Blocks.SPRUCE_LOG.defaultBlockState();
+        BlockState sail = Blocks.WHITE_WOOL.defaultBlockState();
+        List<Part> parts = new ArrayList<>();
+        int half = length / 2;
+        for (int z = -half; z <= half; z++) {
+            // The beam narrows over the last quarter at each end.
+            int end = half - Math.abs(z);
+            int w = Math.min(width / 2, end * 2 * (width / 2) / Math.max(1, half / 2));
+            for (int x = -w; x <= w; x++) {
+                parts.add(new Part(x, 0, z, keel));
+                if (Math.abs(x) == w || end == 0) {
+                    parts.add(new Part(x, 1, z, side));
+                    parts.add(new Part(x, 2, z, side));
+                }
+            }
+        }
+        int top = 3 + length / 2;
+        for (int y = 1; y <= top; y++) {
+            parts.add(new Part(0, y, 0, mast));
+        }
+        int sailHalf = width / 2 + 1;
+        for (int y = 4; y < top; y++) {
+            for (int x = -sailHalf; x <= sailHalf; x++) {
+                if (x != 0) {
+                    parts.add(new Part(x, y, 0, sail));
+                }
+            }
+        }
+        return List.copyOf(parts);
+    }
+}

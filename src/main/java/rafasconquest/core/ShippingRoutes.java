@@ -9,17 +9,20 @@ import java.util.Set;
 
 /**
  * The sea lanes between port cities ({@link SeatCities.City#port}), for ships to sail: no blocks, only a line of
- * points. Each port is joined to its {@link #PORT_LINKS} nearest ports on the same sea, from its harbour mouth (out past
- * its harbour wall) to theirs. Lanes go only over the ocean, keeping off the shore where they can, and are smoothed
- * into curves like the roads.
+ * points. Each port is joined to at least {@link #PORT_LINKS} of its nearest ports on the same sea (where it has that
+ * many), from its harbour mouth (out past its harbour wall) to theirs. Lanes go only over the ocean, keeping a
+ * {@link #BERTH}-block berth from land (islands too) wherever the sea is wide enough, and are smoothed into curves like
+ * the roads.
  */
 public final class ShippingRoutes {
     static final int PORT_LINKS = 3;
     /** The harbour mouth: this far out past the middle of a port's harbour wall, then the nearest sea pixel. */
     static final int MOUTH = 64;
     private static final int MOUTH_SEARCH = 8;
-    /** Extra cost of a sea pixel beside land, so lanes keep to open water. */
-    private static final double SHORE_COST = 4;
+    /** Lanes keep this many blocks off land where they can. */
+    public static final int BERTH = 100;
+    /** Extra cost of a sea pixel right beside land, falling to none at the berth's edge. */
+    private static final double SHORE_COST = 8;
 
     private ShippingRoutes() {
     }
@@ -55,16 +58,30 @@ public final class ShippingRoutes {
             }
             seas++;
         }
-        boolean[] shore = new boolean[n];
+        // How far each sea pixel lies from land, in pixels (up to the berth), for the lanes' berth.
+        int berth = Math.max(1, (BERTH + land.bpp() - 1) / land.bpp());
+        int[] fromLand = new int[n];
+        Arrays.fill(fromLand, berth);
+        int head = 0;
+        int tail = 0;
         for (int i = 0; i < n; i++) {
-            if (ocean[i]) {
-                for (int q : neighbours(i, w, land.height())) {
-                    if (q >= 0 && !ocean[q]) {
-                        shore[i] = true;
-                        break;
-                    }
+            if (!ocean[i]) {
+                fromLand[i] = 0;
+                queue[tail++] = i;
+            }
+        }
+        while (head < tail) {
+            int p = queue[head++];
+            for (int q : neighbours(p, w, land.height())) {
+                if (q >= 0 && fromLand[q] > fromLand[p] + 1) {
+                    fromLand[q] = fromLand[p] + 1;
+                    queue[tail++] = q;
                 }
             }
+        }
+        double[] shore = new double[n];
+        for (int i = 0; i < n; i++) {
+            shore[i] = SHORE_COST * (berth - fromLand[i]) / berth;
         }
         List<SeatCities.City> ports = new ArrayList<>();
         List<Integer> mouths = new ArrayList<>();
@@ -78,6 +95,7 @@ public final class ShippingRoutes {
         Search search = new Search(land, ocean, shore);
         List<Roads.Road> lanes = new ArrayList<>();
         Set<Long> joined = new HashSet<>();
+        int[] links = new int[ports.size()];
         for (int a = 0; a < ports.size(); a++) {
             SeatCities.City from = ports.get(a);
             int fromSea = sea[mouths.get(a)];
@@ -88,14 +106,22 @@ public final class ShippingRoutes {
                 }
             }
             nearest.sort(java.util.Comparator.comparingDouble(b -> Math.hypot(ports.get(b).x() - from.x(), ports.get(b).z() - from.z())));
-            for (int b : nearest.subList(0, Math.min(PORT_LINKS, nearest.size()))) {
-                if (!joined.add(Math.min(a, b) * 1_000_003L + Math.max(a, b))) {
+            // The nearest first, going further out until this port has its links (lanes that fail don't count).
+            for (int b : nearest) {
+                if (links[a] >= PORT_LINKS) {
+                    break;
+                }
+                long pair = Math.min(a, b) * 1_000_003L + Math.max(a, b);
+                if (joined.contains(pair)) {
                     continue;
                 }
                 List<Integer> path = search.route(mouths.get(a), mouths.get(b));
                 if (path == null) {
                     continue;
                 }
+                joined.add(pair);
+                links[a]++;
+                links[b]++;
                 List<double[]> line = new ArrayList<>();
                 for (int p : path) {
                     int[] c = land.centre(p);
@@ -159,13 +185,13 @@ public final class ShippingRoutes {
     private static final class Search {
         private final Roads.Land land;
         private final boolean[] ocean;
-        private final boolean[] shore;
+        private final double[] shore;
         private final double[] best;
         private final int[] from;
         private final int[] stamp;
         private int search;
 
-        Search(Roads.Land land, boolean[] ocean, boolean[] shore) {
+        Search(Roads.Land land, boolean[] ocean, double[] shore) {
             this.land = land;
             this.ocean = ocean;
             this.shore = shore;
@@ -206,7 +232,7 @@ public final class ShippingRoutes {
                         continue;
                     }
                     boolean diagonal = i == 0 || i == 2 || i == 5 || i == 7;
-                    double g = best[at] + (diagonal ? Math.sqrt(2) : 1) * (1 + (shore[q] ? SHORE_COST : 0));
+                    double g = best[at] + (diagonal ? Math.sqrt(2) : 1) * (1 + shore[q]);
                     if (stamp[q] != search || g < best[q]) {
                         stamp[q] = search;
                         best[q] = g;

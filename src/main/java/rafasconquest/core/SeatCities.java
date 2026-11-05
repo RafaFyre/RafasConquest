@@ -20,7 +20,9 @@ import java.util.Random;
  * <p>
  * <b>Ports</b>: a seat with the sea within its reach is drawn to the shore instead, so that one side of the city (its
  * {@link City#harbour}) stands with its wall on land and the sea just past it, for its wharf and piers. Of the spots
- * that make a port, the one nearest the province's centre; a seat with none is an inland city as before.
+ * that make a port, the one nearest the province's centre; a seat with none is an inland city as before. A kingdom's
+ * or empire's capital is always a port where the realm has a shore with room for one: its seat moves to that province
+ * (and the seats of the titles under it with it). Only a realm with no such shore keeps an inland capital.
  */
 public final class SeatCities {
     /** One district: 5 × 5 city blocks of 32. */
@@ -108,11 +110,26 @@ public final class SeatCities {
                 }
                 List<Integer> candidates = candidates(titles, tier, title, seat[title]);
                 City city = null;
-                for (int province : candidates) {
-                    city = fit(g, notLand, sea, cities, province, sizes[title], t);
+                if (tier >= 2) {
+                    // A kingdom's or empire's capital is a port: on the shore of any province of it that has room for one.
+                    List<Integer> coast = new ArrayList<>(candidates);
+                    for (int p : provincesOf(titles, tier, title)) {
+                        if (!coast.contains(p)) {
+                            coast.add(p);
+                        }
+                    }
+                    for (int province : coast) {
+                        city = fit(g, notLand, sea, cities, province, sizes[title], t, true);
+                        if (city != null) {
+                            seatChain(titles, tier, province);
+                            break;
+                        }
+                    }
+                }
+                for (int i = 0; city == null && i < candidates.size(); i++) {
+                    city = fit(g, notLand, sea, cities, candidates.get(i), sizes[title], t, false);
                     if (city != null) {
-                        moveSeat(titles, tier, title, province);
-                        break;
+                        moveSeat(titles, tier, title, candidates.get(i));
                     }
                 }
                 if (city != null) {
@@ -155,6 +172,34 @@ public final class SeatCities {
         seats[tier][title] = province;
     }
 
+    /** Every province of a kingdom (tier 2) or empire (tier 3). */
+    private static List<Integer> provincesOf(TitleMap t, int tier, int title) {
+        List<Integer> out = new ArrayList<>();
+        for (int p = 0; p < t.county().length; p++) {
+            int k = t.kingdom()[t.duchy()[t.county()[p]]];
+            if ((tier == 2 ? k : t.empire()[k]) == title) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A title's seat moves to {@code province}, and so do the seats of every title below it that holds the province,
+     * so seats stay nested. Those lower titles are placed later, so none has a city yet.
+     */
+    private static void seatChain(TitleMap t, int tier, int province) {
+        int county = t.county()[province];
+        int duchy = t.duchy()[county];
+        int kingdom = t.kingdom()[duchy];
+        t.countySeat()[county] = province;
+        t.duchySeat()[duchy] = province;
+        t.kingdomSeat()[kingdom] = province;
+        if (tier == 3) {
+            t.empireSeat()[t.empire()[kingdom]] = province;
+        }
+    }
+
     private static boolean alreadyPlaced(List<City> cities, int province) {
         for (City c : cities) {
             if (c.province() == province) {
@@ -167,9 +212,10 @@ public final class SeatCities {
     /**
      * A city of {@code districts} a side for a seat in {@code province}, searched within the province's reach: the port
      * nearest its centre, if any spot makes one; else the spot nearest its centre where the whole city (and its margin)
-     * is on land. Clear of the others either way; null if none.
+     * is on land, unless {@code portOnly}. Clear of the others either way; null if none.
      */
-    private static City fit(Grid g, int[] notLand, int[] sea, List<City> cities, int province, int districts, TitleMap.Tier tier) {
+    private static City fit(Grid g, int[] notLand, int[] sea, List<City> cities, int province, int districts, TitleMap.Tier tier,
+                            boolean portOnly) {
         ProvinceMap.Centre centre = g.centres().get(province);
         City probe = new City(centre.x(), centre.z(), districts, tier, province);
         int reach = probe.reach() + g.bpp();
@@ -200,13 +246,13 @@ public final class SeatCities {
                         break;
                     }
                 }
-                if (port == null && d < bestDistance && box(g, notLand, x - reach, z - reach, x + reach, z + reach) == 0) {
+                if (port == null && own && d < bestDistance && box(g, notLand, x - reach, z - reach, x + reach, z + reach) == 0) {
                     bestDistance = d;
                     best = new City(x, z, districts, tier, province);
                 }
             }
         }
-        return port != null ? port : best;
+        return port != null || portOnly ? port : best;
     }
 
     /**

@@ -60,6 +60,11 @@ public final class ConquestContent {
     public static final DeferredHolder<Item, Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
+    /** Green obsidian: marks where ships dock at a pier (for managing docked ships later). */
+    public static final DeferredHolder<Block, Block> DOCK_BLOCK = BLOCKS.register("dock_block",
+            () -> new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.OBSIDIAN).mapColor(net.minecraft.world.level.material.MapColor.EMERALD)));
+    public static final DeferredHolder<Item, Item> DOCK_BLOCK_ITEM = ITEMS.register("dock_block",
+            () -> new BlockItem(DOCK_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.rafasconquest"))
             .icon(() -> COMMAND_TABLE_ITEM.get().getDefaultInstance())
@@ -72,6 +77,7 @@ public final class ConquestContent {
                 output.accept(GRAVEL_SLAB_ITEM.get());
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
                 output.accept(MARKER_ITEM.get());
+                output.accept(DOCK_BLOCK_ITEM.get());
             })
             .build());
 

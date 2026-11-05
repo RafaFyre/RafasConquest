@@ -115,6 +115,7 @@ public final class ConquestEvents {
             if (server != null) {
                 server.tick();
             }
+            rafasconquest.bridge.SableLink.tick(level);
         }
     }
 

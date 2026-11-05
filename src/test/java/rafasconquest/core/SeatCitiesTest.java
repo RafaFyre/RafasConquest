@@ -89,6 +89,22 @@ class SeatCitiesTest {
             assertTrue(wallFoot - SeatCities.HARBOUR_SEA < CELL * BPP, "a port far from the sea: " + c);
         }
         assertTrue(cities.stream().anyMatch(c -> !c.port()), "inland cities became ports");
+        // A realm on the coast has its capital there.
+        TitleMap t = w.titles();
+        for (SeatCities.City c : cities) {
+            if (c.tier().ordinal() < TitleMap.Tier.KINGDOM.ordinal()) {
+                continue;
+            }
+            int realm = t.kingdom()[t.duchy()[t.county()[c.province()]]];
+            boolean empire = c.tier() == TitleMap.Tier.EMPIRE;
+            boolean coastal = false;
+            for (int p = 0; p < t.county().length; p++) {
+                int k = t.kingdom()[t.duchy()[t.county()[p]]];
+                boolean ours = empire ? t.empire()[k] == t.empire()[realm] : k == realm;
+                coastal |= ours && w.grid().centres().get(p).x() < 2 * CELL * BPP;
+            }
+            assertTrue(!coastal || c.port(), "a coastal realm's capital is inland: " + c);
+        }
         // The ports' shipping routes keep to the sea, and join them.
         int width = CELLS * CELL;
         boolean[] ocean = new boolean[width * width];
@@ -143,7 +159,7 @@ class SeatCitiesTest {
         World w = world(17);
         for (SeatCities.City c : SeatCities.plan(17, w.grid(), w.titles())) {
             List<Integer> covered = SeatCities.covered(w.grid(), c);
-            assertTrue(covered.contains(c.province()), "a city doesn't cover its own province");
+            assertTrue(covered.contains(c.province()), "a city doesn't cover its own province: " + c + " covers " + covered);
             if (c.districts() >= 7) {
                 assertTrue(covered.size() >= 4, "a " + c.districts() + "-district city covers only " + covered);
             }
