@@ -14,10 +14,9 @@ import java.util.List;
  * other players near enough to be loaded as blue markers. Recruits' armies go here when the map shows them.
  */
 public class UnitLayer implements MapLayer {
-    private static final ResourceLocation ICONS = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/map/map_icons.png");
-    /** Vanilla map icons: 8 × 8 each, 16 to a row, in a 128 × 128 texture. */
-    private static final int PLAYER_ICON = 0;
-    private static final int MARKER_ICON = 3;
+    /** Vanilla map icons, one 8 × 8 texture each since 1.20.5. */
+    private static final ResourceLocation PLAYER_ICON = ResourceLocation.withDefaultNamespace("textures/map/decorations/player.png");
+    private static final ResourceLocation MARKER_ICON = ResourceLocation.withDefaultNamespace("textures/map/decorations/blue_marker.png");
 
     @Override
     public void render(GuiGraphics g, MapView view, MapContext map, int mouseX, int mouseY) {
@@ -34,12 +33,12 @@ public class UnitLayer implements MapLayer {
     }
 
     /** A map icon centred at (x, y), turned to face {@code yaw} (Minecraft yaw: 0 is south). */
-    static void drawIcon(GuiGraphics g, double x, double y, int icon, float yaw, float size) {
+    static void drawIcon(GuiGraphics g, double x, double y, ResourceLocation icon, float yaw, float size) {
         g.pose().pushPose();
         g.pose().translate(x, y, 0);
         g.pose().mulPose(Axis.ZP.rotationDegrees(yaw + 180));
         g.pose().scale(size, size, 1);
-        g.blit(ICONS, -4, -4, (icon % 16) * 8, (icon / 16) * 8, 8, 8, 128, 128);
+        g.blit(icon, -4, -4, 0, 0, 8, 8, 8, 8);
         g.pose().popPose();
     }
 

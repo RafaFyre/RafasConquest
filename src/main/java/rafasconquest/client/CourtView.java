@@ -7,6 +7,7 @@ import com.mojang.math.Axis;
 import com.talhanation.recruits.entities.AbstractRecruitEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
@@ -228,15 +229,16 @@ final class CourtView {
         float scale = now.zoom * height;
         pose.pushPose();
         pose.translate(now.anchorX * width, now.anchorY * height, 1500);
-        pose.mulPose(new Matrix4f().scaling(scale, -scale, scale));
+        pose.last().pose().mul(new Matrix4f().scaling(scale, -scale, scale)); // the pose only: 1.21 mulPose would flip the normals too, lighting the court from below
         pose.mulPose(Axis.XP.rotationDegrees(now.pitch));
         pose.mulPose(Axis.YP.rotationDegrees(now.yaw));
         pose.translate(-now.at.x(), -now.at.y(), -now.at.z());
         drawn = new Matrix4f(pose.last().pose());
         drawnScale = scale;
 
+        FogRenderer.setupNoFog(); // the world's fog would wash the court out to its colour: it is thousands of GUI units "away"
         RenderSystem.enableDepthTest();
-        Lighting.setupFor3DItems();
+        hallLights();
         MultiBufferSource.BufferSource buffers = g.bufferSource();
         BlockRenderDispatcher blocks = mc.getBlockRenderer();
         for (Map.Entry<BlockPos, BlockState> e : set.blocks.entrySet()) {
@@ -274,6 +276,16 @@ final class CourtView {
         pose.popPose();
         Lighting.setupFor3DItems();
         RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+    }
+
+    /**
+     * 1.20.1's GUI 3D lights: 1.20.5 turned them for its new item look, which leaves the hall's floors and podium tops
+     * unlit, so the court sets the old ones (vanilla's level light directions, turned as 1.20.1 turned them).
+     */
+    private static void hallLights() {
+        Matrix4f turn = new Matrix4f().scaling(1.0F, -1.0F, 1.0F).rotateYXZ((float) (-Math.PI / 8), (float) (Math.PI * 3.0 / 4.0), 0.0F);
+        RenderSystem.setShaderLights(turn.transformDirection(new Vector3f(0.2F, 1.0F, -0.7F).normalize()),
+                turn.transformDirection(new Vector3f(-0.2F, 1.0F, 0.7F).normalize()));
     }
 
     /** The person under the mouse (the nearest, if several), or -1. */
