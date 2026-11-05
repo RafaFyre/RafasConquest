@@ -75,6 +75,10 @@ dependencies {
 
     // Recommended client mods: present in dev runs, but not dependencies of this mod.
     runtimeOnly "maven.modrinth:embeddium:${embeddium_version}"
+    runtimeOnly "maven.modrinth:epic-knights-shields-armor-and-weapons:${epic_knights_version}"
+    runtimeOnly "maven.modrinth:epic-knights-antique-legacy:${antique_legacy_version}"
+    runtimeOnly "maven.modrinth:architectury-api:${architectury_version}"
+    runtimeOnly "maven.modrinth:cloth-config:${cloth_config_version}"
     // Distant Horizons is also compiled against, to draw battles in its terrain. Only client/DistantHorizonsArmies
     // touches it, and only when it is installed.
     implementation "maven.modrinth:distanthorizons:${distant_horizons_version}"
