@@ -43,8 +43,8 @@ public final class BattleSounds {
     /** A sound at volume v carries 16 v blocks. */
     private static final float MAX_VOLUME = 8;
     /** The clips (assets/rafasconquest/sounds.json); played on the client only, so never registered. */
-    private static final SoundEvent CHARGE = SoundEvent.createVariableRangeEvent(new ResourceLocation(RafasConquest.MOD_ID, "battle.charge"));
-    private static final SoundEvent DIN = SoundEvent.createVariableRangeEvent(new ResourceLocation(RafasConquest.MOD_ID, "battle.din"));
+    private static final SoundEvent CHARGE = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.charge"));
+    private static final SoundEvent DIN = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.din"));
     /** A clip lasts 10 s, fading for the last second: the next starts 8 to 9 s after the last. */
     private static final int CLIP_EVERY = 160;
     private static final int CLIP_JITTER = 20;

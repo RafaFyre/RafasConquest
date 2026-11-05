@@ -1,11 +1,11 @@
 package rafasconquest;
 
 import com.mojang.logging.LogUtils;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.ModContainer;
 import org.slf4j.Logger;
 import rafasconquest.content.ConquestContent;
 import rafasconquest.net.ConquestNetwork;
@@ -16,14 +16,13 @@ public class RafasConquest {
     public static final String MOD_ID = "rafasconquest";
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    public RafasConquest(FMLJavaModLoadingContext context) {
-        IEventBus modBus = context.getModEventBus();
+    public RafasConquest(IEventBus modBus, ModContainer container) {
         ConquestWorldgen.register(modBus);
         ConquestContent.register(modBus);
         rafasconquest.npc.ConquestEntities.register(modBus);
-        ConquestNetwork.register();
+        modBus.addListener(ConquestNetwork::register);
         modBus.addListener(this::commonSetup);
-        context.registerConfig(ModConfig.Type.COMMON, ConquestConfig.SPEC);
+        container.registerConfig(ModConfig.Type.COMMON, ConquestConfig.SPEC);
         LOGGER.info("RafasConquest loaded");
     }
 

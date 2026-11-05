@@ -15,8 +15,8 @@ import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.storage.LevelResource;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.ProvinceMap;
@@ -219,7 +219,7 @@ public final class HorizontalStretch {
                 if (generator.generatorSettings() instanceof Holder.Reference<NoiseGeneratorSettings> named) {
                     value.set(named, stretched);
                 } else {
-                    ObfuscationReflectionHelper.findField(NoiseBasedChunkGenerator.class, "f_64318_").set(generator, Holder.direct(stretched));
+                    ObfuscationReflectionHelper.findField(NoiseBasedChunkGenerator.class, "settings").set(generator, Holder.direct(stretched));
                 }
                 count += edited[0];
             }

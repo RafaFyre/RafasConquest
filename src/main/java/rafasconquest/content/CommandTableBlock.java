@@ -17,8 +17,8 @@ import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import rafasconquest.client.ClientScreens;
 
 /**
@@ -45,7 +45,9 @@ public class CommandTableBlock extends HorizontalDirectionalBlock {
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (level.isClientSide) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientScreens.openFactionMenu(player));
+            if (FMLEnvironment.dist == Dist.CLIENT) {
+                ClientScreens.openFactionMenu(player);
+            }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

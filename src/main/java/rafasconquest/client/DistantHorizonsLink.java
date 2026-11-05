@@ -1,6 +1,6 @@
 package rafasconquest.client;
 
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 import rafasconquest.RafasConquest;
 
 /**

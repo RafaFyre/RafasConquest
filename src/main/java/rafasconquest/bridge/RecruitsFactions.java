@@ -95,7 +95,7 @@ public class RecruitsFactions implements RecruitsBridge {
         team.setColor(color);
         applyTeamRules(team);
         manager.addTeam(id, faction.name(), faction.id(), typeName(faction.type()),
-                FactionBannerNbt.item(overworld.registryAccess(), banner).serializeNBT(), (byte) banner.base(), color);
+                (net.minecraft.nbt.CompoundTag) FactionBannerNbt.item(overworld.registryAccess(), banner).save(overworld.registryAccess()), (byte) banner.base(), color);
         return true;
     }
 

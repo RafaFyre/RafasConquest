@@ -266,7 +266,7 @@ public final class CharacterMarkers {
         private final List<CompoundTag> labels = new ArrayList<>();
 
         static Placed get(ServerLevel level) {
-            return level.getServer().overworld().getDataStorage().computeIfAbsent(Placed::load, Placed::new, NAME);
+            return level.getServer().overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Placed::new, (tag, registries) -> Placed.load(tag)), NAME);
         }
 
         boolean has(int person) {
@@ -312,7 +312,7 @@ public final class CharacterMarkers {
         }
 
         @Override
-        public CompoundTag save(CompoundTag tag) {
+        public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
             tag.putIntArray("people", people.stream().mapToInt(Integer::intValue).toArray());
             ListTag list = new ListTag();
             list.addAll(labels);

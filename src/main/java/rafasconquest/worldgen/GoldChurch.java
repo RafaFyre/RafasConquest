@@ -19,7 +19,7 @@ import java.util.Optional;
  * its lords inside, so both agree.
  */
 public final class GoldChurch {
-    static final ResourceLocation TEMPLATE = new ResourceLocation("minecraft", "village/plains/houses/plains_temple_4");
+    static final ResourceLocation TEMPLATE = ResourceLocation.fromNamespaceAndPath("minecraft", "village/plains/houses/plains_temple_4");
 
     /** The template's turn, worked out once from where its entrance (the jigsaw) is. */
     private static volatile Rotation turn;

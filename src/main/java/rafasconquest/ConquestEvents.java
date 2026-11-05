@@ -5,23 +5,24 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureType;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.ChunkEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingDropsEvent;
-import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.minecraft.world.InteractionResult;
 import rafasconquest.bridge.RecruitsBattle;
 import rafasconquest.dev.BattleMap;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import rafasconquest.command.PveCommands;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import rafasconquest.core.CapitalLayout;
@@ -34,7 +35,7 @@ import rafasconquest.sim.ConquestServer;
 import rafasconquest.worldgen.ConquestRuntime;
 import rafasconquest.worldgen.ConquestWorldgen;
 
-@Mod.EventBusSubscriber(modid = RafasConquest.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = RafasConquest.MOD_ID)
 public final class ConquestEvents {
     private ConquestEvents() {
     }
@@ -74,7 +75,7 @@ public final class ConquestEvents {
 
     /** A player joins: their client is told how far the world is stretched, for its far-terrain quality. */
     @SubscribeEvent
-    public static void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+    public static void onPlayerLoggedIn(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
             rafasconquest.peerage.PeerageSync.to(player);
@@ -85,7 +86,7 @@ public final class ConquestEvents {
 
     /** A player leaves mid city view: back where they were, before they are saved. */
     @SubscribeEvent
-    public static void onPlayerLoggedOut(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+    public static void onPlayerLoggedOut(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.peerage.CityManager.close(player);
         }
@@ -93,7 +94,7 @@ public final class ConquestEvents {
 
     /** Before the world's levels are made: its horizontal stretch, as chosen when it was created. */
     @SubscribeEvent
-    public static void onServerAboutToStart(net.minecraftforge.event.server.ServerAboutToStartEvent event) {
+    public static void onServerAboutToStart(net.neoforged.neoforge.event.server.ServerAboutToStartEvent event) {
         rafasconquest.style.StyleLibrary.init(); // the style folders, before any land is built
         rafasconquest.worldgen.HorizontalStretch.onServerAboutToStart(event.getServer());
     }
@@ -107,8 +108,8 @@ public final class ConquestEvents {
     }
 
     @SubscribeEvent
-    public static void onLevelTick(TickEvent.LevelTickEvent event) {
-        if (event.phase == TickEvent.Phase.END && event.level instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
+    public static void onLevelTick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             ConquestServer server = ConquestServer.get();
             if (server != null) {
                 server.tick();
@@ -118,16 +119,17 @@ public final class ConquestEvents {
 
     /** Drives the debug battle and times whole server ticks while it runs. */
     @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.START) {
-            RecruitsBattle.onServerTickStart();
-        } else {
-            RecruitsBattle.onServerTickEnd();
-            BattleMap.tick();
-            rafasconquest.npc.Townsfolk.tick(event.getServer());
-            rafasconquest.peerage.QuestProgress.tick(event.getServer());
-            rafasconquest.politics.Wars.tick(event.getServer());
-        }
+    public static void onServerTick(ServerTickEvent.Pre event) {
+        RecruitsBattle.onServerTickStart();
+    }
+
+    @SubscribeEvent
+    public static void onServerTickEnd(ServerTickEvent.Post event) {
+        RecruitsBattle.onServerTickEnd();
+        BattleMap.tick();
+        rafasconquest.npc.Townsfolk.tick(event.getServer());
+        rafasconquest.peerage.QuestProgress.tick(event.getServer());
+        rafasconquest.politics.Wars.tick(event.getServer());
     }
 
     @SubscribeEvent
@@ -148,7 +150,7 @@ public final class ConquestEvents {
 
     /** Cavalry momentum and braced walls change how hard battle soldiers hit each other. */
     @SubscribeEvent
-    public static void onLivingHurt(LivingHurtEvent event) {
+    public static void onLivingHurt(LivingIncomingDamageEvent event) {
         event.setAmount(RecruitsBattle.adjustDamage(event.getEntity(), event.getSource().getEntity(), event.getAmount()));
     }
 

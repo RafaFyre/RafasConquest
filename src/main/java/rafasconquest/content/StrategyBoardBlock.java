@@ -8,8 +8,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 
 /** The Strategy Board, a cartography table dyed red: right-click to open the battle screen, as the war horn does. */
 public class StrategyBoardBlock extends Block {
@@ -20,7 +20,9 @@ public class StrategyBoardBlock extends Block {
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (level.isClientSide) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> rafasconquest.client.BattleScreen::open);
+            if (FMLEnvironment.dist == Dist.CLIENT) {
+                rafasconquest.client.BattleScreen.open();
+            }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

@@ -4,7 +4,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraftforge.common.Tags;
+import net.neoforged.neoforge.common.Tags;
 
 import java.util.List;
 
@@ -30,7 +30,7 @@ public final class BiomePalette {
             new Entry(BiomeTags.IS_JUNGLE, 0x3C8A24),
             new Entry(Tags.Biomes.IS_SWAMP, 0x4F6B3C),
             new Entry(BiomeTags.IS_SAVANNA, 0xB4AE5A),
-            new Entry(Tags.Biomes.IS_PEAK, 0x9A9A9A),
+            new Entry(Tags.Biomes.IS_MOUNTAIN_PEAK, 0x9A9A9A),
             new Entry(BiomeTags.IS_TAIGA, 0x4D7A58),
             new Entry(BiomeTags.IS_FOREST, 0x4E8A36),
             new Entry(Tags.Biomes.IS_MOUNTAIN, 0x8A9A7A),
@@ -51,7 +51,7 @@ public final class BiomePalette {
     /** Hard country, where provinces are larger: deserts, badlands, snow and peaks. */
     public static boolean isRough(Holder<Biome> biome) {
         return biome.is(Tags.Biomes.IS_DESERT) || biome.is(BiomeTags.IS_BADLANDS) || biome.is(Tags.Biomes.IS_SNOWY)
-                || biome.is(Tags.Biomes.IS_PEAK);
+                || biome.is(Tags.Biomes.IS_MOUNTAIN_PEAK);
     }
 
     /** Colour of a column whose surface is {@code height}, on a world whose sea is at {@code seaLevel}. */

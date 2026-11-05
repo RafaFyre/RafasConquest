@@ -256,7 +256,7 @@ final class WarCamp {
                 set(p.relative(right, 1).above(), Blocks.AIR.defaultBlockState());
             }
             // A bed inside, its head to the back, and the way in toward the enemy.
-            Block bed = BuiltInRegistries.BLOCK.get(new ResourceLocation(colour.getName() + "_bed"));
+            Block bed = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(colour.getName() + "_bed"));
             Direction head = front.getOpposite();
             set(base, bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.FOOT));
             set(base.relative(head), bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.HEAD));
@@ -360,14 +360,14 @@ final class WarCamp {
 
     private void wallBanner(BlockPos pos, Direction facing, ItemStack banner) {
         DyeColor base = banner.getItem() instanceof BannerItem b ? b.getColor() : DyeColor.WHITE;
-        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(base.getName() + "_wall_banner"));
+        Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(base.getName() + "_wall_banner"));
         set(pos, block.defaultBlockState().setValue(WallBannerBlock.FACING, facing));
         pattern(pos, banner, base);
     }
 
     private void standingBanner(BlockPos pos, Direction facing, ItemStack banner) {
         DyeColor base = banner.getItem() instanceof BannerItem b ? b.getColor() : DyeColor.WHITE;
-        Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(base.getName() + "_banner"));
+        Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(base.getName() + "_banner"));
         // Rotation 0 faces south; each step is a sixteenth of a turn clockwise.
         int rotation = Math.floorMod(Math.round(facing.toYRot() / 22.5F), 16);
         set(pos, block.defaultBlockState().setValue(BlockStateProperties.ROTATION_16, rotation));
@@ -383,7 +383,7 @@ final class WarCamp {
     }
 
     private static BlockState wool(DyeColor colour) {
-        return BuiltInRegistries.BLOCK.get(new ResourceLocation(colour.getName() + "_wool")).defaultBlockState();
+        return BuiltInRegistries.BLOCK.get(ResourceLocation.parse(colour.getName() + "_wool")).defaultBlockState();
     }
 
     /** Sets a block, keeping what was there first (and its block entity) to put back. */

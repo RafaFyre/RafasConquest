@@ -59,9 +59,9 @@ public final class WallTemplates {
     public static void main(String[] args) throws IOException {
         Path dir = Path.of(args[0]);
         Files.createDirectories(dir);
-        NbtIo.writeCompressed(build(false, 0), dir.resolve("segment.nbt").toFile());
-        NbtIo.writeCompressed(build(true, 0), dir.resolve("gate.nbt").toFile());
-        NbtIo.writeCompressed(build(false, CORNER_LEAD), dir.resolve("corner.nbt").toFile());
+        NbtIo.writeCompressed(build(false, 0), dir.resolve("segment.nbt"));
+        NbtIo.writeCompressed(build(true, 0), dir.resolve("gate.nbt"));
+        NbtIo.writeCompressed(build(false, CORNER_LEAD), dir.resolve("corner.nbt"));
         System.out.println("Wrote wall templates to " + dir.toAbsolutePath());
     }
 

@@ -6,5 +6,5 @@
     "P": { "item": "minecraft:paper" },
     "B": { "tag": "minecraft:planks" }
   },
-  "result": { "item": "rafasconquest:quest_board" }
+  "result": { "id": "rafasconquest:quest_board" }
 }

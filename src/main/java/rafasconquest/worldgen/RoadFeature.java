@@ -265,7 +265,7 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
                     for (int y = top - 1; y >= top - 2; y--) {
                         BlockPos pos = new BlockPos(x, y, z);
                         BlockState state = level.getBlockState(pos);
-                        if (state.is(Blocks.GRASS) || state.is(Blocks.TALL_GRASS) || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
+                        if (state.is(Blocks.SHORT_GRASS) || state.is(Blocks.TALL_GRASS) || state.is(Blocks.FERN) || state.is(Blocks.LARGE_FERN)
                                 || state.is(Blocks.DEAD_BUSH)) {
                             level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
                         }

@@ -215,7 +215,7 @@ public final class BaseMapGenerator {
                 rough[index] = BiomePalette.isRough(biome);
                 homeland[index] = (byte) homeland(biome).ordinal();
                 hard[index] = (byte) (biome.is(net.minecraft.tags.BiomeTags.IS_JUNGLE) ? 1
-                        : biome.is(net.minecraft.tags.BiomeTags.IS_MOUNTAIN) || biome.is(net.minecraftforge.common.Tags.Biomes.IS_PEAK) ? 2 : 0);
+                        : biome.is(net.minecraft.tags.BiomeTags.IS_MOUNTAIN) || biome.is(net.neoforged.neoforge.common.Tags.Biomes.IS_MOUNTAIN_PEAK) ? 2 : 0);
                 int color = BiomePalette.color(biome, (int) h, sea);
                 if (!water[index] && h >= sea) {
                     // Light from the north-west, measured across a full height-sample step so the smoothing between

@@ -110,16 +110,19 @@ final class Portraits {
     static final class Banner {
         @Nullable
         private final ModelPart flag;
-        private final List<Pair<Holder<BannerPattern>, DyeColor>> patterns;
+        private final net.minecraft.world.level.block.entity.BannerPatternLayers patterns;
+        private final DyeColor base;
 
         Banner(Minecraft mc, UUID nation) {
             if (mc.level == null) {
                 flag = null;
-                patterns = List.of();
+                patterns = net.minecraft.world.level.block.entity.BannerPatternLayers.EMPTY;
+                base = DyeColor.WHITE;
                 return;
             }
             FactionBanner design = FactionBanner.of(nation);
-            patterns = BannerBlockEntity.createPatterns(FactionBannerNbt.baseColor(design), FactionBannerNbt.patterns(mc.level.registryAccess(), design));
+            patterns = FactionBannerNbt.patterns(mc.level.registryAccess(), design);
+            base = FactionBannerNbt.baseColor(design);
             flag = mc.getEntityModels().bakeLayer(ModelLayers.BANNER).getChild("flag");
         }
 
@@ -138,7 +141,7 @@ final class Portraits {
             flag.xRot = 0;
             flag.y = 0;
             BannerRenderer.renderPatterns(pose, g.bufferSource(), LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, flag,
-                    ModelBakery.BANNER_BASE, true, patterns);
+                    ModelBakery.BANNER_BASE, true, base, patterns);
             pose.popPose();
             g.flush();
             Lighting.setupFor3DItems();

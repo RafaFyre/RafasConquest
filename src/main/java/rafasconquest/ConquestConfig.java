@@ -1,6 +1,6 @@
 package rafasconquest;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.WorldSettings;
 
@@ -9,39 +9,39 @@ import rafasconquest.core.WorldSettings;
  * so edits here only affect new worlds.
  */
 public final class ConquestConfig {
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
-    private static final ForgeConfigSpec.IntValue EYE_RADIUS;
-    private static final ForgeConfigSpec.IntValue WAR_ZONE_OUTER_EDGE;
-    private static final ForgeConfigSpec.IntValue RING_CAPITAL_COUNT;
-    private static final ForgeConfigSpec.IntValue RING_DISTANCE;
-    private static final ForgeConfigSpec.IntValue RING_JITTER;
-    private static final ForgeConfigSpec.IntValue OUTER_CELL_SIZE;
-    private static final ForgeConfigSpec.IntValue OUTER_CELL_MARGIN;
-    private static final ForgeConfigSpec.IntValue FARM_SPACING;
-    private static final ForgeConfigSpec.IntValue FARM_SEPARATION;
-    private static final ForgeConfigSpec.IntValue FARM_OUTPUT;
-    private static final ForgeConfigSpec.IntValue STORM_RADIUS_MIN;
-    private static final ForgeConfigSpec.IntValue STORM_RADIUS_MAX;
-    private static final ForgeConfigSpec.IntValue STORM_STRENGTH_MIN;
-    private static final ForgeConfigSpec.IntValue STORM_STRENGTH_MAX;
-    private static final ForgeConfigSpec.IntValue FAR_RADIUS_MIN;
-    private static final ForgeConfigSpec.IntValue FAR_RADIUS_MAX;
-    private static final ForgeConfigSpec.IntValue FAR_STRENGTH_MIN;
-    private static final ForgeConfigSpec.IntValue FAR_STRENGTH_MAX;
-    private static final ForgeConfigSpec.IntValue FAR_DISTANCE_OFFSET;
-    private static final ForgeConfigSpec.IntValue MAX_CATCH_UP_DAYS;
-    private static final ForgeConfigSpec.IntValue INITIAL_PRECOMPUTE_RADIUS;
-    private static final ForgeConfigSpec.IntValue LAZY_PRECOMPUTE_DISTANCE;
-    private static final ForgeConfigSpec.IntValue CITY_CELL_SIZE;
-    private static final ForgeConfigSpec.IntValue CITY_CELL_MARGIN;
-    private static final ForgeConfigSpec.IntValue CITY_STRENGTH_MIN;
-    private static final ForgeConfigSpec.IntValue CITY_STRENGTH_MAX;
-    private static final ForgeConfigSpec.IntValue CITY_OUTPUT;
+    private static final ModConfigSpec.IntValue EYE_RADIUS;
+    private static final ModConfigSpec.IntValue WAR_ZONE_OUTER_EDGE;
+    private static final ModConfigSpec.IntValue RING_CAPITAL_COUNT;
+    private static final ModConfigSpec.IntValue RING_DISTANCE;
+    private static final ModConfigSpec.IntValue RING_JITTER;
+    private static final ModConfigSpec.IntValue OUTER_CELL_SIZE;
+    private static final ModConfigSpec.IntValue OUTER_CELL_MARGIN;
+    private static final ModConfigSpec.IntValue FARM_SPACING;
+    private static final ModConfigSpec.IntValue FARM_SEPARATION;
+    private static final ModConfigSpec.IntValue FARM_OUTPUT;
+    private static final ModConfigSpec.IntValue STORM_RADIUS_MIN;
+    private static final ModConfigSpec.IntValue STORM_RADIUS_MAX;
+    private static final ModConfigSpec.IntValue STORM_STRENGTH_MIN;
+    private static final ModConfigSpec.IntValue STORM_STRENGTH_MAX;
+    private static final ModConfigSpec.IntValue FAR_RADIUS_MIN;
+    private static final ModConfigSpec.IntValue FAR_RADIUS_MAX;
+    private static final ModConfigSpec.IntValue FAR_STRENGTH_MIN;
+    private static final ModConfigSpec.IntValue FAR_STRENGTH_MAX;
+    private static final ModConfigSpec.IntValue FAR_DISTANCE_OFFSET;
+    private static final ModConfigSpec.IntValue MAX_CATCH_UP_DAYS;
+    private static final ModConfigSpec.IntValue INITIAL_PRECOMPUTE_RADIUS;
+    private static final ModConfigSpec.IntValue LAZY_PRECOMPUTE_DISTANCE;
+    private static final ModConfigSpec.IntValue CITY_CELL_SIZE;
+    private static final ModConfigSpec.IntValue CITY_CELL_MARGIN;
+    private static final ModConfigSpec.IntValue CITY_STRENGTH_MIN;
+    private static final ModConfigSpec.IntValue CITY_STRENGTH_MAX;
+    private static final ModConfigSpec.IntValue CITY_OUTPUT;
 
     static {
         WorldSettings d = WorldSettings.defaults();
-        ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder b = new ModConfigSpec.Builder();
         b.comment("Starting values, frozen into each world's save data when the world is created.").push("world");
 
         b.push("zones");

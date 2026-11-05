@@ -39,9 +39,9 @@ public final class MapPreview {
         Path world = Path.of(args[0]);
         Path out = Path.of(args[1]);
         BaseMap base = BaseMap.decode(Files.readAllBytes(world.resolve("data/rafasconquest_basemap.bin")));
-        CompoundTag saved = NbtIo.readCompressed(world.resolve("data/rafasconquest_world.dat").toFile());
+        CompoundTag saved = NbtIo.readCompressed(world.resolve("data/rafasconquest_world.dat"), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
         ConquestSavedData data = ConquestSavedData.load(saved.getCompound("data"));
-        long seed = NbtIo.readCompressed(world.resolve("level.dat").toFile())
+        long seed = NbtIo.readCompressed(world.resolve("level.dat"), net.minecraft.nbt.NbtAccounter.unlimitedHeap())
                 .getCompound("Data").getCompound("WorldGenSettings").getLong("seed");
         List<FactionInfo> factions = FactionInfo.collect(data, BlockPos.ZERO, seed);
         PoliticalMap political = PoliticalMap.build(base, factions);

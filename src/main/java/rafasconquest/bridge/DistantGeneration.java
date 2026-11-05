@@ -2,7 +2,7 @@ package rafasconquest.bridge;
 
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.interfaces.config.IDhApiConfig;
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 import rafasconquest.RafasConquest;
 
 /**

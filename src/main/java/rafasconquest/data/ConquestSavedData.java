@@ -51,9 +51,9 @@ public class ConquestSavedData extends SavedData {
     }
 
     public static ConquestSavedData get(ServerLevel overworld, WorldSettings forNewWorld) {
-        return overworld.getDataStorage().computeIfAbsent(
-                ConquestSavedData::load,
+        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(
                 () -> new ConquestSavedData(forNewWorld, Math.floorDiv(overworld.getDayTime(), 24_000L), System.currentTimeMillis()),
+                (tag, registries) -> ConquestSavedData.load(tag)),
                 NAME);
     }
 
@@ -170,7 +170,7 @@ public class ConquestSavedData extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
         lastSavedRealTime = clock.getAsLong();
         tag.put("settings", settings.save());
         ListTag factionList = new ListTag();

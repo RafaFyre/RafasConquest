@@ -24,7 +24,7 @@ import javax.annotation.Nullable;
  */
 public final class BattleSpotRing {
     private static final double HIDE_WITHIN = 5;
-    private static final ResourceLocation BEAM = new ResourceLocation("textures/entity/beacon_beam.png");
+    private static final ResourceLocation BEAM = ResourceLocation.parse("textures/entity/beacon_beam.png");
     private static final float[] WHITE = {1, 1, 1};
     private static final float OUTER = 0.55f;
     private static final float INNER = 0.42f;

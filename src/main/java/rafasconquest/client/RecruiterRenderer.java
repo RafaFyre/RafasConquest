@@ -14,7 +14,7 @@ public class RecruiterRenderer extends HumanoidMobRenderer<Recruiter, PlayerMode
 
     static {
         for (int i = 0; i < SKINS.length; i++) {
-            SKINS[i] = new ResourceLocation("recruits", "textures/entity/human/human_" + i + ".png");
+            SKINS[i] = ResourceLocation.fromNamespaceAndPath("recruits", "textures/entity/human/human_" + i + ".png");
         }
     }
 

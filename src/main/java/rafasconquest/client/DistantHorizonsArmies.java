@@ -182,7 +182,7 @@ final class DistantHorizonsArmies {
         Minecraft mc = Minecraft.getInstance();
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
-        FormationSnapshot.Positions positions = DistantArmies.positions(mc.getFrameTime());
+        FormationSnapshot.Positions positions = DistantArmies.positions(mc.getTimer().getGameTimeDeltaPartialTick(false));
         for (FormationSnapshot formation : DistantArmies.now()) {
             for (Sprite sprite : formation.place(positions)) {
                 if (DistantArmyRenderer.onGameTerrain(sprite.x() - eye.x, sprite.z() - eye.z, renderBlocks)) {

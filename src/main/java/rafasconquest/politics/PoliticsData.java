@@ -19,8 +19,8 @@ public final class PoliticsData extends SavedData {
     }
 
     public static PoliticsData get(net.minecraft.server.level.ServerLevel overworld) {
-        return overworld.getDataStorage().computeIfAbsent(tag -> new PoliticsData(Politics.load(tag.getCompound("politics"))),
-                () -> new PoliticsData(new Politics()), NAME);
+        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(() -> new PoliticsData(new Politics()),
+                (tag, registries) -> new PoliticsData(Politics.load(tag.getCompound("politics")))), NAME);
     }
 
     public Politics politics() {
@@ -28,7 +28,7 @@ public final class PoliticsData extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
         tag.put("politics", politics.save());
         return tag;
     }

@@ -10,8 +10,8 @@ import com.talhanation.recruits.world.RecruitsDiplomacyManager;
 import com.talhanation.recruits.CommandEvents;
 import com.talhanation.recruits.RecruitEvents;
 import com.talhanation.recruits.world.RecruitsGroup;
-import net.minecraftforge.common.ToolActions;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.neoforge.common.ItemAbilities;
+import net.neoforged.fml.loading.FMLPaths;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.world.BossEvent;
@@ -703,8 +703,7 @@ public final class RecruitsBattle {
     }
 
     private static int rgb(DyeColor dye) {
-        float[] c = dye.getTextureDiffuseColors();
-        return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
+        return dye.getTextureDiffuseColor() & 0xFFFFFF;
     }
 
     /**
@@ -2397,7 +2396,7 @@ public final class RecruitsBattle {
             }
         }
         for (AbstractRecruitEntity s : l.living()) {
-            if (!s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) || commanded.contains(s.getId())) {
+            if (!s.getOffhandItem().canPerformAction(ItemAbilities.SHIELD_BLOCK) || commanded.contains(s.getId())) {
                 // A player's soldiers raise their shields at the player's order (Recruits' Shields command).
                 continue;
             }
@@ -2804,7 +2803,7 @@ public final class RecruitsBattle {
                 continue;
             }
             for (AbstractRecruitEntity s : soldiers) {
-                if (s.getOffhandItem().canPerformAction(ToolActions.SHIELD_BLOCK) && s.getShouldBlock() != u.shields
+                if (s.getOffhandItem().canPerformAction(ItemAbilities.SHIELD_BLOCK) && s.getShouldBlock() != u.shields
                         && u.mode != UnitMode.RECRUITS) {
                     s.setShouldBlock(u.shields);
                 }

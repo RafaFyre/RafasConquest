@@ -7,8 +7,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLPaths;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.people.Homeland;
@@ -367,7 +367,7 @@ public final class StyleLibrary {
             if (loaded != null && loaded.modified() == modified) {
                 return loaded;
             }
-            CompoundTag tag = NbtIo.readCompressed(file.toFile());
+            CompoundTag tag = NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             net.minecraft.nbt.ListTag s = tag.getList("size", net.minecraft.nbt.Tag.TAG_INT);
             net.minecraft.core.Vec3i size = new net.minecraft.core.Vec3i(s.getInt(0), s.getInt(1), s.getInt(2));
             if (size.getX() <= TILE && size.getZ() <= TILE) {

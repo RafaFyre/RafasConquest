@@ -5,20 +5,20 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.client.event.RenderLivingEvent;
-import net.minecraftforge.client.event.ScreenEvent;
-import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.client.event.RenderLivingEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import rafasconquest.RafasConquest;
 import rafasconquest.client.map.ClientMapCache;
 import rafasconquest.client.map.FactionMapScreen;
 
-@Mod.EventBusSubscriber(modid = RafasConquest.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
+@EventBusSubscriber(modid = RafasConquest.MOD_ID, value = Dist.CLIENT)
 public final class ClientEvents {
     /** Size of Recruits' faction menu, which centres itself the same way. */
     private static final int MENU_WIDTH = 246;
@@ -93,10 +93,8 @@ public final class ClientEvents {
 
     /** The sound of the battle as a whole: hoofbeats and the din of the front. */
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            BattleSounds.tick();
-        }
+    public static void onClientTick(ClientTickEvent.Post event) {
+        BattleSounds.tick();
     }
 
     /** A battle soldier (or its horse) past the handover is hidden; its figure stands in for it. */
@@ -113,7 +111,7 @@ public final class ClientEvents {
 
     /** Right-clicking the war horn opens the battle screen instead of blowing it. */
     @SubscribeEvent
-    public static void onRightClickItem(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem event) {
+    public static void onRightClickItem(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickItem event) {
         if (event.getLevel().isClientSide() && rafasconquest.bridge.WarHorn.is(event.getItemStack())) {
             event.setCanceled(true);
             event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
@@ -129,7 +127,7 @@ public final class ClientEvents {
      * decides what the blow does.
      */
     @SubscribeEvent
-    public static void onAttack(net.minecraftforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
+    public static void onAttack(net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft mc = Minecraft.getInstance();
         if (!event.isAttack() || mc.player == null || mc.hitResult != null && mc.hitResult.getType() == net.minecraft.world.phys.HitResult.Type.ENTITY) {
             return;
@@ -177,7 +175,7 @@ public final class ClientEvents {
 
     /** In the battle screen the field of view is the plain setting, so the screen's picking matches what is drawn. */
     @SubscribeEvent
-    public static void onComputeFov(net.minecraftforge.client.event.ViewportEvent.ComputeFov event) {
+    public static void onComputeFov(net.neoforged.neoforge.client.event.ViewportEvent.ComputeFov event) {
         Minecraft mc = Minecraft.getInstance();
         if (event.usedConfiguredFov() && mc.screen instanceof BattleScreen) {
             event.setFOV(mc.options.fov().get());
@@ -189,7 +187,7 @@ public final class ClientEvents {
      * what it bumps into); any movement key of their own takes it back.
      */
     @SubscribeEvent
-    public static void onMovementInput(net.minecraftforge.client.event.MovementInputUpdateEvent event) {
+    public static void onMovementInput(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event) {
         net.minecraft.world.phys.Vec3 to = BattleScreen.walkTo;
         Minecraft mc = Minecraft.getInstance();
         if (to == null || event.getEntity() != mc.player) {

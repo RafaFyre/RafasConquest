@@ -5,10 +5,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.scores.PlayerTeam;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import rafasconquest.RafasConquest;
 import rafasconquest.map.BaseMap;
 import rafasconquest.people.Organization;
@@ -34,7 +34,7 @@ import java.util.UUID;
  * already their vassals; a player's is the recruits they hired, each named and made a character as they join, who keep
  * with them wherever they go. In war a player's vassals come with their own vassals and troops, by standing.
  */
-@Mod.EventBusSubscriber(modid = RafasConquest.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@EventBusSubscriber(modid = RafasConquest.MOD_ID)
 public final class Retinues {
     public static final int TOP = 4;
     /** The troops a vassal brings to war by standing, castle lord to ruler; with all their own vassals' besides. */
@@ -192,8 +192,8 @@ public final class Retinues {
 
     /** A retinue keeps with its player: one fallen far behind (a teleport, a long ride) is brought to them. */
     @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || !(event.player instanceof ServerPlayer player) || player.tickCount % EVERY != 0) {
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.tickCount % EVERY != 0) {
             return;
         }
         Map<UUID, String> retinue = Peerage.get(player.server).of(player.getUUID()).retinue;

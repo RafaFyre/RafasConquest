@@ -6,5 +6,5 @@
     "M": { "item": "minecraft:map" },
     "P": { "item": "minecraft:dark_oak_planks" }
   },
-  "result": { "item": "rafasconquest:grand_strategy" }
+  "result": { "id": "rafasconquest:grand_strategy" }
 }

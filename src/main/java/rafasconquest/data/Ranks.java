@@ -22,7 +22,7 @@ public final class Ranks extends SavedData {
     private final Map<UUID, BattleRole> roles = new HashMap<>();
 
     public static Ranks get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(Ranks::load, Ranks::new, NAME);
+        return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Ranks::new, (tag, registries) -> Ranks.load(tag)), NAME);
     }
 
     public Rank of(UUID player) {
@@ -53,7 +53,7 @@ public final class Ranks extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
         CompoundTag list = new CompoundTag();
         ranks.forEach((id, rank) -> list.putInt(id.toString(), rank.number()));
         tag.put("ranks", list);

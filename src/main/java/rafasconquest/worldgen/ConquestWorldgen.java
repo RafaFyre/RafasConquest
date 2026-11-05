@@ -7,9 +7,9 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureType;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import rafasconquest.RafasConquest;
 
 public final class ConquestWorldgen {
@@ -19,30 +19,30 @@ public final class ConquestWorldgen {
     private static final DeferredRegister<net.minecraft.world.level.levelgen.feature.Feature<?>> FEATURES = DeferredRegister.create(Registries.FEATURE, RafasConquest.MOD_ID);
 
     /** The roads, built into each chunk ({@link RoadFeature}). */
-    public static final RegistryObject<RoadFeature> ROADS = FEATURES.register("roads",
+    public static final DeferredHolder<net.minecraft.world.level.levelgen.feature.Feature<?>, RoadFeature> ROADS = FEATURES.register("roads",
             () -> new RoadFeature(net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration.CODEC));
 
-    public static final RegistryObject<StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
-    public static final RegistryObject<StructureType<CityStructure>> CITY_STRUCTURE = STRUCTURE_TYPES.register("city", () -> () -> CityStructure.CODEC);
-    public static final RegistryObject<StructureType<CityDistrictStructure>> CITY_DISTRICT_STRUCTURE = STRUCTURE_TYPES.register("city_district", () -> () -> CityDistrictStructure.CODEC);
+    public static final DeferredHolder<StructureType<?>, StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
+    public static final DeferredHolder<StructureType<?>, StructureType<CityStructure>> CITY_STRUCTURE = STRUCTURE_TYPES.register("city", () -> () -> CityStructure.CODEC);
+    public static final DeferredHolder<StructureType<?>, StructureType<CityDistrictStructure>> CITY_DISTRICT_STRUCTURE = STRUCTURE_TYPES.register("city_district", () -> () -> CityDistrictStructure.CODEC);
 
-    public static final RegistryObject<StructureType<CountryStructure>> COUNTRY_STRUCTURE = STRUCTURE_TYPES.register("countryside", () -> () -> CountryStructure.CODEC);
-    public static final RegistryObject<StructurePlacementType<CountryPlacement>> COUNTRY_PLACEMENT = PLACEMENT_TYPES.register("countryside_sites", () -> () -> CountryPlacement.CODEC);
-    public static final RegistryObject<StructurePieceType> COUNTRY_PIECE = PIECE_TYPES.register("countryside", () -> (context, tag) -> new CountryPiece(tag));
-    public static final RegistryObject<StructurePlacementType<FarmPlacement>> FARM_PLACEMENT = PLACEMENT_TYPES.register("farm_spread", () -> () -> FarmPlacement.CODEC);
-    public static final RegistryObject<StructurePlacementType<DojoPlacement>> DOJO_PLACEMENT = PLACEMENT_TYPES.register("dojo_sites", () -> () -> DojoPlacement.CODEC);
-    public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_PLACEMENT = PLACEMENT_TYPES.register("city_sites", () -> () -> CityPlacement.CENTER_CODEC);
-    public static final RegistryObject<StructurePlacementType<CityPlacement>> CITY_DISTRICT_PLACEMENT = PLACEMENT_TYPES.register("city_district_sites", () -> () -> CityPlacement.DISTRICT_CODEC);
+    public static final DeferredHolder<StructureType<?>, StructureType<CountryStructure>> COUNTRY_STRUCTURE = STRUCTURE_TYPES.register("countryside", () -> () -> CountryStructure.CODEC);
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CountryPlacement>> COUNTRY_PLACEMENT = PLACEMENT_TYPES.register("countryside_sites", () -> () -> CountryPlacement.CODEC);
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> COUNTRY_PIECE = PIECE_TYPES.register("countryside", () -> (context, tag) -> new CountryPiece(tag));
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<FarmPlacement>> FARM_PLACEMENT = PLACEMENT_TYPES.register("farm_spread", () -> () -> FarmPlacement.CODEC);
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<DojoPlacement>> DOJO_PLACEMENT = PLACEMENT_TYPES.register("dojo_sites", () -> () -> DojoPlacement.CODEC);
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CityPlacement>> CITY_PLACEMENT = PLACEMENT_TYPES.register("city_sites", () -> () -> CityPlacement.CENTER_CODEC);
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CityPlacement>> CITY_DISTRICT_PLACEMENT = PLACEMENT_TYPES.register("city_district_sites", () -> () -> CityPlacement.DISTRICT_CODEC);
 
-    public static final RegistryObject<StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
 
-    public static final RegistryObject<StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
-    public static final RegistryObject<StructurePieceType> CITY_TERRAIN_PIECE = PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
-    public static final RegistryObject<StructurePieceType> RECRUITMENT_POST_PIECE = PIECE_TYPES.register("recruitment_post",
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_TERRAIN_PIECE = PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> RECRUITMENT_POST_PIECE = PIECE_TYPES.register("recruitment_post",
             () -> (context, tag) -> new RecruitmentPostPiece(tag));
-    public static final RegistryObject<StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",
             () -> (context, tag) -> new GoldChurchPiece(tag));
-    public static final RegistryObject<StructurePieceType> STYLE_PIECE = PIECE_TYPES.register("style",
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> STYLE_PIECE = PIECE_TYPES.register("style",
             () -> (context, tag) -> new rafasconquest.style.StylePiece(tag));
 
     public static final ResourceKey<Structure> FARM = key("farm");

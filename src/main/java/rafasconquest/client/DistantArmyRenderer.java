@@ -161,7 +161,7 @@ public final class DistantArmyRenderer {
      */
     private static double drawnWithin(EntityType<?> type) {
         EntityDimensions size = type.getDimensions();
-        return (size.width * 2 + size.height) / 3 * 64 * Entity.getViewScale();
+        return (size.width() * 2 + size.height()) / 3 * 64 * Entity.getViewScale();
     }
 
     /** One figure, built of rectangles side by side so none overlaps another. Sizes in blocks, from the feet up. */

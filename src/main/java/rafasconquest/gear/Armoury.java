@@ -9,8 +9,8 @@ import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.fml.ModList;
+import net.minecraft.core.registries.BuiltInRegistries;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.people.Homeland;
@@ -264,8 +264,7 @@ public final class Armoury {
 
     /** A nation's colour (its banner's ground), as RGB. */
     public static int colour(java.util.UUID nation) {
-        float[] c = rafasconquest.faction.FactionBannerNbt.baseColor(rafasconquest.faction.FactionBanner.of(nation)).getTextureDiffuseColors();
-        return (int) (c[0] * 255) << 16 | (int) (c[1] * 255) << 8 | (int) (c[2] * 255);
+        return rafasconquest.faction.FactionBannerNbt.baseColor(rafasconquest.faction.FactionBanner.of(nation)).getTextureDiffuseColor() & 0xFFFFFF;
     }
 
     /** A nation's banner, as an item. */
@@ -578,8 +577,8 @@ public final class Armoury {
      */
     @Nullable
     public static ItemStack glaive() {
-        for (ResourceLocation id : new ResourceLocation[]{new ResourceLocation("better_weaponry", "iron_glaive"), new ResourceLocation(MOD, "iron_guisarme")}) {
-            Item item = ForgeRegistries.ITEMS.getValue(id);
+        for (ResourceLocation id : new ResourceLocation[]{ResourceLocation.fromNamespaceAndPath("better_weaponry", "iron_glaive"), ResourceLocation.fromNamespaceAndPath(MOD, "iron_guisarme")}) {
+            Item item = BuiltInRegistries.ITEM.getOptional(id).orElse(null);
             if (item != null && item != Items.AIR) {
                 return new ItemStack(item);
             }
@@ -593,7 +592,7 @@ public final class Armoury {
         if (name == null) {
             return null;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(name.indexOf(':') >= 0 ? new ResourceLocation(name) : new ResourceLocation(MOD, name));
+        Item item = BuiltInRegistries.ITEM.getOptional(name.indexOf(':') >= 0 ? ResourceLocation.parse(name) : ResourceLocation.fromNamespaceAndPath(MOD, name)).orElse(null);
         if (item == null || item == Items.AIR) {
             return null;
         }

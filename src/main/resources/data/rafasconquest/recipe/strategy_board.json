@@ -5,5 +5,5 @@
     { "item": "minecraft:cartography_table" },
     { "item": "minecraft:red_dye" }
   ],
-  "result": { "item": "rafasconquest:strategy_board" }
+  "result": { "id": "rafasconquest:strategy_board" }
 }

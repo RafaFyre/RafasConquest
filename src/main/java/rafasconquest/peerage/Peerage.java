@@ -83,7 +83,7 @@ public final class Peerage extends SavedData {
     private final Map<Integer, String> fates = new HashMap<>();
 
     public static Peerage get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(Peerage::load, Peerage::new, NAME);
+        return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Peerage::new, (tag, registries) -> Peerage.load(tag)), NAME);
     }
 
     public Peer of(UUID player) {
@@ -135,7 +135,7 @@ public final class Peerage extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
         CompoundTag list = new CompoundTag();
         peers.forEach((id, p) -> {
             CompoundTag t = new CompoundTag();

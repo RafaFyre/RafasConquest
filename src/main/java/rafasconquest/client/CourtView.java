@@ -228,7 +228,7 @@ final class CourtView {
         float scale = now.zoom * height;
         pose.pushPose();
         pose.translate(now.anchorX * width, now.anchorY * height, 1500);
-        pose.mulPoseMatrix(new Matrix4f().scaling(scale, -scale, scale));
+        pose.mulPose(new Matrix4f().scaling(scale, -scale, scale));
         pose.mulPose(Axis.XP.rotationDegrees(now.pitch));
         pose.mulPose(Axis.YP.rotationDegrees(now.yaw));
         pose.translate(-now.at.x(), -now.at.y(), -now.at.z());

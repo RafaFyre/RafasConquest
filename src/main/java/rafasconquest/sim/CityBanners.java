@@ -70,10 +70,10 @@ final class CityBanners {
         if (!(state.getBlock() instanceof BannerBlock)) {
             return false;
         }
-        ListTag layers = FactionBannerNbt.patterns(level.registryAccess(), design);
+        net.minecraft.world.level.block.entity.BannerPatternLayers layers = FactionBannerNbt.patterns(level.registryAccess(), design);
         Block colored = BannerBlock.byColor(FactionBannerNbt.baseColor(design));
         BlockEntity current = level.getBlockEntity(pos);
-        if (state.getBlock() == colored && current != null && layers.equals(current.saveWithoutMetadata().getList("Patterns", 10))) {
+        if (state.getBlock() == colored && current instanceof BannerBlockEntity old && layers.equals(old.getPatterns())) {
             return false;
         }
         if (state.getBlock() != colored) {
@@ -81,9 +81,7 @@ final class CityBanners {
             level.setBlock(pos, state, 3);
         }
         if (level.getBlockEntity(pos) instanceof BannerBlockEntity banner) {
-            CompoundTag tag = banner.saveWithoutMetadata();
-            tag.put("Patterns", layers);
-            banner.load(tag);
+            banner.fromItem(FactionBannerNbt.item(level.registryAccess(), design), FactionBannerNbt.baseColor(design));
             banner.setChanged();
             level.sendBlockUpdated(pos, state, state, 3);
         }

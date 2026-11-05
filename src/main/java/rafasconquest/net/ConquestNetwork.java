@@ -3,13 +3,10 @@ package rafasconquest.net;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkDirection;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.NetworkRegistry;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.network.simple.SimpleChannel;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+import rafasconquest.net.SimpleChannel.NetworkDirection;
 import rafasconquest.RafasConquest;
 import net.minecraft.world.item.ItemStack;
 import rafasconquest.battle.FormationSnapshot;
@@ -21,7 +18,6 @@ import rafasconquest.sim.ConquestServer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * The mod's network channel. The Faction Info screen and the world map ask the server for faction data; the map also
@@ -32,13 +28,16 @@ import java.util.function.Supplier;
 public final class ConquestNetwork {
     private static final String VERSION = "4";
     private static final int MAP_PART_BYTES = 256 * 1024;
-    private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "main"), () -> VERSION, VERSION::equals, VERSION::equals);
+    private static final SimpleChannel CHANNEL = new SimpleChannel(VERSION);
 
     private ConquestNetwork() {
     }
 
-    public static void register() {
+    public static void register(RegisterPayloadHandlersEvent event) {
+        CHANNEL.register(event);
+    }
+
+    static {
         CHANNEL.messageBuilder(RequestFactionInfo.class, 0, NetworkDirection.PLAY_TO_SERVER)
                 .encoder((msg, buf) -> {
                 })
@@ -181,7 +180,7 @@ public final class ConquestNetwork {
                 .encoder((m, b) -> {
                 })
                 .decoder(b -> new CityClose())
-                .consumerMainThread((m, c) -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> rafasconquest.client.ClientScreens::closeCityManager))
+                .consumerMainThread((m, c) -> rafasconquest.client.ClientScreens.closeCityManager())
                 .add();
     }
 
@@ -206,11 +205,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendTalk(ServerPlayer player, rafasconquest.peerage.Talk.View view) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new TalkView(view));
+        CHANNEL.send(player, new TalkView(view));
     }
 
-    private static void handleTalkView(TalkView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openTalk(msg.view()));
+    private static void handleTalkView(TalkView msg, IPayloadContext context) {
+        rafasconquest.client.ClientScreens.openTalk(msg.view());
     }
 
     /** Client → server: the player's choice in a conversation. */
@@ -229,8 +228,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new TalkChoice(entity, key));
     }
 
-    private static void handleTalkChoice(TalkChoice msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleTalkChoice(TalkChoice msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
             rafasconquest.peerage.Talk.choose(player, msg.entity(), msg.key());
         }
@@ -261,11 +260,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendBoard(ServerPlayer player, rafasconquest.peerage.Boards.View view) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BoardView(view));
+        CHANNEL.send(player, new BoardView(view));
     }
 
-    private static void handleBoardView(BoardView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openBoard(msg.view()));
+    private static void handleBoardView(BoardView msg, IPayloadContext context) {
+        rafasconquest.client.ClientScreens.openBoard(msg.view());
     }
 
     /** Client → server: reading a quest on a board, or taking or reporting a general one there. */
@@ -285,8 +284,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new BoardAction(board, quest, action));
     }
 
-    private static void handleBoardAction(BoardAction msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleBoardAction(BoardAction msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
             rafasconquest.peerage.Boards.act(player, msg.board(), msg.quest(), msg.action());
         }
@@ -306,11 +305,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendPeerage(ServerPlayer player, java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new PeerageView(holders, fates));
+        CHANNEL.send(player, new PeerageView(holders, fates));
     }
 
-    private static void handlePeerageView(PeerageView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates()));
+    private static void handlePeerageView(PeerageView msg, IPayloadContext context) {
+        rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates());
     }
 
     /**
@@ -352,23 +351,23 @@ public final class ConquestNetwork {
     }
 
     public static void openMarker(ServerPlayer player, net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new MarkerView(pos, spec));
+        CHANNEL.send(player, new MarkerView(pos, spec));
     }
 
     public static void setMarker(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
         CHANNEL.sendToServer(new MarkerSet(pos, spec));
     }
 
-    private static void handleMarkerView(MarkerView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openMarker(msg.pos(), msg.spec()));
+    private static void handleMarkerView(MarkerView msg, IPayloadContext context) {
+        rafasconquest.client.ClientScreens.openMarker(msg.pos(), msg.spec());
     }
 
     /** Client → server: a Character Marker's settings, to keep (creative, within reach). */
     public record MarkerSet(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
     }
 
-    private static void handleMarkerSet(MarkerSet msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleMarkerSet(MarkerSet msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null && player.isCreative() && player.blockPosition().closerThan(msg.pos(), 16)
                 && player.level().getBlockEntity(msg.pos()) instanceof rafasconquest.style.MarkerBlockEntity marker) {
             marker.setSpec(msg.spec());
@@ -392,11 +391,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendGrandStrategy(ServerPlayer player, rafasconquest.peerage.GrandStrategy.View view) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new GrandStrategyView(view));
+        CHANNEL.send(player, new GrandStrategyView(view));
     }
 
-    private static void handleGrandStrategyView(GrandStrategyView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openGrandStrategy(msg.view()));
+    private static void handleGrandStrategyView(GrandStrategyView msg, IPayloadContext context) {
+        rafasconquest.client.ClientScreens.openGrandStrategy(msg.view());
     }
 
     /**
@@ -414,15 +413,15 @@ public final class ConquestNetwork {
     }
 
     public static void closeCityView(ServerPlayer player) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CityClose());
+        CHANNEL.send(player, new CityClose());
     }
 
     public static void cityView(int province) {
         CHANNEL.sendToServer(new CityView(province));
     }
 
-    private static void handleCityView(CityView msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleCityView(CityView msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player == null) {
             return;
         }
@@ -446,10 +445,10 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new StatsRequest());
     }
 
-    private static void handleStatsRequest(StatsRequest msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleStatsRequest(StatsRequest msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new StatsView(rafasconquest.peerage.PlayerStats.view(player)));
+            CHANNEL.send(player, new StatsView(rafasconquest.peerage.PlayerStats.view(player)));
         }
     }
 
@@ -469,8 +468,8 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleStatsView(StatsView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientScreens.openStats(msg.view()));
+    private static void handleStatsView(StatsView msg, IPayloadContext context) {
+        rafasconquest.client.ClientScreens.openStats(msg.view());
     }
 
     /** Client → server: change one of my settings. */
@@ -489,8 +488,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new SetSetting(key, value));
     }
 
-    private static void handleSetSetting(SetSetting msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleSetSetting(SetSetting msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
             rafasconquest.peerage.PlayerStats.set(player, msg.key(), msg.value());
         }
@@ -512,8 +511,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new TeleportTo(x, z));
     }
 
-    private static void handleTeleportTo(TeleportTo msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleTeleportTo(TeleportTo msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player == null || !player.isCreative()) {
             return; // only in creative
         }
@@ -523,11 +522,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendPolitics(ServerPlayer player, PoliticsView view) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), view);
+        CHANNEL.send(player, view);
     }
 
-    private static void handlePoliticsView(PoliticsView msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ClientPolitics.set(msg));
+    private static void handlePoliticsView(PoliticsView msg, IPayloadContext context) {
+        rafasconquest.client.ClientPolitics.set(msg);
     }
 
     /** Server → client: how far the world is stretched (1: not at all), for the client's far-terrain quality. */
@@ -542,11 +541,11 @@ public final class ConquestNetwork {
     }
 
     public static void sendWorldStretch(ServerPlayer player, int factor) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new WorldStretch(factor));
+        CHANNEL.send(player, new WorldStretch(factor));
     }
 
-    private static void handleWorldStretch(WorldStretch msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.DistantHorizonsLink.worldStretch(msg.factor()));
+    private static void handleWorldStretch(WorldStretch msg, IPayloadContext context) {
+        rafasconquest.client.DistantHorizonsLink.worldStretch(msg.factor());
     }
 
     // ---- the war horn: a player's units ----
@@ -574,10 +573,10 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new UnitsRequest());
     }
 
-    private static void handleUnitsRequest(UnitsRequest msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleUnitsRequest(UnitsRequest msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new UnitsState(rafasconquest.bridge.RecruitsBattle.unitInfo(player)));
+            CHANNEL.send(player, new UnitsState(rafasconquest.bridge.RecruitsBattle.unitInfo(player)));
         }
     }
 
@@ -617,8 +616,8 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleUnitsState(UnitsState msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleScreen.receive(msg.units()));
+    private static void handleUnitsState(UnitsState msg, IPayloadContext context) {
+        rafasconquest.client.BattleScreen.receive(msg.units());
     }
 
     /** Client → server: the orders given in the war horn's screen, each to some units, with a place for a move. */
@@ -653,8 +652,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(orders);
     }
 
-    private static void handleHornOrders(HornOrders msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleHornOrders(HornOrders msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player == null) {
             return;
         }
@@ -690,8 +689,8 @@ public final class ConquestNetwork {
         CHANNEL.sendToServer(new FigureStrike(formation, x, z));
     }
 
-    private static void handleFigureStrike(FigureStrike msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleFigureStrike(FigureStrike msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
             rafasconquest.bridge.RecruitsBattle.playerStrikesFigure(player, msg.formation(), msg.x(), msg.z());
         }
@@ -705,7 +704,7 @@ public final class ConquestNetwork {
     /** The same, with a beacon beam at ({@code bx}, {@code by}, {@code bz}): where an order sends the player. */
     public static void sendBattleSpot(ServerPlayer player, boolean has, double x, double y, double z, boolean beacon, double bx,
                                       double by, double bz) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BattleSpot(has, x, y, z, beacon, bx, by, bz));
+        CHANNEL.send(player, new BattleSpot(has, x, y, z, beacon, bx, by, bz));
     }
 
     /** Server → client: where the player should stand in their block, if anywhere. */
@@ -727,14 +726,14 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleBattleSpot(BattleSpot msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z(), msg.beacon(), msg.bx(), msg.by(), msg.bz()));
+    private static void handleBattleSpot(BattleSpot msg, IPayloadContext context) {
+        rafasconquest.client.BattleSpotRing.set(msg.has(), msg.x(), msg.y(), msg.z(), msg.beacon(), msg.bx(), msg.by(), msg.bz());
     }
 
     /** Tells players of the arrows archers loosed as numbers this second, for drawing in flight. */
     public static void sendVolleys(List<ServerPlayer> players, Volleys volleys) {
         for (ServerPlayer player : players) {
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), volleys);
+            CHANNEL.send(player, volleys);
         }
     }
 
@@ -751,15 +750,15 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleVolleys(Volleys msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> rafasconquest.client.ArrowVolleys.receive(msg.from(), msg.to(), msg.shots()));
+    private static void handleVolleys(Volleys msg, IPayloadContext context) {
+        rafasconquest.client.ArrowVolleys.receive(msg.from(), msg.to(), msg.shots());
     }
 
     /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */
     public static void sendBattleSnapshot(List<ServerPlayer> players, List<FormationSnapshot> formations) {
         BattleSnapshot msg = new BattleSnapshot(formations);
         for (ServerPlayer player : players) {
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), msg);
+            CHANNEL.send(player, msg);
         }
     }
 
@@ -812,29 +811,29 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleBattleSnapshot(BattleSnapshot msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> DistantArmies.receive(msg.formations()));
+    private static void handleBattleSnapshot(BattleSnapshot msg, IPayloadContext context) {
+        DistantArmies.receive(msg.formations());
     }
 
     /** Tells a player that an entity they now see wears this banner on its back (a battle's general). */
     public static void sendBackBanner(ServerPlayer player, int entityId, ItemStack banner) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BackBanner(entityId, banner));
+        CHANNEL.send(player, new BackBanner(entityId, banner));
     }
 
     /** Server → client: entity {@code entityId} wears {@code banner} on its back. */
     public record BackBanner(int entityId, ItemStack banner) {
-        void write(FriendlyByteBuf buf) {
+        void write(RegistryFriendlyByteBuf buf) {
             buf.writeVarInt(entityId);
-            buf.writeItem(banner);
+            ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, banner);
         }
 
-        static BackBanner read(FriendlyByteBuf buf) {
-            return new BackBanner(buf.readVarInt(), buf.readItem());
+        static BackBanner read(RegistryFriendlyByteBuf buf) {
+            return new BackBanner(buf.readVarInt(), ItemStack.OPTIONAL_STREAM_CODEC.decode(buf));
         }
     }
 
-    private static void handleBackBanner(BackBanner msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> BackBanners.put(msg.entityId(), msg.banner()));
+    private static void handleBackBanner(BackBanner msg, IPayloadContext context) {
+        BackBanners.put(msg.entityId(), msg.banner());
     }
 
     public static void requestFactionInfo() {
@@ -850,7 +849,7 @@ public final class ConquestNetwork {
         int parts = Math.max(1, (encoded.length + MAP_PART_BYTES - 1) / MAP_PART_BYTES);
         for (int i = 0; i < parts; i++) {
             byte[] part = Arrays.copyOfRange(encoded, i * MAP_PART_BYTES, Math.min(encoded.length, (i + 1) * MAP_PART_BYTES));
-            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BaseMapPart(i, parts, part));
+            CHANNEL.send(player, new BaseMapPart(i, parts, part));
         }
     }
 
@@ -892,30 +891,30 @@ public final class ConquestNetwork {
         }
     }
 
-    private static void handleRequest(RequestFactionInfo msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleRequest(RequestFactionInfo msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         ConquestServer server = ConquestServer.get();
         if (player == null) {
             return;
         }
         List<FactionInfo> factions = server == null ? List.of()
                 : FactionInfo.collect(server.data(), player.blockPosition(), server.overworld().getSeed());
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new FactionInfoReply(factions));
+        CHANNEL.send(player, new FactionInfoReply(factions));
     }
 
-    private static void handleReply(FactionInfoReply msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientScreens.receiveFactionInfo(msg.factions()));
+    private static void handleReply(FactionInfoReply msg, IPayloadContext context) {
+        ClientScreens.receiveFactionInfo(msg.factions());
     }
 
-    private static void handleMapRequest(RequestBaseMap msg, Supplier<NetworkEvent.Context> context) {
-        ServerPlayer player = context.get().getSender();
+    private static void handleMapRequest(RequestBaseMap msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
         ConquestServer server = ConquestServer.get();
         if (player != null && server != null) {
             server.mapStore().request(player);
         }
     }
 
-    private static void handleMapPart(BaseMapPart msg, Supplier<NetworkEvent.Context> context) {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientScreens.receiveBaseMapPart(msg.index(), msg.count(), msg.bytes()));
+    private static void handleMapPart(BaseMapPart msg, IPayloadContext context) {
+        ClientScreens.receiveBaseMapPart(msg.index(), msg.count(), msg.bytes());
     }
 }
