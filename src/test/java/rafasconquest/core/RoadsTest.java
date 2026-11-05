@@ -55,6 +55,14 @@ class RoadsTest {
     }
 
     @Test
+    void aRoadNeverLeavesAPortByItsHarbour() {
+        Roads.Place port = new Roads.Place("Westford", 600, 1280, 160, 2, CityLayout.Side.EAST.ordinal());
+        int[] start = Roads.gate(port, EAST);
+        assertTrue(start[0] <= port.x() + port.half(), "the road leaves by the harbour");
+        assertTrue(Math.abs(start[1] - port.z()) > port.half(), "the road doesn't leave by a side gate");
+    }
+
+    @Test
     void roadsGoRoundMountainsAndCrossTheRiverOnce() {
         Roads.Plan plan = Roads.plan(land(), List.of(new Roads.Link(Roads.Grade.HIGH, WEST, EAST)), List.of(), List.of(WEST, EAST));
         Roads.Road road = plan.roads().get(0);

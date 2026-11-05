@@ -79,8 +79,14 @@ public final class Roads {
         }
     }
 
-    /** A place a road can reach: a city (its square {@code half} blocks each way), a castle, village or dojo (a point). */
-    public record Place(String name, int x, int z, int half, int districts) {
+    /**
+     * A place a road can reach: a city (its square {@code half} blocks each way), a castle, village or dojo (a point);
+     * {@code harbour} is the {@link CityLayout.Side} ordinal a port city's harbour faces, or -1.
+     */
+    public record Place(String name, int x, int z, int half, int districts, int harbour) {
+        public Place(String name, int x, int z, int half, int districts) {
+            this(name, x, z, half, districts, -1);
+        }
     }
 
     static final int POINT_SPACING = 8;
@@ -118,7 +124,7 @@ public final class Roads {
 
     /** A city as a place roads reach: named after its province, its square its walls. */
     public static Place place(SeatCities.City city, String name) {
-        return new Place(name, city.x(), city.z(), city.size() / 2, city.districts());
+        return new Place(name, city.x(), city.z(), city.size() / 2, city.districts(), city.harbour());
     }
 
     /**
@@ -222,20 +228,35 @@ public final class Roads {
         };
     }
 
-    /** Where a road to {@code toward} leaves a place: a city's gate facing it, just outside the walls; else the place. */
+    /**
+     * The way out (dx, dz) of the gate a road to {@code toward} leaves a city by: the side facing it, unless that side
+     * is the harbour, then the side facing it next best.
+     */
+    static int[] side(Place place, Place toward) {
+        int dx = toward.x() - place.x();
+        int dz = toward.z() - place.z();
+        int[] x = {dx >= 0 ? 1 : -1, 0};
+        int[] z = {0, dz >= 0 ? 1 : -1};
+        boolean alongX = Math.abs(dx) >= Math.abs(dz);
+        int[] best = alongX ? x : z;
+        CityLayout.Side s = best[0] > 0 ? CityLayout.Side.EAST : best[0] < 0 ? CityLayout.Side.WEST
+                : best[1] > 0 ? CityLayout.Side.SOUTH : CityLayout.Side.NORTH;
+        return s.ordinal() == place.harbour() ? (alongX ? z : x) : best;
+    }
+
+    /** Where a road to {@code toward} leaves a place: a city's gate (see {@link #side}), just outside the walls; else the place. */
     static int[] gate(Place place, Place toward) {
         if (place.half() <= 0) {
             return new int[]{place.x(), place.z()};
         }
-        int dx = toward.x() - place.x();
-        int dz = toward.z() - place.z();
+        int[] d = side(place, toward);
         int blocks = place.districts() * CityLayout.BLOCKS_PER_CELL;
         int origin = -place.half();
         int along = origin + CityLayout.roadStart(blocks / 2) + 1; // the gate avenue's middle, from the centre
         int out = place.half() + GATE_OUT;
-        return Math.abs(dx) >= Math.abs(dz)
-                ? new int[]{place.x() + Integer.signum(dx) * out, place.z() + along}
-                : new int[]{place.x() + along, place.z() + Integer.signum(dz) * out};
+        return d[0] != 0
+                ? new int[]{place.x() + d[0] * out, place.z() + along}
+                : new int[]{place.x() + along, place.z() + d[1] * out};
     }
 
     /** {@link #GATE_STUB} blocks straight out from the gate a road to {@code toward} leaves by (the place, for a point). */
@@ -244,11 +265,8 @@ public final class Roads {
         if (place.half() <= 0) {
             return g;
         }
-        int dx = toward.x() - place.x();
-        int dz = toward.z() - place.z();
-        return Math.abs(dx) >= Math.abs(dz)
-                ? new int[]{g[0] + Integer.signum(dx) * GATE_STUB, g[1]}
-                : new int[]{g[0], g[1] + Integer.signum(dz) * GATE_STUB};
+        int[] d = side(place, toward);
+        return new int[]{g[0] + d[0] * GATE_STUB, g[1] + d[1] * GATE_STUB};
     }
 
     /** The pixel under (x, z), clamped onto the map. */

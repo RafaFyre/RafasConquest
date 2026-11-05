@@ -406,7 +406,19 @@ public final class BaseMapGenerator {
 
     /** The kind of land a biome is, by the villagers who would live there; plains for any other mod's own kinds. */
     public static rafasconquest.people.Homeland homeland(Holder<Biome> biome) {
-        net.minecraft.world.entity.npc.VillagerType type = net.minecraft.world.entity.npc.VillagerType.byBiome(biome);
+        rafasconquest.people.Homeland land = HOMELANDS.get(biome.value());
+        if (land == null) {
+            // byBiome isn't thread-safe once other mods (Lithostitched) cache in it, and the map is drawn in parallel.
+            synchronized (HOMELANDS) {
+                land = HOMELANDS.computeIfAbsent(biome.value(), b -> homelandOf(net.minecraft.world.entity.npc.VillagerType.byBiome(biome)));
+            }
+        }
+        return land;
+    }
+
+    private static final java.util.Map<Biome, rafasconquest.people.Homeland> HOMELANDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static rafasconquest.people.Homeland homelandOf(net.minecraft.world.entity.npc.VillagerType type) {
         if (type == net.minecraft.world.entity.npc.VillagerType.DESERT) {
             return rafasconquest.people.Homeland.DESERT;
         } else if (type == net.minecraft.world.entity.npc.VillagerType.JUNGLE) {
