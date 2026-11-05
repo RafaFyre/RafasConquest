@@ -36,7 +36,7 @@ public final class RankKits {
         if (map == null || nation == null) {
             return;
         }
-        Armoury.Outfit kit = Armoury.rankKit(to.number(), Armoury.homeland(map, nation.id()), Armoury.colour(nation.id()),
+        Armoury.Outfit kit = Armoury.rankKit(to.number(), Armoury.style(map, nation.id()), Armoury.colour(nation.id()),
                 Armoury.banner(player.level().registryAccess(), nation.id()));
         if (kit.isEmpty()) {
             return;

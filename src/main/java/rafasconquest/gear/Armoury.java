@@ -21,8 +21,8 @@ import java.util.Map;
 /**
  * Kits of Epic Knights armour and arms ({@code magistuarmory}), when that mod is installed: for heavy infantry, cavalry
  * and officers in battle, for guards, for rulers, nobles and the sword-titled, and for enlisted players by their rank.
- * Each land's people have their own look ({@link Style}). Armour and decorations that take a dye are dyed the side's
- * colour, and surcoats and shields carry its banner. Without Epic Knights every kit is empty, and the callers keep their
+ * Each land has a few looks ({@link Style}), which its nations take in turn. Armour and decorations that take a dye are
+ * dyed the side's colour, and surcoats and shields carry its banner. Without Epic Knights every kit is empty, and the callers keep their
  * vanilla gear. Epic Knights is never needed to build or run: its items are looked up by name.
  */
 public final class Armoury {
@@ -35,59 +35,148 @@ public final class Armoury {
     }
 
     /**
-     * A land's look: the heavy infantry's helmet, body (chest, legs, feet), weapon and shield; the cavalry's helmet,
-     * body and weapon; the officers' helmet, body and weapon; and the decoration an officer's helmet wears.
+     * A look: the heavy infantry's helmet, body (chest, legs, feet), weapon and shield; the cavalry's helmet, body and
+     * weapon; the officers' helmet, body and weapon; and the decoration an officer's helmet wears.
      */
-    record Style(String infantryHelmet, String[] infantryBody, String infantryWeapon, String shield,
-                 String cavalryHelmet, String[] cavalryBody, String cavalryWeapon,
-                 String officerHelmet, String[] officerBody, String officerWeapon, String crest) {
+    public record Style(String infantryHelmet, String[] infantryBody, String infantryWeapon, String shield,
+                        String cavalryHelmet, String[] cavalryBody, String cavalryWeapon,
+                        String officerHelmet, String[] officerBody, String officerWeapon, String crest) {
     }
 
-    private static final Map<Homeland, Style> STYLES = new EnumMap<>(Homeland.class);
+    /** Each land's looks; its nations take them in turn, so nations of one culture still dress apart. */
+    private static final Map<Homeland, java.util.List<Style>> STYLES = new EnumMap<>(Homeland.class);
+
+    private static void looks(Homeland land, Style... looks) {
+        STYLES.put(land, java.util.List.of(looks));
+    }
 
     static {
         // The plains: the knights of the west: mail and kettle hats, knightly harness, plate for the officers.
-        STYLES.put(Homeland.PLAINS, new Style("kettlehat", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"),
+        looks(Homeland.PLAINS, new Style("kettlehat", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"),
                 "iron_heavymace", "iron_heatershield",
                 "armet", body("knight_chestplate", "knight_leggings", "knight_boots"), "iron_chivalrylance",
                 "grand_bascinet", body("platemail_chestplate", "platemail_leggings", "platemail_boots"), "steel_bastardsword",
-                "big_plume_decoration"));
+                "big_plume_decoration"),
+                // free companies: brigandines and bascinets, cuirassiers, gothic plate and a lion for the officers
+                new Style("bascinet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"),
+                        "iron_bastardsword", "iron_tartsche",
+                        "sallet", body("cuirassier_chestplate", "cuirassier_leggings", "cuirassier_boots"), "iron_chivalrylance",
+                        "armet_with_plume", body("gothic_chestplate", "gothic_leggings", "gothic_boots"), "steel_estoc",
+                        "lion_decoration"),
+                // the old crusade: mail hoods and crusader surcoats, great helms and a griffin for the officers
+                new Style("chainmail_helmet", body("crusader_chestplate", "crusader_leggings", "crusader_boots"),
+                        "iron_heavymace", "iron_kiteshield",
+                        "greathelm", body("xivcenturyknight_chestplate", "xivcenturyknight_leggings", "xivcenturyknight_boots"), "iron_chivalrylance",
+                        "greathelm", body("platemail_chestplate", "platemail_leggings", "platemail_boots"), "steel_bastardsword",
+                        "griffin_decoration"));
         // The taiga: the north: nasal helms and lamellar, a bear's head for the officers.
-        STYLES.put(Homeland.TAIGA, new Style("norman_helmet", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
+        looks(Homeland.TAIGA, new Style("norman_helmet", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
                 "iron_morgenstern", "iron_roundshield",
                 "shishak", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "iron_chivalrylance",
                 "face_helmet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "steel_lochaberaxe",
-                "bear_decoration"));
+                "bear_decoration"),
+                // mail from head to foot, horned officers
+                new Style("chainmail_helmet", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"),
+                        "iron_heavymace", "iron_roundshield",
+                        "norman_helmet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_chivalrylance",
+                        "norman_helmet", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "steel_lochaberaxe",
+                        "viking_horns_decoration"),
+                // padded levies, masked riders, antlered officers
+                new Style("kettlehat", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_morgenstern", "iron_kiteshield",
+                        "face_helmet", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "iron_chivalrylance",
+                        "face_helmet", body("xivcenturyknight_chestplate", "xivcenturyknight_leggings", "xivcenturyknight_boots"), "steel_claymore",
+                        "antlers_decoration"));
         // The snows: heavy crusader mail under great helms, a fur hood for the officers.
-        STYLES.put(Homeland.SNOW, new Style("greathelm", body("crusader_chestplate", "crusader_leggings", "crusader_boots"),
+        looks(Homeland.SNOW, new Style("greathelm", body("crusader_chestplate", "crusader_leggings", "crusader_boots"),
                 "iron_heavywarhammer", "iron_kiteshield",
                 "greathelm", body("crusader_chestplate", "crusader_leggings", "crusader_boots"), "iron_chivalrylance",
                 "bascinet", body("xivcenturyknight_chestplate", "xivcenturyknight_leggings", "xivcenturyknight_boots"), "steel_claymore",
-                "hood_decoration"));
+                "hood_decoration"),
+                // mail on foot, knights on horse, a dragon over the officers
+                new Style("chainmail_helmet", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"),
+                        "iron_heavymace", "iron_heatershield",
+                        "greathelm", body("knight_chestplate", "knight_leggings", "knight_boots"), "iron_chivalrylance",
+                        "greathelm", body("crusader_chestplate", "crusader_leggings", "crusader_boots"), "steel_bastardsword",
+                        "dragon_decoration"),
+                // bascinets behind pavises, gothic officers
+                new Style("bascinet", body("xivcenturyknight_chestplate", "xivcenturyknight_leggings", "xivcenturyknight_boots"),
+                        "iron_heavywarhammer", "iron_pavese",
+                        "bascinet", body("platemail_chestplate", "platemail_leggings", "platemail_boots"), "iron_chivalrylance",
+                        "grand_bascinet", body("gothic_chestplate", "gothic_leggings", "gothic_boots"), "steel_zweihander",
+                        "bear_decoration"));
         // The desert: pointed helms and lamellar, round shields, a torse and mantle for the officers.
-        STYLES.put(Homeland.DESERT, new Style("shishak", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
+        looks(Homeland.DESERT, new Style("shishak", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
                 "messer_sword", "iron_rondache",
                 "shishak", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "iron_ranseur",
                 "shishak", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "steel_estoc",
-                "torse_and_mantle_decoration"));
+                "torse_and_mantle_decoration"),
+                // light padded foot, half-armoured riders, a torse for the officers
+                new Style("chainmail_helmet", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_shortsword", "iron_roundshield",
+                        "shishak", body("halfarmor_chestplate", "chainmail_leggings", "chainmail_boots"), "iron_chivalrylance",
+                        "shishak", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "steel_katzbalger",
+                        "torse_decoration"),
+                // coifed foot, brigandine riders, horned officers
+                new Style("coif", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
+                        "iron_estoc", "iron_target",
+                        "chainmail_helmet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_ranseur",
+                        "shishak", body("cuirassier_chestplate", "cuirassier_leggings", "cuirassier_boots"), "messer_sword",
+                        "gazelle_horns_decoration"));
         // The savanna: light gambesons and open helms, feathers for the officers.
-        STYLES.put(Homeland.SAVANNA, new Style("barbute", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+        looks(Homeland.SAVANNA, new Style("barbute", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
                 "iron_shortsword", "iron_target",
                 "barbute", body("halfarmor_chestplate", "chainmail_leggings", "gambeson_boots"), "iron_guisarme",
                 "sallet", body("cuirassier_chestplate", "cuirassier_leggings", "cuirassier_boots"), "steel_katzbalger",
-                "feathers_decoration"));
+                "feathers_decoration"),
+                // kettle hats and maces, a plume for the officers
+                new Style("kettlehat", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_heavymace", "iron_rondache",
+                        "barbute", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_ranseur",
+                        "barbute", body("halfarmor_chestplate", "chainmail_leggings", "brigandine_boots"), "steel_estoc",
+                        "plume_middle_decoration"),
+                // coifs and oval shields, a lion over the officers
+                new Style("coif", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_shortsword", "iron_ellipticalshield",
+                        "sallet", body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"), "iron_chivalrylance",
+                        "sallet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "steel_flamebladedsword",
+                        "lion_decoration"));
         // The jungle: sallets and gambesons, oval shields, feathers for the officers.
-        STYLES.put(Homeland.JUNGLE, new Style("sallet", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+        looks(Homeland.JUNGLE, new Style("sallet", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
                 "iron_morgenstern", "iron_ellipticalshield",
                 "sallet", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_ranseur",
                 "bascinet", body("kastenbrust_chestplate", "kastenbrust_leggings", "kastenbrust_boots"), "steel_flamebladedsword",
-                "feathers_decoration"));
+                "feathers_decoration"),
+                // coifs and targes, spiked officers
+                new Style("coif", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_heavymace", "iron_target",
+                        "barbute", body("halfarmor_chestplate", "chainmail_leggings", "gambeson_boots"), "iron_guisarme",
+                        "barbute", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "steel_katzbalger",
+                        "spike_decoration"),
+                // brigandines behind tall shields, armets for the officers
+                new Style("kettlehat", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"),
+                        "iron_morgenstern", "iron_tartsche",
+                        "sallet", body("cuirassier_chestplate", "cuirassier_leggings", "cuirassier_boots"), "iron_chivalrylance",
+                        "armet", body("kastenbrust_chestplate", "kastenbrust_leggings", "kastenbrust_boots"), "steel_estoc",
+                        "horse_decoration"));
         // The swamp: coifs and gambesons, bucklers, two plumes for the officers.
-        STYLES.put(Homeland.SWAMP, new Style("coif", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+        looks(Homeland.SWAMP, new Style("coif", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
                 "iron_shortsword", "iron_buckler",
                 "bascinet", body("halfarmor_chestplate", "chainmail_leggings", "chainmail_boots"), "iron_guisarme",
                 "bascinet", body("kastenbrust_chestplate", "kastenbrust_leggings", "kastenbrust_boots"), "steel_lucernhammer",
-                "two_plumes_decoration"));
+                "two_plumes_decoration"),
+                // mail and hammers, lilies over gothic officers
+                new Style("chainmail_helmet", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"),
+                        "iron_heavywarhammer", "iron_buckler",
+                        "kettlehat", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_guisarme",
+                        "sallet", body("gothic_chestplate", "gothic_leggings", "gothic_boots"), "steel_lucernhammer",
+                        "lily_decoration"),
+                // pavises in the reeds, plate for the officers
+                new Style("kettlehat", body("gambeson_chestplate", "chainmail_leggings", "gambeson_boots"),
+                        "iron_morgenstern", "iron_pavese",
+                        "barbute", body("brigandine_chestplate", "chainmail_leggings", "brigandine_boots"), "iron_chivalrylance",
+                        "armet", body("platemail_chestplate", "platemail_leggings", "platemail_boots"), "steel_ahlspiess",
+                        "rondel_decoration"));
     }
 
     /** A worn outfit: the stack for each slot it fills (the others are left as they are). */
@@ -114,6 +203,35 @@ public final class Armoury {
         return Homeland.PLAINS;
     }
 
+    /**
+     * The look a nation's people wear: one of its land's, the nations of one land taking them in turn by their order on
+     * the map. A nation off the map takes one by its id.
+     */
+    public static Style style(@Nullable rafasconquest.map.BaseMap map, @Nullable java.util.UUID nation) {
+        Homeland land = homeland(map, nation);
+        int turn = nation == null ? 0 : nation.hashCode();
+        if (map != null && nation != null) {
+            int before = 0;
+            for (int n = 0; n < map.nations().size(); n++) {
+                if (map.nations().get(n).id().equals(nation)) {
+                    turn = before;
+                    break;
+                }
+                if (n < map.realm().nationCulture().length
+                        && map.realm().cultures().get(map.realm().nationCulture()[n]).homeland() == land) {
+                    before++;
+                }
+            }
+        }
+        return style(land, turn);
+    }
+
+    /** A land's {@code turn}th look, wrapping round. */
+    public static Style style(Homeland land, int turn) {
+        java.util.List<Style> looks = STYLES.getOrDefault(land, STYLES.get(Homeland.PLAINS));
+        return looks.get(Math.floorMod(turn, looks.size()));
+    }
+
     /** A nation's colour (its banner's ground), as RGB. */
     public static int colour(java.util.UUID nation) {
         float[] c = rafasconquest.faction.FactionBannerNbt.baseColor(rafasconquest.faction.FactionBanner.of(nation)).getTextureDiffuseColors();
@@ -130,7 +248,7 @@ public final class Armoury {
         if (!available()) {
             return;
         }
-        outfit(kit, homeland(map, nation), colour(nation), banner(who.level().registryAccess(), nation)).slots()
+        outfit(kit, style(map, nation), colour(nation), banner(who.level().registryAccess(), nation)).slots()
                 .forEach((slot, stack) -> {
                     who.setItemSlot(slot, stack);
                     if (who instanceof com.talhanation.recruits.entities.AbstractRecruitEntity recruit) {
@@ -157,7 +275,7 @@ public final class Armoury {
             }
             slots.put(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
         } else {
-            Homeland land = homeland(map, nation);
+            Style land = style(map, nation);
             ItemStack banner = banner(who.level().registryAccess(), nation);
             slots = switch (Math.max(1, Math.min(4, tier))) {
                 case 1 -> rankKit(1, land, colour(nation), banner).slots();
@@ -204,7 +322,7 @@ public final class Armoury {
         if (p.nation() >= 0) {
             dress(who, kitOf(map, person), map, map.nations().get(p.nation()).id());
         } else {
-            outfit(kitOf(map, person), map.realm().cultures().get(p.culture()).homeland(), 0x6B5A44, null).slots().forEach(who::setItemSlot);
+            outfit(kitOf(map, person), style(map.realm().cultures().get(p.culture()).homeland(), 0), 0x6B5A44, null).slots().forEach(who::setItemSlot);
         }
     }
 
@@ -214,14 +332,13 @@ public final class Armoury {
     }
 
     /**
-     * A kit for someone of {@code land}, their side's {@code colour} (RGB) on whatever takes a dye and its
+     * A kit in look {@code s}, their side's {@code colour} (RGB) on whatever takes a dye and its
      * {@code banner} (a banner item, or null) on surcoats and shields. Empty without Epic Knights.
      */
-    public static Outfit outfit(Kit kit, Homeland land, int colour, @Nullable ItemStack banner) {
+    public static Outfit outfit(Kit kit, Style s, int colour, @Nullable ItemStack banner) {
         if (!available()) {
             return Outfit.NONE;
         }
-        Style s = STYLES.getOrDefault(land, STYLES.get(Homeland.PLAINS));
         Map<EquipmentSlot, ItemStack> slots = new EnumMap<>(EquipmentSlot.class);
         switch (kit) {
             case HEAVY_INFANTRY -> {
@@ -275,15 +392,14 @@ public final class Armoury {
     }
 
     /**
-     * What an enlisted player is given on reaching a rank (1 Soldier to 8 Grand Marshal), in their land's style: the
+     * What an enlisted player is given on reaching a rank (1 Soldier to 8 Grand Marshal), in their nation's look: the
      * levy's half harness at first, the heavy infantry's from Serjeant, the cavalry's from Major, the officers' from
      * Marshal. Empty without Epic Knights.
      */
-    public static Outfit rankKit(int rank, Homeland land, int colour, @Nullable ItemStack banner) {
+    public static Outfit rankKit(int rank, Style s, int colour, @Nullable ItemStack banner) {
         if (!available()) {
             return Outfit.NONE;
         }
-        Style s = STYLES.getOrDefault(land, STYLES.get(Homeland.PLAINS));
         Map<EquipmentSlot, ItemStack> slots = new EnumMap<>(EquipmentSlot.class);
         if (rank <= 2) {
             wear(slots, rank == 1 ? "coif" : s.infantryHelmet(), body("gambeson_chestplate", null, "gambeson_boots"), colour, banner);

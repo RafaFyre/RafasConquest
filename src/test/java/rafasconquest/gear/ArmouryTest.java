@@ -18,6 +18,9 @@ class ArmouryTest {
         Map<?, ?> styles = (Map<?, ?>) f.get(null);
         for (Homeland land : Homeland.values()) {
             assertNotNull(styles.get(land), land + " has no style");
+            // nations of one land take its looks in turn
+            org.junit.jupiter.api.Assertions.assertNotSame(Armoury.style(land, 0), Armoury.style(land, 1), land + " has one look");
+            org.junit.jupiter.api.Assertions.assertSame(Armoury.style(land, 0), Armoury.style(land, ((java.util.List<?>) styles.get(land)).size()));
         }
     }
 

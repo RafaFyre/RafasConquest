@@ -1193,7 +1193,7 @@ public final class RecruitsBattle {
 
     /** Puts on an Epic Knights kit in the side's land's style, colour and banner (nothing, without Epic Knights). */
     private static void wear(AbstractRecruitEntity soldier, Side side, rafasconquest.gear.Armoury.Kit kit) {
-        rafasconquest.people.Homeland land = rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), side.faction.id());
+        rafasconquest.gear.Armoury.Style land = rafasconquest.gear.Armoury.style(ConquestRuntime.map(), side.faction.id());
         rafasconquest.gear.Armoury.outfit(kit, land, side.uniform, side.banner).slots().forEach((slot, stack) -> equip(soldier, slot, stack));
     }
 
@@ -2079,7 +2079,7 @@ public final class RecruitsBattle {
             case SHIELDMAN -> kit.add(bannerShield(side));
             case HEAVY_INFANTRY -> {
                 rafasconquest.gear.Armoury.Outfit knight = rafasconquest.gear.Armoury.outfit(rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY,
-                        rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), side.faction.id()), side.uniform, side.banner);
+                        rafasconquest.gear.Armoury.style(ConquestRuntime.map(), side.faction.id()), side.uniform, side.banner);
                 if (!knight.isEmpty()) {
                     // With Epic Knights: a sallet, knightly harness and an iron zweihänder.
                     knight.slots().values().stream().filter(s -> !s.isEmpty()).forEach(s -> kit.add(s.copy()));
