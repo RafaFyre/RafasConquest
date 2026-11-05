@@ -18,7 +18,7 @@ public class StrategyBoardBlock extends Block {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (level.isClientSide) {
             if (FMLEnvironment.dist == Dist.CLIENT) {
                 rafasconquest.client.BattleScreen.open();

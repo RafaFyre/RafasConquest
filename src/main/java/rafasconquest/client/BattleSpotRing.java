@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
 public final class BattleSpotRing {
     private static final double HIDE_WITHIN = 5;
     private static final ResourceLocation BEAM = ResourceLocation.parse("textures/entity/beacon_beam.png");
-    private static final float[] WHITE = {1, 1, 1};
+    private static final int WHITE = 0xFFFFFFFF;
     private static final float OUTER = 0.55f;
     private static final float INNER = 0.42f;
     private static final int SEGMENTS = 32;
@@ -103,16 +103,15 @@ public final class BattleSpotRing {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableCull();
-        BufferBuilder builder = Tesselator.getInstance().getBuilder();
-        builder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= SEGMENTS; i++) {
             double a = 2 * Math.PI * i / SEGMENTS;
             float cos = (float) Math.cos(a);
             float sin = (float) Math.sin(a);
-            builder.vertex(matrix, cos * OUTER, 0, sin * OUTER).color(255, 255, 255, 230).endVertex();
-            builder.vertex(matrix, cos * INNER, 0, sin * INNER).color(255, 255, 255, 230).endVertex();
+            builder.addVertex(matrix, cos * OUTER, 0, sin * OUTER).setColor(255, 255, 255, 230);
+            builder.addVertex(matrix, cos * INNER, 0, sin * INNER).setColor(255, 255, 255, 230);
         }
-        BufferUploader.drawWithShader(builder.end());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
         pose.popPose();

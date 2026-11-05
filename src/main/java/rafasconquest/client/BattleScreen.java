@@ -39,6 +39,12 @@ import java.util.Set;
  * Orders go out at once. Client thread only.
  */
 public final class BattleScreen extends Screen {
+    /** Draws an entity standing with its feet at (x, feet), {@code scale} pixels a block, looking toward the mouse. */
+    static void inventoryFigure(GuiGraphics g, int x, int feet, int scale, int mouseX, int mouseY, net.minecraft.world.entity.LivingEntity entity) {
+        // 1.21 centres the entity in a box (and clips to it): a box two blocks high, its middle a block above the feet.
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, x - scale, feet - 2 * scale, x + scale, feet, scale, 0.0625F, mouseX, mouseY, entity);
+    }
+
     private static final String[] ARMS = {"INFANTRY", "HVY INF", "ARCHERS", "CAVALRY"};
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
@@ -465,8 +471,7 @@ public final class BattleScreen extends Screen {
         int r = ringR();
         g.fill(cx - r / 2 - 4, (int) (height * 0.895), (int) (width * 0.135), (int) (height * 0.96), 0xCC4A4A4A);
         disc(g, cx, cy, r - 2, playerSelected ? 0x60FFD700 : 0x40000000);
-        InventoryScreen.renderEntityInInventoryFollowsMouse(g, cx, cy + r * 3 / 4, (int) (r * 0.75), cx - mouseX, cy - mouseY,
-                minecraft.player);
+        inventoryFigure(g, cx, cy + r * 3 / 4, (int) (r * 0.75), mouseX, mouseY, minecraft.player);
         ring(g, cx, cy, r, r - 2, GOLD);
         // The nation: shortcut: a square in its colour; draw its banner once the client knows it.
         int n = Math.max(12, (int) (width * 0.03));
@@ -575,7 +580,7 @@ public final class BattleScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         double[] b = basis();
         camX += b[0] * delta * 4;
         camY += b[1] * delta * 4;

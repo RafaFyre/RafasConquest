@@ -38,6 +38,13 @@ import rafasconquest.net.ConquestNetwork;
  * world ({@link CharacterMarkers#fire}), then the block its settings name.
  */
 public class MarkerBlock extends BaseEntityBlock {
+    private static final com.mojang.serialization.MapCodec<MarkerBlock> CODEC = simpleCodec(MarkerBlock::new);
+
+    @Override
+    protected com.mojang.serialization.MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
+    }
+
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final BooleanProperty ARMED = BooleanProperty.create("armed");
 
@@ -82,7 +89,7 @@ public class MarkerBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (!player.isCreative()) {
             return InteractionResult.PASS;
         }

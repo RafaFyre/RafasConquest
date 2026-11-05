@@ -105,8 +105,7 @@ public final class ArrowVolleys {
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
         long now = Util.getMillis();
-        BufferBuilder buffer = Tesselator.getInstance().getBuilder();
-        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
+        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Matrix4f matrix = pose.last().pose();
         int drawn = 0;
         for (Iterator<Arrow> it = ARROWS.iterator(); it.hasNext(); ) {
@@ -141,14 +140,15 @@ public final class ArrowVolleys {
             drawn++;
         }
         if (drawn == 0) {
-            buffer.end().release();
+            try (com.mojang.blaze3d.vertex.MeshData unused = buffer.build()) { // nothing to draw: let the buffer go
+            }
             return;
         }
         RenderSystem.setShader(GameRenderer::getPositionColorLightmapShader);
         RenderSystem.enableDepthTest();
         RenderSystem.disableCull();
         mc.gameRenderer.lightTexture().turnOnLightLayer();
-        BufferUploader.drawWithShader(buffer.end());
+        BufferUploader.drawWithShader(buffer.buildOrThrow());
         mc.gameRenderer.lightTexture().turnOffLightLayer();
         RenderSystem.enableCull();
     }
@@ -168,7 +168,7 @@ public final class ArrowVolleys {
     }
 
     private static void vertex(BufferBuilder buffer, Matrix4f matrix, Vec3 v, float r, float g, float b, int light) {
-        buffer.vertex(matrix, (float) v.x, (float) v.y, (float) v.z).color(r, g, b, 1F).uv2(light).endVertex();
+        buffer.addVertex(matrix, (float) v.x, (float) v.y, (float) v.z).setColor(r, g, b, 1F).setLight(light);
     }
 
     /** The light where the arrow flies, as for the figures; out past the chunks the client has, open sky. */

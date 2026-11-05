@@ -116,7 +116,7 @@ public final class ConquestWorldScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, title, width / 2, height / 2 - 80, 0xFFFFFF);
         g.drawCenteredString(font, "Stretches biomes and the land (continents, mountains, coasts) wider each way.",
                 width / 2, height / 2 - 62, 0xA0A0A0);
@@ -125,7 +125,9 @@ public final class ConquestWorldScreen extends Screen {
             g.drawCenteredString(font, Component.literal("Off by default: " + String.join(", ", clashing) + " installed")
                     .withStyle(ChatFormatting.GOLD), width / 2, height / 2 - 48, 0xFFFFFF);
         }
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

@@ -367,7 +367,10 @@ public final class StyleLibrary {
             if (loaded != null && loaded.modified() == modified) {
                 return loaded;
             }
-            CompoundTag tag = NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+            CompoundTag raw = NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+            // Brought up to this game version, as vanilla does its own structure files (styles may be saved in older ones).
+            CompoundTag tag = net.minecraft.util.datafix.DataFixTypes.STRUCTURE.updateToCurrentVersion(
+                    net.minecraft.util.datafix.DataFixers.getDataFixer(), raw, net.minecraft.nbt.NbtUtils.getDataVersion(raw, 500));
             net.minecraft.nbt.ListTag s = tag.getList("size", net.minecraft.nbt.Tag.TAG_INT);
             net.minecraft.core.Vec3i size = new net.minecraft.core.Vec3i(s.getInt(0), s.getInt(1), s.getInt(2));
             if (size.getX() <= TILE && size.getZ() <= TILE) {

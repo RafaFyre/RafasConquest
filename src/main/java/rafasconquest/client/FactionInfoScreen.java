@@ -213,14 +213,14 @@ public class FactionInfoScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         scroll = Mth.clamp(scroll - delta * LINE * 3, 0, maxScroll());
         return true;
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         int left = left();
         int top = top();
         g.fill(left - 1, top - 1, left + WIDTH + 1, top + HEIGHT + 1, PANEL_EDGE);
@@ -273,7 +273,9 @@ public class FactionInfoScreen extends Screen {
             g.fill(br - SCROLLBAR, thumbTop, br, thumbTop + thumb, 0xFF6B6B6B);
         }
 
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

@@ -89,7 +89,9 @@ public class CityManagerScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         // No background: the city itself is the view.
         g.drawCenteredString(font, title, width / 2, 10, 0xF4EEDC);
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override
@@ -103,7 +105,7 @@ public class CityManagerScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         radius = Mth.clamp(radius * Math.pow(0.85, delta), 15, 250);
         return true;
     }

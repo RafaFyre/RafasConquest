@@ -48,7 +48,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.animal.horse.Horse;
 import net.minecraft.world.item.DyeColor;
-import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -239,7 +238,7 @@ public final class RecruitsBattle {
     /** Marks the kit a player is given for a battle, to take back after. */
     private static final String KIT_TAG = "RafasConquestBattleKit";
     /** The slowing put on a spent charge's horses. */
-    private static final UUID SPENT_HORSE = UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f");
+    private static final net.minecraft.resources.ResourceLocation SPENT_HORSE = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "spent_charge");
     /** A charged soldier this close to its target is taken to be striking it (for calibration, and for momentum). */
     private static final double STRIKING_DISTANCE = 4;
 
@@ -1138,7 +1137,7 @@ public final class RecruitsBattle {
         }
         BlockPos feet = ground(p);
         soldier.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, yaw, 0);
-        soldier.finalizeSpawn(level, level.getCurrentDifficultyAt(feet), MobSpawnType.EVENT, null, null);
+        soldier.finalizeSpawn(level, level.getCurrentDifficultyAt(feet), MobSpawnType.EVENT, null);
         if (soldier instanceof BowmanEntity) {
             soldier.getInventory().addItem(new ItemStack(Items.ARROW, 64));
         }
@@ -1227,8 +1226,8 @@ public final class RecruitsBattle {
 
     private static ItemStack dyed(Item item, int rgb) {
         ItemStack stack = new ItemStack(item);
-        if (item instanceof DyeableLeatherItem leather) {
-            leather.setColor(stack, rgb);
+        if (stack.is(net.minecraft.tags.ItemTags.DYEABLE)) {
+            stack.set(net.minecraft.core.component.DataComponents.DYED_COLOR, new net.minecraft.world.item.component.DyedItemColor(rgb & 0xFFFFFF, true));
         }
         return stack;
     }
@@ -1487,7 +1486,7 @@ public final class RecruitsBattle {
                 }
                 speed.removeModifier(SPENT_HORSE);
                 if (factor < 1) {
-                    speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, "spent charge", factor - 1, AttributeModifier.Operation.MULTIPLY_TOTAL));
+                    speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, factor - 1, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
                 }
             }
         }
@@ -2045,14 +2044,18 @@ public final class RecruitsBattle {
         return soldier;
     }
 
+    private static net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment(ServerLevel level,
+            net.minecraft.resources.ResourceKey<net.minecraft.world.item.enchantment.Enchantment> key) {
+        return level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getHolderOrThrow(key);
+    }
+
     /** A shield bearing the nation's banner. */
     private static ItemStack bannerShield(Side side) {
         ItemStack shield = new ItemStack(Items.SHIELD);
-        CompoundTag pattern = side.banner.getTagElement("BlockEntityTag");
-        CompoundTag tag = pattern == null ? new CompoundTag() : pattern.copy();
-        DyeColor base = side.banner.getItem() instanceof BannerItem banner ? banner.getColor() : DyeColor.WHITE;
-        tag.putInt("Base", base.getId());
-        shield.getOrCreateTag().put("BlockEntityTag", tag);
+                DyeColor base = side.banner.getItem() instanceof BannerItem banner ? banner.getColor() : DyeColor.WHITE;
+        shield.set(net.minecraft.core.component.DataComponents.BANNER_PATTERNS,
+                side.banner.getOrDefault(net.minecraft.core.component.DataComponents.BANNER_PATTERNS, net.minecraft.world.level.block.entity.BannerPatternLayers.EMPTY));
+        shield.set(net.minecraft.core.component.DataComponents.BASE_COLOR, base);
         return shield;
     }
 
@@ -2071,7 +2074,7 @@ public final class RecruitsBattle {
                     horse.moveTo(player.getX(), player.getY(), player.getZ(), player.getYRot(), 0);
                     horse.setTamed(true);
                     horse.setOwnerUUID(player.getUUID());
-                    horse.equipSaddle(null);
+                    horse.equipSaddle(new ItemStack(Items.SADDLE), null);
                     horse.getSlot(401).set(horseArmour(side, false)); // 401: the armour slot
                     horse.setPersistenceRequired();
                     level.addFreshEntity(horse);
@@ -2081,13 +2084,13 @@ public final class RecruitsBattle {
             }
             case FOOTMAN -> {
                 ItemStack sword = new ItemStack(Items.IRON_SWORD);
-                sword.enchant(Enchantments.SWEEPING_EDGE, 3);
+                sword.enchant(enchantment(level, Enchantments.SWEEPING_EDGE), 3);
                 kit.add(sword);
             }
             case ARCHER -> {
                 ItemStack bow = new ItemStack(Items.BOW);
-                bow.enchant(Enchantments.INFINITY_ARROWS, 1);
-                bow.enchant(Enchantments.UNBREAKING, 2);
+                bow.enchant(enchantment(level, Enchantments.INFINITY), 1);
+                bow.enchant(enchantment(level, Enchantments.UNBREAKING), 2);
                 kit.add(bow);
                 kit.add(new ItemStack(Items.ARROW));
             }
@@ -2114,7 +2117,7 @@ public final class RecruitsBattle {
         }
         kit.add(WarHorn.make(side.horn)); // every enlisted player commands their units with it
         for (ItemStack stack : kit) {
-            stack.getOrCreateTag().putBoolean(KIT_TAG, true);
+            rafasconquest.gear.ItemFlags.set(stack, KIT_TAG);
             player.getInventory().add(stack);
         }
     }
@@ -2134,7 +2137,7 @@ public final class RecruitsBattle {
         var inventory = player.getInventory();
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
-            if (stack.hasTag() && stack.getTag().getBoolean(KIT_TAG)) {
+            if (rafasconquest.gear.ItemFlags.has(stack, KIT_TAG)) {
                 inventory.setItem(i, ItemStack.EMPTY);
             }
         }
@@ -2208,7 +2211,7 @@ public final class RecruitsBattle {
         }
         speed.removeModifier(SPENT_HORSE);
         if (factor < 1) {
-            speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, "spent charge", factor - 1, AttributeModifier.Operation.MULTIPLY_TOTAL));
+            speed.addTransientModifier(new AttributeModifier(SPENT_HORSE, factor - 1, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
         }
     }
 

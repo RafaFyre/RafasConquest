@@ -16,8 +16,8 @@ import java.util.Optional;
  * around each centre.
  */
 public class CityPlacement extends StructurePlacement {
-    public static final Codec<CityPlacement> CENTER_CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, CityPlacement::center));
-    public static final Codec<CityPlacement> DISTRICT_CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, CityPlacement::district));
+    public static final com.mojang.serialization.MapCodec<CityPlacement> CENTER_CODEC = RecordCodecBuilder.mapCodec(i -> placementCodec(i).apply(i, CityPlacement::center));
+    public static final com.mojang.serialization.MapCodec<CityPlacement> DISTRICT_CODEC = RecordCodecBuilder.mapCodec(i -> placementCodec(i).apply(i, CityPlacement::district));
 
     private final boolean districts;
 

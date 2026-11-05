@@ -294,13 +294,13 @@ public final class ConquestNetwork {
     /** Server → client: the counties players hold (seat province → "Count Steve"), and what befell those they replaced. */
     public record PeerageView(java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
         void write(FriendlyByteBuf buf) {
-            buf.writeMap(holders, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeUtf);
-            buf.writeMap(fates, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeUtf);
+            buf.writeMap(holders, (b, k) -> b.writeVarInt(k), (b, v) -> b.writeUtf(v));
+            buf.writeMap(fates, (b, k) -> b.writeVarInt(k), (b, v) -> b.writeUtf(v));
         }
 
         static PeerageView read(FriendlyByteBuf buf) {
-            return new PeerageView(buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readUtf),
-                    buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readUtf));
+            return new PeerageView(buf.readMap(b -> b.readVarInt(), b -> b.readUtf()),
+                    buf.readMap(b -> b.readVarInt(), b -> b.readUtf()));
         }
     }
 

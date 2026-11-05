@@ -183,7 +183,7 @@ public class CountryPiece extends StructurePiece {
                 sheep.moveTo(middle.getX() + 0.5 + random.nextInt(3) - 1, middle.getY(), middle.getZ() + 0.5 + random.nextInt(5) - 2,
                         random.nextFloat() * 360, 0);
                 sheep.setColor(random.nextInt(6) == 0 ? DyeColor.GRAY : DyeColor.WHITE);
-                sheep.finalizeSpawn(level, level.getCurrentDifficultyAt(middle), MobSpawnType.STRUCTURE, null, null);
+                sheep.finalizeSpawn(level, level.getCurrentDifficultyAt(middle), MobSpawnType.STRUCTURE, null);
                 sheep.setPersistenceRequired();
                 level.addFreshEntityWithPassengers(sheep);
             }

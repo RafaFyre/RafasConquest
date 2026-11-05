@@ -149,7 +149,7 @@ public class RecruitsFactions implements RecruitsBridge {
         }
         Vec3 post = Vec3.atBottomCenterOf(feet);
         bowman.moveTo(post.x, post.y, post.z, yaw, 0);
-        bowman.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        bowman.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null);
         bowman.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.CHAINMAIL_CHESTPLATE));
         bowman.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.CHAINMAIL_LEGGINGS));
         bowman.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.CHAINMAIL_BOOTS));
@@ -181,7 +181,7 @@ public class RecruitsFactions implements RecruitsBridge {
         Vec3 post = Vec3.atBottomCenterOf(feet);
         guard.moveTo(post.x, post.y, post.z, yaw, 0);
         guard.setYHeadRot(yaw);
-        guard.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        guard.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null);
         guard.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
         guard.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
         guard.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
@@ -220,7 +220,7 @@ public class RecruitsFactions implements RecruitsBridge {
         Vec3 post = Vec3.atBottomCenterOf(feet);
         soldier.moveTo(post.x, post.y, post.z, yaw, 0);
         soldier.setYHeadRot(yaw);
-        soldier.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null, null);
+        soldier.finalizeSpawn(overworld, overworld.getCurrentDifficultyAt(feet), MobSpawnType.STRUCTURE, null);
         ItemStack held = soldier.getMainHandItem().copy();
         rafasconquest.gear.Armoury.dressTier(soldier, kit, rafasconquest.worldgen.ConquestRuntime.map(), owner.id());
         if (type.equals("BOWMAN")) {
@@ -240,7 +240,7 @@ public class RecruitsFactions implements RecruitsBridge {
             if (horse != null) {
                 horse.moveTo(post.x, post.y, post.z, yaw, 0);
                 horse.setTamed(true);
-                horse.equipSaddle(null);
+                horse.equipSaddle(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SADDLE), null);
                 horse.setPersistenceRequired();
                 overworld.addFreshEntity(horse);
                 soldier.startRiding(horse, true);

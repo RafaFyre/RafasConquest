@@ -50,6 +50,12 @@ neoForge {
             sourceSet(sourceSets.main)
         }
     }
+
+    // Unit tests run with Minecraft (and this mod) on the classpath.
+    unitTest {
+        enable()
+        testedMod = mods."${mod_id}"
+    }
 }
 
 repositories {

@@ -26,6 +26,13 @@ import rafasconquest.client.ClientScreens;
  * where the Faction Info button is.
  */
 public class CommandTableBlock extends HorizontalDirectionalBlock {
+    private static final com.mojang.serialization.MapCodec<CommandTableBlock> CODEC = simpleCodec(CommandTableBlock::new);
+
+    @Override
+    protected com.mojang.serialization.MapCodec<? extends HorizontalDirectionalBlock> codec() {
+        return CODEC;
+    }
+
     public CommandTableBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
@@ -43,7 +50,7 @@ public class CommandTableBlock extends HorizontalDirectionalBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (level.isClientSide) {
             if (FMLEnvironment.dist == Dist.CLIENT) {
                 ClientScreens.openFactionMenu(player);
@@ -78,7 +85,7 @@ public class CommandTableBlock extends HorizontalDirectionalBlock {
     }
 
     @Override
-    public boolean isPathfindable(BlockState state, BlockGetter level, BlockPos pos, PathComputationType type) {
+    protected boolean isPathfindable(BlockState state, PathComputationType type) {
         return false;
     }
 }

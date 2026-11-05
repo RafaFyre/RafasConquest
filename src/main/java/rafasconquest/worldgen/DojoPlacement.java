@@ -17,7 +17,7 @@ import java.util.Optional;
  * true, an underground stronghold for now).
  */
 public class DojoPlacement extends StructurePlacement {
-    public static final Codec<DojoPlacement> CODEC = RecordCodecBuilder.create(i -> placementCodec(i)
+    public static final com.mojang.serialization.MapCodec<DojoPlacement> CODEC = RecordCodecBuilder.mapCodec(i -> placementCodec(i)
             .and(Codec.BOOL.fieldOf("hidden").forGetter(p -> p.hidden))
             .apply(i, DojoPlacement::new));
 

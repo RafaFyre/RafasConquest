@@ -13,7 +13,7 @@ import java.util.Optional;
 
 /** Random-spread placement driven by the world's frozen spacing and separation, so it always agrees with the precompute. */
 public class FarmPlacement extends StructurePlacement {
-    public static final Codec<FarmPlacement> CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, FarmPlacement::new));
+    public static final com.mojang.serialization.MapCodec<FarmPlacement> CODEC = RecordCodecBuilder.mapCodec(i -> placementCodec(i).apply(i, FarmPlacement::new));
 
     public FarmPlacement(Vec3i locateOffset, FrequencyReductionMethod method, float frequency, int salt, Optional<ExclusionZone> exclusionZone) {
         super(locateOffset, method, frequency, salt, exclusionZone);

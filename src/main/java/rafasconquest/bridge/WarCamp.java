@@ -391,7 +391,7 @@ final class WarCamp {
         BlockPos at = pos.immutable();
         if (!replaced.containsKey(at)) {
             BlockEntity entity = level.getBlockEntity(at);
-            replaced.put(at, new Saved(level.getBlockState(at), entity == null ? null : entity.saveWithFullMetadata()));
+            replaced.put(at, new Saved(level.getBlockState(at), entity == null ? null : entity.saveWithFullMetadata(level.registryAccess())));
         }
         level.setBlock(at, state, Block.UPDATE_CLIENTS);
     }
@@ -406,7 +406,7 @@ final class WarCamp {
             if (saved.entity() != null) {
                 BlockEntity entity = level.getBlockEntity(pos);
                 if (entity != null) {
-                    entity.load(saved.entity());
+                    entity.loadWithComponents(saved.entity(), level.registryAccess());
                     entity.setChanged();
                 }
             }

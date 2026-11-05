@@ -35,9 +35,11 @@ public class SettingsScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, title, width / 2, height / 2 - 40, GOLD);
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

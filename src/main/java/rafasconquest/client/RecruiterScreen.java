@@ -41,7 +41,7 @@ public class RecruiterScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         int x = width / 2 - WIDTH / 2;
         int lines = 0;
         for (String line : view.lines()) {
@@ -57,7 +57,9 @@ public class RecruiterScreen extends Screen {
             }
             y += 4;
         }
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

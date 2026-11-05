@@ -137,7 +137,9 @@ public class FactionMapScreen extends Screen {
             }
         }
         g.renderOutline(view.left - 1, view.top - 1, view.width() + 2, view.height() + 2, 0xFF5A5A5A);
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     /** The legend, bottom left: every layer's entries, top layer first. */
@@ -198,7 +200,7 @@ public class FactionMapScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
         if (map != null && view.contains(mouseX, mouseY)) {
             view.zoomAt(mouseX, mouseY, Math.pow(1.25, delta));
             return true;

@@ -15,7 +15,7 @@ import java.util.Optional;
  * {@link CityVariant#forSite}; districts ask the same thing, so the whole square always generates together.
  */
 public class CityStructure extends Structure {
-    public static final Codec<CityStructure> CODEC = simpleCodec(CityStructure::new);
+    public static final com.mojang.serialization.MapCodec<CityStructure> CODEC = simpleCodec(CityStructure::new);
 
     public CityStructure(StructureSettings settings) {
         super(settings);

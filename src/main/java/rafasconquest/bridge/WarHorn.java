@@ -18,13 +18,14 @@ public final class WarHorn {
     /** A war horn with the nation's call (one of the eight goat horn calls). */
     public static ItemStack make(int call) {
         ItemStack horn = new ItemStack(Items.GOAT_HORN);
-        horn.getOrCreateTag().putString("instrument", "minecraft:" + CALLS[Math.floorMod(call, CALLS.length)] + "_goat_horn");
-        horn.getOrCreateTag().putBoolean(TAG, true);
-        horn.setHoverName(Component.literal("War Horn"));
+        net.minecraft.core.registries.BuiltInRegistries.INSTRUMENT.getHolder(net.minecraft.resources.ResourceLocation.withDefaultNamespace(CALLS[Math.floorMod(call, CALLS.length)] + "_goat_horn"))
+                .ifPresent(instrument -> horn.set(net.minecraft.core.component.DataComponents.INSTRUMENT, instrument));
+        rafasconquest.gear.ItemFlags.set(horn, TAG);
+        horn.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, Component.literal("War Horn"));
         return horn;
     }
 
     public static boolean is(ItemStack stack) {
-        return stack.hasTag() && stack.getTag().getBoolean(TAG);
+        return rafasconquest.gear.ItemFlags.has(stack, TAG);
     }
 }

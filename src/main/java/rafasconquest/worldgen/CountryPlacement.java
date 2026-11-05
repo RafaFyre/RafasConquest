@@ -11,7 +11,7 @@ import java.util.Optional;
 
 /** Places the countryside's settlements where the world map planned them ({@link CountryIndex}). */
 public class CountryPlacement extends StructurePlacement {
-    public static final Codec<CountryPlacement> CODEC = RecordCodecBuilder.create(i -> placementCodec(i).apply(i, CountryPlacement::new));
+    public static final com.mojang.serialization.MapCodec<CountryPlacement> CODEC = RecordCodecBuilder.mapCodec(i -> placementCodec(i).apply(i, CountryPlacement::new));
 
     public CountryPlacement(Vec3i locateOffset, FrequencyReductionMethod method, float frequency, int salt, Optional<ExclusionZone> exclusionZone) {
         super(locateOffset, method, frequency, salt, exclusionZone);

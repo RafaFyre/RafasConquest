@@ -167,13 +167,15 @@ public class MarkerScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, title, width / 2, 12, GOLD);
         if (label != null) {
             g.drawString(font, "Label", width / 2 - W / 2, label.getY() + 6, LABEL, false);
             g.drawString(font, "Leaves", width / 2 - W / 2, replace.getY() + 6, LABEL, false);
         }
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

@@ -15,7 +15,7 @@ import java.util.Optional;
  * height, from the noise terrain, so a village follows the land.
  */
 public class CountryStructure extends Structure {
-    public static final Codec<CountryStructure> CODEC = simpleCodec(CountryStructure::new);
+    public static final com.mojang.serialization.MapCodec<CountryStructure> CODEC = simpleCodec(CountryStructure::new);
     /** How far a village's hamlets stand from its well. */
     private static final int VILLAGE_RING = 18;
 

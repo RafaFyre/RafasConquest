@@ -341,7 +341,7 @@ public final class CityGridBuilder {
                 }
             }
             pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation,
-                    element.getBoundingBox(templates, pos, rotation)));
+                    element.getBoundingBox(templates, pos, rotation), net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING));
             previous = new PlacedWall(seg, element, pos, rotation);
         }
     }
@@ -532,7 +532,7 @@ public final class CityGridBuilder {
 
     private void place(StructurePoolElement element, BlockPos pos, Rotation rotation, BoundingBox box, int depth) {
         occupied.add(box);
-        pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation, box));
+        pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation, box, net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings.APPLY_WATERLOGGING));
         if (depth >= MAX_CHILD_DEPTH) {
             return;
         }

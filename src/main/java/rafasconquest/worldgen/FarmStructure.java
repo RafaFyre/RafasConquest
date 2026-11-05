@@ -11,7 +11,7 @@ import java.util.Optional;
 
 /** A Farm sits on the surface at its chunk's middle block. The precompute calls the same code to predict it. */
 public class FarmStructure extends Structure {
-    public static final Codec<FarmStructure> CODEC = simpleCodec(FarmStructure::new);
+    public static final com.mojang.serialization.MapCodec<FarmStructure> CODEC = simpleCodec(FarmStructure::new);
 
     public FarmStructure(StructureSettings settings) {
         super(settings);

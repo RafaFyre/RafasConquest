@@ -60,7 +60,7 @@ public class BoardScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        renderBackground(g);
+        renderBackground(g, mouseX, mouseY, partialTick);
         int x = width / 2 - WIDTH / 2;
         int y = top();
         g.drawCenteredString(font, "Quests of " + view.place(), width / 2, y, GOLD);
@@ -80,7 +80,9 @@ public class BoardScreen extends Screen {
             g.drawString(font, where + " — " + e.reward() + state, x, y + 11, MUTED, false);
             y += ROW;
         }
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
     }
 
     @Override

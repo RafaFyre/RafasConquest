@@ -42,11 +42,11 @@ class ConquestSavedDataTest {
     void saveReloadRoundTripIsIdentical() {
         ConquestSavedData original = sample();
         original.setClock(() -> 1_800_000_000_000L);
-        CompoundTag first = original.save(new CompoundTag());
+        CompoundTag first = original.save(new CompoundTag(), null);
 
         ConquestSavedData reloaded = ConquestSavedData.load(first);
         reloaded.setClock(() -> 1_800_000_000_000L);
-        CompoundTag second = reloaded.save(new CompoundTag());
+        CompoundTag second = reloaded.save(new CompoundTag(), null);
 
         assertEquals(first, second);
         assertEquals(original.settings(), reloaded.settings());
@@ -74,7 +74,7 @@ class ConquestSavedDataTest {
 
     @Test
     void worldsSavedBeforeCitiesLoadWithCitiesDisabled() {
-        CompoundTag tag = sample().save(new CompoundTag());
+        CompoundTag tag = sample().save(new CompoundTag(), null);
         CompoundTag settings = tag.getCompound("settings");
         for (String key : new String[]{"cityCellSize", "cityCellMargin", "cityStrengthMin", "cityStrengthMax", "cityDailyOutput"}) {
             settings.remove(key);
@@ -102,7 +102,7 @@ class ConquestSavedDataTest {
     void saveWritesCurrentRealTime() {
         ConquestSavedData data = sample();
         data.setClock(() -> 123_456_789L);
-        assertEquals(123_456_789L, data.save(new CompoundTag()).getLong("lastSavedRealTime"));
+        assertEquals(123_456_789L, data.save(new CompoundTag(), null).getLong("lastSavedRealTime"));
     }
 
     @Test

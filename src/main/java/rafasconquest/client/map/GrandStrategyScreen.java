@@ -229,7 +229,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        return overPanel(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, delta);
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
+        return overPanel(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, scrollX, delta);
     }
 }

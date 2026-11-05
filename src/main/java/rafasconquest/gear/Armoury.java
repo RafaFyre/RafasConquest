@@ -5,7 +5,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -597,8 +596,8 @@ public final class Armoury {
             return null;
         }
         ItemStack stack = new ItemStack(item);
-        if (colour >= 0 && item instanceof DyeableLeatherItem dyeable) {
-            dyeable.setColor(stack, colour & 0xFFFFFF);
+        if (colour >= 0 && stack.is(net.minecraft.tags.ItemTags.DYEABLE)) {
+            stack.set(net.minecraft.core.component.DataComponents.DYED_COLOR, new net.minecraft.world.item.component.DyedItemColor(colour & 0xFFFFFF, true));
         }
         return stack;
     }
@@ -608,9 +607,8 @@ public final class Armoury {
         if (banner == null || !(banner.getItem() instanceof BannerItem bannerItem)) {
             return;
         }
-        CompoundTag design = BlockItem.getBlockEntityData(banner);
-        CompoundTag tag = design == null ? new CompoundTag() : design.copy();
-        tag.putInt("Base", bannerItem.getColor().getId());
-        stack.addTagElement("BlockEntityTag", tag);
+        stack.set(net.minecraft.core.component.DataComponents.BANNER_PATTERNS,
+                banner.getOrDefault(net.minecraft.core.component.DataComponents.BANNER_PATTERNS, net.minecraft.world.level.block.entity.BannerPatternLayers.EMPTY));
+        stack.set(net.minecraft.core.component.DataComponents.BASE_COLOR, bannerItem.getColor());
     }
 }

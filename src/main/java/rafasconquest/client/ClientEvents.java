@@ -82,12 +82,12 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY) {
-            DistantArmyRenderer.prepare(event.getPartialTick());
+            DistantArmyRenderer.prepare(event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantHorizonsLink.update();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
-            DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
+            DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             ArrowVolleys.render(event.getPoseStack(), event.getCamera());
-            BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick());
+            BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
         }
     }
 

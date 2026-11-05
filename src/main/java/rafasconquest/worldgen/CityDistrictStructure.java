@@ -14,7 +14,7 @@ import java.util.Optional;
  * whole city shares one style, and never skips, so the square is always complete.
  */
 public class CityDistrictStructure extends Structure {
-    public static final Codec<CityDistrictStructure> CODEC = simpleCodec(CityDistrictStructure::new);
+    public static final com.mojang.serialization.MapCodec<CityDistrictStructure> CODEC = simpleCodec(CityDistrictStructure::new);
 
     public CityDistrictStructure(StructureSettings settings) {
         super(settings);

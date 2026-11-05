@@ -60,7 +60,7 @@ public final class CharacterMarkers {
             }
             level.setBlock(info.pos(), placed.setValue(MarkerBlock.ARMED, true), 2);
             if (info.nbt() != null && level.getBlockEntity(info.pos()) instanceof MarkerBlockEntity marker) {
-                marker.load(info.nbt());
+                marker.loadWithComponents(info.nbt(), level.registryAccess());
             }
         }
     }

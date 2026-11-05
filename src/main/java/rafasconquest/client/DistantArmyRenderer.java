@@ -94,8 +94,7 @@ public final class DistantArmyRenderer {
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
 
-        BufferBuilder buffer = Tesselator.getInstance().getBuilder();
-        buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
+        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         boolean farInDistantHorizons = DistantHorizonsLink.drawsFarSoldiers();
         FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
@@ -123,14 +122,15 @@ public final class DistantArmyRenderer {
             }
         }
         if (drawn == 0) {
-            buffer.end().release();
+            try (com.mojang.blaze3d.vertex.MeshData unused = buffer.build()) { // nothing to draw: let the buffer go
+            }
             return;
         }
         RenderSystem.setShader(GameRenderer::getPositionColorLightmapShader);
         RenderSystem.enableDepthTest();
         RenderSystem.disableCull();
         mc.gameRenderer.lightTexture().turnOnLightLayer();
-        BufferUploader.drawWithShader(buffer.end());
+        BufferUploader.drawWithShader(buffer.buildOrThrow());
         mc.gameRenderer.lightTexture().turnOffLightLayer();
         RenderSystem.enableCull();
     }
@@ -254,10 +254,10 @@ public final class DistantArmyRenderer {
             float h = (right + width / 2) * scale;
             float lo = y + bottom * scale;
             float hi = y + (bottom + height) * scale;
-            buffer.vertex(matrix, x + rightX * l, lo, z + rightZ * l).color(r, g, b, 1F).uv2(light).endVertex();
-            buffer.vertex(matrix, x + rightX * h, lo, z + rightZ * h).color(r, g, b, 1F).uv2(light).endVertex();
-            buffer.vertex(matrix, x + rightX * h, hi, z + rightZ * h).color(r, g, b, 1F).uv2(light).endVertex();
-            buffer.vertex(matrix, x + rightX * l, hi, z + rightZ * l).color(r, g, b, 1F).uv2(light).endVertex();
+            buffer.addVertex(matrix, x + rightX * l, lo, z + rightZ * l).setColor(r, g, b, 1F).setLight(light);
+            buffer.addVertex(matrix, x + rightX * h, lo, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
+            buffer.addVertex(matrix, x + rightX * h, hi, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
+            buffer.addVertex(matrix, x + rightX * l, hi, z + rightZ * l).setColor(r, g, b, 1F).setLight(light);
         }
     }
 }

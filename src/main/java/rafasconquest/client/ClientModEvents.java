@@ -31,8 +31,7 @@ public final class ClientModEvents {
     @SubscribeEvent
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static void onAddLayers(EntityRenderersEvent.AddLayers event) {
-        LivingEntityRenderer renderer = event.getRenderer(ModEntityTypes.RECRUIT.get());
-        if (renderer != null && renderer.getModel() instanceof HumanoidModel) {
+        if (event.getRenderer(ModEntityTypes.RECRUIT.get()) instanceof LivingEntityRenderer renderer && renderer.getModel() instanceof HumanoidModel) {
             renderer.addLayer(new BackBannerLayer(renderer, event.getContext().getItemInHandRenderer()));
         }
     }

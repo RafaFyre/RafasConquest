@@ -101,7 +101,9 @@ public class NationScreen extends Screen {
         }
         if (court.focus() >= 0) {
             card(g, court.focus());
-            super.render(g, mouseX, mouseY, partialTick);
+            for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+                widget.render(g, mouseX, mouseY, partialTick);
+            }
             tooltip(g, hovered, mouseX, mouseY);
             return;
         }
@@ -153,7 +155,9 @@ public class NationScreen extends Screen {
             String more = unseated(court.unseated);
             g.drawString(font, more, width - font.width(more) - 8, height - 12, MUTED, false);
         }
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
         tooltip(g, hovered, mouseX, mouseY);
     }
 

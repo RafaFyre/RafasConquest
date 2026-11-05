@@ -268,8 +268,7 @@ public class CharacterScreen extends Screen {
                 hovered = r;
             }
             if (r.entity() != null) {
-                InventoryScreen.renderEntityInInventoryFollowsMouse(g, r.x(), r.feet(), r.scale(), r.x() - mouseX,
-                        r.feet() - r.scale() * 1.6F - mouseY, r.entity());
+                BattleScreen.inventoryFigure(g, r.x(), r.feet(), (int) r.scale(), mouseX, mouseY, r.entity());
             }
         }
         if (retainers.isEmpty()) {
@@ -280,7 +279,9 @@ public class CharacterScreen extends Screen {
             g.drawString(font, more, (int) (width * 0.82), height - 12, MUTED, false);
         }
 
-        super.render(g, mouseX, mouseY, partialTick);
+        for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
+            widget.render(g, mouseX, mouseY, partialTick);
+        }
 
         // What the mouse is over, named while it stays there.
         if (hovered != null) {

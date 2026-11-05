@@ -16,6 +16,13 @@ import rafasconquest.peerage.Boards;
 
 /** A quest board: right-click to read the quests of the city it stands in ({@link Boards}). */
 public class QuestBoardBlock extends HorizontalDirectionalBlock {
+    private static final com.mojang.serialization.MapCodec<QuestBoardBlock> CODEC = simpleCodec(QuestBoardBlock::new);
+
+    @Override
+    protected com.mojang.serialization.MapCodec<? extends HorizontalDirectionalBlock> codec() {
+        return CODEC;
+    }
+
     public QuestBoardBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, net.minecraft.core.Direction.NORTH));
@@ -32,7 +39,7 @@ public class QuestBoardBlock extends HorizontalDirectionalBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (player instanceof ServerPlayer server) {
             Boards.open(server, pos);
         }
