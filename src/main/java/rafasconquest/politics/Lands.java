@@ -67,4 +67,38 @@ public interface Lands {
     default boolean wet(double x, double z) {
         return false;
     }
+
+    /**
+     * A county's walls: its seat city, or its castle. {@code half}: from its middle out to its walls, each way. A port's
+     * ({@code outX}, {@code outZ}) is the way out from its harbour wall to sea (zero for one that is no port).
+     */
+    record Fort(String name, int x, int z, int half, boolean port, int outX, int outZ) {
+        /** How far out to sea, past its walls, its fleet meets an enemy's: where the shipping lanes keep. */
+        public static final int OFFSHORE = 300;
+
+        /** A port's own ships, sent out against an amphibious assault: this many for each district of its city. */
+        public static final int HARBOUR_SHIPS_PER_DISTRICT = 2;
+        /** Soldiers aboard each. */
+        public static final int HARBOUR_CREW = 20;
+
+        /** How many ships of its own a port has, by its size; none for a castle or a city that is no port. */
+        public int harbourShips() {
+            return port ? Math.max(1, Math.round(half * 2f / rafasconquest.core.SeatCities.DISTRICT)) * HARBOUR_SHIPS_PER_DISTRICT : 0;
+        }
+
+        public double[] sea() {
+            return new double[]{x + outX * (half + OFFSHORE), z + outZ * (half + OFFSHORE)};
+        }
+    }
+
+    /** A county's walls, or null if it has none (no seat city, no castle). */
+    @org.jetbrains.annotations.Nullable
+    default Fort fort(int county) {
+        return null;
+    }
+
+    /** Whether a nation holds a port, to send a fleet from. */
+    default boolean hasPort(int nation) {
+        return false;
+    }
 }

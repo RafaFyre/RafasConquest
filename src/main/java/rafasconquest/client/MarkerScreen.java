@@ -46,6 +46,12 @@ public class MarkerScreen extends Screen {
     private String otherText;
     private String statMinText;
     private String replaceText;
+    /** The type dropdown: open or shut, and the first of its rows in view. */
+    private Button typeButton;
+    private boolean typeOpen;
+    private int typeScroll;
+    private static final int ROWS = 8;
+    private static final int ROW = 12;
 
     public MarkerScreen(BlockPos pos, MarkerSpec spec) {
         super(Component.literal("Character Marker"));
@@ -80,12 +86,10 @@ public class MarkerScreen extends Screen {
     protected void init() {
         int x = width / 2 - W / 2;
         int y = 30;
-        addRenderableWidget(CycleButton.<String>builder(t -> Component.literal(MarkerSpec.title(t))).withValues(MarkerSpec.TYPES).withInitialValue(type)
-                .create(x, y, W, 20, Component.literal("Type"), (b, v) -> {
-                    keepText();
-                    type = v;
-                    rebuildWidgets();
-                }));
+        typeButton = addRenderableWidget(Button.builder(Component.literal("Type: " + MarkerSpec.title(type) + "  ▼"), b -> {
+            typeOpen = !typeOpen;
+            typeScroll = Math.max(0, Math.min(MarkerSpec.TYPES.size() - ROWS, MarkerSpec.TYPES.indexOf(type) - ROWS / 2));
+        }).bounds(x, y, W, 20).build());
         y += 24;
         MarkerSpec now = spec();
         if (now.soldiers()) {
@@ -176,6 +180,64 @@ public class MarkerScreen extends Screen {
         for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
             widget.render(g, mouseX, mouseY, partialTick);
         }
+        if (typeOpen) {
+            int lx = typeButton.getX(), ly = typeButton.getBottom(), shown = Math.min(ROWS, MarkerSpec.TYPES.size());
+            g.pose().pushPose();
+            g.pose().translate(0, 0, 400); // over the widgets and their text
+            g.fill(lx, ly, lx + W, ly + shown * ROW + 2, 0xF0101010);
+            g.renderOutline(lx, ly, W, shown * ROW + 2, GOLD);
+            int hovered = typeRow(mouseX, mouseY);
+            for (int i = 0; i < shown; i++) {
+                int index = typeScroll + i;
+                int rowY = ly + 1 + i * ROW;
+                if (index == hovered) {
+                    g.fill(lx + 1, rowY, lx + W - 1, rowY + ROW, 0xFF404040);
+                }
+                String t = MarkerSpec.TYPES.get(index);
+                g.drawString(font, MarkerSpec.title(t), lx + 5, rowY + 2, t.equals(type) ? GOLD : 0xFFFFFFFF, false);
+            }
+            if (MarkerSpec.TYPES.size() > ROWS) { // scrollbar
+                int track = shown * ROW;
+                int thumb = Math.max(8, track * ROWS / MarkerSpec.TYPES.size());
+                int thumbY = ly + 1 + (track - thumb) * typeScroll / (MarkerSpec.TYPES.size() - ROWS);
+                g.fill(lx + W - 4, thumbY, lx + W - 1, thumbY + thumb, 0xFFA0A0A0);
+            }
+            g.pose().popPose();
+        }
+    }
+
+    /** The type under the mouse in the open dropdown, or -1. */
+    private int typeRow(double mouseX, double mouseY) {
+        int lx = typeButton.getX(), ly = typeButton.getBottom() + 1;
+        int row = (int) Math.floor((mouseY - ly) / ROW);
+        if (mouseX < lx || mouseX >= lx + W || row < 0 || row >= Math.min(ROWS, MarkerSpec.TYPES.size())) {
+            return -1;
+        }
+        return typeScroll + row;
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!typeOpen || typeButton.isMouseOver(mouseX, mouseY)) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
+        int index = typeRow(mouseX, mouseY);
+        typeOpen = false;
+        if (index >= 0) {
+            keepText();
+            type = MarkerSpec.TYPES.get(index);
+            rebuildWidgets();
+        }
+        return true; // a click off the open list only shuts it
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
+        if (typeOpen) {
+            typeScroll = Math.max(0, Math.min(MarkerSpec.TYPES.size() - ROWS, typeScroll - (int) Math.signum(delta)));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, delta);
     }
 
     @Override

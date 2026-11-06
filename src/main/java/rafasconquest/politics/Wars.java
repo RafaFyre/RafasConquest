@@ -11,6 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import net.minecraft.util.Mth;
 import rafasconquest.battle.BattlePlan;
+import rafasconquest.battle.BattleType;
 import rafasconquest.bridge.RecruitsBattle;
 import rafasconquest.faction.Faction;
 import rafasconquest.map.BaseMap;
@@ -148,11 +149,31 @@ public final class Wars {
         if (a == null || d == null) {
             return false;
         }
+        boolean atSea = war.type() == BattleType.OCEAN || war.type() == BattleType.AMPHIBIOUS;
+        if (atSea && !rafasconquest.bridge.SableLink.available()) {
+            return false; // without Sable there are no real ships to fight from: by strength alone
+        }
         double[] axis = axis(map, war);
-        bringToBattle(server, war, axis);
+        BattlePlan.Point at = new BattlePlan.Point(war.siteX(), war.siteZ());
+        Lands.Fort fort = war.type().walled() ? MapLands.of(map).fort(war.target()) : null;
+        if (war.type().walled() && fort == null) {
+            return false;
+        }
+        if (fort != null) {
+            // At its walls: the attacker comes on from the field (or in from the sea, at its harbour), the defenders'
+            // front on the wall facing it.
+            double dx = war.type() == BattleType.AMPHIBIOUS ? -fort.outX() : fort.x() - war.siteX();
+            double dz = war.type() == BattleType.AMPHIBIOUS ? -fort.outZ() : fort.z() - war.siteZ();
+            double length = Math.max(1e-6, Math.hypot(dx, dz));
+            axis = new double[]{dx / length, dz / length};
+            double wall = (fort.half() - 2) / Math.max(Math.abs(axis[0]), Math.abs(axis[1]));
+            at = new BattlePlan.Point(fort.x() - axis[0] * (wall + BattlePlan.DEPLOY_DISTANCE),
+                    fort.z() - axis[1] * (wall + BattlePlan.DEPLOY_DISTANCE));
+        }
+        bringToBattle(server, war, at, axis);
         boolean near = false;
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            if (p.level() == server.overworld() && Math.hypot(p.getX() - war.siteX(), p.getZ() - war.siteZ()) <= REAL_RANGE) {
+            if (p.level() == server.overworld() && Math.hypot(p.getX() - at.x(), p.getZ() - at.z()) <= REAL_RANGE) {
                 near = true;
             }
         }
@@ -178,9 +199,15 @@ public final class Wars {
             // Fought at full size: the field battle is numbers, only blocks near players are real soldiers.
             RecruitsBattle.start(server.overworld(), a, Mth.clamp(attackers, 20, BattlePlan.MAX_SOLDIERS), d,
                     Mth.clamp(defenders, 20, BattlePlan.MAX_SOLDIERS),
-                    new BattlePlan.Point(war.siteX(), war.siteZ()), axis[0], axis[1], general(map, war, true), general(map, war, false),
+                    at, axis[0], axis[1], general(map, war, true), general(map, war, false), war.type(),
+                    war.type() == BattleType.AMPHIBIOUS ? fort.harbourShips() : 0,
                     line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] The armies of " + a.name() + " and "
-                            + d.name() + " meet in battle for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
+                            + d.name() + switch (war.type()) {
+                                case OCEAN -> " meet at sea, their fleets closing,";
+                                case AMPHIBIOUS -> " meet at " + fort.name() + ", " + a.name() + " landing under its walls from the sea,";
+                                case SIEGE -> " meet at the walls of " + fort.name() + ", " + d.name() + " holding out behind them,";
+                                case LAND -> " meet in battle";
+                            } + " for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
                     why -> {
                         RafasConquest.LOGGER.warn("[war] The battle for the {} could not be fought for real: {}", county, why);
                         PoliticsData.get(server).politics.realBattleCancelled(war.id());
@@ -202,7 +229,7 @@ public final class Wars {
     }
 
     /** The players who mustered with a war's armies come with them to the battle, behind their own lines. */
-    private static void bringToBattle(MinecraftServer server, War war, double[] axis) {
+    private static void bringToBattle(MinecraftServer server, War war, BattlePlan.Point at, double[] axis) {
         ServerLevel level = server.overworld();
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             long[] answer = mustered.get(p.getUUID());
@@ -210,8 +237,8 @@ public final class Wars {
                 continue;
             }
             double side = answer[1] == 1 ? -1 : 1;
-            int x = (int) Math.round(war.siteX() + axis[0] * BEHIND_LINES * side);
-            int z = (int) Math.round(war.siteZ() + axis[1] * BEHIND_LINES * side);
+            int x = (int) Math.round(at.x() + axis[0] * BEHIND_LINES * side);
+            int z = (int) Math.round(at.z() + axis[1] * BEHIND_LINES * side);
             teleport(p, level, x, z);
             p.sendSystemMessage(Component.literal("Your army has reached the field of battle.").withStyle(ChatFormatting.RED));
         }
@@ -518,7 +545,7 @@ public final class Wars {
         for (War w : politics.wars()) {
             out.append("\n  ").append(map.nations().get(w.attacker()).name()).append(" against ").append(map.nations().get(w.defender()).name())
                     .append(" for the ").append(lands.titleName(w.goal())).append(": ").append(w.taken().size()).append(" of ")
-                    .append(w.goal().counties(lands).size()).append(" counties taken, ").append(w.battles()).append(" battle(s); next for the ")
+                    .append(w.goal().counties(lands).size()).append(" counties taken, ").append(w.battles()).append(" battle(s); next: ").append(w.type().title()).append(" for the ")
                     .append(lands.titleName(new Goal(false, w.target()))).append(String.format(" at %.0f, %.0f", w.siteX(), w.siteZ()));
             for (boolean attacking : new boolean[]{true, false}) {
                 Army army = w.army(attacking);

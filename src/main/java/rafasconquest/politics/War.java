@@ -3,6 +3,7 @@ package rafasconquest.politics;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.IntArrayTag;
 import org.jetbrains.annotations.Nullable;
+import rafasconquest.battle.BattleType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,9 @@ public final class War {
     int target = -1;
     double siteX;
     double siteZ;
+    /** What the next battle is, and the county whose fleet the attacker has beaten at sea (-1: none), to land at next. */
+    BattleType type = BattleType.LAND;
+    int seaWon = -1;
     @Nullable
     Army attackerArmy;
     @Nullable
@@ -78,6 +82,10 @@ public final class War {
         return siteZ;
     }
 
+    public BattleType type() {
+        return type;
+    }
+
     @Nullable
     public Army army(boolean attacking) {
         return attacking ? attackerArmy : defenderArmy;
@@ -125,6 +133,8 @@ public final class War {
         tag.putInt("target", target);
         tag.putDouble("siteX", siteX);
         tag.putDouble("siteZ", siteZ);
+        tag.putString("type", type.name());
+        tag.putInt("seaWon", seaWon);
         if (attackerArmy != null) {
             tag.put("attackerArmy", attackerArmy.save());
         }
@@ -148,6 +158,8 @@ public final class War {
         w.target = tag.getInt("target");
         w.siteX = tag.getDouble("siteX");
         w.siteZ = tag.getDouble("siteZ");
+        w.type = tag.contains("type") ? BattleType.valueOf(tag.getString("type")) : BattleType.LAND;
+        w.seaWon = tag.contains("seaWon") ? tag.getInt("seaWon") : -1;
         w.attackerArmy = tag.contains("attackerArmy") ? Army.load(tag.getCompound("attackerArmy")) : null;
         w.defenderArmy = tag.contains("defenderArmy") ? Army.load(tag.getCompound("defenderArmy")) : null;
         w.battles = tag.getInt("battles");

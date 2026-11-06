@@ -178,6 +178,39 @@ public final class MapLands implements Lands {
         return i < 0 || map.wet()[i];
     }
 
+    @Override
+    public Fort fort(int county) {
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (county(c.province()) == county) {
+                int[] out = c.port() ? switch (rafasconquest.core.CityLayout.Side.values()[c.harbour()]) {
+                    case NORTH -> new int[]{0, -1};
+                    case SOUTH -> new int[]{0, 1};
+                    case WEST -> new int[]{-1, 0};
+                    case EAST -> new int[]{1, 0};
+                } : new int[]{0, 0};
+                return new Fort(map.names().get(c.province()), c.x(), c.z(), c.size() / 2 + rafasconquest.core.CityLayout.WALL_OUTSET,
+                        c.port(), out[0], out[1]);
+            }
+        }
+        for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
+            if (s.kind() == rafasconquest.core.Countryside.Kind.CASTLE && county(s.province()) == county) {
+                // Its curtain wall is 41 blocks square (CountryPiece).
+                return new Fort("the castle of " + map.names().get(s.province()), s.x(), s.z(), 20, false, 0, 0);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean hasPort(int nation) {
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (c.port() && owner(c.province()) == nation) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Which provinces touch which, from the map's pixels. */
     private static List<Set<Integer>> adjacency(BaseMap map) {
         int n = map.centres().size();

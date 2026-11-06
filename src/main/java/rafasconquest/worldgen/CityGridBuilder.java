@@ -113,14 +113,15 @@ public final class CityGridBuilder {
         int sea = ctx.chunkGenerator().getSeaLevel();
         // The box reaches past the walls: a style's own may stand further out than the mod's.
         int outset = rafasconquest.style.CityPlan.wallOutset(site);
+        boolean port = Harbour.sideOf(site) != null;
         CityTerrain.plan(site, (x, z) -> {
             wanted.add(xz(x, z));
             return sea;
-        }, sea, outset);
+        }, sea, outset, port);
         java.util.Map<Long, Integer> read = new java.util.concurrent.ConcurrentHashMap<>();
         // On a pool of its own, a quarter of the threads: the rest stay free for the world generation going on meanwhile.
         SURVEY.submit(() -> wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)))).join();
-        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea, outset);
+        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea, outset, port);
         int[] counts = new int[CityTerrain.Edge.values().length];
         for (CityTerrain.Edge[] side : plan.edges()) {
             for (CityTerrain.Edge e : side) {
@@ -199,6 +200,38 @@ public final class CityGridBuilder {
                 pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), variant));
             }
         }
+        // The gate avenues' extra width, on the side toward the origin.
+        int gate = site.blocksPerSide() / 2;
+        int extra = CityLayout.AVENUE_EXTRA;
+        int g = CityLayout.roadStart(gate);
+        if (CityLayout.roadsInCell(site.cells(), cellX).contains(gate)) {
+            road(g - extra, cellMinZ - oz, g - 1, cellMaxZ - oz, styled);
+        }
+        if (CityLayout.roadsInCell(site.cells(), cellZ).contains(gate)) {
+            road(cellMinX - ox, g - extra, cellMaxX - ox, g - 1, styled);
+        }
+        // The ring road just inside the wall, on the edge cells.
+        int far = site.size() - 1;
+        int in0 = CityLayout.ROAD_WIDTH;
+        int in1 = far - CityLayout.ROAD_WIDTH;
+        int ring = CityLayout.RING_ROAD_WIDTH;
+        int x0 = Math.max(cellMinX - ox, in0);
+        int x1 = Math.min(cellMaxX - ox, in1);
+        int z0 = Math.max(cellMinZ - oz, in0);
+        int z1 = Math.min(cellMaxZ - oz, in1);
+        int last = site.cells() - 1;
+        if (cellZ == 0) {
+            road(x0, in0, x1, in0 + ring - 1, styled);
+        }
+        if (cellZ == last) {
+            road(x0, in1 - ring + 1, x1, in1, styled);
+        }
+        if (cellX == 0) {
+            road(in0, z0, in0 + ring - 1, z1, styled);
+        }
+        if (cellX == last) {
+            road(in1 - ring + 1, z0, in1, z1, styled);
+        }
 
         for (int bx : CityLayout.blocksInCell(cellX)) {
             for (int bz : CityLayout.blocksInCell(cellZ)) {
@@ -211,7 +244,7 @@ public final class CityGridBuilder {
                 if (bx == site.centerBlock() && bz == site.centerBlock()) {
                     townCenter(blockX, blockZ);
                 } else if (!(bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)) && styledHouses().any()) {
-                    packBlock(blockX, blockZ); // the style's own houses, of any size
+                    packBlock(bx, bz); // the style's own houses, of any size
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
@@ -247,12 +280,16 @@ public final class CityGridBuilder {
                             }
                             int px = blockX + qx * (CityLayout.PLOT_SIZE + 1);
                             int pz = blockZ + qz * (CityLayout.PLOT_SIZE + 1);
-                            house(new BoundingBox(px, minY, pz, px + CityLayout.PLOT_SIZE - 1, maxY, pz + CityLayout.PLOT_SIZE - 1),
+                            // Plots against the ring road or the wide avenue are that much shallower.
+                            int[] sx = CityLayout.blockSpan(site.blocksPerSide(), bx);
+                            int[] sz = CityLayout.blockSpan(site.blocksPerSide(), bz);
+                            house(new BoundingBox(Math.max(px, ox + sx[0]), minY, Math.max(pz, oz + sz[0]),
+                                            Math.min(px + CityLayout.PLOT_SIZE - 1, ox + sx[1]), maxY, Math.min(pz + CityLayout.PLOT_SIZE - 1, oz + sz[1])),
                                     facing(bx, bz, qx, qz));
                         }
                     }
                 }
-                lamps(blockX, blockZ);
+                lamps(bx, bz);
             }
         }
 
@@ -271,6 +308,24 @@ public final class CityGridBuilder {
         }
         // A port's wharf and piers, outside its harbour wall.
         Harbour.build(ctx, site, cellX, cellZ, plate, pieces);
+    }
+
+    /** A road over city-local [x0, x1] × [z0, z1], less any part inside the noble district. */
+    private void road(int x0, int z0, int x1, int z1, rafasconquest.style.CityPlan.Plan styled) {
+        boolean alongX = x1 - x0 >= z1 - z0;
+        boolean crosses = styled.noble() && (alongX
+                ? z1 >= styled.areaMinZ() && z0 <= styled.areaMaxZ()
+                : x1 >= styled.areaMinX() && x0 <= styled.areaMaxX());
+        int from = alongX ? x0 : z0;
+        int to = alongX ? x1 : z1;
+        for (int[] run : runs(from, to, crosses ? (alongX ? styled.areaMinX() : styled.areaMinZ()) : 0,
+                crosses ? (alongX ? styled.areaMaxX() : styled.areaMaxZ()) : -1)) {
+            int ox = site.originX();
+            int oz = site.originZ();
+            pieces.addPiece(alongX
+                    ? new CityRoadPiece(new BoundingBox(ox + run[0], plate, oz + z0, ox + run[1], plate, oz + z1), variant)
+                    : new CityRoadPiece(new BoundingBox(ox + x0, plate, oz + run[0], ox + x1, plate, oz + run[1]), variant));
+        }
     }
 
     /** The stretches of [from, to] outside [cutFrom, cutTo] (all of it if the cut is empty). */
@@ -393,27 +448,30 @@ public final class CityGridBuilder {
     }
 
     /** A block filled with the style's houses (BlockPacker): as many as fit, any size, each facing the nearer road. */
-    private void packBlock(int blockX, int blockZ) {
+    private void packBlock(int bx, int bz) {
         rafasconquest.style.CityStyles.Houses houses = styledHouses();
-        int size = 2 * CityLayout.PLOT_SIZE + 1;
+        int[] sx = CityLayout.blockSpan(site.blocksPerSide(), bx);
+        int[] sz = CityLayout.blockSpan(site.blocksPerSide(), bz);
+        int w = sx[1] - sx[0] + 1;
+        int d = sz[1] - sz[0] + 1;
         java.util.Random packing = new java.util.Random(random.nextLong());
-        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(size, houses.sizes(), packing)) {
-            rafasconquest.style.StylePiece.at(houses.files().get(p.building()), blockX + p.x(), plate, blockZ + p.z(), p.turns())
+        List<rafasconquest.style.BlockPacker.Rect> free = List.of(new rafasconquest.style.BlockPacker.Rect(0, 0, w, d));
+        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing)) {
+            rafasconquest.style.StylePiece.at(houses.files().get(p.building()), site.originX() + sx[0] + p.x(), plate, site.originZ() + sz[0] + p.z(), p.turns())
                     .forEach(pieces::addPiece);
         }
     }
 
     private void house(BoundingBox plot, Direction toRoad) {
-        int half = CityLayout.PLOT_SIZE / 2;
         int ex = switch (toRoad) {
             case WEST -> plot.minX();
             case EAST -> plot.maxX();
-            default -> plot.minX() + half;
+            default -> plot.minX() + plot.getXSpan() / 2;
         };
         int ez = switch (toRoad) {
             case NORTH -> plot.minZ();
             case SOUTH -> plot.maxZ();
-            default -> plot.minZ() + half;
+            default -> plot.minZ() + plot.getZSpan() / 2;
         };
         Optional<? extends Holder<StructureTemplatePool>> pool = pools.getHolder(variant.houses());
         if (pool.isEmpty()) {
@@ -482,17 +540,22 @@ public final class CityGridBuilder {
      * blocks) and where the alleys cross. Each uses this style's own lamp if it fits without touching a building,
      * otherwise the 1-wide taiga lamp post, which always fits an alley.
      */
-    private void lamps(int blockX, int blockZ) {
-        int alley = CityLayout.PLOT_SIZE;
-        int last = CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH - 1;
-        int[][] spots = {{alley, 1}, {alley, last - 1}, {1, alley}, {last - 1, alley}, {alley, alley}};
-        BoundingBox block = new BoundingBox(blockX, ctx.heightAccessor().getMinBuildHeight(), blockZ,
-                blockX + last, ctx.heightAccessor().getMaxBuildHeight() - 1, blockZ + last);
+    private void lamps(int bx, int bz) {
+        // City-local: the alleys between plots, and the block's buildable edges (clear of the ring road and avenue).
+        int[] sx = CityLayout.blockSpan(site.blocksPerSide(), bx);
+        int[] sz = CityLayout.blockSpan(site.blocksPerSide(), bz);
+        int ax = CityLayout.blockStart(bx) + CityLayout.PLOT_SIZE;
+        int az = CityLayout.blockStart(bz) + CityLayout.PLOT_SIZE;
+        int[][] spots = {{ax, sz[0] + 1}, {ax, sz[1] - 1}, {sx[0] + 1, az}, {sx[1] - 1, az}, {ax, az}};
+        int ox = site.originX();
+        int oz = site.originZ();
+        BoundingBox block = new BoundingBox(ox + sx[0], ctx.heightAccessor().getMinBuildHeight(), oz + sz[0],
+                ox + sx[1], ctx.heightAccessor().getMaxBuildHeight() - 1, oz + sz[1]);
         List<StructurePoolElement> own = lampElements(variant.decor());
         List<StructurePoolElement> fallback = lampElements(CityVariant.TAIGA.decor());
         for (int[] spot : spots) {
-            if (!lamp(own, blockX + spot[0], blockZ + spot[1], block)) {
-                lamp(fallback, blockX + spot[0], blockZ + spot[1], block);
+            if (!lamp(own, ox + spot[0], oz + spot[1], block)) {
+                lamp(fallback, ox + spot[0], oz + spot[1], block);
             }
         }
     }

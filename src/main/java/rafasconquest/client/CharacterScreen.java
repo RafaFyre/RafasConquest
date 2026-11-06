@@ -268,6 +268,7 @@ public class CharacterScreen extends Screen {
                 hovered = r;
             }
             if (r.entity() != null) {
+                Portraits.animate(r.entity());
                 BattleScreen.inventoryFigure(g, r.x(), r.feet(), (int) r.scale(), mouseX, mouseY, r.entity());
             }
         }

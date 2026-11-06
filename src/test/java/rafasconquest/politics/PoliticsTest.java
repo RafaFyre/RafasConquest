@@ -148,6 +148,71 @@ class PoliticsTest {
         public boolean wet(double x, double z) {
             return water.test(x, z);
         }
+
+        /** Each county's walls (none unless set), and which nations hold a port. */
+        final Fort[] forts = new Fort[6];
+        final boolean[] ports = new boolean[3];
+
+        @Override
+        public Fort fort(int county) {
+            return forts[county];
+        }
+
+        @Override
+        public boolean hasPort(int nation) {
+            return ports[nation];
+        }
+    }
+
+    @Test
+    void portAgainstPortTheFleetsMeetAtSeaThenTheArmyLandsUnderTheWalls() {
+        Row lands = row();
+        lands.forts[2] = new Lands.Fort("Haven", 4500, 0, 60, true, 0, 1);
+        lands.ports[0] = true;
+        Politics p = new Politics();
+        War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        assertNotNull(w);
+        assertEquals(rafasconquest.battle.BattleType.OCEAN, w.type());
+        assertEquals(4500, w.siteX(), 1e-9);
+        assertEquals(60 + Lands.Fort.OFFSHORE, w.siteZ(), 1e-9, "out at sea off its harbour");
+        p.after(w, true, 0.9, 0.6, 3, lands, new Random(5), FAR);
+        assertEquals(rafasconquest.battle.BattleType.AMPHIBIOUS, w.type(), "the sea won, they land");
+        assertEquals(1, lands.owner(4), "the sea battle took no land");
+        assertEquals(4500, w.siteX(), 1e-9);
+        assertEquals(0, w.siteZ(), 1e-9, "at its walls");
+        p.after(w, true, 0.8, 0.3, 4, lands, new Random(5), FAR);
+        assertEquals(0, lands.owner(4), "the port stormed and taken");
+    }
+
+    @Test
+    void aPortHasShipsOfItsOwnByItsSizeACastleNone() {
+        int oneDistrict = rafasconquest.core.SeatCities.DISTRICT / 2 + 4;
+        assertEquals(2, new Lands.Fort("Small", 0, 0, oneDistrict, true, 0, 1).harbourShips());
+        assertEquals(6, new Lands.Fort("Big", 0, 0, 3 * rafasconquest.core.SeatCities.DISTRICT / 2 + 4, true, 0, 1).harbourShips());
+        assertEquals(0, new Lands.Fort("Inland", 0, 0, oneDistrict, false, 0, 0).harbourShips());
+    }
+
+    @Test
+    void aHolderOutmatchedKeepsBehindTheWallsTheBoldRideOutSooner() {
+        assertTrue(Politics.holdsOut(500, 1000, ruler(10)), "outnumbered two to one");
+        assertFalse(Politics.holdsOut(1000, 1000, ruler(10)), "a match in the field");
+        assertTrue(Politics.holdsOut(800, 1000, ruler(10)));
+        assertFalse(Politics.holdsOut(800, 1000, ruler(10, Personality.BRAVE)), "the brave ride out against the odds");
+        assertTrue(Politics.holdsOut(1000, 1000, ruler(10, Personality.CRAVEN, Personality.PATIENT)), "the careful wait");
+    }
+
+    @Test
+    void aWalledCountyIsBesiegedWhenItsHolderHoldsOut() {
+        Row lands = row();
+        lands.forts[2] = new Lands.Fort("Castle", 4500, 0, 20, false, 0, 0);
+        lands.levy[0] = 50000;
+        lands.levy[1] = 2000;
+        Politics p = new Politics();
+        War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        assertEquals(rafasconquest.battle.BattleType.LAND, w.type(), "it marches to the border first");
+        runWar(p, lands, new Random(3), 1, 100);
+        assertTrue(p.chronicle().stream().anyMatch(e -> e.text().contains("at the siege of Castle")),
+                "no siege: " + p.chronicle().stream().map(Politics.Event::text).toList());
     }
 
     static final Politics.Front FAR = new Politics.Front() {

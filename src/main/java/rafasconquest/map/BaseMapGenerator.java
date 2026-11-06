@@ -246,7 +246,7 @@ public final class BaseMapGenerator {
         TitleMap titles = TitleMap.build(level.getSeed(), size, size, provinces, centres.size(), ocean);
         List<String> names = centres.stream().map(c -> ProvinceNames.name(level.getSeed(), c.x(), c.z())).toList();
         SeatCities.Grid grid = new SeatCities.Grid(minX, minZ, bpp, size, size, provinces, centres);
-        List<SeatCities.City> planned = SeatCities.plan(level.getSeed(), grid, titles);
+        List<SeatCities.City> planned = SeatCities.plan(level.getSeed(), grid, titles, ocean);
         Countryside.Plan countryside = Countryside.plan(level.getSeed(), grid, titles, planned);
         // Where each seat stands: its city, its castle, or its province's centre.
         java.util.Map<Integer, int[]> seatAt = new java.util.HashMap<>();

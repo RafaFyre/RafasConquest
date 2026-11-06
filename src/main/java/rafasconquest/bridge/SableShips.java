@@ -104,17 +104,30 @@ final class SableShips {
 
     /** Builds the ship's hull on the water where it is, bow to +z, and hands it to Sable, then turns it to its heading. */
     private static void build(ServerLevel level, SeaLanes.Ship ship) {
+        ServerSubLevel sub = assemble(level, ship, TAG);
+        if (sub != null) {
+            live.put(ship.id(), sub);
+            steer(sub, ship);
+        }
+    }
+
+    /**
+     * Builds a ship's hull on the water where it is, bow to +z, and hands it to Sable, tagged {@code key} = its id, with
+     * its waterline height kept as "y"; null if it can't be built there yet.
+     */
+    @org.jetbrains.annotations.Nullable
+    static ServerSubLevel assemble(ServerLevel level, SeaLanes.Ship ship, String key) {
         int sea = level.getSeaLevel();
         BlockPos centre = BlockPos.containing(ship.x(), sea, ship.z());
         if (!level.hasChunkAt(centre) || !level.getFluidState(centre.below()).is(FluidTags.WATER)) {
-            return; // not loaded yet, or the lane's point lies over land at this block (its smoothing cut a corner)
+            return null; // not loaded yet, or the point lies over land at this block (a lane's smoothing cut a corner)
         }
         List<ShipHulls.Part> parts = ShipHulls.of(ship);
         List<BlockPos> blocks = new ArrayList<>();
         for (ShipHulls.Part part : parts) {
             BlockPos pos = centre.offset(part.x(), part.y(), part.z());
             if (!level.hasChunkAt(pos) || !level.getBlockState(pos).isAir()) {
-                return; // not loaded, or something stands there (a pier, an island, another ship): try again later
+                return null; // not loaded, or something stands there (a pier, an island): try again later
             }
             blocks.add(pos);
         }
@@ -124,16 +137,23 @@ final class SableShips {
         ServerSubLevel sub = SubLevelAssemblyHelper.assembleBlocks(level, centre, blocks, BoundingBox3i.from(blocks));
         if (sub == null) {
             blocks.forEach(pos -> level.removeBlock(pos, false));
-            return;
+            return null;
         }
         CompoundTag tag = new CompoundTag();
-        tag.putString(TAG, ship.id());
+        tag.putString(key, ship.id());
         // It sits a block down in the water, where it was built (its floor on the surface) less its draught.
         tag.putDouble("y", sub.logicalPose().position().y() - 1);
         sub.setUserDataTag(tag);
         sub.setName("Ship " + ship.id());
-        live.put(ship.id(), sub);
-        steer(sub, ship);
+        return sub;
+    }
+
+    /** Turns a ship toward a heading (a turn about the up axis), keeping it upright, by setting its spin. */
+    static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin) {
+        Quaterniond heading = new Quaterniond().rotationY(yaw);
+        AxisAngle4d turn = new AxisAngle4d(heading.mul(new Quaterniond(pose.orientation()).invert()));
+        double angle = turn.angle > Math.PI ? turn.angle - 2 * Math.PI : turn.angle;
+        return new Vector3d(turn.x, turn.y, turn.z).mul(angle * TURN).sub(spin);
     }
 
     /**
@@ -163,10 +183,7 @@ final class SableShips {
             pull.normalize(MAX_PULL);
         }
         Vector3d want = new Vector3d(ship.vx() * 20, 0, ship.vz() * 20).add(pull).add(avoid(sub, pose, ship));
-        AxisAngle4d turn = new AxisAngle4d(heading.mul(new Quaterniond(pose.orientation()).invert()));
-        double angle = turn.angle > Math.PI ? turn.angle - 2 * Math.PI : turn.angle;
-        Vector3d wantSpin = new Vector3d(turn.x, turn.y, turn.z).mul(angle * TURN);
-        body.addLinearAndAngularVelocity(want.sub(velocity), wantSpin.sub(spin));
+        body.addLinearAndAngularVelocity(want.sub(velocity), spinToward(pose, ship.yaw(), spin));
     }
 
     /**

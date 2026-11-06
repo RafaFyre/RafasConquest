@@ -96,6 +96,9 @@ public final class GroundPlan {
         int ambushers = 0;
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
+            if (field.afloat(side)) {
+                continue; // a fleet keeps its places on the water
+            }
             place(field, army, ground);
             ambushers += ambush(field, army, ground);
         }
@@ -115,7 +118,7 @@ public final class GroundPlan {
         // The front first, then the archers (to the high ground before the reserves take it), then the rest.
         List<FieldBlock> order = new ArrayList<>();
         for (FieldBlock b : army.blocks) {
-            if (b.duty != Duty.GENERAL && b.duty != Duty.GUARD && b.duty != Duty.BEARER) {
+            if (b.duty != Duty.GENERAL && b.duty != Duty.GUARD && b.duty != Duty.BEARER && !b.afloat) { // ships keep to the water
                 order.add(b);
             }
         }

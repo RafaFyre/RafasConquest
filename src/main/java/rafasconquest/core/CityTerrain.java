@@ -34,11 +34,16 @@ public final class CityTerrain {
     /** Lowest and highest local coordinate inside the box, on both axes. The wall stands out past the city square. */
     public static final int BOX_MIN = -CityLayout.WALL_OUTSET - BOX_MARGIN;
     public static final int BOX_MAX = CityLayout.SIZE - 1 + CityLayout.WALL_OUTSET + BOX_MARGIN;
+    /** How far the carve and fill may run past the box. */
+    public static final int SLOPE_REACH = 84;
     /**
-     * How far the carve and fill may run past the box. An edge cell's structure start sits 86 blocks from the box
-     * edge, and Minecraft only places pieces within about 128 blocks of a start.
+     * How far past the box an edge cell lays the slope itself. An edge cell's structure start sits 86 blocks from the
+     * box edge, and Minecraft only places pieces within about 128 blocks of a start, so the slope beyond this is laid
+     * by {@link #slopeTiles slope tiles}, each its own structure start.
      */
-    public static final int SLOPE_REACH = 42;
+    public static final int CELL_REACH = 42;
+    /** Longest side of a slope tile: with its start at its middle, every column is well within the engine's reach. */
+    static final int SLOPE_TILE = 96;
     public static final int EDGE_SEGMENT = 32;
     public static final int SEGMENTS_PER_SIDE = (BOX_MAX - BOX_MIN + EDGE_SEGMENT) / EDGE_SEGMENT;
     static final int MEDIAN_STEP = 24;
@@ -170,6 +175,11 @@ public final class CityTerrain {
 
     /** The same, for a wall standing {@code outset} blocks out past the city square. */
     public static Plan plan(CityLayout.Site site, Heights heights, int seaLevel, int outset) {
+        return plan(site, heights, seaLevel, outset, false);
+    }
+
+    /** The same; a {@code port}'s plate is always at sea level, flush with the water, and the land is shaped to meet it. */
+    public static Plan plan(CityLayout.Site site, Heights heights, int seaLevel, int outset, boolean port) {
         int cells = site.cells();
         Plan box = new Plan(0, null, null, cells, outset); // only its box and reach are read
         int boxMin = box.boxMin();
@@ -182,7 +192,7 @@ public final class CityTerrain {
             }
         }
         samples.sort(Integer::compare);
-        int plate = Math.max(seaLevel - 1, samples.get(samples.size() / 2));
+        int plate = port ? seaLevel - 1 : Math.max(seaLevel - 1, samples.get(samples.size() / 2));
 
         Edge[][] edges = new Edge[Side.values().length][segments];
         int[][] carveTo = new int[Side.values().length][segments];
@@ -386,7 +396,7 @@ public final class CityTerrain {
     }
 
     public static int ownedMin(int cells, int cell, int outset) {
-        return cell == 0 ? boxMin(cells, outset) - SLOPE_REACH : cell * CityLayout.DISTRICT_SPACING;
+        return cell == 0 ? boxMin(cells, outset) - CELL_REACH : cell * CityLayout.DISTRICT_SPACING;
     }
 
     public static int ownedMax(int cell) {
@@ -398,6 +408,39 @@ public final class CityTerrain {
     }
 
     public static int ownedMax(int cells, int cell, int outset) {
-        return cell == cells - 1 ? boxMax(cells, outset) + SLOPE_REACH : (cell + 1) * CityLayout.DISTRICT_SPACING - 1;
+        return cell == cells - 1 ? boxMax(cells, outset) + CELL_REACH : (cell + 1) * CityLayout.DISTRICT_SPACING - 1;
+    }
+
+    /**
+     * The outer slope, past what the edge cells lay ({@link #CELL_REACH}) out to {@link #SLOPE_REACH}, cut into tiles
+     * no longer than {@link #SLOPE_TILE}: each a local box {minX, minZ, maxX, maxZ}. The north and south strips run
+     * the full width, corners included; the west and east strips fill between them. Together they cover the ring once.
+     */
+    public static List<int[]> slopeTiles(int cells, int outset) {
+        int inMin = boxMin(cells, outset) - CELL_REACH;
+        int inMax = boxMax(cells, outset) + CELL_REACH;
+        int outMin = boxMin(cells, outset) - SLOPE_REACH;
+        int outMax = boxMax(cells, outset) + SLOPE_REACH;
+        List<int[]> tiles = new ArrayList<>();
+        for (int[] a : split(outMin, outMax)) {
+            tiles.add(new int[]{a[0], outMin, a[1], inMin - 1});
+            tiles.add(new int[]{a[0], inMax + 1, a[1], outMax});
+        }
+        for (int[] a : split(inMin, inMax)) {
+            tiles.add(new int[]{outMin, a[0], inMin - 1, a[1]});
+            tiles.add(new int[]{inMax + 1, a[0], outMax, a[1]});
+        }
+        return tiles;
+    }
+
+    /** [min, max] cut into the fewest equal runs no longer than {@link #SLOPE_TILE}. */
+    private static List<int[]> split(int min, int max) {
+        int length = max - min + 1;
+        int runs = (length + SLOPE_TILE - 1) / SLOPE_TILE;
+        List<int[]> out = new ArrayList<>();
+        for (int i = 0; i < runs; i++) {
+            out.add(new int[]{min + i * length / runs, min + (i + 1) * length / runs - 1});
+        }
+        return out;
     }
 }

@@ -1037,10 +1037,10 @@ cities each spawn a `CITY_STATE` faction (no territory claims), tracked as a `CI
 city too**, centred on its Capital site and tracked as its `CAPITAL` POI. A capital takes its style from its biome
 like any city, and falls back to plains where no style matches.
 
-**No cities or farms on ocean:** no part of a city's flattened box, and no part of a farm's plot, may lie on a biome
-in the tag `rafasconquest:no_settlement` (all oceans; packs can add more). Biomes are sampled at sea level, every 16
-blocks over a city and at the corners and centre of a farm (`worldgen/SettlementBiomes`). A City-state site that fails
-this has no City-state.
+**No cities or farms on ocean:** seat cities are put on land by the world map (`SeatCities`; ports beside the sea), and
+the chunks build every one it plans. No part of a farm's plot may lie on a biome in the tag `rafasconquest:no_settlement`
+(all oceans; packs can add more), sampled at sea level at its corners and centre (`worldgen/SettlementBiomes`). A
+City-state site whose city would touch such a biome has no City-state.
 
 **Capitals move to land:** a Capital site whose city would touch ocean moves to the nearest spot, searched every 32
 blocks up to 1,024 away, where the whole city fits on land. The new spot also stays out of the eye and keeps a city's

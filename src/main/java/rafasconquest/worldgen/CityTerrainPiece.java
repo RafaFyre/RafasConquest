@@ -47,6 +47,16 @@ public class CityTerrainPiece extends StructurePiece {
         setOrientation(null);
     }
 
+    /** A stretch of the city's outer slope, {@code box} in world coordinates. */
+    public CityTerrainPiece(int originX, int originZ, CityVariant variant, CityTerrain.Plan plan, BoundingBox box) {
+        super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, box);
+        this.originX = originX;
+        this.originZ = originZ;
+        this.variant = variant;
+        this.plan = plan;
+        setOrientation(null);
+    }
+
     public CityTerrainPiece(CompoundTag tag) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), tag);
         this.originX = tag.getInt("originX");

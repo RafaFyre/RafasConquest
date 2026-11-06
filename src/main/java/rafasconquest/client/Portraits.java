@@ -18,6 +18,7 @@ import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import org.jetbrains.annotations.Nullable;
@@ -60,8 +61,19 @@ final class Portraits {
             };
             entity.setBiome((byte) race.homeland().ordinal());
             entity.setVariant(skins[0] + Math.floorMod(p.name().hashCode(), skins[1] - skins[0]));
+            // Animated models (EMF, as Fresh Friends) idle only for entities standing on the ground near the camera.
+            Vec3 camera = mc.gameRenderer.getMainCamera().getPosition();
+            entity.setPos(camera.x, camera.y, camera.z);
+            entity.setOnGround(true);
         }
         return entity;
+    }
+
+    /** Ages a figure that never ticks by the clock, so animated models breathe and blink; returns the partial tick to draw it at. */
+    static float animate(net.minecraft.world.entity.Entity entity) {
+        long ms = net.minecraft.Util.getMillis();
+        entity.tickCount = (int) (ms / 50);
+        return (ms % 50) / 50F;
     }
 
     /** A character's model, dressed as they would be (crown, ceremonial dress or sword-titled harness, with Epic Knights). */

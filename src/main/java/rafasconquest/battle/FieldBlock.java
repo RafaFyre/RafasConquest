@@ -88,6 +88,8 @@ public final class FieldBlock {
     int reformUntil;
     /** Braced against charging cavalry, facing it, and when it last saw cavalry coming. */
     boolean braced;
+    /** Aboard its ship: it sails, and its soldiers fight from the deck, until it comes ashore (if ever). */
+    boolean afloat;
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
@@ -238,6 +240,10 @@ public final class FieldBlock {
     }
 
     /** Braced against charging cavalry. */
+    public boolean afloat() {
+        return afloat;
+    }
+
     public boolean braced() {
         return braced;
     }

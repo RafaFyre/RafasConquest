@@ -144,4 +144,19 @@ class CityLayoutTest {
         // The cities built are the title seats', whatever the City-state setting (none are published here).
         assertTrue(CityLayout.allSitesInBox(1L, off, -5_000, -5_000, 5_000, 5_000).isEmpty());
     }
+
+    @Test
+    void blocksLeaveRoomForTheRingRoadAndTheWideAvenue() {
+        int blocks = CityLayout.BLOCKS_PER_SIDE;
+        int full = CityLayout.ROAD_PERIOD - CityLayout.ROAD_WIDTH;
+        int gate = blocks / 2;
+        // Ring road: just inside the wall, which stands on the edge road.
+        assertEquals(CityLayout.ROAD_WIDTH + CityLayout.RING_ROAD_WIDTH, CityLayout.blockSpan(blocks, 0)[0]);
+        assertEquals(CityLayout.SIZE - 1 - CityLayout.ROAD_WIDTH - CityLayout.RING_ROAD_WIDTH, CityLayout.blockSpan(blocks, blocks - 1)[1]);
+        // The avenue is 5 wide, eating into the block before it only.
+        assertEquals(CityLayout.roadStart(gate) - 1 - CityLayout.AVENUE_EXTRA, CityLayout.blockSpan(blocks, gate - 1)[1]);
+        assertEquals(CityLayout.blockStart(gate), CityLayout.blockSpan(blocks, gate)[0]);
+        int[] plain = CityLayout.blockSpan(blocks, 1);
+        assertEquals(full, plain[1] - plain[0] + 1);
+    }
 }

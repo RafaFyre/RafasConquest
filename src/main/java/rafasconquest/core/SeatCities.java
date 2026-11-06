@@ -20,7 +20,8 @@ import java.util.Random;
  * <p>
  * <b>Ports</b>: a seat with the sea within its reach is drawn to the shore instead, so that one side of the city (its
  * {@link City#harbour}) stands with its wall on land and the sea just past it, for its wharf and piers. Of the spots
- * that make a port, the one nearest the province's centre; a seat with none is an inland city as before. A kingdom's
+ * that make a port, the one nearest the province's centre; a seat with none is an inland city as before. Only a sea
+ * of at least {@link #MIN_SEA_AREA} counts: a pond of ocean biome makes no harbour. A kingdom's
  * or empire's capital is always a port where the realm has a shore with room for one: its seat moves to that province
  * (and the seats of the titles under it with it). Only a realm with no such shore keeps an inland capital.
  */
@@ -33,6 +34,8 @@ public final class SeatCities {
     /** A port's harbour side has land this far past its square (its wall's foot), then the sea within {@link #HARBOUR_SEA}. */
     static final int WALL_FOOT = 8;
     static final int HARBOUR_SEA = 40;
+    /** A harbour opens only on water covering this many square blocks or more: a round sea some 2 km across. */
+    static final long MIN_SEA_AREA = 3_000_000;
     private static final long SALT = 0x5345415443495459L;
 
     /**
@@ -85,10 +88,20 @@ public final class SeatCities {
      * returning the cities, highest title first.
      */
     public static List<City> plan(long seed, Grid g, TitleMap titles) {
+        boolean[] ocean = new boolean[g.provinces().length];
+        for (int i = 0; i < ocean.length; i++) {
+            ocean[i] = g.provinces()[i] == ProvinceMap.WATER;
+        }
+        return plan(seed, g, titles, ocean);
+    }
+
+    /** As {@link #plan(long, Grid, TitleMap)}, with harbours opening only on {@code ocean} pixels (the sea ships sail). */
+    public static List<City> plan(long seed, Grid g, TitleMap titles, boolean[] ocean) {
         Random random = new Random(seed ^ SALT);
         // Land, for squares wholly on it: a summed-area table of pixels that aren't (so a square is checked at once).
-        int[] notLand = summed(g, p -> p < 0);
-        int[] sea = summed(g, p -> p == ProvinceMap.WATER);
+        int[] notLand = summed(g, i -> g.provinces()[i] < 0);
+        boolean[] seas = seas(g, ocean);
+        int[] sea = summed(g, i -> seas[i]);
         List<City> cities = new ArrayList<>();
         int[][] seats = {titles.countySeat(), titles.duchySeat(), titles.kingdomSeat(), titles.empireSeat()};
         for (int tier = 3; tier >= 0; tier--) {
@@ -274,13 +287,56 @@ public final class SeatCities {
         };
     }
 
-    /** A summed-area table of the pixels whose province matches. */
+    /**
+     * The {@code ocean} pixels of seas a harbour can open on: each body of water joined pixel to pixel that covers at
+     * least {@link #MIN_SEA_AREA}; smaller ones (ponds of ocean biome) are left out.
+     */
+    static boolean[] seas(Grid g, boolean[] ocean) {
+        int w = g.width();
+        int h = g.height();
+        boolean[] seas = new boolean[w * h];
+        boolean[] seen = new boolean[w * h];
+        int[] queue = new int[w * h];
+        long minPixels = MIN_SEA_AREA / ((long) g.bpp() * g.bpp());
+        for (int i = 0; i < w * h; i++) {
+            if (!ocean[i] || seen[i]) {
+                continue;
+            }
+            int head = 0;
+            int tail = 0;
+            queue[tail++] = i;
+            seen[i] = true;
+            while (head < tail) {
+                int p = queue[head++];
+                int x = p % w;
+                int z = p / w;
+                for (int dz = -1; dz <= 1; dz++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int nx = x + dx;
+                        int nz = z + dz;
+                        if (nx >= 0 && nz >= 0 && nx < w && nz < h && ocean[nz * w + nx] && !seen[nz * w + nx]) {
+                            seen[nz * w + nx] = true;
+                            queue[tail++] = nz * w + nx;
+                        }
+                    }
+                }
+            }
+            if (tail >= minPixels) {
+                for (int k = 0; k < tail; k++) {
+                    seas[queue[k]] = true;
+                }
+            }
+        }
+        return seas;
+    }
+
+    /** A summed-area table of the pixels (by index) that count. */
     private static int[] summed(Grid g, java.util.function.IntPredicate counts) {
         int w = g.width();
         int[] t = new int[(w + 1) * (g.height() + 1)];
         for (int z = 0; z < g.height(); z++) {
             for (int x = 0; x < w; x++) {
-                int one = counts.test(g.provinces()[z * w + x]) ? 1 : 0;
+                int one = counts.test(z * w + x) ? 1 : 0;
                 t[(z + 1) * (w + 1) + x + 1] = one + t[z * (w + 1) + x + 1] + t[(z + 1) * (w + 1) + x] - t[z * (w + 1) + x];
             }
         }

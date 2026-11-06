@@ -103,14 +103,11 @@ public enum CityVariant {
     }
 
     /**
-     * The style of a city. No city stands where any of it would be on ocean ({@link SettlementBiomes}). Otherwise it takes
-     * the style of its centre's biome, or the plains style where none matches.
+     * The style of a city: its centre's biome's, or the plains style where none matches. Never empty: the world map
+     * ({@code SeatCities}) already put every seat city on land, ports beside the sea, so the chunks don't second-guess it
+     * with their own ocean check (which, sampled finer and at sea level, rejected ports and cities near ponds of ocean).
      */
     public static Optional<CityVariant> forSite(Structure.GenerationContext ctx, rafasconquest.core.CityLayout.Site site) {
-        if (SettlementBiomes.blocksCity(ctx, site)) {
-            return Optional.empty();
-        }
-        // Every city is a title's seat: one stands whatever the biome, in the plains style where no other fits.
         return Optional.of(at(ctx, site.x(), site.z()).orElse(PLAINS));
     }
 

@@ -66,6 +66,160 @@ public final class FieldBattle {
     private final boolean[] advanced = new boolean[2];
     @Nullable
     private Outcome outcome;
+    /** What kind of battle it is: in a walled one, the defenders (side 1) hold the line they deployed on, their walls. */
+    private BattleType type = BattleType.LAND;
+    /** Behind their walls, defenders take this share of the harm done them. */
+    static final double WALL_TAKES = 0.45;
+    /** How far out past the wall line a defender still counts as on the walls. */
+    static final double WALL_BAND = 2;
+
+    public BattleType type() {
+        return type;
+    }
+
+    /** Ships sail this many blocks a second, whatever their soldiers' arm. */
+    public static final double SHIP_SPEED = 2.5;
+    /** In an amphibious assault, a ship this close to the walls has reached the wharf: its soldiers land. */
+    static final double LANDING = 10;
+
+    /**
+     * Makes it a battle of this kind; before it begins only. At sea both armies sail; in an amphibious assault the
+     * attacker does, until it lands.
+     */
+    public void setType(BattleType type) {
+        if (begun()) {
+            throw new IllegalStateException("the battle has begun");
+        }
+        this.type = type;
+        for (FieldArmy army : armies) {
+            for (FieldBlock b : army.blocks) {
+                b.afloat = type == BattleType.OCEAN || type == BattleType.AMPHIBIOUS && army.side == 0;
+            }
+        }
+    }
+
+    /** The defenders' harbour ships wait this far out past their walls, between them and the attacker's fleet. */
+    static final double HARBOUR_OUT = 20;
+
+    /**
+     * An amphibious assault's port has its own fleet, on top of the army holding its walls: {@code ships} ships of a
+     * formation each (every third of archers, the rest swordsmen), waiting in a line out past the walls, across the
+     * front, to go out against the attacker's ships before they land. Before the battle begins only.
+     */
+    public void addHarbourFleet(int ships) {
+        if (begun() || type != BattleType.AMPHIBIOUS) {
+            throw new IllegalStateException("a harbour fleet is for an amphibious assault, before it begins");
+        }
+        FieldArmy d = armies[1];
+        int id = d.blocks.stream().mapToInt(FieldBlock::id).max().orElse(10_000) + 1;
+        double rx = -d.facingZ;
+        double rz = d.facingX;
+        for (int i = 0; i < ships; i++) {
+            double right = (i - (ships - 1) / 2.0) * BattlePlan.BLOCK_PITCH;
+            Point at = d.origin.plus(d.facingX * HARBOUR_OUT + rx * right, d.facingZ * HARBOUR_OUT + rz * right);
+            FieldBlock b = new FieldBlock(id++, 1, i % 3 == 2 ? Arm.ARCHERS : Arm.SWORDSMEN, BattlePlan.SOLDIERS_PER_FORMATION,
+                    FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false, at, d.facingX, d.facingZ, Duty.RESTING);
+            b.afloat = true;
+            b.deployed = at;
+            d.blocks.add(b);
+            d.started += b.started();
+        }
+    }
+
+    /**
+     * The defenders' harbour ships each go after the nearest of the attacker's ships still afloat. With none left
+     * afloat they put back in under the walls, and their soldiers go up onto them, to hold them with the rest.
+     */
+    private void harbourFleet() {
+        FieldArmy d = armies[1];
+        for (FieldBlock b : d.blocks) {
+            if (!b.afloat || b.alive == 0 || b.duty == Duty.FLEEING || b.duty == Duty.ROUTED || b.duty == Duty.RALLYING) {
+                continue;
+            }
+            FieldBlock prey = null;
+            double best = Double.MAX_VALUE;
+            for (FieldBlock a : armies[0].blocks) {
+                if (a.afloat && a.alive > 0 && b.pos.distanceTo(a.pos) < best) {
+                    best = b.pos.distanceTo(a.pos);
+                    prey = a;
+                }
+            }
+            b.strikeAt = null;
+            b.approaching = false;
+            if (prey != null) {
+                b.charged = true;
+                b.prey = prey;
+                continue;
+            }
+            b.charged = false;
+            b.prey = null;
+            Point mooring = b.pos.plus(-d.facingX * pastWalls(b.pos), -d.facingZ * pastWalls(b.pos));
+            b.line = mooring.plus(d.facingX * LANDING, d.facingZ * LANDING);
+            if (pastWalls(b.pos) <= LANDING + 1e-6) {
+                // Ashore: into the queue of the nearest file of the wall's front, to relieve it in turn.
+                b.afloat = false;
+                b.line = mooring.plus(-d.facingX * BattlePlan.LINE_GAP, -d.facingZ * BattlePlan.LINE_GAP);
+                int file = -1;
+                for (int f = 0; f < d.front.length; f++) {
+                    if (d.front[f] != null && (file < 0 || d.front[f].line.distanceTo(b.pos) < d.front[file].line.distanceTo(b.pos))) {
+                        file = f;
+                    }
+                }
+                if (file >= 0) {
+                    d.join(b, file);
+                }
+                if (d.blocks.stream().noneMatch(o -> o.afloat && o.alive > 0)) {
+                    events.add(new Event(1, "The harbour ships put back in, and their soldiers man the walls"));
+                }
+            }
+        }
+    }
+
+    /** Whether a side began the battle aboard its ships. */
+    public boolean afloat(int side) {
+        return type == BattleType.OCEAN || type == BattleType.AMPHIBIOUS && side == 0;
+    }
+
+    /** Where a block is making for this second: its prey, if it has charged one, else its place in the line. */
+    public Point makingFor(FieldBlock block) {
+        return block.charged && hunted(block.prey) && block.duty != Duty.FLEEING ? block.prey.pos : block.line;
+    }
+
+    /** The attacker's ships that have reached the wharf put their soldiers ashore. */
+    private void land() {
+        for (FieldBlock b : armies[0].blocks) {
+            if (b.afloat && b.alive > 0 && pastWalls(b.pos) <= LANDING) {
+                b.afloat = false;
+                if (armies[0].blocks.stream().noneMatch(o -> o != b && !o.afloat && o.alive > 0)) {
+                    events.add(new Event(0, "The first ships come in under the walls, and their soldiers land"));
+                }
+            }
+        }
+    }
+
+    /** How far a place is out past the defenders' walls (their deployed front line, facing the attacker); below zero inside. */
+    private double pastWalls(Point at) {
+        FieldArmy d = armies[1];
+        return (at.x() - d.origin.x()) * d.facingX + (at.z() - d.origin.z()) * d.facingZ;
+    }
+
+    /** The defenders keep within their walls: none charges out, and every place they are sent to is kept inside. */
+    private void holdWalls() {
+        FieldArmy d = armies[1];
+        for (FieldBlock b : d.blocks) {
+            if (b.afloat) {
+                continue; // the harbour fleet, out on the water (harbourFleet)
+            }
+            b.charged = false;
+            b.approaching = false;
+            b.strikeAt = null;
+            b.prey = null;
+            double past = pastWalls(b.line);
+            if (past > 0) {
+                b.line = b.line.plus(-d.facingX * past, -d.facingZ * past);
+            }
+        }
+    }
 
     /**
      * Deploys two armies around {@code centre}, facing each other along ({@code axisX}, {@code axisZ}) (a unit vector
@@ -427,8 +581,17 @@ public final class FieldBattle {
         for (int side = 0; side < 2; side++) {
             command(armies[side], armies[1 - side]);
         }
+        if (type.walled()) {
+            holdWalls();
+        }
+        if (type == BattleType.AMPHIBIOUS) {
+            harbourFleet();
+        }
         for (FieldArmy army : armies) {
             move(army);
+        }
+        if (type == BattleType.AMPHIBIOUS) {
+            land();
         }
         index();
         fight();
@@ -2082,7 +2245,7 @@ public final class FieldBattle {
             double dx = target.x() - block.pos.x();
             double dz = target.z() - block.pos.z();
             double distance = Math.hypot(dx, dz);
-            double step = rates.speed(block.arm);
+            double step = block.afloat ? SHIP_SPEED : rates.speed(block.arm);
             if (pursuing && block.duty == Duty.FLEEING) {
                 step *= FieldRules.FLEE_SPEED; // running for their lives, gear thrown down
             }
@@ -2120,7 +2283,7 @@ public final class FieldBattle {
                     }
                     block.contactFoe = foe;
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
-                    if (block.live && foe.live) {
+                    if (block.live && foe.live && !block.afloat && !foe.afloat) {
                         // Real soldiers on both sides: Recruits fights it out between them. Those of the block still
                         // only numbers fight on as numbers.
                         int figures = block.alive - block.real;
@@ -2131,7 +2294,7 @@ public final class FieldBattle {
                     }
                     double damage = fighters * rates.meleeDps(block.arm)
                             * rates.meleeFactor(sideOf(foe, block), foe.arm);
-                    if (block.arm == Arm.CAVALRY && block.charged) {
+                    if (block.arm == Arm.CAVALRY && block.charged && !block.afloat) { // no charging horses from a deck
                         damage *= 1 + rates.chargeBonus() * block.momentum;
                     }
                     if (foe.braced && block.arm == Arm.CAVALRY && sideOf(foe, block) == FieldRules.Side.FRONT) {
@@ -2154,6 +2317,9 @@ public final class FieldBattle {
         for (int i = 0; i < targets.size(); i++) {
             FieldBlock target = targets.get(i);
             double damage = damages.get(i) * (resolute(target) ? FieldRules.RESOLVE_TAKES : 1);
+            if (type.walled() && target.side == 1 && pastWalls(target.pos) <= WALL_BAND) {
+                damage *= WALL_TAKES;
+            }
             if (damage > 0) {
                 lastHurt[target.side] = seconds;
             }
@@ -2270,7 +2436,7 @@ public final class FieldBattle {
             outcome = new Outcome(winner, "side " + winner + " wins; side " + (1 - winner) + " routs", seconds);
             flee(armies[1 - winner]);
         } else if (seconds >= BattlePlan.TIME_LIMIT_SECONDS) {
-            outcome = new Outcome(-1, "draw (time limit)", seconds);
+            outcome = type.walled() ? new Outcome(1, "the walls held (time limit)", seconds) : new Outcome(-1, "draw (time limit)", seconds);
         }
     }
 

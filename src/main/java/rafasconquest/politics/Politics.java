@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
+import rafasconquest.battle.BattleType;
 import rafasconquest.people.Person;
 import rafasconquest.people.Personality;
 import rafasconquest.people.Stat;
@@ -41,8 +42,6 @@ public final class Politics {
     static final double REST = 0.25;
     /** An army smaller than this can't be raised: the nation has no one left to send. */
     static final int MIN_ARMY = 50;
-    /** A defender fights on their own ground: their army counts this much more. */
-    static final double DEFENDER_EDGE = 1.15;
     /** Of each day's dead, this share of a nation's levy returns to its manpower each day (the young grown, the wounded healed). */
     static final double RECOVERY = 0.02;
     /** A war this old ends: each side keeps what it holds. */
@@ -434,10 +433,36 @@ public final class Politics {
             return false;
         }
         w.target = best;
+        w.seaWon = -1;
+        Lands.Fort fort = lands.fort(best);
+        if (fort != null && fort.port() && lands.hasPort(w.attacker)) {
+            // Port against port: the fleets meet at sea first, off its harbour.
+            w.type = BattleType.OCEAN;
+            w.siteX = fort.sea()[0];
+            w.siteZ = fort.sea()[1];
+            return true;
+        }
+        w.type = BattleType.LAND; // a siege instead, if its holder keeps behind its walls when the armies meet (fight)
         double[] land = onLand(bestSite, lands);
         w.siteX = land[0];
         w.siteZ = land[1];
         return true;
+    }
+
+    /**
+     * Whether a county's holder keeps behind its walls rather than ride out to meet the attacker: they ride out only when
+     * their army is a match for the attacker's in the field, the bold sooner, the careful later.
+     */
+    static boolean holdsOut(int defenders, int attackers, Person holder) {
+        double caution = 0;
+        for (Personality trait : holder.traits()) {
+            caution += switch (trait) {
+                case BRAVE, WRATHFUL, ARROGANT, IMPATIENT -> -0.25;
+                case CRAVEN, PATIENT, CALM, PARANOID -> 0.25;
+                default -> 0;
+            };
+        }
+        return defenders * BattleType.LAND.defenderEdge() < attackers * (1 + caution);
     }
 
     /** How far about a battle site the ground must be dry, how far to look for such a site, and in what steps. */
@@ -577,12 +602,17 @@ public final class Politics {
     void fight(War w, double now, Lands lands, Random random, Front front) {
         int attackers = w.attackerArmy.soldiers;
         int defenders = w.defenderArmy.soldiers;
+        if ((w.type == BattleType.LAND || w.type == BattleType.SIEGE) && lands.fort(w.target) != null) {
+            w.type = holdsOut(defenders, attackers, lands.person(lands.ruler(w.defender))) ? BattleType.SIEGE : BattleType.LAND;
+        }
         if (front.fightForReal(w, attackers, defenders)) {
             awaiting.add(w.id);
             return;
         }
+        Lands.Fort fort = lands.fort(w.target);
+        int crews = w.type == BattleType.AMPHIBIOUS && fort != null ? fort.harbourShips() * Lands.Fort.HARBOUR_CREW : 0;
         double a = Math.pow(attackers, 1.2);
-        double d = Math.pow(defenders * DEFENDER_EDGE, 1.2);
+        double d = Math.pow((defenders + crews) * w.type.defenderEdge(), 1.2);
         boolean attackerWon = random.nextDouble() < a / (a + d);
         double winnerLoss = 0.10 + random.nextDouble() * 0.15;
         double loserLoss = 0.35 + random.nextDouble() * 0.30;
@@ -616,9 +646,27 @@ public final class Politics {
         bury(w.attacker, w.attackerArmy, attackersLeft);
         bury(w.defender, w.defenderArmy, defendersLeft);
         String county = lands.titleName(new Goal(false, w.target));
+        Lands.Fort fort = lands.fort(w.target);
+        String where = fort == null ? "in battle" : switch (w.type) {
+            case OCEAN -> "at sea off " + fort.name();
+            case LAND -> "in battle, riding out from " + fort.name();
+            case SIEGE -> "at the siege of " + fort.name();
+            case AMPHIBIOUS -> "storming " + fort.name() + " from the sea";
+        };
+        if (attackerWon && w.type == BattleType.OCEAN && fort != null) {
+            // The sea is theirs: the attacker's army lands under the port's walls next.
+            log(day, lands.nationName(w.attacker) + " beat the fleet of " + lands.nationName(w.defender) + " " + where
+                    + ", and sails on to land there.");
+            w.seaWon = w.target;
+            w.type = BattleType.AMPHIBIOUS;
+            w.siteX = fort.x();
+            w.siteZ = fort.z();
+            w.attackerArmy.readyAt = now + REST;
+            return;
+        }
         if (attackerWon) {
             take(w, w.target, lands);
-            log(day, lands.nationName(w.attacker) + " beat " + lands.nationName(w.defender) + " in battle, and took the " + county + ".");
+            log(day, lands.nationName(w.attacker) + " beat " + lands.nationName(w.defender) + " " + where + ", and took the " + county + ".");
             if (!aim(w, lands)) {
                 peace(w, day, lands, lands.nationName(w.attacker) + " won the war: the whole " + lands.titleName(w.goal) + " is theirs.");
                 return;
@@ -641,7 +689,7 @@ public final class Politics {
             front.raised(w, false);
             w.attackerArmy.readyAt = now + REST;
         } else {
-            log(day, lands.nationName(w.defender) + " beat " + lands.nationName(w.attacker) + " in battle for the " + county + ".");
+            log(day, lands.nationName(w.defender) + " beat " + lands.nationName(w.attacker) + " " + where + " for the " + county + ".");
             if (sues(w, true, lands, random)) {
                 peace(w, day, lands, lands.nationName(w.attacker) + " sued for peace" + (w.taken.isEmpty() ? ", and gained nothing."
                         : ", keeping what it had taken."));

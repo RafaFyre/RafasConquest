@@ -191,6 +191,33 @@ public final class CityLayout {
         return k * ROAD_PERIOD + ROAD_WIDTH;
     }
 
+    /** Width of the ring road running just inside the wall, all the way round. */
+    public static final int RING_ROAD_WIDTH = ROAD_WIDTH;
+    /**
+     * How much wider than the other roads the gate avenue is (5 to their 3). It widens toward the origin, into the block
+     * before it, so the town centre's block and the recruitment post's beside it stay whole.
+     */
+    public static final int AVENUE_EXTRA = 2;
+
+    /**
+     * Local [min, max] along one axis of what block k can build on, in a city {@code blocks} blocks a side: the block
+     * less the ring road on the city's edge blocks and the avenue's extra width on the block before it.
+     */
+    public static int[] blockSpan(int blocks, int k) {
+        int min = blockStart(k);
+        int max = min + ROAD_PERIOD - ROAD_WIDTH - 1;
+        if (k == 0) {
+            min += RING_ROAD_WIDTH;
+        }
+        if (k == blocks - 1) {
+            max -= RING_ROAD_WIDTH;
+        }
+        if (k == blocks / 2 - 1) {
+            max -= AVENUE_EXTRA;
+        }
+        return new int[]{min, max};
+    }
+
     /** Local extent [min, max] of a cell along one axis, including the road on its far side. */
     public static int cellMin(int cell) {
         return roadStart(cell * BLOCKS_PER_CELL);
@@ -436,6 +463,44 @@ public final class CityLayout {
             for (District d : districts(city)) {
                 if (d.x() >= minX && d.x() <= minX + 15 && d.z() >= minZ && d.z() <= minZ + 15) {
                     return Optional.of(d);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * A stretch of a city's outer slope ({@link CityTerrain#slopeTiles}), its own structure start at its middle so the
+     * slope can run further than an edge cell reaches. {@code minX}..{@code maxZ} are city-local.
+     */
+    public record SlopeTile(Site city, int minX, int minZ, int maxX, int maxZ) {
+        public int x() {
+            return city.originX() + Math.floorDiv(minX + maxX, 2);
+        }
+
+        public int z() {
+            return city.originZ() + Math.floorDiv(minZ + maxZ, 2);
+        }
+    }
+
+    public static List<SlopeTile> slopeTiles(Site city) {
+        List<SlopeTile> tiles = new ArrayList<>();
+        for (int[] t : CityTerrain.slopeTiles(city.cells(), wallOutsets.applyAsInt(city))) {
+            tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3]));
+        }
+        return tiles;
+    }
+
+    /** The slope tile whose start block lies in this chunk, if any. */
+    public static Optional<SlopeTile> slopeTileInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
+        int minX = chunkX << 4;
+        int minZ = chunkZ << 4;
+        // shortcut: assumes no style's wall stands more than ~130 blocks out past the square.
+        int r = MAX_HALF_EXTENT + 128 + CityTerrain.SLOPE_REACH;
+        for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
+            for (SlopeTile t : slopeTiles(city)) {
+                if (t.x() >= minX && t.x() <= minX + 15 && t.z() >= minZ && t.z() <= minZ + 15) {
+                    return Optional.of(t);
                 }
             }
         }

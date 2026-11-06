@@ -58,6 +58,7 @@ import net.minecraft.world.scores.PlayerTeam;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.BattleSite;
+import rafasconquest.battle.BattleType;
 import rafasconquest.map.BaseMap;
 import rafasconquest.people.Person;
 import rafasconquest.people.Personality;
@@ -539,13 +540,17 @@ public final class RecruitsBattle {
      */
     public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
                              Point centre, double axisX, double axisZ, Consumer<String> ready, Consumer<String> failed) {
-        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, null, null, ready, failed);
+        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, null, null, BattleType.LAND, 0, ready, failed);
     }
 
-    /** As above, with each side's general chosen by name (null: the best at war, by Martial). */
+    /**
+     * As above, with each side's general chosen by name (null: the best at war, by Martial), and of a kind: in a walled
+     * battle the second side defends, its front line on its walls, and the battle stays where it was called. An
+     * amphibious assault's port sends out {@code harbourShips} ships of its own against the attacker's.
+     */
     public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
                              Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
-                             Consumer<String> ready, Consumer<String> failed) {
+                             BattleType type, int harbourShips, Consumer<String> ready, Consumer<String> failed) {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
         }
@@ -572,10 +577,14 @@ public final class RecruitsBattle {
         FieldBattle laidOut = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
         // Moved over the land, by the world map, so no part of an army is cut off by a river or the sea.
         BaseMap map = ConquestRuntime.map();
-        Point shift = map == null ? new Point(0, 0) : BattleSite.shift(siteParts(laidOut), mapWater(map));
+        Point shift = map == null || type != BattleType.LAND ? new Point(0, 0) : BattleSite.shift(siteParts(laidOut), mapWater(map));
         Point site = centre.plus(shift.x(), shift.z());
         FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
                 : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
+        field.setType(type);
+        if (type == BattleType.AMPHIBIOUS && harbourShips > 0) {
+            field.addHarbourFleet(harbourShips);
+        }
         if (field != laidOut) {
             RafasConquest.LOGGER.info("[battle] moved {} blocks ({}, {}) so no army is cut off by water",
                     Math.round(Math.hypot(shift.x(), shift.z())), Math.round(shift.x()), Math.round(shift.z()));
@@ -626,7 +635,7 @@ public final class RecruitsBattle {
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
         diplomacy.setRelation(teamB.getName(), teamA.getName(), DiplomacyStatus.ENEMY, level, false);
         current = battle;
-        battle.name = battleName(level, centre);
+        battle.name = battleName(level, centre).replace("The Battle", "The " + field.type().title());
         String line = String.format(Locale.ROOT, "%s: %s, %d soldiers, against %s, %d soldiers, at %d, %d", battle.name,
                 battle.describe(0), field.army(0).started(), battle.describe(1), field.army(1).started(),
                 Math.round(centre.x()), Math.round(centre.z()));
@@ -943,6 +952,9 @@ public final class RecruitsBattle {
         AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
         if (soldier == null) {
             return;
+        }
+        if (block.afloat()) {
+            soldier.teleportTo(soldier.getX(), level.getSeaLevel() + DECK_DROP, soldier.getZ()); // onto its ship, not the sea floor
         }
         if (block.champion()) {
             makeChampion(soldier);
@@ -1263,6 +1275,19 @@ public final class RecruitsBattle {
         if (living.isEmpty()) {
             return;
         }
+        if (block.afloat()) {
+            // Aboard: they ride their ship where it sails (sail), and fight as the numbers say, from the deck.
+            for (AbstractRecruitEntity s : living) {
+                s.setTarget(null);
+                if (s.getState() != 3) {
+                    s.setAggroState(3);
+                }
+            }
+            l.appliedDuty = null; // orders again once ashore
+            l.appliedLine = null;
+            l.appliedCharge = false;
+            return;
+        }
         if (!mayFight(block.side())) {
             // Pulled back, resting, or the fighting over: nobody fights, whatever their duty.
             for (AbstractRecruitEntity s : living) {
@@ -1385,6 +1410,9 @@ public final class RecruitsBattle {
      */
     private void frontRowFights(Live l) {
         FieldBlock block = l.block;
+        if (block.afloat()) {
+            return;
+        }
         List<AbstractRecruitEntity> living = l.living();
         living.removeIf(s -> commanded.contains(s.getId()));
         // The real enemies at hand: its foe's, and every real enemy block near it.
@@ -1665,6 +1693,7 @@ public final class RecruitsBattle {
         if (++battle.ticks % 20 == 0) {
             battle.second();
         }
+        battle.sail();
         battle.council.tick(battle.level.getServer(), battle.level.getGameTime());
         battle.turnToListeners();
         if (battle.ticks % 2 == 0) {
@@ -1685,6 +1714,74 @@ public final class RecruitsBattle {
             long nanos = System.nanoTime() - battle.tickStart;
             battle.whole.add(nanos);
             battle.window.add(nanos);
+        }
+    }
+
+    /** A soldier sent aboard starts this far above the sea, to drop onto the deck. */
+    private static final int DECK_DROP = 3;
+    /** A ship that has put its soldiers ashore stays moored where it landed this long, in battle seconds, then goes. */
+    private static final int MOORED_SECONDS = 30;
+
+    /** Where and when each formation came ashore, by its id. */
+    private record Landing(Point at, int second) {
+    }
+
+    private final Map<Integer, Landing> landings = new HashMap<>();
+    /** The formations that have been afloat this battle, by id: ashore again, they have landed. */
+    private final Set<Integer> sailed = new HashSet<>();
+
+    /**
+     * Each tick of a battle at sea, or of an amphibious assault: a ship under each formation afloat near a player (and
+     * those just landed, moored a while), sailing where the numbers send it: a real formation's ship carries it, so it
+     * is the ship that moves it; one still only numbers is followed by its ship. Aboard, soldiers keep still on deck.
+     */
+    private void sail() {
+        if (field.type() != BattleType.OCEAN && field.type() != BattleType.AMPHIBIOUS) {
+            return;
+        }
+        List<Point> watchers = new ArrayList<>(watchPoints);
+        for (ServerPlayer player : level.players()) {
+            watchers.add(new Point(player.getX(), player.getZ()));
+        }
+        List<SableLink.Helm> helms = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock block : field.army(side).blocks()) {
+                if (block.alive() == 0) {
+                    continue;
+                }
+                if (block.afloat()) {
+                    sailed.add(block.id());
+                } else if (sailed.contains(block.id()) && !landings.containsKey(block.id())) {
+                    landings.put(block.id(), new Landing(block.pos(), field.seconds()));
+                }
+                Landing landed = landings.get(block.id());
+                boolean moored = !block.afloat() && landed != null && field.seconds() - landed.second() < MOORED_SECONDS;
+                if (!block.afloat() && !moored) {
+                    continue;
+                }
+                double near = Double.MAX_VALUE;
+                for (Point w : watchers) {
+                    near = Math.min(near, w.distanceTo(block.pos()));
+                }
+                if (near > NUMBERS_BEYOND + BLOCK_REACH) {
+                    continue;
+                }
+                boolean real = live.containsKey(block);
+                Point at = moored ? landed.at() : block.pos();
+                Point to = moored ? landed.at() : real ? field.makingFor(block) : block.pos();
+                helms.add(new SableLink.Helm(block.id(), at.x(), at.z(), to.x(), to.z(), block.facingX(), block.facingZ(),
+                        real ? FieldBattle.SHIP_SPEED : 2 * FieldBattle.SHIP_SPEED, block.duty() == Duty.GENERAL));
+            }
+        }
+        SableLink.sailBattle(level, helms);
+        for (Live l : live.values()) {
+            if (l.block.afloat()) {
+                for (AbstractRecruitEntity s : l.living()) {
+                    if (!commanded.contains(s.getId())) {
+                        s.getNavigation().stop();
+                    }
+                }
+            }
         }
     }
 
@@ -3899,6 +3996,9 @@ public final class RecruitsBattle {
 
     private void buildCamps() {
         for (int side = 0; side < 2; side++) {
+            if (field.afloat(side)) {
+                continue; // a fleet has no camp: it sleeps aboard
+            }
             FieldArmy army = field.army(side);
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
@@ -5017,6 +5117,9 @@ public final class RecruitsBattle {
      * had, so a huge battle's first seconds don't stall the server.
      */
     private int groundY(FieldBlock block, double x, double z) {
+        if (block.afloat()) {
+            return level.getSeaLevel() + DECK_DROP; // onto its ship's deck, from just above it
+        }
         int bx = Mth.floor(x);
         int bz = Mth.floor(z);
         int y;

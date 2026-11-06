@@ -25,6 +25,7 @@ public final class ConquestWorldgen {
     public static final DeferredHolder<StructureType<?>, StructureType<FarmStructure>> FARM_STRUCTURE = STRUCTURE_TYPES.register("farm", () -> () -> FarmStructure.CODEC);
     public static final DeferredHolder<StructureType<?>, StructureType<CityStructure>> CITY_STRUCTURE = STRUCTURE_TYPES.register("city", () -> () -> CityStructure.CODEC);
     public static final DeferredHolder<StructureType<?>, StructureType<CityDistrictStructure>> CITY_DISTRICT_STRUCTURE = STRUCTURE_TYPES.register("city_district", () -> () -> CityDistrictStructure.CODEC);
+    public static final DeferredHolder<StructureType<?>, StructureType<CitySlopeStructure>> CITY_SLOPE_STRUCTURE = STRUCTURE_TYPES.register("city_slope", () -> () -> CitySlopeStructure.CODEC);
 
     public static final DeferredHolder<StructureType<?>, StructureType<CountryStructure>> COUNTRY_STRUCTURE = STRUCTURE_TYPES.register("countryside", () -> () -> CountryStructure.CODEC);
     public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CountryPlacement>> COUNTRY_PLACEMENT = PLACEMENT_TYPES.register("countryside_sites", () -> () -> CountryPlacement.CODEC);
@@ -33,6 +34,7 @@ public final class ConquestWorldgen {
     public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<DojoPlacement>> DOJO_PLACEMENT = PLACEMENT_TYPES.register("dojo_sites", () -> () -> DojoPlacement.CODEC);
     public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CityPlacement>> CITY_PLACEMENT = PLACEMENT_TYPES.register("city_sites", () -> () -> CityPlacement.CENTER_CODEC);
     public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CityPlacement>> CITY_DISTRICT_PLACEMENT = PLACEMENT_TYPES.register("city_district_sites", () -> () -> CityPlacement.DISTRICT_CODEC);
+    public static final DeferredHolder<StructurePlacementType<?>, StructurePlacementType<CityPlacement>> CITY_SLOPE_PLACEMENT = PLACEMENT_TYPES.register("city_slope_sites", () -> () -> CityPlacement.SLOPE_CODEC);
 
     public static final DeferredHolder<StructurePieceType, StructurePieceType> FARM_PIECE = PIECE_TYPES.register("farm", () -> (context, tag) -> new FarmPiece(tag));
 

@@ -45,6 +45,10 @@ public class MarkerBlock extends BaseEntityBlock {
         return CODEC;
     }
 
+    /** Each player's last saved settings, given to the next marker they place. */
+    // shortcut: kept in memory only, so a server restart forgets it; move to player data if that matters
+    public static final java.util.Map<java.util.UUID, MarkerSpec> LAST = new java.util.HashMap<>();
+
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final BooleanProperty ARMED = BooleanProperty.create("armed");
 
@@ -61,6 +65,14 @@ public class MarkerBlock extends BaseEntityBlock {
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable net.minecraft.world.entity.LivingEntity placer, net.minecraft.world.item.ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide && placer != null && LAST.containsKey(placer.getUUID()) && level.getBlockEntity(pos) instanceof MarkerBlockEntity marker) {
+            marker.setSpec(LAST.get(placer.getUUID()));
+        }
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.talhanation.recruits.entities.AbstractRecruitEntity;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.FogRenderer;
@@ -14,6 +15,7 @@ import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
@@ -258,24 +260,75 @@ final class CourtView {
             if (e == null) {
                 continue;
             }
-            // Facing the hall's front; the one looked at turns their head a little toward the mouse.
-            float head = f.person() == focus ? Math.max(-40, Math.min(40, (mouseX - now.anchorX * width) / width * 90)) : 0;
-            e.setYRot(0);
-            e.yRotO = 0;
-            e.setYBodyRot(0);
-            e.yBodyRotO = 0;
+            // Facing the hall's front, swaying, and now and then glancing at another of the court (the model's pupils lead the
+            // head, so the eyes slide over first); the one looked at turns their head toward the mouse instead.
+            float t = Util.getMillis() / 1000F;
+            float beat = f.person() * 1.7F;
+            float body = 5 * Mth.sin(0.31F * t + beat);
+            float head;
+            float look;
+            if (f.person() == focus) {
+                head = Math.max(-40, Math.min(40, (mouseX - now.anchorX * width) / width * 90));
+                look = 0;
+            } else {
+                float[] gaze = gaze(f, t, beat, body);
+                head = gaze[0];
+                look = gaze[1];
+            }
+            e.setYRot(body);
+            e.yRotO = body;
+            e.setYBodyRot(body);
+            e.yBodyRotO = body;
             e.setYHeadRot(head);
             e.yHeadRotO = head;
-            e.setXRot(0);
-            e.xRotO = 0;
+            e.setXRot(look);
+            e.xRotO = look;
             CourtSet.Seat s = f.seat();
-            RenderSystem.runAsFancy(() -> entities.render(e, s.x(), s.y(), s.z(), 0, 1, pose, buffers, LightTexture.FULL_BRIGHT));
+            float tick = Portraits.animate(e);
+            pose.pushPose();
+            pose.translate(s.x(), s.y(), s.z());
+            pose.mulPose(Axis.ZP.rotationDegrees(1.5F * Mth.sin(0.5F * t + beat))); // a slow lean from the feet
+            RenderSystem.runAsFancy(() -> entities.render(e, 0, 0, 0, 0, tick, pose, buffers, LightTexture.FULL_BRIGHT));
+            pose.popPose();
         }
         buffers.endBatch();
         entities.setRenderShadow(true);
         pose.popPose();
         Lighting.setupFor3DItems();
         RenderSystem.clear(GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+    }
+
+    private static final float GLANCE = 3.5F;
+
+    /** Where a figure looks at {@code t} seconds, as head yaw and pitch: it picks a new mark every few seconds and turns to it smoothly. */
+    private float[] gaze(Figure f, float t, float beat, float body) {
+        float clock = t + beat * 2;
+        long slot = (long) Math.floor(clock / GLANCE);
+        float turn = Math.min(1, (clock - slot * GLANCE) / 0.6F);
+        turn = turn * turn * (3 - 2 * turn);
+        float[] from = mark(f, slot - 1, t, beat, body);
+        float[] to = mark(f, slot, t, beat, body);
+        return new float[]{Mth.lerp(turn, from[0], to[0]), Mth.lerp(turn, from[1], to[1])};
+    }
+
+    /** A figure's mark for one glance: idly about the hall, or at the head of another of the court. */
+    private float[] mark(Figure f, long slot, float t, float beat, float body) {
+        java.util.Random pick = new java.util.Random(f.person() * 1_000_003L + slot);
+        if (figures.size() < 2 || pick.nextInt(100) < 40) {
+            return new float[]{body + 28 * Mth.sin(0.23F * t + 2 * beat) + 12 * Mth.sin(0.67F * t + beat), 7 * Mth.sin(0.41F * t + 3 * beat)};
+        }
+        Figure other = figures.get(pick.nextInt(figures.size() - 1));
+        if (other == f) {
+            other = figures.get(figures.size() - 1);
+        }
+        CourtSet.Seat a = f.seat();
+        CourtSet.Seat b = other.seat();
+        double dx = b.x() - a.x();
+        double dy = b.y() - a.y();
+        double dz = b.z() - a.z();
+        float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz)); // Minecraft's yaw: 0 faces +z, 90 faces -x
+        float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+        return new float[]{body + Mth.clamp(Mth.wrapDegrees(yaw - body), -70, 70), Mth.clamp(pitch, -30, 30)};
     }
 
     /**

@@ -124,6 +124,21 @@ class SeatCitiesTest {
     }
 
     @Test
+    void aPondIsNoSeaForAHarbour() {
+        World w = world(3);
+        boolean[] ocean = new boolean[w.grid().provinces().length];
+        for (int i = 0; i < ocean.length; i++) {
+            ocean[i] = w.grid().provinces()[i] == ProvinceMap.WATER;
+        }
+        int width = CELLS * CELL;
+        int pond = 200 * width + 300;
+        ocean[pond] = true;
+        boolean[] seas = SeatCities.seas(w.grid(), ocean);
+        assertTrue(seas[0], "the west sea is a sea");
+        assertFalse(seas[pond], "a one-pixel pond is a sea");
+    }
+
+    @Test
     void aCityIsSizedByItsHighestTitle() {
         World w = world(9);
         for (SeatCities.City c : SeatCities.plan(9, w.grid(), w.titles())) {

@@ -371,6 +371,7 @@ public final class ConquestNetwork {
         if (player != null && player.isCreative() && player.blockPosition().closerThan(msg.pos(), 16)
                 && player.level().getBlockEntity(msg.pos()) instanceof rafasconquest.style.MarkerBlockEntity marker) {
             marker.setSpec(msg.spec());
+            rafasconquest.style.MarkerBlock.LAST.put(player.getUUID(), msg.spec());
         }
     }
 

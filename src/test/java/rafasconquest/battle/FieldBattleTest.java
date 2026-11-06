@@ -410,4 +410,93 @@ class FieldBattleTest {
         assertTrue(BattlePlan.archersMayAdvance(BattlePlan.ARCHER_BACK + BattlePlan.MARCH_STEP));
         assertFalse(BattlePlan.archersMayAdvance(BattlePlan.ARCHER_BACK));
     }
+
+    @Test
+    void besiegedDefendersHoldTheirWallsAndOutlastAnEqualAttacker() {
+        int held = 0;
+        for (long seed = 1; seed <= 4; seed++) {
+            FieldBattle battle = battle(30, 30, seed);
+            battle.setType(BattleType.SIEGE);
+            FieldArmy d = battle.army(1);
+            while (!battle.over()) {
+                battle.second();
+                for (FieldBlock b : d.blocks()) {
+                    double past = (b.pos().x() - d.origin().x()) * d.facingX() + (b.pos().z() - d.origin().z()) * d.facingZ();
+                    assertTrue(past <= 1e-6, "a defender came out past its walls, by " + past);
+                }
+            }
+            held += battle.outcome().winner() == 1 ? 1 : 0;
+        }
+        assertTrue(held >= 3, "the walls held in only " + held + " of 4 sieges");
+    }
+
+    @Test
+    void atSeaEveryFormationSailsAtShipSpeedAndTheFleetsFightItOut() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        java.util.Map<FieldBlock, Point> last = new java.util.HashMap<>();
+        while (!battle.over()) {
+            for (int side = 0; side < 2; side++) {
+                for (FieldBlock b : battle.army(side).blocks()) {
+                    assertTrue(b.afloat(), "a formation ashore in open water");
+                    last.put(b, b.pos());
+                }
+            }
+            battle.second();
+            for (java.util.Map.Entry<FieldBlock, Point> e : last.entrySet()) {
+                assertTrue(e.getKey().pos().distanceTo(e.getValue()) <= FieldBattle.SHIP_SPEED + 1e-6, "faster than a ship sails");
+            }
+        }
+        assertTrue(battle.army(0).alive() < battle.army(0).started() && battle.army(1).alive() < battle.army(1).started(), "no one fell");
+    }
+
+    @Test
+    void anAmphibiousAssaultLandsUnderTheWallsWhileTheDefendersHoldThem() {
+        FieldBattle battle = battle(20, 20, 5);
+        battle.setType(BattleType.AMPHIBIOUS);
+        assertTrue(battle.army(0).blocks().stream().allMatch(FieldBlock::afloat), "the attacker comes by sea");
+        assertTrue(battle.army(1).blocks().stream().noneMatch(FieldBlock::afloat), "the defending army holds the walls");
+        FieldArmy d = battle.army(1);
+        boolean landed = false;
+        java.util.Set<FieldBlock> ashore = new java.util.HashSet<>();
+        for (int i = 0; i < 300 && !battle.over(); i++) {
+            battle.second();
+            for (FieldBlock b : battle.army(0).blocks()) {
+                if (!b.afloat() && ashore.add(b) && b.alive() > 0) {
+                    landed = true;
+                    double past = (b.pos().x() - d.origin().x()) * d.facingX() + (b.pos().z() - d.origin().z()) * d.facingZ();
+                    assertTrue(past <= FieldBattle.LANDING + 1e-6, "came ashore out at sea: " + past);
+                }
+            }
+        }
+        assertTrue(landed, "no ship came ashore");
+    }
+
+    @Test
+    void theDefendersHarbourShipsGoOutToMeetTheAttackersShipsBeforeTheyLand() {
+        FieldBattle battle = battle(30, 30, 6);
+        battle.setType(BattleType.AMPHIBIOUS);
+        FieldArmy d = battle.army(1);
+        int army = d.blocks().size();
+        int started = d.started();
+        battle.addHarbourFleet(3);
+        java.util.List<FieldBlock> fleet = d.blocks().stream().filter(FieldBlock::afloat).toList();
+        assertEquals(3, fleet.size(), "the port's own three ships");
+        assertEquals(army + 3, d.blocks().size(), "on top of the army, none taken from it");
+        assertEquals(started + 3 * BattlePlan.SOLDIERS_PER_FORMATION, d.started());
+        assertTrue(fleet.stream().noneMatch(b -> b.arm() == Arm.CAVALRY), "no horsemen at sea");
+        for (FieldBlock b : fleet) {
+            double past = (b.pos().x() - d.origin().x()) * d.facingX() + (b.pos().z() - d.origin().z()) * d.facingZ();
+            assertTrue(past > 0, "a harbour ship waiting behind the walls");
+        }
+        boolean metAtSea = false;
+        for (int i = 0; i < 200 && !battle.over() && !metAtSea; i++) {
+            battle.second();
+            for (FieldBlock b : fleet) {
+                FieldBlock foe = b.contactFoe();
+                metAtSea |= b.afloat() && foe != null && foe.afloat();
+            }
+        }
+        assertTrue(metAtSea, "the harbour ships never met the attacker's at sea");
+    }
 }

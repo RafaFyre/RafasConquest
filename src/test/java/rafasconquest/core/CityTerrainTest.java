@@ -50,6 +50,12 @@ class CityTerrainTest {
     }
 
     @Test
+    void portPlateSitsAtSeaLevelEvenOnAHill() {
+        assertEquals(SEA - 1, CityTerrain.plan(SITE, local((x, z) -> 120), SEA, 12, true).plateY());
+        assertEquals(120, CityTerrain.plan(SITE, local((x, z) -> 120), SEA, 12, false).plateY());
+    }
+
+    @Test
     void levelOrRisingLandIsCarvedNeverFilled() {
         for (int north : new int[]{80, 95, 140}) {
             CityTerrain.Plan plan = northAt(north);
@@ -158,7 +164,36 @@ class CityTerrainTest {
                 }
             }
         }
-        assertEquals(CityTerrain.BOX_MIN - CityTerrain.SLOPE_REACH, CityTerrain.ownedMin(0));
-        assertEquals(CityTerrain.BOX_MAX + CityTerrain.SLOPE_REACH, CityTerrain.ownedMax(CityLayout.CELLS_PER_SIDE - 1));
+        assertEquals(CityTerrain.BOX_MIN - CityTerrain.CELL_REACH, CityTerrain.ownedMin(0));
+        assertEquals(CityTerrain.BOX_MAX + CityTerrain.CELL_REACH, CityTerrain.ownedMax(CityLayout.CELLS_PER_SIDE - 1));
+    }
+
+    @Test
+    void slopeTilesCoverTheRingPastTheCellsOnceAndInReach() {
+        for (int cells : new int[]{2, 3, 9}) {
+            int outset = 12;
+            int in0 = CityTerrain.ownedMin(cells, 0, outset);
+            int in1 = CityTerrain.ownedMax(cells, cells - 1, outset);
+            int out0 = CityTerrain.boxMin(cells, outset) - CityTerrain.SLOPE_REACH;
+            int out1 = CityTerrain.boxMax(cells, outset) + CityTerrain.SLOPE_REACH;
+            int side = out1 - out0 + 1;
+            int[] hits = new int[side * side];
+            for (int[] t : CityTerrain.slopeTiles(cells, outset)) {
+                int startX = Math.floorDiv(t[0] + t[2], 2) >> 4;
+                int startZ = Math.floorDiv(t[1] + t[3], 2) >> 4;
+                for (int x = t[0]; x <= t[2]; x++) {
+                    for (int z = t[1]; z <= t[3]; z++) {
+                        hits[(x - out0) * side + (z - out0)]++;
+                        assertTrue(Math.abs((x >> 4) - startX) <= 8 && Math.abs((z >> 4) - startZ) <= 8, cells + ": out of reach");
+                    }
+                }
+            }
+            for (int x = out0; x <= out1; x++) {
+                for (int z = out0; z <= out1; z++) {
+                    boolean cell = x >= in0 && x <= in1 && z >= in0 && z <= in1;
+                    assertEquals(cell ? 0 : 1, hits[(x - out0) * side + (z - out0)], cells + ": column " + x + "," + z);
+                }
+            }
+        }
     }
 }
