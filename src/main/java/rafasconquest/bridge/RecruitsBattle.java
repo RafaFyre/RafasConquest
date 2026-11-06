@@ -1806,9 +1806,11 @@ public final class RecruitsBattle {
                 Set<Integer> lashed = new HashSet<>();
                 block.lashed().forEach(o -> lashed.add(o.id()));
                 byId.put(block.id(), block);
+                FactionBanner flag = FactionBanner.of(sides[side].faction.id());
                 helms.add(new SableLink.Helm(block.id(), side, at.x(), at.z(), to.x(), to.z(), block.facingX(), block.facingZ(),
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.duty() == Duty.GENERAL,
-                        block.ship() == FieldBlock.ShipKind.CAMP, lashed));
+                        block.ship() == FieldBlock.ShipKind.CAMP, lashed, flag.base(),
+                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()));
             }
         }
         for (SableLink.Ram ram : SableLink.sailBattle(level, helms)) {

@@ -5,6 +5,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
@@ -80,13 +82,18 @@ public final class ShipHulls {
 
     /**
      * A battle ship's hull: always the plain flat-topped one of its size (a style's ship may have no open deck for a
-     * formation to stand on), with hay, barrels and chests on deck if it is a {@code cargo} ship (the fleet's camp).
+     * formation to stand on), with hay, barrels and chests on deck if it is a {@code cargo} ship (the fleet's camp), and its
+     * sail in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s across the middle.
      */
-    public static List<Part> battle(SeaLanes.Size size, boolean cargo) {
-        if (!cargo) {
-            return PLAIN.get(size);
+    public static List<Part> battle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
+        int middle = (DECK + 4 + 2 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
+        List<Part> parts = new ArrayList<>();
+        for (Part p : PLAIN.get(size)) {
+            parts.add(p.state().is(Blocks.WHITE_WOOL) ? new Part(p.x(), p.y(), p.z(), wool(p.y() == middle ? stripe : sail)) : p);
         }
-        List<Part> parts = new ArrayList<>(PLAIN.get(size));
+        if (!cargo) {
+            return List.copyOf(parts);
+        }
         BlockState[] goods = {Blocks.HAY_BLOCK.defaultBlockState(), Blocks.BARREL.defaultBlockState(), Blocks.CHEST.defaultBlockState()};
         int half = size.length / 2;
         for (int z = -half / 2; z <= half / 2; z += 2) {
@@ -95,6 +102,10 @@ public final class ShipHulls {
             }
         }
         return List.copyOf(parts);
+    }
+
+    private static BlockState wool(DyeColor dye) {
+        return BuiltInRegistries.BLOCK.get(ResourceLocation.parse(dye.getName() + "_wool")).defaultBlockState();
     }
 
     /**

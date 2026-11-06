@@ -129,7 +129,8 @@ final class BattleShips {
         double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
         SeaLanes.Ship hull = new SeaLanes.Ship(key(h), h.x(), h.z(), h.faceX() / length, h.faceZ() / length, 0, 0, true,
                 size(h), "", "");
-        ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h), h.cargo()));
+        ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h), h.cargo(),
+                net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe())));
         if (sub == null) {
             return;
         }

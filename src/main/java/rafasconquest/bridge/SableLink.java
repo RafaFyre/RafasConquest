@@ -17,10 +17,11 @@ public final class SableLink {
      * A battle ship's orders this tick: formation {@code id}'s ship (of {@code side}) sails for (toX, toZ) at up to
      * {@code speed} blocks a second, bow along its course (or along (faceX, faceZ) once there). {@code flagship}: the
      * general's, a size up; {@code cargo}: one of the fleet's camp, stores on deck; {@code lashed}: the formations whose
-     * ships it is grappled to, which it keeps alongside.
+     * ships it is grappled to, which it keeps alongside; {@code sail}, {@code stripe}: its side's banner dyes (base, first
+     * mark), which its sail is woven in.
      */
     public record Helm(int id, int side, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed,
-                       boolean flagship, boolean cargo, java.util.Set<Integer> lashed) {
+                       boolean flagship, boolean cargo, java.util.Set<Integer> lashed, int sail, int stripe) {
     }
 
     /**
