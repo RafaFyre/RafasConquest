@@ -19,6 +19,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.level.ServerPlayer;
 import rafasconquest.dev.BattleMap;
 import rafasconquest.battle.BattlePlan;
+import rafasconquest.battle.BattleType;
 import rafasconquest.battle.FieldArmy;
 import rafasconquest.battle.FieldBattle;
 import rafasconquest.bridge.RecruitsBattle;
@@ -182,6 +183,18 @@ public final class PveCommands {
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                // A test battle of one kind: ocean, land, siege or amphibious (the second side defends).
+                                .then(Commands.literal("type")
+                                        .then(Commands.argument("type", StringArgumentType.word())
+                                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(java.util.Arrays.stream(BattleType.values())
+                                                        .map(t -> t.name().toLowerCase(java.util.Locale.ROOT)).toList(), b))
+                                                .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY, battleType(ctx)))
+                                                .then(Commands.argument("first", StringArgumentType.string())
+                                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                        .then(Commands.argument("second", StringArgumentType.string())
+                                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"), DEFAULT_ARMY,
+                                                                        StringArgumentType.getString(ctx, "second"), DEFAULT_ARMY, battleType(ctx)))))))
                                 .then(Commands.literal("start").executes(ctx -> {
                                     String line = RecruitsBattle.startFighting();
                                     ctx.getSource().sendSuccess(() -> Component.literal(line), true);
@@ -261,6 +274,21 @@ public final class PveCommands {
      */
     private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
                               int secondSoldiers) throws CommandSyntaxException {
+        return battle(ctx, first, firstSoldiers, second, secondSoldiers, BattleType.LAND);
+    }
+
+    private static BattleType battleType(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        String name = StringArgumentType.getString(ctx, "type");
+        try {
+            return BattleType.valueOf(name.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new SimpleCommandExceptionType(Component.literal("No battle type " + name + ": ocean, land, siege or amphibious")).create();
+        }
+    }
+
+    /** As above, of a kind: in a walled battle the second side defends, and an amphibious port sends out a district's ships. */
+    private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
+                              int secondSoldiers, BattleType type) throws CommandSyntaxException {
         ConquestServer server = server();
         Vec3 here = ctx.getSource().getPosition();
         List<Faction> nearest = server.data().factions().stream()
@@ -278,7 +306,8 @@ public final class PveCommands {
         BattlePlan.Point centre = new BattlePlan.Point(here.x + lookX * 45, here.z + lookZ * 45);
         CommandSourceStack source = ctx.getSource();
         try {
-            RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX, line -> {
+            RecruitsBattle.start(server.overworld(), a, firstSoldiers, b, secondSoldiers, centre, -lookZ, lookX, null, null, type,
+                    type == BattleType.AMPHIBIOUS ? rafasconquest.politics.Lands.Fort.HARBOUR_SHIPS_PER_DISTRICT : 0, line -> {
                 String url = BattleMap.open(server.overworld().getServer());
                 source.sendSuccess(() -> Component.literal(line + ". The armies are deploying: place them on the battle map, then start. ")
                         .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA).withUnderlined(true)

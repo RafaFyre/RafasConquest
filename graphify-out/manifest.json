@@ -474,9 +474,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1793928904.1896002,
-    "seen": 1793929199.9141896,
-    "ast_hash": "6f6f4baefb5ce89b461e940ea825e705",
+    "mtime": 1793940365.0929809,
+    "seen": 1793940407.507701,
+    "ast_hash": "0221eb8d83f195c7ef6711dc76f791b8",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
