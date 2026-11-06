@@ -551,13 +551,25 @@ public final class RecruitsBattle {
     public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
                              Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
                              BattleType type, int harbourShips, Consumer<String> ready, Consumer<String> failed) {
+        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, firstGeneral, secondGeneral, type, harbourShips,
+                null, ready, failed);
+    }
+
+    /**
+     * As above, the second side fighting under {@code secondTeam} rather than its faction's own team when one is given:
+     * a feud's skirmish between two lords of one nation.
+     */
+    public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                             Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
+                             BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, Consumer<String> ready,
+                             Consumer<String> failed) {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
         }
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
-        PlayerTeam teamB = factions.team(second);
+        PlayerTeam teamB = secondTeam != null ? secondTeam : factions.team(second);
         RecruitsDiplomacyManager diplomacy = FactionEvents.recruitsDiplomacyManager;
         if (teamA == null || teamB == null || diplomacy == null) {
             throw new IllegalStateException("Recruits isn't ready");

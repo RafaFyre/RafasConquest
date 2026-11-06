@@ -287,6 +287,45 @@ public class RecruitsFactions implements RecruitsBridge {
         return team;
     }
 
+    /**
+     * A temporary team for one lord's men in a feud's skirmish against a lord of their own nation (whose men keep the
+     * nation's team): registered with Recruits like a faction, under the nation's banner, until {@link #removeFeudTeam}.
+     */
+    @Nullable
+    public PlayerTeam feudTeam(Faction nation, String displayName) {
+        RecruitsFactionManager manager = FactionEvents.recruitsFactionManager;
+        if (manager == null) {
+            return null;
+        }
+        String id = "feud_" + Long.toHexString(System.nanoTime() & 0xFFFFFFL);
+        FactionBanner banner = FactionBanner.of(nation.id());
+        ChatFormatting color = CHAT_COLORS[banner.base()];
+        ServerScoreboard scoreboard = overworld.getServer().getScoreboard();
+        PlayerTeam team = scoreboard.addPlayerTeam(id);
+        team.setDisplayName(Component.literal(displayName));
+        team.setColor(color);
+        applyTeamRules(team);
+        manager.addTeam(id, displayName, java.util.UUID.randomUUID(), typeName(nation.type()),
+                (net.minecraft.nbt.CompoundTag) FactionBannerNbt.item(overworld.registryAccess(), banner).save(overworld.registryAccess()),
+                (byte) banner.base(), color);
+        publish();
+        return team;
+    }
+
+    /** Takes a feud's temporary team away again, once its skirmish is over. */
+    public void removeFeudTeam(String id) {
+        RecruitsFactionManager manager = FactionEvents.recruitsFactionManager;
+        if (manager != null && manager.getFactionByStringID(id) != null) {
+            manager.removeTeam(id);
+            publish();
+        }
+        ServerScoreboard scoreboard = overworld.getServer().getScoreboard();
+        PlayerTeam team = scoreboard.getPlayerTeam(id);
+        if (team != null) {
+            scoreboard.removePlayerTeam(team);
+        }
+    }
+
     /** The Recruits id this mod registered for a faction, or null. */
     private static String registeredId(RecruitsFactionManager manager, Faction faction) {
         for (RecruitsFaction rf : manager.getFactions()) {

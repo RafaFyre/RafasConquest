@@ -315,22 +315,26 @@ public final class ConquestNetwork {
     /**
      * Server → client: the nations' politics: each war (attacker, defender, duchy? 1 : 0, the title, the county fought for
      * next, counties taken, counties in all, the battle site x and z), the armies in the field (nation, soldiers, x, z,
-     * mustering? 1 : 0, which war, heading x, z), the alliances (pairs), the provinces conquered and by whom, and the latest news.
+     * mustering? 1 : 0, which war, heading x, z), the alliances (pairs), the provinces conquered and by whom, the latest
+     * news, and the feuds' fights called (duel? 1 : 0, x, z) with what each is (a line).
      */
     public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> armies, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
-                               java.util.List<String> news) {
+                               java.util.List<String> news, java.util.List<int[]> clashes, java.util.List<String> clashNames) {
         void write(FriendlyByteBuf buf) {
             buf.writeCollection(wars, FriendlyByteBuf::writeVarIntArray);
             buf.writeCollection(armies, FriendlyByteBuf::writeVarIntArray);
             buf.writeCollection(alliances, FriendlyByteBuf::writeVarIntArray);
             buf.writeMap(conquered, FriendlyByteBuf::writeVarInt, FriendlyByteBuf::writeVarInt);
             buf.writeCollection(news, FriendlyByteBuf::writeUtf);
+            buf.writeCollection(clashes, FriendlyByteBuf::writeVarIntArray);
+            buf.writeCollection(clashNames, FriendlyByteBuf::writeUtf);
         }
 
         static PoliticsView read(FriendlyByteBuf buf) {
             return new PoliticsView(buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readList(FriendlyByteBuf::readVarIntArray),
-                    buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf));
+                    buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf),
+                    buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readUtf));
         }
     }
 

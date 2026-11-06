@@ -211,6 +211,43 @@ public final class MapLands implements Lands {
         return false;
     }
 
+    @Override
+    public int holder(int province) {
+        return map.realm().holderOf(province);
+    }
+
+    @Override
+    public int countySeat(int county) {
+        return map.titles().countySeat()[county];
+    }
+
+    @Override
+    public List<int[]> rivals() {
+        List<int[]> pairs = new ArrayList<>();
+        for (rafasconquest.people.Realm.Bond bond : map.realm().bonds()) {
+            if (bond.kind() == rafasconquest.people.Realm.Bond.Kind.RIVAL) {
+                pairs.add(new int[]{bond.a(), bond.b()});
+            }
+        }
+        return pairs;
+    }
+
+    @Override
+    public int troops(int person) {
+        return rafasconquest.peerage.Retinues.troops(map.realm(), person);
+    }
+
+    @Override
+    public int champion(int person, Set<Integer> fallen) {
+        int best = fallen.contains(person) ? -1 : person;
+        for (int r : rafasconquest.peerage.Retinues.of(map, person)) {
+            if (!fallen.contains(r) && (best < 0 || person(r).stat(rafasconquest.people.Stat.PROWESS) > person(best).stat(rafasconquest.people.Stat.PROWESS))) {
+                best = r;
+            }
+        }
+        return best;
+    }
+
     /** Which provinces touch which, from the map's pixels. */
     private static List<Set<Integer>> adjacency(BaseMap map) {
         int n = map.centres().size();

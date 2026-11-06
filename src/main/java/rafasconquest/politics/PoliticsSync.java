@@ -51,6 +51,18 @@ public final class PoliticsSync {
         for (int i = Math.max(0, chronicle.size() - NEWS); i < chronicle.size(); i++) {
             news.add("Day " + chronicle.get(i).day() + ": " + chronicle.get(i).text());
         }
-        return new ConquestNetwork.PoliticsView(wars, armies, politics.alliances(), politics.conquered(), news);
+        List<int[]> clashes = new ArrayList<>();
+        List<String> clashNames = new ArrayList<>();
+        for (Feud f : politics.feuds()) {
+            Feud.Clash c = f.clash();
+            if (c != null && map != null) {
+                Politics.Front front = Wars.front(server, map);
+                MapLands lands = MapLands.of(map);
+                clashes.add(new int[]{c.kind() == Feud.Kind.DUEL ? 1 : 0, (int) c.x(), (int) c.z()});
+                clashNames.add((c.kind() == Feud.Kind.DUEL ? "Duel: " : "Skirmish: ") + Feuds.name(f.lord(true), lands, front) + " against "
+                        + Feuds.name(f.lord(false), lands, front));
+            }
+        }
+        return new ConquestNetwork.PoliticsView(wars, armies, politics.alliances(), politics.conquered(), news, clashes, clashNames);
     }
 }

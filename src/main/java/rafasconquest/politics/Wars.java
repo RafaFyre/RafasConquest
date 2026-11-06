@@ -81,6 +81,14 @@ public final class Wars {
             data.politics.realBattleCancelled(pendingWar); // stopped, or never begun
             pendingWar = -1;
         }
+        if (pendingFeud >= 0 && !RecruitsBattle.running()) {
+            data.politics.realClashCancelled(pendingFeud);
+            pendingFeud = -1;
+        }
+        if (feudTeam != null && !RecruitsBattle.running()) {
+            new rafasconquest.bridge.RecruitsFactions(server.overworld()).removeFeudTeam(feudTeam);
+            feudTeam = null;
+        }
         Random random = new Random(server.overworld().getSeed() ^ day * 0x9E3779B97F4A7C15L);
         data.politics.day(day, MapLands.of(map), random, front(server, map));
         data.setDirty();
@@ -95,11 +103,12 @@ public final class Wars {
         if (map != null && server.overworld().getGameTime() % MusterBars.EVERY == 0) {
             MusterBars.update(server, map, PoliticsData.get(server).politics);
         }
+        FeudDuel.tick(server);
         if (map == null || server.overworld().getGameTime() % MARCH_TICKS != 0) {
             return;
         }
         PoliticsData data = PoliticsData.get(server);
-        if (data.politics.wars().isEmpty()) {
+        if (data.politics.wars().isEmpty() && !data.politics.clashing()) {
             return;
         }
         Random random = new Random(server.overworld().getGameTime() ^ server.overworld().getSeed());
@@ -112,7 +121,7 @@ public final class Wars {
         PoliticsSync.toAll(server); // the armies have moved
     }
 
-    private static Politics.Front front(MinecraftServer server, BaseMap map) {
+    static Politics.Front front(MinecraftServer server, BaseMap map) {
         return new Politics.Front() {
             @Override
             public boolean fightForReal(War war, int attackers, int defenders) {
@@ -123,7 +132,139 @@ public final class Wars {
             public void raised(War war, boolean attacking) {
                 call(server, map, war, attacking);
             }
+
+            @Override
+            public Map<Integer, UUID> playerCounties() {
+                return rafasconquest.peerage.Peerage.get(server).holdings();
+            }
+
+            @Override
+            public String playerName(UUID player) {
+                ServerPlayer p = server.getPlayerList().getPlayer(player);
+                if (p != null) {
+                    return p.getName().getString();
+                }
+                var cache = server.getProfileCache();
+                return cache == null ? "a lord" : cache.get(player).map(com.mojang.authlib.GameProfile::getName).orElse("a lord");
+            }
+
+            @Override
+            public int playerTroops(UUID player) {
+                ServerPlayer p = server.getPlayerList().getPlayer(player);
+                return Math.max(Politics.MIN_ARMY, p == null ? 0 : rafasconquest.peerage.Retinues.playerTroops(p));
+            }
+
+            @Override
+            public boolean feudForReal(Feud feud, int troopsA, int troopsB) {
+                return feudFight(server, map, feud, troopsA, troopsB);
+            }
+
+            @Override
+            public void clashSet(Feud feud, String text) {
+                server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] " + text + " (see the map)")
+                        .withStyle(ChatFormatting.GOLD), false);
+            }
+
+            @Override
+            public void pay(Feud.Lord from, Feud.Lord to, int emeralds) {
+                Wars.pay(server, from, to, emeralds);
+            }
         };
+    }
+
+    /** Whether a player is near enough a place for a fight there to be fought for real. */
+    static boolean playerNear(MinecraftServer server, double x, double z) {
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p.level() == server.overworld() && Math.hypot(p.getX() - x, p.getZ() - z) <= REAL_RANGE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The feud whose skirmish is being fought for real, and the temporary team one lord's men fight under. */
+    private static long pendingFeud = -1;
+    @Nullable
+    private static String feudTeam;
+
+    /**
+     * Fights a feud's skirmish or duel for real if a player is near it. A skirmish is a battle of the lords' troops; two
+     * lords of one nation share its Recruits team, so the second lord's men fight under a temporary team of their own.
+     */
+    private static boolean feudFight(MinecraftServer server, BaseMap map, Feud feud, int troopsA, int troopsB) {
+        Feud.Clash clash = feud.clash();
+        if (clash == null || !playerNear(server, clash.x(), clash.z())) {
+            return false;
+        }
+        if (clash.kind() == Feud.Kind.DUEL) {
+            return FeudDuel.start(server, map, feud);
+        }
+        if (RecruitsBattle.running() || pendingWar >= 0 || pendingFeud >= 0) {
+            return false;
+        }
+        ConquestServer conquest = ConquestServer.get();
+        Faction a = conquest == null ? null : conquest.data().faction(map.nations().get(feud.nation(true)).id());
+        Faction b = conquest == null ? null : conquest.data().faction(map.nations().get(feud.nation(false)).id());
+        if (a == null || b == null) {
+            return false;
+        }
+        MapLands lands = MapLands.of(map);
+        Politics.Front front = front(server, map);
+        String nameA = Feuds.name(feud.lord(true), lands, front);
+        String nameB = Feuds.name(feud.lord(false), lands, front);
+        net.minecraft.world.scores.PlayerTeam second = null;
+        if (a.id().equals(b.id())) {
+            second = new rafasconquest.bridge.RecruitsFactions(server.overworld()).feudTeam(b, nameB + "'s men");
+            if (second == null) {
+                return false;
+            }
+            feudTeam = second.getName();
+        }
+        BaseMap.Nation home = map.nations().get(feud.nation(true));
+        double dx = clash.x() - home.x();
+        double dz = clash.z() - home.z();
+        double length = Math.hypot(dx, dz);
+        double[] axis = length < 1 ? new double[]{1, 0} : new double[]{dx / length, dz / length};
+        try {
+            RecruitsBattle.start(server.overworld(), a, Mth.clamp(troopsA, 20, BattlePlan.MAX_SOLDIERS), b,
+                    Mth.clamp(troopsB, 20, BattlePlan.MAX_SOLDIERS), new BattlePlan.Point(clash.x(), clash.z()), axis[0], axis[1],
+                    feud.lord(true).isPlayer() ? null : nameA, feud.lord(false).isPlayer() ? null : nameB, BattleType.LAND, 0, second,
+                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] The men of " + nameA + " and " + nameB
+                            + " meet in a skirmish. " + line).withStyle(ChatFormatting.RED), false),
+                    why -> {
+                        RafasConquest.LOGGER.warn("[feud] The skirmish of {} and {} could not be fought for real: {}", nameA, nameB, why);
+                        PoliticsData.get(server).politics.realClashCancelled(feud.id());
+                        pendingFeud = -1;
+                    });
+        } catch (IllegalStateException e) {
+            return false;
+        }
+        pendingFeud = feud.id();
+        pendingAttacker = a.id();
+        return true;
+    }
+
+    /** One lord pays another: an online player's emeralds go or come; characters' purses are only told of. */
+    static void pay(MinecraftServer server, Feud.Lord from, Feud.Lord to, int emeralds) {
+        // shortcut: an offline player neither pays nor is paid; upgrade when the mod has its own currency, kept per lord.
+        if (from.isPlayer()) {
+            ServerPlayer p = server.getPlayerList().getPlayer(from.player());
+            if (p != null) {
+                int paid = p.getInventory().clearOrCountMatchingItems(s -> s.is(net.minecraft.world.item.Items.EMERALD), emeralds,
+                        p.inventoryMenu.getCraftSlots());
+                p.sendSystemMessage(Component.literal("You paid " + paid + " emeralds in your feud.").withStyle(ChatFormatting.GOLD));
+            }
+        }
+        if (to.isPlayer()) {
+            ServerPlayer p = server.getPlayerList().getPlayer(to.player());
+            if (p != null) {
+                net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.EMERALD, emeralds);
+                if (!p.getInventory().add(stack)) {
+                    p.drop(stack, false);
+                }
+                p.sendSystemMessage(Component.literal("You were paid " + emeralds + " emeralds in your feud.").withStyle(ChatFormatting.GOLD));
+            }
+        }
     }
 
     /** The way from the attacker's side of a battle toward the defender's: from their capital toward the site. */
@@ -140,7 +281,7 @@ public final class Wars {
      * first) and no other battle is on.
      */
     private static boolean fight(MinecraftServer server, BaseMap map, War war, int attackers, int defenders) {
-        if (RecruitsBattle.running() || pendingWar >= 0) {
+        if (RecruitsBattle.running() || pendingWar >= 0 || pendingFeud >= 0) {
             return false;
         }
         ConquestServer conquest = ConquestServer.get();
@@ -259,11 +400,28 @@ public final class Wars {
 
     /** A battle fought for real is over: if it was a war's, its result goes to the war. */
     public static void battleOver(UUID first, UUID second, int winner, double firstLeft, double secondLeft) {
+        ConquestServer conquest = ConquestServer.get();
+        MinecraftServer server = conquest == null ? null : conquest.overworld().getServer();
+        if (pendingFeud >= 0 && server != null) {
+            // A feud's skirmish: its first side is always the feud's first lord.
+            long feud = pendingFeud;
+            pendingFeud = -1;
+            PoliticsData data = PoliticsData.get(server);
+            BaseMap map = ConquestRuntime.map();
+            if (winner < 0 || map == null) {
+                data.politics.realClashCancelled(feud);
+            } else {
+                data.politics.realSkirmish(feud, winner == 0, firstLeft, secondLeft, now(server), MapLands.of(map),
+                        new Random(server.overworld().getGameTime()), front(server, map));
+                claimCities(map, data.politics);
+            }
+            data.setDirty();
+            PoliticsSync.toAll(server);
+            return;
+        }
         if (pendingWar < 0) {
             return;
         }
-        ConquestServer conquest = ConquestServer.get();
-        MinecraftServer server = conquest == null ? null : conquest.overworld().getServer();
         if (server == null || !first.equals(pendingAttacker) && !second.equals(pendingAttacker)) {
             return;
         }
@@ -559,6 +717,16 @@ public final class Wars {
         for (int[] a : politics.alliances()) {
             out.append("\n  ").append(map.nations().get(a[0]).name()).append(" and ").append(map.nations().get(a[1]).name());
         }
+        out.append("\n").append(politics.feuds().size()).append(" feud(s):");
+        Politics.Front front = front(server, map);
+        for (Feud f : politics.feuds()) {
+            out.append("\n  ").append(Feuds.name(f.lord(true), lands, front)).append(" against ").append(Feuds.name(f.lord(false), lands, front))
+                    .append(String.format(", %d to %d", f.scoreA, f.scoreB));
+            Feud.Clash c = f.clash();
+            if (c != null) {
+                out.append(String.format("; a %s at %.0f, %.0f", c.kind() == Feud.Kind.DUEL ? "duel" : "skirmish", c.x(), c.z()));
+            }
+        }
         out.append("\n").append(politics.conquered().size()).append(" province(s) conquered");
         java.util.List<Politics.Event> news = politics.chronicle();
         for (int i = Math.max(0, news.size() - 5); i < news.size(); i++) {
@@ -634,11 +802,50 @@ public final class Wars {
                 + (gd >= 0 ? "; " + map.realm().people().get(gd).name() + " leads the defence" : "");
     }
 
-    /** One of a nation's characters by name, or -1. */
+    /**
+     * Starts a feud between two characters now (or finds theirs), and with {@code kind} ("skirmish" or "duel") calls that
+     * fight for half a minute from now, for {@code /pve politics feud}.
+     */
+    public static String forceFeud(MinecraftServer server, String first, String second, @Nullable String kind) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return "No world map yet";
+        }
+        int a = personNamed(map, -1, first);
+        int b = personNamed(map, -1, second);
+        if (a < 0 || b < 0) {
+            return "No character called " + (a < 0 ? first : second);
+        }
+        PoliticsData data = PoliticsData.get(server);
+        MapLands lands = MapLands.of(map);
+        Politics.Front front = front(server, map);
+        Feud.Lord la = Feud.Lord.of(a);
+        Feud.Lord lb = Feud.Lord.of(b);
+        Feud feud = data.politics.feuds().stream().filter(f -> f.involves(la) && f.involves(lb)).findFirst()
+                .orElseGet(() -> data.politics.feud(la, lb, (long) now(server), lands, front));
+        if (feud == null) {
+            return "They can't feud: one of them is feuding already, or holds no land";
+        }
+        String text = Feuds.name(feud.lord(true), lands, front) + " is feuding with " + Feuds.name(feud.lord(false), lands, front);
+        if (kind != null) {
+            Feud.Kind k = kind.equalsIgnoreCase("duel") ? Feud.Kind.DUEL : Feud.Kind.SKIRMISH;
+            if (!data.politics.callClash(feud, k, now(server), 30 / 1200.0, lands, front)) {
+                return text + "; a fight is already called";
+            }
+            Feud.Clash c = feud.clash();
+            text += String.format("; a %s in half a minute at %.0f, %.0f (fought for real if you are within %d blocks)",
+                    k == Feud.Kind.DUEL ? "duel" : "skirmish", c.x(), c.z(), REAL_RANGE);
+        }
+        data.setDirty();
+        PoliticsSync.toAll(server);
+        return text;
+    }
+
+    /** One of a nation's characters by name (any nation's if -1), or -1. */
     private static int personNamed(BaseMap map, int nation, String name) {
         java.util.List<rafasconquest.people.Person> people = map.realm().people();
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).nation() == nation && people.get(i).name().equalsIgnoreCase(name.trim())) {
+            if ((nation < 0 || people.get(i).nation() == nation) && people.get(i).name().equalsIgnoreCase(name.trim())) {
                 return i;
             }
         }

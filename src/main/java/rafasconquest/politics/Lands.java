@@ -101,4 +101,36 @@ public interface Lands {
     default boolean hasPort(int nation) {
         return false;
     }
+
+    // ---- lords, for feuds ----
+
+    /** The character keeping the hold in a province, or -1. */
+    default int holder(int province) {
+        return -1;
+    }
+
+    /** A county's seat province. */
+    default int countySeat(int county) {
+        for (int p = 0; p < provinces(); p++) {
+            if (county(p) == county) {
+                return p;
+            }
+        }
+        return -1;
+    }
+
+    /** Every pair of rival characters. */
+    default java.util.List<int[]> rivals() {
+        return java.util.List.of();
+    }
+
+    /** The troops a character brings to a fight: by their standing, with their vassals'. */
+    default int troops(int person) {
+        return Politics.MIN_ARMY;
+    }
+
+    /** A character's champion for a duel: the best fighter of them and their retinue, none of {@code fallen}; -1 if none. */
+    default int champion(int person, Set<Integer> fallen) {
+        return fallen.contains(person) ? -1 : person;
+    }
 }

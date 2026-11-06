@@ -117,6 +117,10 @@ public class PlaceMenuLayer implements MapLayer {
             places.add(new Place("Battle site: " + map.base.nations().get(war[0]).name() + " against "
                     + map.base.nations().get(war[1]).name(), war[7], war[8]));
         }
+        List<int[]> clashes = rafasconquest.client.ClientPolitics.clashes();
+        for (int i = 0; i < clashes.size(); i++) {
+            places.add(new Place(rafasconquest.client.ClientPolitics.clashNames().get(i), clashes.get(i)[1], clashes.get(i)[2]));
+        }
         for (FactionInfo f : map.factions) {
             for (PoiType type : new PoiType[]{PoiType.CAPITAL, PoiType.CITY, PoiType.FARM}) {
                 for (BlockPos pos : f.structures().getOrDefault(type, List.of())) {

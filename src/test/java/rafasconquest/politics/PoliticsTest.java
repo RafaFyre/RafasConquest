@@ -26,8 +26,30 @@ class PoliticsTest {
         final Person[] rulers;
         int opinion;
 
+        /** Who keeps a hold in each province (-1: no one), and the rival pairs. */
+        final int[] holders = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+        final List<int[]> rivalPairs = new java.util.ArrayList<>();
+
         Row(Person... rulers) {
             this.rulers = rulers;
+        }
+
+        /** Each county's seat. */
+        final int[] seats = {0, 2, 4, 6, 8, 10};
+
+        @Override
+        public int holder(int province) {
+            return holders[province];
+        }
+
+        @Override
+        public int countySeat(int county) {
+            return seats[county];
+        }
+
+        @Override
+        public List<int[]> rivals() {
+            return rivalPairs;
         }
 
         @Override
@@ -412,5 +434,110 @@ class PoliticsTest {
         assertEquals(0, back.conquered().get(4));
         assertEquals(55, back.dead.get(0));
         assertEquals(p.chronicle(), back.chronicle());
+    }
+
+    // ---- feuds ----
+
+    static Person lord(int nation, int liege, Personality... traits) {
+        int[] stats = new int[Stat.values().length];
+        stats[Stat.MARTIAL.ordinal()] = 12;
+        stats[Stat.PROWESS.ordinal()] = 15;
+        return new Person("L", "Y", false, 30, 0, 0, 0, stats, List.of(traits), new Person.Hold(Person.Kind.TOWN, 0, 0, 0), liege, nation, false);
+    }
+
+    /**
+     * Nation 1's two lords: person 3 holds county 2 (provinces 4, 5; seat 4), person 4 county 3 (6, 7; seat 7, so 6 on
+     * the border is no seat); rivals, thinking ill of each other.
+     */
+    static Row feudingRow() {
+        Row lands = new Row(ruler(10), ruler(10), ruler(10), lord(1, 1, Personality.WRATHFUL, Personality.AMBITIOUS), lord(1, 1));
+        lands.holders[4] = 3;
+        lands.seats[3] = 7;
+        lands.holders[7] = 4;
+        lands.rivalPairs.add(new int[]{3, 4});
+        lands.opinion = -60;
+        return lands;
+    }
+
+    @Test
+    void eachProvinceIsItsCountySeatHoldersElseItsRulers() {
+        Row lands = feudingRow();
+        Politics p = new Politics();
+        assertEquals(Feud.Lord.of(3), p.lord(5, lands, java.util.Map.of()));
+        assertEquals(Feud.Lord.of(4), p.lord(7, lands, java.util.Map.of()));
+        assertEquals(Feud.Lord.of(1), p.lord(8, lands, java.util.Map.of()), "no hold at its seat: the ruler's");
+        java.util.UUID player = java.util.UUID.randomUUID();
+        assertEquals(Feud.Lord.of(player), p.lord(5, lands, java.util.Map.of(4, player)), "a player's county");
+    }
+
+    @Test
+    void rivalLordsFallToFeudingAndEveryFeudEndsInATruce() {
+        Row lands = feudingRow();
+        Politics p = new Politics();
+        Random random = new Random(3);
+        boolean began = false;
+        boolean ended = false;
+        for (int day = 1; day <= 400 && !ended; day++) {
+            p.feuds.day(p, day, lands, random, FAR);
+            for (int step = 1; step <= 20; step++) {
+                p.feuds.advance(p, day + step / 20.0, lands, random, FAR);
+            }
+            began |= !p.feuds().isEmpty();
+            ended = began && p.feuds().isEmpty();
+            if (ended) {
+                long until = p.feuds.truces.get(Feuds.pair(Feud.Lord.of(3), Feud.Lord.of(4)));
+                assertEquals(day + Feuds.TRUCE_DAYS, until, "a three-day truce");
+            }
+        }
+        assertTrue(began, "the rivals began a feud");
+        assertTrue(ended, "and it ended");
+    }
+
+    @Test
+    void aBeatenLordYieldsTheWinnerMayTakeABorderProvinceNeverASeat() {
+        boolean tookLand = false;
+        for (int seed = 0; seed < 40 && !tookLand; seed++) {
+            Row lands = feudingRow();
+            Politics p = new Politics();
+            Feud f = p.feud(Feud.Lord.of(3), Feud.Lord.of(4), 1, lands, FAR);
+            assertNotNull(f);
+            f.scoreA = 3;
+            p.feuds.skirmished(p, f, true, 0.9, 0.5, 2, lands, new Random(seed * 0x9E3779B97F4A7C15L), FAR);
+            assertTrue(p.feuds().isEmpty(), "two points more: four ahead, the other yields");
+            assertTrue(p.dead.get(1) > 0, "the skirmish's dead count against their nation");
+            if (!p.feuds.lords.isEmpty()) {
+                tookLand = true;
+                assertEquals(java.util.Map.of(6, Feud.Lord.of(3)), p.feuds.lords, "the border province, not the seat behind it");
+                assertEquals(Feud.Lord.of(3), p.lord(6, lands, java.util.Map.of()));
+            }
+        }
+        assertTrue(tookLand, "an ambitious winner takes land often enough");
+    }
+
+    @Test
+    void aWarsConquestClearsTheLandFeudsGave() {
+        Row lands = feudingRow();
+        Politics p = new Politics();
+        p.feuds.lords.put(5, Feud.Lord.of(4));
+        War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        assertNotNull(w);
+        p.after(w, true, 0.9, 0.5, 2, lands, new Random(1), FAR);
+        assertEquals(0, lands.owner(5));
+        assertFalse(p.feuds.lords.containsKey(5));
+    }
+
+    @Test
+    void feudsAreKeptWithTheWorld() {
+        Row lands = feudingRow();
+        Politics p = new Politics();
+        Feud f = p.feud(Feud.Lord.of(3), Feud.Lord.of(4), 1, lands, FAR);
+        assertTrue(p.callClash(f, Feud.Kind.DUEL, 1, 0.5, lands, FAR));
+        p.feuds.lords.put(5, Feud.Lord.of(java.util.UUID.randomUUID()));
+        p.feuds.fallen.add(7);
+        Politics back = Politics.load(p.save());
+        assertEquals(1, back.feuds().size());
+        assertEquals(Feud.Kind.DUEL, back.feuds().get(0).clash().kind());
+        assertEquals(p.feuds.lords, back.feuds.lords);
+        assertEquals(p.feuds.fallen, back.feuds.fallen);
     }
 }

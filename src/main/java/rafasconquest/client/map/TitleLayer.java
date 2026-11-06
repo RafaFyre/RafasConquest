@@ -110,6 +110,27 @@ public class TitleLayer implements MapLayer {
                 hoveredProvince = -1;
             }
         }
+        // Each feud's fight called: an orange cross (smaller than a war's), naming the lords.
+        java.util.List<int[]> clashes = rafasconquest.client.ClientPolitics.clashes();
+        for (int i = 0; i < clashes.size(); i++) {
+            int x = (int) view.screenX(clashes.get(i)[1]);
+            int y = (int) view.screenY(clashes.get(i)[2]);
+            if (!view.near(x, y, 8)) {
+                continue;
+            }
+            for (int d = -3; d <= 3; d++) {
+                g.fill(x + d - 1, y + d - 1, x + d + 2, y + d + 2, OUTLINE);
+                g.fill(x + d - 1, y - d - 1, x + d + 2, y - d + 2, OUTLINE);
+            }
+            for (int d = -2; d <= 2; d++) {
+                g.fill(x + d, y + d, x + d + 1, y + d + 1, 0xFFE08020);
+                g.fill(x + d, y - d, x + d + 1, y - d + 1, 0xFFE08020);
+            }
+            if (Math.abs(mouseX - x) <= 5 && Math.abs(mouseY - y) <= 5) {
+                hovered = rafasconquest.client.ClientPolitics.clashNames().get(i) + " (at midday)";
+                hoveredProvince = -1;
+            }
+        }
         for (int[] army : rafasconquest.client.ClientPolitics.armies()) {
             int x = (int) view.screenX(army[2]);
             int y = (int) view.screenY(army[3]);

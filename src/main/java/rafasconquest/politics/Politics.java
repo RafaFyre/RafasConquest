@@ -59,6 +59,37 @@ public final class Politics {
 
         /** A side raises an army (at the start of a war, or another after a defeat): its people muster. */
         void raised(War war, boolean attacking);
+
+        // ---- feuds ----
+
+        /** The counties players hold: seat province → player. */
+        default Map<Integer, java.util.UUID> playerCounties() {
+            return Map.of();
+        }
+
+        default String playerName(java.util.UUID player) {
+            return "a lord";
+        }
+
+        default int playerTroops(java.util.UUID player) {
+            return MIN_ARMY;
+        }
+
+        /**
+         * Whether a feud's skirmish or duel is fought for real (someone is near); its result then comes later by
+         * {@link #realSkirmish} or {@link #realDuel}.
+         */
+        default boolean feudForReal(Feud feud, int troopsA, int troopsB) {
+            return false;
+        }
+
+        /** A feud's skirmish or duel has been called, for midday. */
+        default void clashSet(Feud feud, String text) {
+        }
+
+        /** One lord pays another (a player's emeralds change hands; characters' are only told of). */
+        default void pay(Feud.Lord from, Feud.Lord to, int emeralds) {
+        }
     }
 
     /** Something that happened, on a day. */
@@ -73,6 +104,8 @@ public final class Politics {
     /** Each nation's dead not yet made good: its manpower is its levy, less these, less its armies in the field. */
     final Map<Integer, Integer> dead = new HashMap<>();
     final List<Event> chronicle = new ArrayList<>();
+    /** The lords' feuds, and the land feuds gave them. */
+    Feuds feuds = new Feuds();
     /** Wars whose battle is being fought for real. */
     private final Set<Long> awaiting = new HashSet<>();
     private long nextWar = 1;
@@ -89,6 +122,65 @@ public final class Politics {
 
     public List<Event> chronicle() {
         return Collections.unmodifiableList(chronicle);
+    }
+
+    public List<Feud> feuds() {
+        return Collections.unmodifiableList(feuds.list);
+    }
+
+    /** Who holds a province: its county's lord, or whoever a feud gave it to; null if no one. */
+    @Nullable
+    public Feud.Lord lord(int province, Lands lands, Map<Integer, java.util.UUID> players) {
+        return feuds.lord(province, lands, players);
+    }
+
+    /** Starts a feud between two lords now (for {@code /pve politics feud}); null if either can't. */
+    @Nullable
+    public Feud feud(Feud.Lord a, Feud.Lord b, long day, Lands lands, Front front) {
+        return feuds.force(this, a, b, day, lands, front);
+    }
+
+    /** Calls a skirmish or duel in a feud now, to be fought {@code in} days from {@code now} (for the command). */
+    public boolean callClash(Feud f, Feud.Kind kind, double now, double in, Lands lands, Front front) {
+        if (f.clash != null) {
+            return false;
+        }
+        Map<Feud.Lord, Set<Integer>> land = feuds.holdings(lands, front.playerCounties());
+        List<Integer> targets = Feuds.border(land.getOrDefault(f.b, Set.of()), land.getOrDefault(f.a, Set.of()), lands);
+        int[] c = lands.centre(targets.isEmpty() ? land.getOrDefault(f.b, Set.of(0)).iterator().next() : targets.get(0));
+        double[] site = onLand(new double[]{c[0], c[1]}, lands);
+        int ca = f.a.isPlayer() ? -1 : lands.champion(f.a.person(), feuds.fallen);
+        int cb = f.b.isPlayer() ? -1 : lands.champion(f.b.person(), feuds.fallen);
+        boolean duel = kind == Feud.Kind.DUEL;
+        f.clash = new Feud.Clash(kind, now + in, site[0], site[1], true, ca, cb, duel && feuds.toTheDeath(ca, f.a, f.b, lands),
+                duel && feuds.toTheDeath(cb, f.b, f.a, lands));
+        return true;
+    }
+
+    /** A feud's skirmish fought for real is over. */
+    public void realSkirmish(long feudId, boolean aWon, double aLeft, double bLeft, double now, Lands lands, Random random, Front front) {
+        Feud f = feuds.find(feudId);
+        if (f != null) {
+            feuds.skirmished(this, f, aWon, aLeft, bLeft, (long) Math.floor(now), lands, random, front);
+        }
+    }
+
+    /** A feud's duel fought for real is over. */
+    public void realDuel(long feudId, boolean aWon, boolean loserDied, double now, Lands lands, Random random, Front front) {
+        Feud f = feuds.find(feudId);
+        if (f != null) {
+            feuds.dueled(this, f, aWon, loserDied, (long) Math.floor(now), lands, random, front);
+        }
+    }
+
+    /** A feud's real fight came to nothing: it is fought again soon, by strength. */
+    public void realClashCancelled(long feudId) {
+        feuds.cancelled(feudId);
+    }
+
+    /** Whether any feud has a fight called or being fought. */
+    public boolean clashing() {
+        return feuds.list.stream().anyMatch(f -> f.clash != null);
     }
 
     /** The alliances, as pairs of nations. */
@@ -151,6 +243,7 @@ public final class Politics {
                 decide(n, day, lands, random, front);
             }
         }
+        feuds.day(this, day, lands, random, front);
         while (chronicle.size() > CHRONICLE) {
             chronicle.remove(0);
         }
@@ -193,11 +286,22 @@ public final class Politics {
             weights.add(w);
             total += w;
         }
+        // A feud between two of their own lords, to order ended: the diplomatic and the just more readily.
+        for (Feud f : feuds.list) {
+            if (f.nationA == n && f.nationB == n && f.clash == null && f.a.person() != ruler && f.b.person() != ruler) {
+                double w = 2 + p.stat(Stat.DIPLOMACY) / 5.0 + (p.has(Personality.JUST) ? 3 : 0);
+                choices.add(f);
+                weights.add(w);
+                total += w;
+            }
+        }
         double roll = random.nextDouble() * total;
         for (int i = 0; i < choices.size(); i++) {
             roll -= weights.get(i);
             if (roll < 0) {
-                if (choices.get(i) instanceof Claim claim) {
+                if (choices.get(i) instanceof Feud f) {
+                    feuds.settle(this, f, ruler, day, lands, front);
+                } else if (choices.get(i) instanceof Claim claim) {
                     declare(n, claim.defender(), claim.goal(), day, lands, random, front);
                 } else {
                     propose(n, (Integer) choices.get(i), day, lands);
@@ -568,6 +672,7 @@ public final class Politics {
                 fight(w, now, lands, random, front);
             }
         }
+        feuds.advance(this, now, lands, random, front);
     }
 
     /** Moves an army toward the battle site; true once it is there. */
@@ -789,6 +894,7 @@ public final class Politics {
             if (lands.county(p) == county && lands.owner(p) == w.defender) {
                 lands.transfer(p, w.attacker);
                 conquered.put(p, w.attacker);
+                feuds.lords.remove(p); // the conqueror's now, by its own lords
             }
         }
         if (!w.taken.contains(county)) {
@@ -807,7 +913,7 @@ public final class Politics {
         }
     }
 
-    private void log(long day, String text) {
+    void log(long day, String text) {
         chronicle.add(new Event(day, text));
     }
 
@@ -844,6 +950,7 @@ public final class Politics {
         tag.put("chronicle", events);
         tag.putLong("nextWar", nextWar);
         tag.putDouble("moved", moved);
+        tag.put("feuds", feuds.save());
         return tag;
     }
 
@@ -873,6 +980,7 @@ public final class Politics {
         }
         p.nextWar = Math.max(1, tag.getLong("nextWar"));
         p.moved = tag.contains("moved") ? tag.getDouble("moved") : -1;
+        p.feuds = Feuds.load(tag.getCompound("feuds"));
         return p;
     }
 }

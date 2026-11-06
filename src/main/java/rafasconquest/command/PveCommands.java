@@ -124,6 +124,16 @@ public final class PveCommands {
                                                 .suggests(PveCommands::suggestNations)
                                                 .executes(ctx -> say(ctx, rafasconquest.politics.Wars.finishMarch(ctx.getSource().getServer(),
                                                         arg(ctx, "nation")))))))
+                        // Two characters fall to feuding now; optionally a skirmish or duel between them in half a minute.
+                        .then(Commands.literal("feud").requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("first", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                        .then(Commands.argument("second", com.mojang.brigadier.arguments.StringArgumentType.string())
+                                                .executes(ctx -> say(ctx, rafasconquest.politics.Wars.forceFeud(ctx.getSource().getServer(),
+                                                        arg(ctx, "first"), arg(ctx, "second"), null)))
+                                                .then(Commands.argument("fight", StringArgumentType.word())
+                                                        .suggests((ctx, b) -> SharedSuggestionProvider.suggest(List.of("skirmish", "duel"), b))
+                                                        .executes(ctx -> say(ctx, rafasconquest.politics.Wars.forceFeud(ctx.getSource().getServer(),
+                                                                arg(ctx, "first"), arg(ctx, "second"), arg(ctx, "fight"))))))))
                         .then(Commands.literal("war").requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("attacker", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)
                                         .then(Commands.argument("defender", com.mojang.brigadier.arguments.StringArgumentType.string()).suggests(PveCommands::suggestNations)

@@ -11,7 +11,8 @@ import java.util.Map;
  * into the client's world map as they come (and again when the map itself arrives), so it is drawn as the land now lies.
  */
 public final class ClientPolitics {
-    private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), List.of(), Map.of(), List.of());
+    private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), List.of(), Map.of(), List.of(),
+            List.of(), List.of());
 
     private ClientPolitics() {
     }
@@ -60,5 +61,14 @@ public final class ClientPolitics {
 
     public static List<String> news() {
         return view.news();
+    }
+
+    /** Each feud's fight called: duel? 1 : 0, x, z; and, by the same index, what it is. */
+    public static List<int[]> clashes() {
+        return view.clashes();
+    }
+
+    public static List<String> clashNames() {
+        return view.clashNames();
     }
 }
