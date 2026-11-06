@@ -172,6 +172,13 @@ public class CharacterScreen extends Screen {
         int x = (int) (width * 0.143);
         String faith = realm.faiths().get(p.faith()).name();
         boolean ownFaith = nation == null || realm.nationFaith()[p.nation()] == p.faith();
+        String hold = realm.holdName(p.hold().province());
+        rafasconquest.core.TitleMap.Tier seated = base.titles().seatOf(p.hold().province());
+        if (!hold.isEmpty() && seated != null && p.hold().kind() != Person.Kind.LORD && p.hold().kind() != Person.Kind.RETAINER) {
+            int fief = base.titles().fief(p.hold().province()).size();
+            x = info(g, x, infoY, hold, 0xFFB08850, "Hold", "Holds " + hold + ", seat of the " + base.titleName(seated, p.hold().province())
+                    + ": a fief of " + fief + (fief == 1 ? " province." : " provinces."));
+        }
         x = info(g, x, infoY, realm.cultures().get(p.culture()).name(), 0xFF8A7CE0, "Culture", "Of the " + realm.cultures().get(p.culture()).name()
                 + " culture, of the " + realm.cultures().get(p.culture()).homeland().title().toLowerCase(Locale.ROOT) + " lands.");
         x = info(g, x, infoY, faith, 0xFFF0B020, "Faith", ownFaith ? "Keeps the faith of " + faith + "."

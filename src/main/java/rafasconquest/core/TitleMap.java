@@ -83,6 +83,40 @@ public record TitleMap(int[] county, int[] duchy, int[] kingdom, int[] empire,
     }
 
     /**
+     * A hold's fief: every province under the highest title seated at {@code seat} (an empire's seat, all the empire's),
+     * or none if no title is seated there.
+     */
+    public List<Integer> fief(int seat) {
+        Tier tier = seatOf(seat);
+        List<Integer> provinces = new ArrayList<>();
+        if (tier == null) {
+            return provinces;
+        }
+        int title = titleOf(seat, tier);
+        for (int p = 0; p < county.length; p++) {
+            if (county[p] >= 0 && titleOf(p, tier) == title) {
+                provinces.add(p);
+            }
+        }
+        return provinces;
+    }
+
+    /** The title of this tier a province lies in. */
+    public int titleOf(int province, Tier tier) {
+        int t = county[province];
+        if (tier.ordinal() >= Tier.DUCHY.ordinal()) {
+            t = duchy[t];
+        }
+        if (tier.ordinal() >= Tier.KINGDOM.ordinal()) {
+            t = kingdom[t];
+        }
+        if (tier == Tier.EMPIRE) {
+            t = empire[t];
+        }
+        return t;
+    }
+
+    /**
      * Draws the titles over provinces on a {@code width} × {@code height} grid ({@code provinces[pixel]} is a province
      * index, or negative for none). {@code sea[pixel]} marks the sea, for telling shore provinces.
      */

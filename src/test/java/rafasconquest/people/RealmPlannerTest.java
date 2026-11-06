@@ -73,6 +73,32 @@ class RealmPlannerTest {
     }
 
     @Test
+    void everyTitleSeatIsANamedHoldWhoseFiefIsItsHighestTitle() {
+        World w = world(5);
+        TitleMap t = w.titles();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (int seat : t.countySeat()) {
+            String name = w.realm().holdName(seat);
+            assertFalse(name.isEmpty(), "a seat with no hold");
+            assertTrue(names.add(name), "two holds named " + name);
+        }
+        assertEquals(t.counties(), w.realm().holds().size());
+        // An empire's seat holds the whole empire; a county seat no more than its county.
+        int empireSeat = t.empireSeat()[0];
+        long inEmpire = java.util.stream.IntStream.range(0, t.county().length)
+                .filter(p -> t.county()[p] >= 0 && t.titleOf(p, TitleMap.Tier.EMPIRE) == 0).count();
+        assertEquals(inEmpire, t.fief(empireSeat).size());
+        for (int c = 0; c < t.counties(); c++) {
+            int seat = t.countySeat()[c];
+            if (t.seatOf(seat) == TitleMap.Tier.COUNTY) {
+                for (int p : t.fief(seat)) {
+                    assertEquals(c, t.county()[p]);
+                }
+            }
+        }
+    }
+
+    @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.
         List<List<Homeland>> styles = new ArrayList<>();

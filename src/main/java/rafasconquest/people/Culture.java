@@ -26,6 +26,11 @@ public record Culture(int id, String name, Homeland homeland, List<String> start
             "ford", "wood", "more", "hart", "holt", "ridge", "brook", "wick", "helm", "worth", "bridge", "thorne",
             "court", "lock", "ward", "stone", "vale", "mark", "dane", "crest", "sson", "ovic", "ez", "elli", "anu"};
     private static final String[] ADJECTIVE_ENDS = {"ish", "ian", "ic", "an", "ese", "i", "ite"};
+    private static final String[] HOLD_ENDS = {
+            "maine", "hold", "keep", "garde", "burg", "mont", "fort", "haven", "spire", "crag", "wall", "tor", "gate",
+            "watch", "rock", "castle"};
+    /** Each culture's holds end in this many of {@link #HOLD_ENDS}, which by its id. */
+    private static final int HOLD_ENDS_EACH = 4;
 
     /** A new culture of a homeland, its sounds chosen from the common stock by {@code random}. */
     static Culture make(Homeland homeland, Random random) {
@@ -47,6 +52,14 @@ public record Culture(int id, String name, Homeland homeland, List<String> start
         String middle = middles.get(random.nextInt(middles.size()));
         List<String> ends = female ? femaleEnds : maleEnds;
         return start + (middle.length() > 1 ? "" : middle) + ends.get(random.nextInt(ends.size()));
+    }
+
+    /** A hold's name (a castle's: "Barmaine", "Kelgarde") in this culture's sounds. */
+    public String holdName(Random random) {
+        String start = starts.get(random.nextInt(starts.size()));
+        String middle = middles.get(random.nextInt(middles.size()));
+        String end = HOLD_ENDS[(id * HOLD_ENDS_EACH + random.nextInt(HOLD_ENDS_EACH)) % HOLD_ENDS.length];
+        return start + (middle.length() > 1 ? "" : middle) + end;
     }
 
     /** A family name of this culture. */

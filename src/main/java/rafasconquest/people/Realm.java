@@ -13,8 +13,14 @@ import java.util.List;
  */
 public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> people, List<Bond> bonds,
                     int[] nationCulture, int[] nationFaith, float[] nationPiety, List<Demographics> demographics,
-                    List<Organization> organizations) {
-    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0], List.of(), List.of());
+                    List<Organization> organizations, java.util.Map<Integer, String> holds) {
+    public static final Realm EMPTY = new Realm(List.of(), List.of(), List.of(), List.of(), new int[0], new int[0], new float[0], List.of(), List.of(),
+            java.util.Map.of());
+
+    /** The name of the hold (a lone castle, or a palace and its city) at a title's seat province, or "" if none stands there. */
+    public String holdName(int province) {
+        return holds.getOrDefault(province, "");
+    }
 
     /** A nation's people, or none if it has no record. */
     public Demographics demographics(int nation) {
@@ -23,7 +29,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
 
     /** The same realm with these organizations. */
     public Realm withOrganizations(List<Organization> organizations) {
-        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations);
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations, holds);
     }
 
     /** The organization a person belongs to (heads or trained at), or -1. */
@@ -221,6 +227,11 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             writeIndexes(out, o.kings());
             writeIndexes(out, o.saints());
         }
+        out.writeShort(holds.size());
+        for (java.util.Map.Entry<Integer, String> h : holds.entrySet()) {
+            out.writeShort(h.getKey());
+            out.writeUTF(h.getValue());
+        }
     }
 
     public static Realm read(DataInputStream in) throws IOException {
@@ -288,7 +299,12 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         for (int i = 0; i < organizationCount; i++) {
             organizations.add(new Organization(in.readUTF(), in.readShort(), in.readShort(), readIndexes(in), readIndexes(in)));
         }
-        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations);
+        int holdCount = in.readUnsignedShort();
+        java.util.Map<Integer, String> holds = new java.util.TreeMap<>();
+        for (int i = 0; i < holdCount; i++) {
+            holds.put((int) in.readShort(), in.readUTF());
+        }
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety, demographics, organizations, holds);
     }
 
     private static void writeIndexes(DataOutputStream out, List<Integer> indexes) throws IOException {

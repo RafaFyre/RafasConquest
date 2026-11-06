@@ -276,7 +276,32 @@ public final class RealmPlanner {
         }
 
         return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
-                demographics, List.of());
+                demographics, List.of(), holdNames(seed, t, cultures, nationCulture, holder, homeland));
+    }
+
+    /**
+     * Every title's seat is a hold, named in the culture of the nation holding it (its land's, if none does); a seat
+     * carrying several titles (a duchy's is also its county's) is one hold. No two share a name.
+     */
+    static java.util.Map<Integer, String> holdNames(long seed, TitleMap t, List<Culture> cultures, int[] nationCulture, int[] holder,
+                                                    int[] homeland) {
+        Random random = new Random(seed ^ SALT ^ 0x484F4C44L);
+        java.util.Map<Integer, String> names = new java.util.TreeMap<>();
+        Set<String> taken = new HashSet<>();
+        for (int seat : t.countySeat()) {
+            int nation = seat < holder.length ? holder[seat] : -1;
+            Culture culture = cultures.get(nation >= 0 ? nationCulture[nation] : homeland[seat]);
+            // A culture has only a few hundred plain names: once they run thin, two beginnings ("Kelbarmaine"), and in
+            // the end the seat's number, so this always ends.
+            String name = culture.holdName(random);
+            for (int tries = 0; !taken.add(name); tries++) {
+                name = tries < 20 ? culture.holdName(random)
+                        : tries < 200 ? culture.starts().get(random.nextInt(culture.starts().size())) + culture.holdName(random).toLowerCase(java.util.Locale.ROOT)
+                        : culture.holdName(random) + " " + seat;
+            }
+            names.put(seat, name);
+        }
+        return names;
     }
 
     /**

@@ -117,7 +117,7 @@ public final class Organizations {
             filled.add(new Organization(o.name(), o.nation(), o.head(), List.copyOf(kings), List.copyOf(saints)));
         }
         return new Realm(realm.cultures(), realm.faiths(), List.copyOf(people), realm.bonds(), realm.nationCulture(), realm.nationFaith(),
-                realm.nationPiety(), realm.demographics(), filled);
+                realm.nationPiety(), realm.demographics(), filled, realm.holds());
     }
 
     /** A new retainer of a sanctum: of its nation's culture and faith, sworn to its Sword God, living at its seat. */
