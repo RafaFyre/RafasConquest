@@ -385,7 +385,15 @@ public class CharacterScreen extends Screen {
         }
         y = people(g, "Line of succession", realm.line(index), x, y, w, mouseX, mouseY);
         y = people(g, "Friends", realm.bonded(index, Realm.Bond.Kind.FRIEND), x, y, w, mouseX, mouseY);
-        people(g, "Rivals", realm.bonded(index, Realm.Bond.Kind.RIVAL), x, y, w, mouseX, mouseY);
+        y = people(g, "Rivals", realm.bonded(index, Realm.Bond.Kind.RIVAL), x, y, w, mouseX, mouseY);
+        // Hooks, both ways: those they know a secret of or are owed a favour by, and those who have such a hold on them.
+        List<rafasconquest.people.Hook> hooks = ClientPolitics.succession().hooks(realm.people());
+        for (rafasconquest.people.Hook.Kind kind : rafasconquest.people.Hook.Kind.values()) {
+            List<Integer> on = hooks.stream().filter(h -> h.kind() == kind && h.holder() == index).map(rafasconquest.people.Hook::target).toList();
+            List<Integer> by = hooks.stream().filter(h -> h.kind() == kind && h.target() == index).map(rafasconquest.people.Hook::holder).toList();
+            y = people(g, kind == rafasconquest.people.Hook.Kind.SECRET ? "Knows a secret of" : "Is owed a favour by", on, x, y, w, mouseX, mouseY);
+            y = people(g, kind == rafasconquest.people.Hook.Kind.SECRET ? "Their secret is known to" : "Owes a favour to", by, x, y, w, mouseX, mouseY);
+        }
     }
 
     /** A heading and a name to click for each person, with what this character thinks of them. */

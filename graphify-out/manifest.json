@@ -240,9 +240,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/CharacterScreen.java": {
-    "mtime": 1793937455.2190192,
-    "seen": 1793937856.0832508,
-    "ast_hash": "35d95effce06e9205b4eb90e60f285ed",
+    "mtime": 1793938070.152349,
+    "seen": 1793938163.4491951,
+    "ast_hash": "388ec62d8e026cf37ae5646c3bbd6cd6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientEvents.java": {
@@ -264,9 +264,9 @@
     "semantic_hash": "4e1899e9a28206ea1423d749ac98f9f9"
   },
   "src/main/java/rafasconquest/client/ClientPolitics.java": {
-    "mtime": 1793937077.6828468,
-    "seen": 1793937218.3083882,
-    "ast_hash": "006c69a356a005bc03521b63f80f3885",
+    "mtime": 1793938055.3232906,
+    "seen": 1793938163.4492028,
+    "ast_hash": "074cb44dc3db8725724856234f9361cb",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientScreens.java": {
@@ -1872,9 +1872,9 @@
     "semantic_hash": "6199163f77b8b4462d759f41cacf79b2"
   },
   "src/test/java/rafasconquest/people/RealmPlannerTest.java": {
-    "mtime": 1793937693.6534925,
-    "seen": 1793937856.0837045,
-    "ast_hash": "643e0abcef5e055e1ba6d8db99519d34",
+    "mtime": 1793938093.3263109,
+    "seen": 1793938163.4496503,
+    "ast_hash": "e9dcea62bd0c6ccbdcbeed46aa438d5b",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/politics/PoliticsTest.java": {
@@ -2430,21 +2430,27 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/Feuds.java": {
-    "mtime": 1793935779.6100605,
-    "seen": 1793935972.5984998,
-    "ast_hash": "2937c07c72383616bea05d47ca2323d2",
+    "mtime": 1793938054.711948,
+    "seen": 1793938163.4493911,
+    "ast_hash": "da29feac7edc8d68adebe042d31b819b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Succession.java": {
-    "mtime": 1793937398.1957023,
-    "seen": 1793937856.0834372,
-    "ast_hash": "e59d779571c7749dfd2da3d2b328fea4",
+    "mtime": 1793938043.071361,
+    "seen": 1793938163.4493823,
+    "ast_hash": "f76edb1d185d3bb535c82c146e5bc35b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Marriages.java": {
     "mtime": 1793937373.337636,
     "seen": 1793937856.083425,
     "ast_hash": "266fcb46fc6ae43b888fa1469bcbadf4",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/people/Hook.java": {
+    "mtime": 1793938023.0801208,
+    "seen": 1793938163.4493678,
+    "ast_hash": "124a5e461822a903776e287835e80a86",
     "semantic_hash": ""
   }
 }

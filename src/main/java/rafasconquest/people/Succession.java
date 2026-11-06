@@ -40,9 +40,96 @@ public final class Succession {
     private final List<int[]> deaths = new ArrayList<>();
     /** The weddings not yet seen to by the politics. */
     private final List<Marriages.Wedding> weddings = new ArrayList<>();
+    /** Who has a hook on whom. */
+    private final List<Hook> hooks = new ArrayList<>();
 
     public int years() {
         return years;
+    }
+
+    // ---- hooks ----
+
+    /** Intrigue from which one starts uncovering secrets, and the chance a year for each point past it. */
+    static final int SCHEMER = 8;
+    static final double UNCOVER_PER_POINT = 0.02;
+    /** Secrets are uncovered on those living no further than this away (blocks), rivals likeliest. */
+    static final double HOOK_REACH = 3000;
+
+    /** The hooks held, living holder on living target. */
+    public List<Hook> hooks(List<Person> people) {
+        List<Hook> live = new ArrayList<>();
+        for (Hook h : hooks) {
+            if (alive(people, h.holder()) && alive(people, h.target())) {
+                live.add(h);
+            }
+        }
+        return live;
+    }
+
+    /** The hook {@code holder} has on {@code target}, or null. */
+    public Hook hook(List<Person> people, int holder, int target) {
+        for (Hook h : hooks(people)) {
+            if (h.holder() == holder && h.target() == target) {
+                return h;
+            }
+        }
+        return null;
+    }
+
+    /** {@code holder} gains a hook on {@code target} (a secret outweighs a favour, so one replaces the other). */
+    public void hook(int holder, int target, Hook.Kind kind) {
+        if (holder == target || holder < 0 || target < 0) {
+            return;
+        }
+        for (int i = 0; i < hooks.size(); i++) {
+            Hook h = hooks.get(i);
+            if (h.holder() == holder && h.target() == target) {
+                if (kind.ordinal() > h.kind().ordinal()) {
+                    hooks.set(i, new Hook(holder, target, kind));
+                }
+                return;
+            }
+        }
+        hooks.add(new Hook(holder, target, kind));
+    }
+
+    /** Spends {@code holder}'s hook on {@code target}: true if they had one, now gone. */
+    public boolean spend(int holder, int target) {
+        return hooks.removeIf(h -> h.holder() == holder && h.target() == target);
+    }
+
+    /**
+     * A year's schemes: each living grown character with an eye for it ({@link #SCHEMER} Intrigue or more) may uncover a
+     * secret of someone near, a rival twice as likely as anyone else.
+     */
+    void uncover(Realm realm, Random random) {
+        List<Person> people = realm.people();
+        hooks.removeIf(h -> !alive(people, h.holder()) || !alive(people, h.target()));
+        for (int i = 0; i < people.size(); i++) {
+            Person p = people.get(i);
+            int edge = p.stat(Stat.INTRIGUE) - SCHEMER;
+            if (!alive(people, i) || p.age() < Marriages.ADULT || edge < 0 || random.nextDouble() >= (edge + 1) * UNCOVER_PER_POINT) {
+                continue;
+            }
+            List<Integer> near = new ArrayList<>();
+            for (int j = 0; j < people.size(); j++) {
+                Person q = people.get(j);
+                if (j != i && alive(people, j) && q.age() >= Marriages.ADULT
+                        && Math.hypot(q.hold().x() - p.hold().x(), q.hold().z() - p.hold().z()) <= HOOK_REACH) {
+                    near.add(j);
+                    if (realm.bond(i, j) == Realm.Bond.Kind.RIVAL) {
+                        near.add(j); // twice
+                    }
+                }
+            }
+            if (!near.isEmpty()) {
+                hook(i, near.get(random.nextInt(near.size())), Hook.Kind.SECRET);
+            }
+        }
+    }
+
+    private static boolean alive(List<Person> people, int i) {
+        return i >= 0 && i < people.size() && people.get(i).hold().kind() != Person.Kind.DEAD;
     }
 
     /** The chance a year that someone of this age dies. */
@@ -81,6 +168,7 @@ public final class Succession {
             apply(realm);
             List<Person> all = realm.people();
             weddings.addAll(Marriages.year(all, realm.cultures(), random, (i, p) -> set(all, i, p)));
+            uncover(realm, random);
         }
         List<Integer> dying = new ArrayList<>();
         List<Person> people = realm.people();
@@ -193,6 +281,12 @@ public final class Succession {
                 out.writeShort(d[0]);
                 out.writeShort(d[1]);
             }
+            out.writeShort(hooks.size());
+            for (Hook h : hooks) {
+                out.writeShort(h.holder());
+                out.writeShort(h.target());
+                out.writeByte(h.kind().ordinal());
+            }
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -215,6 +309,10 @@ public final class Succession {
             int d = in.readShort();
             for (int i = 0; i < d; i++) {
                 s.deaths.add(new int[]{in.readShort(), in.readShort()});
+            }
+            int hookCount = in.readShort();
+            for (int i = 0; i < hookCount; i++) {
+                s.hooks.add(new Hook(in.readShort(), in.readShort(), Hook.Kind.values()[in.readUnsignedByte()]));
             }
         } catch (IOException e) {
             throw new IllegalStateException(e);

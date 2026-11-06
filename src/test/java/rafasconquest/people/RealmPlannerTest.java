@@ -251,6 +251,35 @@ class RealmPlannerTest {
     }
 
     @Test
+    void schemersUncoverSecretsAndHooksAreSpentKeptAndLapse() {
+        Realm realm = world(9).realm();
+        Succession s = new Succession();
+        java.util.Random random = new java.util.Random(5);
+        for (int year = 1; year <= 3; year++) {
+            s.day(year * Succession.YEAR_DAYS, realm, random, java.util.Set.of());
+        }
+        List<Hook> hooks = s.hooks(realm.people());
+        assertFalse(hooks.isEmpty(), "no secrets uncovered in three years");
+        for (Hook h : hooks) {
+            assertTrue(realm.people().get(h.holder()).stat(Stat.INTRIGUE) >= Succession.SCHEMER, "an unschooled schemer");
+            assertEquals(Hook.Kind.SECRET, h.kind());
+        }
+        // A favour doesn't undo a secret; kept and sent, the hooks come out the same.
+        Hook first = hooks.get(0);
+        s.hook(first.holder(), first.target(), Hook.Kind.FAVOUR);
+        assertEquals(Hook.Kind.SECRET, s.hook(realm.people(), first.holder(), first.target()).kind());
+        assertEquals(hooks, Succession.decode(s.encode()).hooks(realm.people()));
+        // Spent, it is gone; one on someone who has died is worth nothing.
+        assertTrue(s.spend(first.holder(), first.target()));
+        assertFalse(s.spend(first.holder(), first.target()));
+        if (hooks.size() > 1) {
+            Hook second = hooks.get(1);
+            s.died(realm, second.target(), random);
+            assertEquals(null, s.hook(realm.people(), second.holder(), second.target()));
+        }
+    }
+
+    @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.
         List<List<Homeland>> styles = new ArrayList<>();

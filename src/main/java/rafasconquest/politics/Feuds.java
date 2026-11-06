@@ -466,6 +466,9 @@ final class Feuds {
         } else {
             politics.log(day, wc + ", for " + name(winner, lands, front) + ", beat " + lc + " in a duel; " + lc + " yielded.");
         }
+        if (c != null && !winner.isPlayer() && c.champion(aWon) >= 0 && c.champion(aWon) != winner.person()) {
+            politics.succession.hook(c.champion(aWon), winner.person(), rafasconquest.people.Hook.Kind.FAVOUR); // owed for fighting for them
+        }
         yielded(politics, f, day, lands, random, front, holdings(lands, front.playerCounties()));
         if (loserDied && c != null && c.champion(!aWon) >= 0) {
             politics.died(c.champion(!aWon), day, lands, random, "fell in a duel to the death"); // after the yielding, so the feud ends first

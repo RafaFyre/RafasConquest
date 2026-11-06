@@ -14,7 +14,14 @@ public final class ClientPolitics {
     private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), List.of(), Map.of(), List.of(),
             List.of(), List.of(), new byte[0]);
 
+    /** Who has died, inherited and holds hooks on whom, as last sent. */
+    private static rafasconquest.people.Succession succession = new rafasconquest.people.Succession();
+
     private ClientPolitics() {
+    }
+
+    public static rafasconquest.people.Succession succession() {
+        return succession;
     }
 
     public static void set(ConquestNetwork.PoliticsView politics) {
@@ -27,7 +34,8 @@ public final class ClientPolitics {
 
     /** Writes the conquests into a map's holders, and who has died and inherited over its people. */
     public static void apply(BaseMap map) {
-        rafasconquest.people.Succession.decode(view.succession()).apply(map.realm());
+        succession = rafasconquest.people.Succession.decode(view.succession());
+        succession.apply(map.realm());
         view.conquered().forEach((p, n) -> {
             if (p >= 0 && p < map.holders().length && n < map.nations().size()) {
                 map.holders()[p] = n;
