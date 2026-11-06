@@ -1,0 +1,9 @@
+{
+  "vertex": "rafasconquest:distant_depth",
+  "fragment": "rafasconquest:distant_depth_view",
+  "samplers": [{"name": "Depth"}],
+  "uniforms": [
+    {"name": "OursInverse", "type": "matrix4x4", "count": 16, "values": [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]},
+    {"name": "Planes", "type": "float", "count": 2, "values": [4, 1024]}
+  ]
+}

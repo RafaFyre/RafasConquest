@@ -18,9 +18,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestConfig.java": {
-    "mtime": 1793877825.0359294,
-    "seen": 1793890446.4238784,
-    "ast_hash": "c50cf56f3b24fc72174c401e47434453",
+    "mtime": 1793954635.36596,
+    "seen": 1793954660.5735078,
+    "ast_hash": "c3aa60496ed9ae8184ee955543680702",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestEvents.java": {
@@ -246,15 +246,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientEvents.java": {
-    "mtime": 1793944531.3855598,
-    "seen": 1793944667.4010847,
-    "ast_hash": "95a09db49775321fbc8b68658f1af8f9",
+    "mtime": 1793994311.0058272,
+    "seen": 1793994402.5307102,
+    "ast_hash": "c34705c479f463d542be799963981790",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientModEvents.java": {
-    "mtime": 1793890191.8636923,
-    "seen": 1793890446.4239378,
-    "ast_hash": "f5e87e94c8899ff2574a04ce3b647d1c",
+    "mtime": 1793994311.091575,
+    "seen": 1793994402.5307121,
+    "ast_hash": "804f81cebac9abe640ce3b0ab38e7fba",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientPeerage.java": {
@@ -300,21 +300,21 @@
     "semantic_hash": "e3747e3110bb2ed49cf64f0f8eb7aa3a"
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1793946654.0997083,
-    "seen": 1793946755.8676193,
-    "ast_hash": "c124e6b7dc6ae713f719e3b5164c3f19",
+    "mtime": 1793994301.0390909,
+    "seen": 1793994402.5307233,
+    "ast_hash": "65f1b3f1879d035bf6356e8fb3271cbd",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
-    "mtime": 1793946675.6952026,
-    "seen": 1793946755.8676207,
-    "ast_hash": "4aaa8246d64fddec6b3bfbf93b6646d7",
+    "mtime": 1793994187.6279147,
+    "seen": 1793994402.5307245,
+    "ast_hash": "c5f94e86875f452f428a08e729ee6817",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsLink.java": {
-    "mtime": 1793877825.0090015,
-    "seen": 1793890446.423951,
-    "ast_hash": "94471d92397638366208f2c01849eb31",
+    "mtime": 1793994187.6867757,
+    "seen": 1793994402.530726,
+    "ast_hash": "6bed54fdd448870023e1e27c865b7d11",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsQuality.java": {
@@ -2322,9 +2322,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1793946640.799557,
-    "seen": 1793946755.8676248,
-    "ast_hash": "0ea5e684fde8f29cb4f7251fd11c4e68",
+    "mtime": 1793991677.0600715,
+    "seen": 1793991734.9244883,
+    "ast_hash": "493ed65b1e6c0a8fa666f58ea12d9c5f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -2334,9 +2334,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/ShipHulls.java": {
-    "mtime": 1793942884.433353,
-    "seen": 1793942912.5681531,
-    "ast_hash": "8b5ec3d2d2e2776cd1fd8db2e041db78",
+    "mtime": 1793992160.4007075,
+    "seen": 1793992200.2926908,
+    "ast_hash": "623563e69312c109221045959abc8040",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SeaLanesTest.java": {
@@ -2469,6 +2469,36 @@
     "mtime": 1793946619.9435399,
     "seen": 1793946755.8676388,
     "ast_hash": "f4de8ad02b2dc2153d7f5795d153dc62",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/SoldierFigure.java": {
+    "mtime": 1793991701.7176788,
+    "seen": 1793991734.9245179,
+    "ast_hash": "f344ae90a1931bd28234c726c9a73524",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/DistantOcclusion.java": {
+    "mtime": 1793997029.1185338,
+    "seen": 1793997048.2563643,
+    "ast_hash": "6c69cc19488e0e39aed77fb9353912f7",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/shaders/core/distant_depth_merge.json": {
+    "mtime": 1793994324.5249355,
+    "seen": 1793994402.5310338,
+    "ast_hash": "19b5492b6c1173b252b8a2ea39c84777",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/shaders/core/distant_depth_view.json": {
+    "mtime": 1793994324.556073,
+    "seen": 1793994402.5310354,
+    "ast_hash": "79f659fed00cc199ccf572f3af4d5541",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/client/DistantOcclusionTest.java": {
+    "mtime": 1793994372.1289086,
+    "seen": 1793994402.531142,
+    "ast_hash": "ef9822811b1719375fdd89d4014bfe7a",
     "semantic_hash": ""
   }
 }

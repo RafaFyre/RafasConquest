@@ -83,9 +83,20 @@ public final class ShipHulls {
     /**
      * A battle ship's hull: always the plain flat-topped one of its size (a style's ship may have no open deck for a
      * formation to stand on), with hay, barrels and chests on deck if it is a {@code cargo} ship (the fleet's camp), and its
-     * sail in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s across the middle.
+     * sail in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s across the middle. Each kind is built
+     * once and the same list handed out after, so the client can keep its shape by the list.
      */
     public static List<Part> battle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
+        return BATTLE.computeIfAbsent(new BattleKind(size, cargo, sail, stripe),
+                k -> buildBattle(k.size(), k.cargo(), k.sail(), k.stripe()));
+    }
+
+    private record BattleKind(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
+    }
+
+    private static final Map<BattleKind, List<Part>> BATTLE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static List<Part> buildBattle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
         int middle = (DECK + 4 + 2 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
         List<Part> parts = new ArrayList<>();
         for (Part p : PLAIN.get(size)) {

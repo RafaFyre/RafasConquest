@@ -17,14 +17,13 @@ import java.util.List;
  * Going away from the camera, each is first the real Sable ship the server sails, then a level of detail, then a sprite:
  * <ul>
  * <li>near, the real ship, drawn by Sable;</li>
- * <li>from just short of where Distant Horizons starts fading the world into its own terrain, out to
- * {@link #SPRITE_PAST}, boxes of its blocks in Distant Horizons' terrain ({@link DistantHorizonsArmies}), right where
- * the real ship is and turned as it is, so the real one fades into them as the land fades into Distant Horizons' (with
- * nothing under it, it would fade into the sea and look like a ghost);</li>
- * <li>past that, or beyond the real ships without Distant Horizons, a flat sprite ({@link DistantArmyRenderer#renderShips}).</li>
+ * <li>from just short of where Distant Horizons starts fading the world into its own terrain (or wherever the client
+ * has no real ship), out to {@link #SPRITE_PAST}, its 3D level of detail: a box for each block, laid over the world
+ * every frame like a soldier's figure, right where the real ship is and turned as it is, so the real one fades into it
+ * (with nothing under it, it would fade into the sea and look like a ghost);</li>
+ * <li>past that, a flat sprite.</li>
  * </ul>
- * A ship the client has no real one for (not built yet, or beyond what the server sends it) is a sprite within the
- * render distance, where Distant Horizons' boxes would be faded, and boxes beyond.
+ * Both are drawn by {@link DistantArmyRenderer#renderShips}.
  */
 final class DistantShips {
     static final double SPRITE_PAST = 2000;
@@ -55,14 +54,12 @@ final class DistantShips {
                     : ShipHulls.battle(size, battle.cargo(), DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
         }
 
-        /** Whether Distant Horizons draws it as boxes, {@code flat} blocks from the camera. */
-        boolean boxes(double flat, double fadeStart, double renderBlocks) {
-            return flat <= SPRITE_PAST && (real ? flat >= fadeStart - FADE_MARGIN : flat > renderBlocks);
-        }
-
-        /** Whether it is drawn as a sprite, {@code flat} blocks from the camera. */
-        boolean sprite(double flat, boolean inDistantHorizons, double renderBlocks) {
-            return inDistantHorizons ? flat > SPRITE_PAST || !real && flat <= renderBlocks : !real;
+        /**
+         * Whether Sable's real ship shows for itself, {@code flat} blocks from the camera: the client has it, and it is
+         * short of where Distant Horizons starts fading the world ({@code fadeStart}, 0 if it isn't).
+         */
+        boolean shownReal(double flat, double fadeStart) {
+            return real && (fadeStart <= 0 || flat < fadeStart - FADE_MARGIN);
         }
     }
 

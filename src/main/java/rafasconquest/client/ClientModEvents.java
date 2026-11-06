@@ -21,6 +21,11 @@ public final class ClientModEvents {
     }
 
     @SubscribeEvent
+    public static void onRegisterShaders(net.neoforged.neoforge.client.event.RegisterShadersEvent event) throws java.io.IOException {
+        DistantOcclusion.registerShaders(event);
+    }
+
+    @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.TOWNSPERSON.get(), TownspersonRenderer::new);
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.RECRUITER.get(), RecruiterRenderer::new);

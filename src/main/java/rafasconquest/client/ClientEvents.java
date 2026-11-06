@@ -83,19 +83,38 @@ public final class ClientEvents {
     /**
      * Distant battle formations, drawn after the world so its terrain hides any behind hills: after the tripwire
      * layer, the last of it, because Distant Horizons fades the world into its own terrain just before that layer and
-     * would fade them too. Those in Distant Horizons' terrain are moved before the world is drawn.
+     * would fade them too.
      */
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY) {
             DistantArmyRenderer.prepare(event.getPartialTick().getGameTimeDeltaPartialTick(false));
-            DistantHorizonsLink.update();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
+            DistantOcclusion.begin();
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantArmyRenderer.renderShips(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            DistantOcclusion.end();
             ArrowVolleys.render(event.getPoseStack(), event.getCamera());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
         }
+    }
+
+    /** {@code /pvedepth [off|on|view]}: the prototype that hides distant figures behind Distant Horizons' hills. */
+    @SubscribeEvent
+    public static void onRegisterClientCommands(net.neoforged.neoforge.client.event.RegisterClientCommandsEvent event) {
+        var command = net.minecraft.commands.Commands.literal("pvedepth").executes(c -> {
+            c.getSource().sendSuccess(() -> Component.literal("Distant depth: " + DistantOcclusion.mode().name().toLowerCase()
+                    + " (" + DistantOcclusion.reason() + ")"), false);
+            return 1;
+        });
+        for (DistantOcclusion.Mode mode : DistantOcclusion.Mode.values()) {
+            command.then(net.minecraft.commands.Commands.literal(mode.name().toLowerCase()).executes(c -> {
+                DistantOcclusion.setMode(mode);
+                c.getSource().sendSuccess(() -> Component.literal("Distant depth: " + mode.name().toLowerCase()), false);
+                return 1;
+            }));
+        }
+        event.getDispatcher().register(command);
     }
 
     /** The sound of the battle as a whole: hoofbeats and the din of the front. */
