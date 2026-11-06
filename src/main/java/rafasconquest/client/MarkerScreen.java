@@ -2,7 +2,6 @@ package rafasconquest.client;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -16,6 +15,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntConsumer;
 
 /**
  * A Character Marker's settings: what it becomes (a dropdown of every type), and the settings of that type: soldiers'
@@ -46,10 +48,9 @@ public class MarkerScreen extends Screen {
     private String otherText;
     private String statMinText;
     private String replaceText;
-    /** The type dropdown: open or shut, and the first of its rows in view. */
-    private Button typeButton;
-    private boolean typeOpen;
-    private int typeScroll;
+    /** The dropdown that is open (null: none), and the first of its rows in view. */
+    private Drop open;
+    private int scroll;
     private static final int ROWS = 8;
     private static final int ROW = 12;
 
@@ -78,47 +79,55 @@ public class MarkerScreen extends Screen {
         return list;
     }
 
-    private static Component shown(String s) {
-        return Component.literal(s.isEmpty() ? "(any)" : s.toLowerCase(Locale.ROOT).replace('_', ' '));
+    private static String shown(String s) {
+        return s.isEmpty() ? "(any)" : s.toLowerCase(Locale.ROOT).replace('_', ' ');
+    }
+
+    /** One dropdown: its button, the names it lists, which is chosen, and what picking a row does. */
+    private record Drop(Button button, List<String> names, int current, IntConsumer pick) {
+    }
+
+    /** Adds a dropdown button; clicking it opens a scrolling list of the values. */
+    private <T> void drop(int x, int y, int w, String caption, List<T> values, Function<T, String> name, T current, Consumer<T> set) {
+        List<String> names = values.stream().map(name).toList();
+        int at = Math.max(0, values.indexOf(current));
+        Drop[] self = new Drop[1];
+        Button button = addRenderableWidget(Button.builder(Component.literal(caption + ": " + names.get(at) + "  ▼"), b -> {
+            open = open == self[0] ? null : self[0];
+            scroll = Math.max(0, Math.min(names.size() - Math.min(ROWS, names.size()), at - ROWS / 2));
+        }).bounds(x, y, w, 20).build());
+        self[0] = new Drop(button, names, at, i -> set.accept(values.get(i)));
     }
 
     @Override
     protected void init() {
+        open = null;
         int x = width / 2 - W / 2;
         int y = 30;
-        typeButton = addRenderableWidget(Button.builder(Component.literal("Type: " + MarkerSpec.title(type) + "  ▼"), b -> {
-            typeOpen = !typeOpen;
-            typeScroll = Math.max(0, Math.min(MarkerSpec.TYPES.size() - ROWS, MarkerSpec.TYPES.indexOf(type) - ROWS / 2));
-        }).bounds(x, y, W, 20).build());
+        drop(x, y, W, "Type", MarkerSpec.TYPES, MarkerSpec::title, type, v -> type = v);
         y += 24;
         MarkerSpec now = spec();
         if (now.soldiers()) {
-            addRenderableWidget(CycleButton.<Integer>builder(k -> Component.literal(new String[]{"Levy", "Heavy infantry", "Elite", "Officer"}[k - 1]))
-                    .withValues(1, 2, 3, 4).withInitialValue(Math.max(1, Math.min(4, kit))).create(x, y, W, 20, Component.literal("Kit"), (b, v) -> kit = v));
+            String[] kits = {"Levy", "Heavy infantry", "Elite", "Officer"};
+            drop(x, y, W, "Kit", List.of(1, 2, 3, 4), k -> kits[k - 1], Math.max(1, Math.min(4, kit)), v -> kit = v);
             y += 24;
-            addRenderableWidget(CycleButton.booleanBuilder(Component.literal("Patrol"), Component.literal("Stand guard")).withInitialValue(patrol)
-                    .create(x, y, W / 2 - 2, 20, Component.literal("Duty"), (b, v) -> patrol = v));
-            addRenderableWidget(CycleButton.<Integer>builder(c -> Component.literal(String.valueOf(c))).withValues(1, 2, 3, 4, 5).withInitialValue(count)
-                    .create(x + W / 2 + 2, y, W / 2 - 2, 20, Component.literal("Count"), (b, v) -> count = v));
+            drop(x, y, W / 2 - 2, "Duty", List.of(false, true), p -> p ? "Patrol" : "Stand guard", patrol, v -> patrol = v);
+            drop(x + W / 2 + 2, y, W / 2 - 2, "Count", List.of(1, 2, 3, 4, 5), String::valueOf, count, v -> count = v);
             y += 24;
         }
         if (now.type().equals("NAMED")) {
-            addRenderableWidget(CycleButton.<String>builder(MarkerScreen::shown).withValues(MarkerSpec.RANKS).withInitialValue(rank)
-                    .create(x, y, W, 20, Component.literal("Rank in peerage"), (b, v) -> rank = v));
+            drop(x, y, W, "Rank in peerage", MarkerSpec.RANKS, MarkerScreen::shown, rank, v -> rank = v);
             y += 24;
-            addRenderableWidget(CycleButton.<String>builder(MarkerScreen::shown).withValues(MarkerSpec.RELATIONS).withInitialValue(relation)
-                    .create(x, y, W / 2 - 2, 20, Component.literal("Relation"), (b, v) -> relation = v));
+            drop(x, y, W / 2 - 2, "Relation", MarkerSpec.RELATIONS, MarkerScreen::shown, relation, v -> relation = v);
             other = new EditBox(font, x + W / 2 + 2, y, W / 2 - 2, 20, Component.literal("Of whom"));
             other.setValue(otherText);
             other.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(
                     "place: this place's holder; nation: its ruler; or another marker's label")));
             addRenderableWidget(other);
             y += 24;
-            addRenderableWidget(CycleButton.<String>builder(MarkerScreen::shown).withValues(withBlank(Personality.values()))
-                    .withInitialValue(trait).create(x, y, W, 20, Component.literal("Trait"), (b, v) -> trait = v));
+            drop(x, y, W, "Trait", withBlank(Personality.values()), MarkerScreen::shown, trait, v -> trait = v);
             y += 24;
-            addRenderableWidget(CycleButton.<String>builder(MarkerScreen::shown).withValues(withBlank(Stat.values()))
-                    .withInitialValue(stat).create(x, y, W / 2 - 2, 20, Component.literal("Stat"), (b, v) -> stat = v));
+            drop(x, y, W / 2 - 2, "Stat", withBlank(Stat.values()), MarkerScreen::shown, stat, v -> stat = v);
             statMin = new EditBox(font, x + W / 2 + 2, y, W / 2 - 2, 20, Component.literal("At least"));
             statMin.setValue(statMinText);
             statMin.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("The least of the stat; -1: the highest")));
@@ -126,10 +135,8 @@ public class MarkerScreen extends Screen {
             y += 24;
         }
         if (!now.soldiers() && !now.type().equals("RECRUITER")) {
-            addRenderableWidget(CycleButton.onOffBuilder(twoPlaces).create(x, y, W / 2 - 2, 20, Component.literal("Two places at once"), (b, v) -> twoPlaces = v));
-            addRenderableWidget(CycleButton.<String>builder(s -> Component.literal(s.equals("GUARD") ? "A guard" : "Nothing"))
-                    .withValues("EMPTY", "GUARD").withInitialValue(ifNone)
-                    .create(x + W / 2 + 2, y, W / 2 - 2, 20, Component.literal("If none"), (b, v) -> ifNone = v));
+            drop(x, y, W / 2 - 2, "Two places", List.of(false, true), t -> t ? "ON" : "OFF", twoPlaces, v -> twoPlaces = v);
+            drop(x + W / 2 + 2, y, W / 2 - 2, "If none", List.of("EMPTY", "GUARD"), s -> s.equals("GUARD") ? "A guard" : "Nothing", ifNone, v -> ifNone = v);
             y += 24;
         }
         label = new EditBox(font, x + 70, y, W - 70, 20, Component.literal("Label"));
@@ -180,52 +187,64 @@ public class MarkerScreen extends Screen {
         for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
             widget.render(g, mouseX, mouseY, partialTick);
         }
-        if (typeOpen) {
-            int lx = typeButton.getX(), ly = typeButton.getBottom(), shown = Math.min(ROWS, MarkerSpec.TYPES.size());
+        if (open != null) {
+            Button b = open.button();
+            int lx = b.getX(), w = b.getWidth(), shown = shownRows(), ly = listTop();
             g.pose().pushPose();
             g.pose().translate(0, 0, 400); // over the widgets and their text
-            g.fill(lx, ly, lx + W, ly + shown * ROW + 2, 0xF0101010);
-            g.renderOutline(lx, ly, W, shown * ROW + 2, GOLD);
-            int hovered = typeRow(mouseX, mouseY);
+            g.fill(lx, ly, lx + w, ly + shown * ROW + 2, 0xF0101010);
+            g.renderOutline(lx, ly, w, shown * ROW + 2, GOLD);
+            int hovered = row(mouseX, mouseY);
             for (int i = 0; i < shown; i++) {
-                int index = typeScroll + i;
+                int index = scroll + i;
                 int rowY = ly + 1 + i * ROW;
                 if (index == hovered) {
-                    g.fill(lx + 1, rowY, lx + W - 1, rowY + ROW, 0xFF404040);
+                    g.fill(lx + 1, rowY, lx + w - 1, rowY + ROW, 0xFF404040);
                 }
-                String t = MarkerSpec.TYPES.get(index);
-                g.drawString(font, MarkerSpec.title(t), lx + 5, rowY + 2, t.equals(type) ? GOLD : 0xFFFFFFFF, false);
+                g.drawString(font, open.names().get(index), lx + 5, rowY + 2, index == open.current() ? GOLD : 0xFFFFFFFF, false);
             }
-            if (MarkerSpec.TYPES.size() > ROWS) { // scrollbar
+            int size = open.names().size();
+            if (size > ROWS) { // scrollbar
                 int track = shown * ROW;
-                int thumb = Math.max(8, track * ROWS / MarkerSpec.TYPES.size());
-                int thumbY = ly + 1 + (track - thumb) * typeScroll / (MarkerSpec.TYPES.size() - ROWS);
-                g.fill(lx + W - 4, thumbY, lx + W - 1, thumbY + thumb, 0xFFA0A0A0);
+                int thumb = Math.max(8, track * ROWS / size);
+                int thumbY = ly + 1 + (track - thumb) * scroll / (size - ROWS);
+                g.fill(lx + w - 4, thumbY, lx + w - 1, thumbY + thumb, 0xFFA0A0A0);
             }
             g.pose().popPose();
         }
     }
 
-    /** The type under the mouse in the open dropdown, or -1. */
-    private int typeRow(double mouseX, double mouseY) {
-        int lx = typeButton.getX(), ly = typeButton.getBottom() + 1;
+    private int shownRows() {
+        return Math.min(ROWS, open.names().size());
+    }
+
+    /** The open list hangs below its button, or above it when there is no room below. */
+    private int listTop() {
+        int h = shownRows() * ROW + 2;
+        return open.button().getBottom() + h <= height ? open.button().getBottom() : open.button().getY() - h;
+    }
+
+    /** The row under the mouse in the open dropdown, or -1. */
+    private int row(double mouseX, double mouseY) {
+        int lx = open.button().getX(), ly = listTop() + 1;
         int row = (int) Math.floor((mouseY - ly) / ROW);
-        if (mouseX < lx || mouseX >= lx + W || row < 0 || row >= Math.min(ROWS, MarkerSpec.TYPES.size())) {
+        if (mouseX < lx || mouseX >= lx + open.button().getWidth() || row < 0 || row >= shownRows()) {
             return -1;
         }
-        return typeScroll + row;
+        return scroll + row;
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (!typeOpen || typeButton.isMouseOver(mouseX, mouseY)) {
+        if (open == null || open.button().isMouseOver(mouseX, mouseY)) {
             return super.mouseClicked(mouseX, mouseY, button);
         }
-        int index = typeRow(mouseX, mouseY);
-        typeOpen = false;
+        int index = row(mouseX, mouseY);
+        Drop picked = open;
+        open = null;
         if (index >= 0) {
             keepText();
-            type = MarkerSpec.TYPES.get(index);
+            picked.pick().accept(index);
             rebuildWidgets();
         }
         return true; // a click off the open list only shuts it
@@ -233,8 +252,8 @@ public class MarkerScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
-        if (typeOpen) {
-            typeScroll = Math.max(0, Math.min(MarkerSpec.TYPES.size() - ROWS, typeScroll - (int) Math.signum(delta)));
+        if (open != null) {
+            scroll = Math.max(0, Math.min(open.names().size() - shownRows(), scroll - (int) Math.signum(delta)));
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, delta);
