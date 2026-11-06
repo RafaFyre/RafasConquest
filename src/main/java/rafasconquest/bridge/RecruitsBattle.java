@@ -783,7 +783,7 @@ public final class RecruitsBattle {
             for (int n = 0; n < map.nations().size(); n++) {
                 if (map.nations().get(n).id().equals(faction.id())) {
                     for (Person p : map.realm().people()) {
-                        if (p.nation() == n) {
+                        if (p.nation() == n && p.age() >= 16) {
                             people.add(p);
                         }
                     }

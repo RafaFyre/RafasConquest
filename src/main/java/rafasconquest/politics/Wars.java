@@ -859,7 +859,7 @@ public final class Wars {
         if (n < 0) {
             return java.util.List.of();
         }
-        return map.realm().people().stream().filter(p -> p.nation() == n)
+        return map.realm().people().stream().filter(p -> p.nation() == n && p.age() >= 16)
                 .sorted(java.util.Comparator.comparingInt((rafasconquest.people.Person p) -> -p.stat(rafasconquest.people.Stat.MARTIAL)))
                 .map(rafasconquest.people.Person::name).toList();
     }

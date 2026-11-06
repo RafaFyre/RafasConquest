@@ -99,6 +99,36 @@ class RealmPlannerTest {
     }
 
     @Test
+    void everyTitleHolderHasAnHeirOfTheirFamilyInLine() {
+        Realm realm = world(9).realm();
+        int holders = 0;
+        for (int i = 0; i < realm.people().size(); i++) {
+            Person h = realm.people().get(i);
+            if (!h.noble() || h.hold().kind().heir()) {
+                continue;
+            }
+            holders++;
+            List<Integer> line = realm.line(i);
+            assertTrue(line.size() >= 1 && line.size() <= RealmPlanner.MAX_KIN, "a holder with " + line.size() + " heirs");
+            int lastAge = Integer.MAX_VALUE;
+            for (int heir : line) {
+                Person p = realm.people().get(heir);
+                assertTrue(p.noble());
+                assertEquals(h.family(), p.family());
+                assertEquals(h.hold().province(), p.hold().province());
+                assertEquals(h.nation(), p.nation());
+                assertFalse(realm.vassals(i).contains(heir), "an heir counted as a vassal");
+                if (p.hold().kind() == Person.Kind.CHILD) {
+                    assertTrue(h.age() - p.age() >= RealmPlanner.PARENT_FROM, "a parent too young for their child");
+                    assertTrue(p.age() <= lastAge, "the line not eldest first");
+                    lastAge = p.age();
+                }
+            }
+        }
+        assertTrue(holders > 20, "too few holders to tell: " + holders);
+    }
+
+    @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.
         List<List<Homeland>> styles = new ArrayList<>();
@@ -145,8 +175,8 @@ class RealmPlannerTest {
         World w = world(5);
         Set<Integer> holds = new HashSet<>();
         for (Person p : w.realm().people()) {
-            if (p.hold().kind() == Person.Kind.LORD) {
-                // A capital city's own lord, sworn to the ruler who holds it.
+            if (p.hold().kind() == Person.Kind.LORD || p.hold().kind().heir()) {
+                // A capital city's own lord, sworn to the ruler who holds it; or an heir, living at their family's hold.
                 Person liege = w.realm().people().get(p.liege());
                 assertTrue(liege.hold().province() == p.hold().province() && liege.hold().kind() != Person.Kind.LORD,
                         "a city's lord not sworn to its ruler");
@@ -179,7 +209,9 @@ class RealmPlannerTest {
         for (int i = 0; i < people.size(); i++) {
             Person p = people.get(i);
             if (p.nation() < 0) {
-                assertEquals(-1, p.liege(), "an unowned hold's holder with a liege");
+                if (!p.hold().kind().heir()) {
+                    assertEquals(-1, p.liege(), "an unowned hold's holder with a liege");
+                }
                 continue;
             }
             int at = i;

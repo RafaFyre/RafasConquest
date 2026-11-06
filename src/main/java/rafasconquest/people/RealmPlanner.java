@@ -275,8 +275,48 @@ public final class RealmPlanner {
             people.add(withLiege(lord, city));
         }
 
-        return new Realm(cultures, faiths, people, bonds(random, people), nationCulture, nationFaith, nationPiety,
+        List<Realm.Bond> bonds = bonds(random, people);
+        heirs(new Random(seed ^ SALT ^ 0x4B494EL), people, cultures, titles);
+        return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety,
                 demographics, List.of(), holdNames(seed, t, cultures, nationCulture, holder, homeland));
+    }
+
+    /** A holder has children this often, if old enough (else siblings); each has up to this many. */
+    static final double HAS_CHILDREN = 0.75;
+    static final int MAX_KIN = 3;
+    /** The youngest a holder has a child at, and the oldest. */
+    static final int PARENT_FROM = 18;
+    static final int PARENT_TO = 45;
+
+    /**
+     * Each title holder's heirs, added after everyone else: children if they are old enough to have them and do, else
+     * one to three brothers and sisters; of their family, culture, faith and race, living at their hold.
+     */
+    static void heirs(Random random, List<Person> people, List<Culture> cultures, int[] titles) {
+        int holders = people.size();
+        for (int i = 0; i < holders; i++) {
+            Person h = people.get(i);
+            if (!h.noble()) {
+                continue;
+            }
+            boolean children = h.age() > PARENT_FROM && random.nextDouble() < HAS_CHILDREN;
+            int kin = 1 + random.nextInt(MAX_KIN);
+            for (int k = 0; k < kin; k++) {
+                int age = children ? Math.max(0, h.age() - PARENT_FROM - random.nextInt(PARENT_TO - PARENT_FROM))
+                        : Math.max(14, h.age() - 12 + random.nextInt(25));
+                Person.Hold hold = new Person.Hold(children ? Person.Kind.CHILD : Person.Kind.SIBLING, h.hold().province(), h.hold().x(), h.hold().z());
+                // A child takes no sword title (every one counted full), so none is spent on a skill they won't have yet.
+                Person p = person(random, cultures.get(h.culture()), h.culture(), h.faith(), h.race(), hold, h.nation(), false,
+                        age >= 16 ? titles : Stat.TITLE_LIMITS.clone());
+                // Of the family, and a child's skills grow with them until they are grown.
+                int[] stats = p.stats().clone();
+                for (int s = 0; s < stats.length; s++) {
+                    stats[s] = age >= 16 ? stats[s] : stats[s] * age / 16;
+                }
+                people.add(new Person(p.given(), h.family(), p.female(), age, p.culture(), p.faith(), p.race(), stats, p.traits(), hold, i,
+                        p.nation(), false));
+            }
+        }
     }
 
     /**

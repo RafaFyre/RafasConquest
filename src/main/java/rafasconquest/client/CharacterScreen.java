@@ -375,8 +375,9 @@ public class CharacterScreen extends Screen {
         }
         y += 4;
         if (p.liege() >= 0) {
-            y = people(g, "Liege", List.of(p.liege()), x, y, w, mouseX, mouseY);
+            y = people(g, p.hold().kind().heir() ? "Heir to" : "Liege", List.of(p.liege()), x, y, w, mouseX, mouseY);
         }
+        y = people(g, "Line of succession", realm.line(index), x, y, w, mouseX, mouseY);
         y = people(g, "Friends", realm.bonded(index, Realm.Bond.Kind.FRIEND), x, y, w, mouseX, mouseY);
         people(g, "Rivals", realm.bonded(index, Realm.Bond.Kind.RIVAL), x, y, w, mouseX, mouseY);
     }
@@ -416,6 +417,8 @@ public class CharacterScreen extends Screen {
             case CASTLE -> "holds the castle of";
             case LORD -> "lord of the city of";
             case RETAINER -> "lives at the sanctum of";
+            case CHILD -> "a child of the holder of";
+            case SIBLING -> "a sibling of the holder of";
         };
     }
 

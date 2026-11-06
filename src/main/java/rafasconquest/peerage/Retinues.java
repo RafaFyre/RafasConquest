@@ -59,7 +59,7 @@ public final class Retinues {
             case CAPITAL, LORD -> 3;
             case CITY -> 2;
             case TOWN -> 1;
-            case CASTLE, RETAINER -> 0;
+            case CASTLE, RETAINER, CHILD, SIBLING -> 0;
         };
     }
 
@@ -94,7 +94,7 @@ public final class Retinues {
         List<Integer> fighters = new ArrayList<>();
         for (int i = 0; i < realm.people().size(); i++) {
             Person q = realm.people().get(i);
-            if (i != person && q.nation() == p.nation() && p.nation() >= 0 && !vassals.contains(i) && !retinue.contains(i)
+            if (i != person && q.nation() == p.nation() && p.nation() >= 0 && q.age() >= 16 && !vassals.contains(i) && !retinue.contains(i)
                     && level(realm, i) < level) {
                 fighters.add(i);
             }

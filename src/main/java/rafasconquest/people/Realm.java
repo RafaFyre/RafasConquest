@@ -85,14 +85,27 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         return found;
     }
 
-    /** The characters whose liege is {@code a}. */
+    /** The characters sworn to {@code a} (not their heirs, who answer to them too). */
     public List<Integer> vassals(int a) {
         List<Integer> found = new ArrayList<>();
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).liege() == a) {
+            if (people.get(i).liege() == a && !people.get(i).hold().kind().heir()) {
                 found.add(i);
             }
         }
+        return found;
+    }
+
+    /** {@code a}'s line of succession: their children, eldest first, then their siblings, eldest first. */
+    public List<Integer> line(int a) {
+        List<Integer> found = new ArrayList<>();
+        for (int i = 0; i < people.size(); i++) {
+            if (people.get(i).liege() == a && people.get(i).hold().kind().heir()) {
+                found.add(i);
+            }
+        }
+        found.sort(java.util.Comparator.comparingInt((Integer i) -> people.get(i).hold().kind() == Person.Kind.CHILD ? 0 : 1)
+                .thenComparingInt(i -> -people.get(i).age()));
         return found;
     }
 

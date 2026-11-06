@@ -136,7 +136,7 @@ public final class Quests {
                     }
                 }
                 for (Person p : realm.people()) {
-                    if (p.nation() != nation && p.hold().kind() != Person.Kind.CASTLE && Math.hypot(p.hold().x() - cx, p.hold().z() - cz) <= SCOUT_REACH) {
+                    if (p.nation() != nation && p.hold().kind() != Person.Kind.CASTLE && !p.hold().kind().heir() && Math.hypot(p.hold().x() - cx, p.hold().z() - cz) <= SCOUT_REACH) {
                         targets.add(new Target("the city of " + map.names().get(p.hold().province()), p.hold().x(), p.hold().z()));
                     }
                 }

@@ -19,7 +19,22 @@ public record Person(String given, String family, boolean female, int age, int c
         /** The lord of a duchy's or a nation's capital city, sworn to its ruler, who holds the city above them. */
         LORD,
         /** One who lives at a sword sanctum, trained there, holding nothing: its Sword Kings and Saints. */
-        RETAINER
+        RETAINER,
+        /** A title holder's child or sibling, living at their hold, in line for their titles (children first). */
+        CHILD, SIBLING;
+
+        /** Whether this is one in line for a holder's titles rather than one holding anything. */
+        public boolean heir() {
+            return this == CHILD || this == SIBLING;
+        }
+    }
+
+    /** A noble: one who holds a title, or is in a title holder's line of succession. */
+    public boolean noble() {
+        return switch (hold.kind()) {
+            case CAPITAL, CITY, TOWN, CASTLE, CHILD, SIBLING -> true;
+            case LORD, RETAINER -> false;
+        };
     }
 
     public int stat(Stat stat) {

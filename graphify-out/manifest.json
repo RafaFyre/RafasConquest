@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1793928788.1041446,
-    "seen": 1793929199.9140995,
-    "ast_hash": "39a23971f325ca68cf5b8f957794f338",
+    "mtime": 1793935253.5307631,
+    "seen": 1793935479.1952443,
+    "ast_hash": "73a96c9b81011face24355e95d4a0bc1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -240,9 +240,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/CharacterScreen.java": {
-    "mtime": 1793924922.914344,
-    "seen": 1793924960.5477223,
-    "ast_hash": "6601266754ebe3ac6922ab5ada91d2d8",
+    "mtime": 1793935209.8392503,
+    "seen": 1793935479.1952755,
+    "ast_hash": "ec127afd268ccf183b3549586e4bc9d7",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientEvents.java": {
@@ -342,15 +342,15 @@
     "semantic_hash": "f242cd097e72ee286ee56ba1481be722"
   },
   "src/main/java/rafasconquest/client/MarkerScreen.java": {
-    "mtime": 1793919036.2306733,
-    "seen": 1793919065.0280645,
-    "ast_hash": "2ae34ddd057371dfe172b8869e72ed6b",
+    "mtime": 1793935123.585815,
+    "seen": 1793935146.378457,
+    "ast_hash": "8b8ac140fdd786379e8f3b0892a852ef",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/NationScreen.java": {
-    "mtime": 1793890169.396247,
-    "seen": 1793890446.4239585,
-    "ast_hash": "0587d0e0a63ec790d8c47115c824a886",
+    "mtime": 1793935215.6495264,
+    "seen": 1793935479.1953034,
+    "ast_hash": "ad0dab6561b72d42287204b8e6ca0d3e",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/OrganizationScreen.java": {
@@ -618,10 +618,10 @@
     "semantic_hash": "02aad7f02367fa2d6fd4dad46ff7a288"
   },
   "src/main/java/rafasconquest/core/TitleMap.java": {
-    "mtime": 1793324099.0753658,
-    "seen": 1793865705.7986605,
-    "ast_hash": "63bbbbb01534c6a54dbe37062332f514",
-    "semantic_hash": "63bbbbb01534c6a54dbe37062332f514"
+    "mtime": 1793930001.0093644,
+    "seen": 1793935085.526498,
+    "ast_hash": "346c5f0e406e54cad1d3d914a35bc4e3",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/WorldFeatures.java": {
     "mtime": 1793385148.470449,
@@ -714,9 +714,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMap.java": {
-    "mtime": 1793909037.649601,
-    "seen": 1793909162.0755074,
-    "ast_hash": "d1474d3e760e504a5d22238e771f3979",
+    "mtime": 1793930004.802223,
+    "seen": 1793935085.5265224,
+    "ast_hash": "339bb4e8edadd70b04e2db42bbc5027b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMapGenerator.java": {
@@ -864,15 +864,15 @@
     "semantic_hash": "761eaa657435ab0430bbabfef0fa7488"
   },
   "src/main/java/rafasconquest/peerage/Quests.java": {
-    "mtime": 1793392789.6047885,
-    "seen": 1793865705.7987013,
-    "ast_hash": "8bfc565b0bebb8eb324a01aab542fc3d",
-    "semantic_hash": "8bfc565b0bebb8eb324a01aab542fc3d"
+    "mtime": 1793935244.4393034,
+    "seen": 1793935479.1954365,
+    "ast_hash": "9b721c3e9dfc38fcbdeaf1edea060717",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/Retinues.java": {
-    "mtime": 1793878119.5599034,
-    "seen": 1793890446.4240851,
-    "ast_hash": "cb3cd6e4b2234efd37ec5ae0f216cf6d",
+    "mtime": 1793935244.3488538,
+    "seen": 1793935479.1954381,
+    "ast_hash": "f9671abc5afe0a4c45c45656b90c3eb9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/Talk.java": {
@@ -882,10 +882,10 @@
     "semantic_hash": "3cc67ece9c7462b7bc8a51529af31329"
   },
   "src/main/java/rafasconquest/people/Culture.java": {
-    "mtime": 1793504001.37057,
-    "seen": 1793865705.7987044,
-    "ast_hash": "0e8d130030729ac96900c5feb714df19",
-    "semantic_hash": "0e8d130030729ac96900c5feb714df19"
+    "mtime": 1793929967.6520042,
+    "seen": 1793935085.5265656,
+    "ast_hash": "11dd65f67a2fbb7af4484daa485e8e7b",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Demographics.java": {
     "mtime": 1793400673.4758186,
@@ -918,16 +918,16 @@
     "semantic_hash": "1d1f13db9e01787333ad7d2ac1ad88f8"
   },
   "src/main/java/rafasconquest/people/Organizations.java": {
-    "mtime": 1793506274.7076223,
-    "seen": 1793865705.7987106,
-    "ast_hash": "8ab41f18bbd051ef937e4a186c68d019",
-    "semantic_hash": "8ab41f18bbd051ef937e4a186c68d019"
+    "mtime": 1793929990.2023137,
+    "seen": 1793935085.526574,
+    "ast_hash": "a944f1a45da68416d4254855cfe27438",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Person.java": {
-    "mtime": 1793506251.7286713,
-    "seen": 1793865705.7987113,
-    "ast_hash": "e3a0695dcb79e583b0394f4545274dbd",
-    "semantic_hash": "e3a0695dcb79e583b0394f4545274dbd"
+    "mtime": 1793935160.799044,
+    "seen": 1793935479.1954498,
+    "ast_hash": "932a47bd4843ba9601f6d76dda33adbe",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Personality.java": {
     "mtime": 1793401829.2550697,
@@ -942,15 +942,15 @@
     "semantic_hash": "51372731878b2c91ae57dcd891e89c2e"
   },
   "src/main/java/rafasconquest/people/Realm.java": {
-    "mtime": 1793406386.7857502,
-    "seen": 1793865705.7987144,
-    "ast_hash": "a72b8338af73f4142f85b70ba7685742",
-    "semantic_hash": "a72b8338af73f4142f85b70ba7685742"
+    "mtime": 1793935160.8688571,
+    "seen": 1793935479.1954536,
+    "ast_hash": "934d4888c555033de3b73108009004d9",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/RealmPlanner.java": {
-    "mtime": 1793868580.5650573,
-    "seen": 1793869449.4928448,
-    "ast_hash": "540e8f39d28c7cc7a1a418357ad47852",
+    "mtime": 1793935189.6732502,
+    "seen": 1793935479.195455,
+    "ast_hash": "3197901b945318cae7aabca53b9c3a12",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Stat.java": {
@@ -1026,9 +1026,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/Wars.java": {
-    "mtime": 1793928896.8155515,
-    "seen": 1793929199.9143345,
-    "ast_hash": "6e519739d9382239e26db0478581b2cd",
+    "mtime": 1793935253.5781713,
+    "seen": 1793935479.1954772,
+    "ast_hash": "f11d8d2a9294a9984dd58e60157bb83b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/sim/CityBanners.java": {
@@ -1062,10 +1062,10 @@
     "semantic_hash": "b685ed510a55fbb29fd06f815d371fbb"
   },
   "src/main/java/rafasconquest/sim/RecruitmentPosts.java": {
-    "mtime": 1793865684.0829885,
-    "seen": 1793865705.798736,
-    "ast_hash": "4db8bc022cd3119abbd1721b9c79de01",
-    "semantic_hash": "4db8bc022cd3119abbd1721b9c79de01"
+    "mtime": 1793935244.3829744,
+    "seen": 1793935479.1954856,
+    "ast_hash": "4f41a61dc2baf53cef0cd61003b026c8",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/BlockPacker.java": {
     "mtime": 1793592129.8858607,
@@ -1872,9 +1872,9 @@
     "semantic_hash": "6199163f77b8b4462d759f41cacf79b2"
   },
   "src/test/java/rafasconquest/people/RealmPlannerTest.java": {
-    "mtime": 1793868597.4657524,
-    "seen": 1793869449.4930751,
-    "ast_hash": "ae1513e6d911f79cb95c4574e9929a8c",
+    "mtime": 1793935400.600612,
+    "seen": 1793935479.1957257,
+    "ast_hash": "5feb57573ab6c9567ad2b8579d260cd7",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/politics/PoliticsTest.java": {
