@@ -180,7 +180,9 @@ public class CharacterScreen extends Screen {
                     + ": a fief of " + fief + (fief == 1 ? " province." : " provinces."));
         }
         x = info(g, x, infoY, realm.cultures().get(p.culture()).name(), 0xFF8A7CE0, "Culture", "Of the " + realm.cultures().get(p.culture()).name()
-                + " culture, of the " + realm.cultures().get(p.culture()).homeland().title().toLowerCase(Locale.ROOT) + " lands.");
+                + " culture, of the " + realm.cultures().get(p.culture()).homeland().title().toLowerCase(Locale.ROOT) + " lands."
+                + (realm.cultures().get(p.culture()).rooted() ? " They put down roots: taking a greater hold, they keep its family there and marry it into their own."
+                : " They don't put down roots: taking a greater hold, they move in and put its family out."));
         x = info(g, x, infoY, faith, 0xFFF0B020, "Faith", ownFaith ? "Keeps the faith of " + faith + "."
                 : "Keeps the faith of " + faith + ", not the nation's (" + realm.faiths().get(realm.nationFaith()[p.nation()]).name() + ").");
         Race race = Race.values()[p.race()];
@@ -434,6 +436,7 @@ public class CharacterScreen extends Screen {
             case CHILD -> "a child of the holder of";
             case SIBLING -> "a sibling of the holder of";
             case SPOUSE -> "married to the holder of";
+            case EXILE -> "was put out of";
             case DEAD -> "is dead; they lived at";
         };
     }

@@ -47,6 +47,183 @@ public final class Succession {
         return years;
     }
 
+    // ---- conquest ----
+
+    /**
+     * A hold taken: its province and where it stands, who took it (the conquering ruler), whether it is a greater hold
+     * than theirs (a bigger city), whether they rank above its holder (by fief), the kind of hold it is for a holder who
+     * isn't a ruler, the kind of hold the conqueror's own becomes if they leave it, who holds each province now, and whether
+     * its family is gone (its holder fell defending it).
+     */
+    public record Taking(int hold, int x, int z, int conqueror, boolean greater, boolean higher, Person.Kind holdKind,
+                         Person.Kind oldHoldKind, int[] owners, boolean gone) {
+    }
+
+    /**
+     * A hold changes hands in war, and its family's fate follows from who took it ({@code t.conqueror}, of a culture that
+     * puts down roots or not) and from whether its family yielded (its holder lives) or is gone (no one holds it):
+     * <ul>
+     *   <li>a greater hold, taken by one of no higher rank: one not putting down roots moves in and puts the family out;
+     *       one who does keeps the family there, married into their own house and sworn to them, or, the family gone,
+     *       gives it to whoever has a hook on them (spending it), else their most loyal vassal;</li>
+     *   <li>a greater hold, taken by one of higher rank: the family married into theirs and kept as the city's lord
+     *       under them, they move in; the family gone, they move in all the same;</li>
+     *   <li>a lesser or equal hold: the family yields and swears to them as vassals, or, gone, it is given as above.</li>
+     * </ul>
+     * Returns what happened, for the news, or null if nothing changed.
+     */
+    public String conquer(Realm realm, Taking t, Random random) {
+        List<Person> people = realm.people();
+        drawn(people);
+        int c = realm.holderOf(t.hold());
+        if (c == t.conqueror() || t.conqueror() < 0) {
+            return null;
+        }
+        Person r = people.get(t.conqueror());
+        boolean gone = t.gone() || c < 0;
+        boolean rooted = realm.cultures().get(r.culture()).rooted();
+        String hold = realm.holdName(t.hold()).isEmpty() ? "the hold" : realm.holdName(t.hold());
+        if (t.greater() && !t.higher() && !rooted || t.greater() && t.higher() && gone) {
+            if (c >= 0) {
+                exile(realm, c, t);
+            }
+            moveIn(realm, t.conqueror(), t, r.hold().kind());
+            return r.name() + " moved into " + hold + (gone ? "." : ", putting out the family that held it.");
+        }
+        if (t.greater() && t.higher()) {
+            marryIn(realm, c, t.conqueror(), random);
+            Person cp = people.get(c);
+            set(people, c, with(cp, new Person.Hold(Person.Kind.LORD, t.hold(), t.x(), t.z()), t.conqueror(), r.nation()));
+            follow(realm, c, t, r.nation());
+            moveIn(realm, t.conqueror(), t, r.hold().kind());
+            return r.name() + " moved into " + hold + "; its family, married into theirs, keep it as its lords.";
+        }
+        if (gone) {
+            int a = appointee(realm, t.conqueror());
+            if (a < 0) {
+                return null;
+            }
+            if (c >= 0) {
+                exile(realm, c, t); // what is left of the family goes
+            }
+            boolean hooked = spend(a, t.conqueror());
+            moveIn(realm, a, t, t.holdKind());
+            set(people, a, with(people.get(a), people.get(a).hold(), t.conqueror(), r.nation()));
+            return r.name() + " gave " + hold + " to " + people.get(a).name() + (hooked ? ", who had a hook on them." : ", their most loyal vassal.");
+        }
+        if (t.greater()) {
+            marryIn(realm, c, t.conqueror(), random);
+        }
+        Person cp = people.get(c);
+        set(people, c, with(cp, new Person.Hold(t.holdKind(), t.hold(), t.x(), t.z()), t.conqueror(), r.nation()));
+        follow(realm, c, t, r.nation());
+        return people.get(c).name() + " of " + hold + (t.greater() ? " married into the house of " + r.family() + " and swore to " : " swore to ")
+                + r.name() + ".";
+    }
+
+    /** Who a conqueror gives a hold to: one with a hook on them (a secret before a favour), else their most loyal vassal. */
+    int appointee(Realm realm, int conqueror) {
+        List<Person> people = realm.people();
+        int best = -1;
+        for (Hook h : hooks(people)) {
+            if (h.target() == conqueror && people.get(h.holder()).age() >= Marriages.ADULT
+                    && (best < 0 || h.kind().ordinal() > hook(people, best, conqueror).kind().ordinal())) {
+                best = h.holder();
+            }
+        }
+        if (best >= 0) {
+            return best;
+        }
+        int loyalest = Integer.MIN_VALUE;
+        for (int v : realm.vassals(conqueror)) {
+            int o = realm.opinion(v, conqueror);
+            if (o > loyalest) {
+                loyalest = o;
+                best = v;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Someone moves to a hold, with their household; the hold they leave passes to the first in their line (as a
+     * {@code t.oldHoldKind()} if they were a ruler, else as the kind it was), or stands empty if they have none.
+     */
+    private void moveIn(Realm realm, int a, Taking t, Person.Kind kind) {
+        List<Person> people = realm.people();
+        Person p = people.get(a);
+        Person.Hold old = p.hold();
+        boolean held = Marriages.holds(p);
+        List<Integer> line = realm.line(a);
+        for (int i = 0; i < people.size(); i++) {
+            Person q = people.get(i);
+            if (q.liege() == a && q.hold().kind().household() && (!held || line.isEmpty() || i != line.get(0))) {
+                set(people, i, with(q, new Person.Hold(q.hold().kind(), t.hold(), t.x(), t.z()), a, q.nation()));
+            }
+        }
+        set(people, a, with(p, new Person.Hold(kind, t.hold(), t.x(), t.z()), p.liege(), p.nation()));
+        if (held && !line.isEmpty()) {
+            int h = line.get(0);
+            Person.Kind left = old.kind() == Person.Kind.CAPITAL ? t.oldHoldKind() : old.kind();
+            set(people, h, with(people.get(h), new Person.Hold(left, old.province(), old.x(), old.z()), a, p.nation()));
+        }
+    }
+
+    /** A family put out of its hold: its holder lives on there, holding nothing; their vassals go to the conqueror. */
+    private void exile(Realm realm, int c, Taking t) {
+        List<Person> people = realm.people();
+        List<Integer> vassals = realm.vassals(c);
+        Person p = people.get(c);
+        set(people, c, with(p, new Person.Hold(Person.Kind.EXILE, p.hold().province(), p.hold().x(), p.hold().z()), -1, p.nation()));
+        for (int v : vassals) {
+            Person q = people.get(v);
+            if (q.hold().province() < t.owners().length && t.owners()[q.hold().province()] == people.get(t.conqueror()).nation()) {
+                set(people, v, with(q, q.hold(), t.conqueror(), people.get(t.conqueror()).nation()));
+            }
+        }
+    }
+
+    /**
+     * Those who answer to {@code c} come with them to their new nation, their household and the vassals whose land it now
+     * holds; the vassals whose land it doesn't go to their own nation's ruler.
+     */
+    private void follow(Realm realm, int c, Taking t, int nation) {
+        List<Person> people = realm.people();
+        for (int i = 0; i < people.size(); i++) {
+            Person q = people.get(i);
+            if (q.liege() != c || q.hold().kind() == Person.Kind.DEAD) {
+                continue;
+            }
+            boolean ours = q.hold().kind().household() || q.hold().province() < t.owners().length && t.owners()[q.hold().province()] == nation;
+            set(people, i, ours ? with(q, q.hold(), c, nation) : with(q, q.hold(), q.nation() >= 0 ? realm.ruler(q.nation()) : -1, q.nation()));
+        }
+    }
+
+    /**
+     * The conquered family marries into the conqueror's house: its holder weds an unmarried grown member of it (if both
+     * are free) and the family, holder and line, takes the conqueror's name.
+     */
+    private void marryIn(Realm realm, int c, int conqueror, Random random) {
+        List<Person> people = realm.people();
+        Person p = people.get(c);
+        if (Marriages.free(people, c)) {
+            for (int m : realm.line(conqueror)) {
+                if (Marriages.free(people, m) && people.get(m).female() != p.female()) {
+                    weddings.add(Marriages.marry(people, c, m, (i, q) -> set(people, i, q)));
+                    break;
+                }
+            }
+        }
+        String house = people.get(conqueror).family();
+        List<Integer> family = new ArrayList<>(realm.line(c));
+        family.add(c);
+        for (int i : family) {
+            Person q = people.get(i);
+            set(people, i, new Person(q.given(), house, q.female(), q.age(), q.culture(), q.faith(), q.race(), q.stats(), q.traits(), q.hold(),
+                    q.liege(), q.nation(), q.away(), q.spouse()));
+        }
+    }
+
     // ---- hooks ----
 
     /** Intrigue from which one starts uncovering secrets, and the chance a year for each point past it. */

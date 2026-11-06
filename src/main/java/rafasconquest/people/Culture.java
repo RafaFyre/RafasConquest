@@ -7,10 +7,11 @@ import java.util.Random;
 /**
  * A people's culture: its name, the kind of land it grew in (one culture for each {@link Homeland}), and the sounds
  * its names are made of. Each culture draws its own few beginnings and endings from the common stock, so its people's
- * names sound alike and unlike a neighbour's. Every character of a nation has the nation's culture.
+ * names sound alike and unlike a neighbour's. Every character of a nation has the nation's culture. A culture that is {@code rooted}
+ * has the tradition of putting down roots: its lords, taking a greater hold, keep the family there and marry it into their own.
  */
 public record Culture(int id, String name, Homeland homeland, List<String> starts, List<String> middles, List<String> maleEnds,
-                      List<String> femaleEnds, List<String> familyEnds) {
+                      List<String> femaleEnds, List<String> familyEnds, boolean rooted) {
     private static final String[] STARTS = {
             "Al", "Bar", "Cal", "Dor", "El", "Fen", "Gal", "Har", "Ist", "Jor", "Kar", "Lor", "Mar", "Nor", "Os", "Pel",
             "Quar", "Ros", "Sar", "Tal", "Ul", "Val", "Wes", "Xan", "Yr", "Zan", "Ash", "Bel", "Cor", "Dun", "Ev", "Gor",
@@ -37,7 +38,7 @@ public record Culture(int id, String name, Homeland homeland, List<String> start
         List<String> starts = pick(STARTS, 9, random);
         String name = starts.get(0) + pick(MIDDLES, 1, random).get(0) + ADJECTIVE_ENDS[random.nextInt(ADJECTIVE_ENDS.length)];
         return new Culture(homeland.ordinal(), name, homeland, starts, pick(MIDDLES, 5, random), pick(MALE_ENDS, 5, random), pick(FEMALE_ENDS, 4, random),
-                pick(FAMILY_ENDS, 5, random));
+                pick(FAMILY_ENDS, 5, random), random.nextBoolean());
     }
 
     private static List<String> pick(String[] stock, int n, Random random) {

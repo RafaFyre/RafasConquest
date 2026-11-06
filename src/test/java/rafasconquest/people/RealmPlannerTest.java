@@ -279,6 +279,110 @@ class RealmPlannerTest {
         }
     }
 
+    /** A realm whose conqueror (nation 0's ruler) is of a culture that puts down roots, or doesn't. */
+    private static Realm rooted(boolean rooted) {
+        Realm realm = world(9).realm();
+        int r = realm.ruler(0);
+        int id = realm.people().get(r).culture();
+        Culture c = realm.cultures().get(id);
+        realm.cultures().set(id, new Culture(c.id(), c.name(), c.homeland(), c.starts(), c.middles(), c.maleEnds(), c.femaleEnds(), c.familyEnds(), rooted));
+        return realm;
+    }
+
+    /** Nation 1's ruler's hold, taken by nation 0's ruler. */
+    private static Succession.Taking taking(Realm realm, boolean greater, boolean higher) {
+        return taking(realm, greater, higher, false);
+    }
+
+    private static Succession.Taking taking(Realm realm, boolean greater, boolean higher, boolean gone) {
+        Person held = realm.people().get(realm.ruler(1));
+        int[] owners = new int[2000];
+        java.util.Arrays.fill(owners, 0);
+        return new Succession.Taking(held.hold().province(), held.hold().x(), held.hold().z(), realm.ruler(0), greater, higher,
+                Person.Kind.CITY, Person.Kind.CITY, owners, gone);
+    }
+
+    @Test
+    void aLesserHoldsFamilySwearsToTheConqueror() {
+        Realm realm = rooted(true);
+        int r = realm.ruler(0);
+        int c = realm.ruler(1);
+        int hold = realm.people().get(c).hold().province();
+        new Succession().conquer(realm, taking(realm, false, true), new java.util.Random(1));
+        assertEquals(c, realm.holderOf(hold), "the family was put out");
+        assertEquals(r, realm.people().get(c).liege());
+        assertEquals(0, realm.people().get(c).nation());
+        assertTrue(realm.vassals(r).contains(c));
+    }
+
+    @Test
+    void aConquerorNotPuttingDownRootsMovesIntoAGreaterHoldAndPutsTheFamilyOut() {
+        Realm realm = rooted(false);
+        int r = realm.ruler(0);
+        int c = realm.ruler(1);
+        Person ruler = realm.people().get(r);
+        int hold = realm.people().get(c).hold().province();
+        List<Integer> line = realm.line(r);
+        new Succession().conquer(realm, taking(realm, true, false), new java.util.Random(1));
+        assertEquals(r, realm.holderOf(hold), "the conqueror didn't move in");
+        assertEquals(r, realm.ruler(0), "the conqueror no longer rules");
+        assertEquals(Person.Kind.EXILE, realm.people().get(c).hold().kind());
+        if (!line.isEmpty()) {
+            assertEquals(line.get(0), realm.holderOf(ruler.hold().province()), "their old hold didn't go to their heir");
+        }
+    }
+
+    @Test
+    void aRootedConquerorMarriesTheFamilyIntoTheirHouse() {
+        Realm realm = rooted(true);
+        int r = realm.ruler(0);
+        int c = realm.ruler(1);
+        int hold = realm.people().get(c).hold().province();
+        new Succession().conquer(realm, taking(realm, true, false), new java.util.Random(1));
+        assertEquals(c, realm.holderOf(hold));
+        assertEquals(realm.people().get(r).family(), realm.people().get(c).family(), "the family didn't take the conqueror's name");
+        for (int h : realm.line(c)) {
+            assertEquals(realm.people().get(r).family(), realm.people().get(h).family());
+        }
+        assertEquals(r, realm.people().get(c).liege());
+    }
+
+    @Test
+    void aHigherConquerorMovesInAndKeepsTheFamilyAsItsLords() {
+        Realm realm = rooted(true);
+        int r = realm.ruler(0);
+        int c = realm.ruler(1);
+        int hold = realm.people().get(c).hold().province();
+        new Succession().conquer(realm, taking(realm, true, true), new java.util.Random(1));
+        assertEquals(r, realm.holderOf(hold));
+        assertEquals(Person.Kind.LORD, realm.people().get(c).hold().kind());
+        assertEquals(r, realm.people().get(c).liege());
+        assertEquals(realm.people().get(r).family(), realm.people().get(c).family());
+    }
+
+    @Test
+    void aHoldWhoseFamilyIsGoneGoesToOneWithAHookOnTheConqueror() {
+        Realm realm = rooted(true);
+        Succession s = new Succession();
+        java.util.Random random = new java.util.Random(1);
+        int r = realm.ruler(0);
+        int c = realm.ruler(1);
+        int hold = realm.people().get(c).hold().province();
+        Succession.Taking t = taking(realm, true, false, true);
+        // The holder fell defending it (their heir holds it now); someone holds a secret over the conqueror.
+        int heir = s.died(realm, c, random);
+        int schemer = realm.people().size() - 1;
+        while (realm.people().get(schemer).age() < 18 || realm.people().get(schemer).hold().kind() == Person.Kind.DEAD) {
+            schemer--;
+        }
+        s.hook(schemer, r, Hook.Kind.SECRET);
+        String news = s.conquer(realm, t, random);
+        assertEquals(schemer, realm.holderOf(hold), news);
+        assertEquals(Person.Kind.EXILE, realm.people().get(heir).hold().kind(), "what was left of the family stayed");
+        assertEquals(null, s.hook(realm.people(), schemer, r), "the hook wasn't spent");
+        assertEquals(r, realm.people().get(schemer).liege());
+    }
+
     @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.

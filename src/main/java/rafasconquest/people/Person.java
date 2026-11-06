@@ -30,6 +30,8 @@ public record Person(String given, String family, boolean female, int age, int c
         CHILD, SIBLING,
         /** One married to a holder or an heir, living with them at their hold; not in anyone's line. */
         SPOUSE,
+        /** One put out of their hold by a conqueror, living on where it was, holding nothing. */
+        EXILE,
         /** One who has died, remembered where they last lived; they hold nothing and stand nowhere. */
         DEAD;
 
@@ -53,7 +55,7 @@ public record Person(String given, String family, boolean female, int age, int c
     public boolean noble() {
         return switch (hold.kind()) {
             case CAPITAL, CITY, TOWN, CASTLE, CHILD, SIBLING -> true;
-            case LORD, RETAINER, SPOUSE, DEAD -> false;
+            case LORD, RETAINER, SPOUSE, EXILE, DEAD -> false;
         };
     }
 

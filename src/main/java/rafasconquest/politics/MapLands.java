@@ -96,6 +96,52 @@ public final class MapLands implements Lands {
     }
 
     @Override
+    public int rank(int province) {
+        rafasconquest.core.TitleMap.Tier r = map.titles().rank(province);
+        return r == null ? -1 : r.ordinal();
+    }
+
+    @Override
+    public int holdSize(int province) {
+        rafasconquest.core.SeatCities.City c = city(province);
+        return c == null ? 1 : c.districts();
+    }
+
+    @Override
+    public Person.Kind holdKind(int province) {
+        rafasconquest.core.SeatCities.City c = city(province);
+        return c == null ? Person.Kind.CASTLE : c.tier() == rafasconquest.core.TitleMap.Tier.COUNTY ? Person.Kind.TOWN : Person.Kind.CITY;
+    }
+
+    @Override
+    public int[] holdAt(int province) {
+        rafasconquest.core.SeatCities.City c = city(province);
+        if (c != null) {
+            return new int[]{c.x(), c.z()};
+        }
+        for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
+            if (s.province() == province && s.kind() == rafasconquest.core.Countryside.Kind.CASTLE) {
+                return new int[]{s.x(), s.z()};
+            }
+        }
+        return centre(province);
+    }
+
+    @Override
+    public int[] owners() {
+        return map.holders();
+    }
+
+    private rafasconquest.core.SeatCities.City city(int province) {
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (c.province() == province) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    @Override
     public int seat(int nation) {
         return map.nations().get(nation).seat();
     }

@@ -112,7 +112,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     /** The character keeping the hold in a province, or -1. */
     public int holderOf(int province) {
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).hold().province() == province && people.get(i).hold().kind() != Person.Kind.DEAD && !people.get(i).hold().kind().household()) {
+            if (people.get(i).hold().province() == province && people.get(i).hold().kind() != Person.Kind.DEAD && people.get(i).hold().kind() != Person.Kind.EXILE && !people.get(i).hold().kind().household()) {
                 return i;
             }
         }
@@ -184,6 +184,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             writeStrings(out, c.maleEnds());
             writeStrings(out, c.femaleEnds());
             writeStrings(out, c.familyEnds());
+            out.writeBoolean(c.rooted());
         }
         out.writeShort(faiths.size());
         for (Faith f : faiths) {
@@ -280,7 +281,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         int cultureCount = in.readUnsignedShort();
         List<Culture> cultures = new ArrayList<>(cultureCount);
         for (int i = 0; i < cultureCount; i++) {
-            cultures.add(new Culture(i, in.readUTF(), Homeland.values()[in.readUnsignedByte()], readStrings(in), readStrings(in), readStrings(in), readStrings(in), readStrings(in)));
+            cultures.add(new Culture(i, in.readUTF(), Homeland.values()[in.readUnsignedByte()], readStrings(in), readStrings(in), readStrings(in), readStrings(in), readStrings(in), in.readBoolean()));
         }
         int faithCount = in.readUnsignedShort();
         List<Faith> faiths = new ArrayList<>(faithCount);

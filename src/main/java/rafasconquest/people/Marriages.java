@@ -94,15 +94,13 @@ final class Marriages {
                 }
             }
         }
+        if (match >= 0) {
+            return marry(people, i, match, set);
+        }
         int from;
         Person spouse;
         Person.Hold hold = new Person.Hold(Person.Kind.SPOUSE, p.hold().province(), p.hold().x(), p.hold().z());
-        if (match >= 0) {
-            Person q = people.get(match);
-            from = q.nation();
-            spouse = new Person(q.given(), q.family(), q.female(), q.age(), q.culture(), q.faith(), q.race(), q.stats(), q.traits(), hold, i,
-                    p.nation(), false, i);
-        } else {
+        {
             match = people.size();
             from = p.nation();
             Culture culture = cultures.get(p.culture());
@@ -114,6 +112,17 @@ final class Marriages {
         set.set(match, spouse);
         set.set(i, withSpouse(p, match));
         return new Wedding(match, i, from, p.nation());
+    }
+
+    /** {@code i} marries {@code match}, who leaves their line to live with them at their hold. */
+    static Wedding marry(List<Person> people, int i, int match, Setter set) {
+        Person p = people.get(i);
+        Person q = people.get(match);
+        Person.Hold hold = new Person.Hold(Person.Kind.SPOUSE, p.hold().province(), p.hold().x(), p.hold().z());
+        set.set(match, new Person(q.given(), q.family(), q.female(), q.age(), q.culture(), q.faith(), q.race(), q.stats(), q.traits(), hold, i,
+                p.nation(), false, i));
+        set.set(i, withSpouse(p, match));
+        return new Wedding(match, i, q.nation(), p.nation());
     }
 
     /** A child born to a holder and their spouse, into the holder's family and line. */

@@ -129,6 +129,37 @@ public interface Lands {
         return Politics.MIN_ARMY;
     }
 
+    // ---- holds, for conquest ----
+
+    /** The rank of whoever holds the hold at a province, by its fief ({@link rafasconquest.core.TitleMap#rank}): 0 count to 3 emperor, -1 no hold. */
+    default int rank(int province) {
+        return -1;
+    }
+
+    /** How great a hold is: its city's districts across (a lone castle, or none, 1). */
+    default int holdSize(int province) {
+        return 1;
+    }
+
+    /** The kind of hold a province's is, for a holder who isn't a ruler: a city, a town or a castle. */
+    default Person.Kind holdKind(int province) {
+        return Person.Kind.CASTLE;
+    }
+
+    /** Where a province's hold stands (x, z). */
+    default int[] holdAt(int province) {
+        return centre(province);
+    }
+
+    /** Who holds each province now (a nation's index, -1 none). */
+    default int[] owners() {
+        int[] owners = new int[provinces()];
+        for (int p = 0; p < owners.length; p++) {
+            owners[p] = owner(p);
+        }
+        return owners;
+    }
+
     /** Every province under the highest title seated at a province (none if no title is seated there). */
     default java.util.List<Integer> fief(int seat) {
         return java.util.List.of();

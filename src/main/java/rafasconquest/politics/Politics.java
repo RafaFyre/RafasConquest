@@ -546,7 +546,7 @@ public final class Politics {
         front.raised(w, true);
         w.defenderArmy = raise(w, false, now, lands);
         if (w.defenderArmy == null) {
-            ceded(w, day, lands); // no one to defend it
+            ceded(w, day, lands, random, front); // no one to defend it
             return w;
         }
         front.raised(w, false);
@@ -826,14 +826,14 @@ public final class Politics {
             return;
         }
         if (attackerWon) {
-            take(w, w.target, lands);
+            take(w, w.target, lands, day, random, front, true);
             log(day, lands.nationName(w.attacker) + " beat " + lands.nationName(w.defender) + " " + where + ", and took the " + county + ".");
             if (!aim(w, lands)) {
                 peace(w, day, lands, lands.nationName(w.attacker) + " won the war: the whole " + lands.titleName(w.goal) + " is theirs.");
                 return;
             }
             if (sues(w, false, lands, random)) {
-                ceded(w, day, lands);
+                ceded(w, day, lands, random, front);
                 return;
             }
             if (random.nextDouble() < content(lands.person(lands.ruler(w.attacker)))) {
@@ -844,7 +844,7 @@ public final class Politics {
             w.defenderArmy = null;
             w.defenderArmy = raise(w, false, now, lands);
             if (w.defenderArmy == null) {
-                ceded(w, day, lands);
+                ceded(w, day, lands, random, front);
                 return;
             }
             front.raised(w, false);
@@ -936,9 +936,9 @@ public final class Politics {
     }
 
     /** The defender gives up the rest of the title. */
-    private void ceded(War w, long day, Lands lands) {
+    private void ceded(War w, long day, Lands lands, Random random, Front front) {
         for (int c : w.goal.counties(lands)) {
-            take(w, c, lands);
+            take(w, c, lands, day, random, front, false);
         }
         peace(w, day, lands, lands.nationName(w.defender) + " sued for peace, and ceded the " + lands.titleName(w.goal) + " to "
                 + lands.nationName(w.attacker) + ".");
@@ -948,7 +948,7 @@ public final class Politics {
      * The defender's provinces in a county go to the attacker; where one is the hold of a higher title, the rest of that
      * title the defender holds goes with it.
      */
-    private void take(War w, int county, Lands lands) {
+    private void take(War w, int county, Lands lands, long day, Random random, Front front, boolean battle) {
         Set<Integer> taking = new TreeSet<>();
         for (int p = 0; p < lands.provinces(); p++) {
             if (lands.county(p) == county && lands.owner(p) == w.defender) {
@@ -962,6 +962,24 @@ public final class Politics {
                 }
             }
         }
+        // The holds among them, as they stood before (the greatest first): who took each, and how they compare.
+        rafasconquest.people.Realm realm = lands.realm();
+        int conqueror = lands.ruler(w.attacker);
+        List<rafasconquest.people.Succession.Taking> holds = new ArrayList<>();
+        List<Integer> ranks = new ArrayList<>();
+        if (realm != null && conqueror >= 0) {
+            int own = lands.person(conqueror).hold().province();
+            for (int p : taking) {
+                int rank = lands.rank(p);
+                if (rank < 0 || front.playerCounties().containsKey(p)) {
+                    continue; // no hold, or a player's (theirs to lose by their own lights)
+                }
+                int[] at = lands.holdAt(p);
+                holds.add(new rafasconquest.people.Succession.Taking(p, at[0], at[1], conqueror, lands.holdSize(p) > lands.holdSize(own),
+                        lands.rank(own) > rank, lands.holdKind(p), lands.holdKind(own), null, false));
+                ranks.add(rank);
+            }
+        }
         for (int p : taking) {
             lands.transfer(p, w.attacker);
             conquered.put(p, w.attacker);
@@ -970,6 +988,33 @@ public final class Politics {
         if (!w.taken.contains(county)) {
             w.taken.add(county);
         }
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < holds.size(); i++) {
+            order.add(i);
+        }
+        order.sort((a, b) -> ranks.get(b) - ranks.get(a));
+        for (int i : order) {
+            rafasconquest.people.Succession.Taking t = holds.get(i);
+            String what = succession.conquer(realm, new rafasconquest.people.Succession.Taking(t.hold(), t.x(), t.z(), t.conqueror(), t.greater(),
+                    t.higher(), t.holdKind(), t.oldHoldKind(), lands.owners(), fell(t.hold(), battle, day, lands, random)), random);
+            if (what != null) {
+                log(day, what);
+            }
+        }
+    }
+
+    /** A hold's holder, taken in battle, falls defending it this often (by peace terms they yield). */
+    static final double FALL_DEFENDING = 0.3;
+
+    /** Whether a hold's family is gone: its holder fell defending it (and so died). */
+    private boolean fell(int hold, boolean battle, long day, Lands lands, Random random) {
+        int holder = lands.holder(hold);
+        if (!battle || holder < 0 || random.nextDouble() >= FALL_DEFENDING) {
+            return false;
+        }
+        String name = lands.realm().holdName(hold);
+        died(holder, day, lands, random, "fell defending " + (name.isEmpty() ? lands.provinceName(hold) : name));
+        return true;
     }
 
     private void peace(War w, long day, Lands lands, String text) {
