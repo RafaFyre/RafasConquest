@@ -129,6 +129,11 @@ public interface Lands {
         return Politics.MIN_ARMY;
     }
 
+    /** The realm's people, for who lives, dies and inherits; null where there is none to keep (as in tests). */
+    default rafasconquest.people.Realm realm() {
+        return null;
+    }
+
     /** A character's champion for a duel: the best fighter of them and their retinue, none of {@code fallen}; -1 if none. */
     default int champion(int person, Set<Integer> fallen) {
         return fallen.contains(person) ? -1 : person;

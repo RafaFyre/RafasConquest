@@ -212,6 +212,11 @@ public final class MapLands implements Lands {
     }
 
     @Override
+    public rafasconquest.people.Realm realm() {
+        return map.realm();
+    }
+
+    @Override
     public int holder(int province) {
         return map.realm().holderOf(province);
     }
@@ -225,7 +230,8 @@ public final class MapLands implements Lands {
     public List<int[]> rivals() {
         List<int[]> pairs = new ArrayList<>();
         for (rafasconquest.people.Realm.Bond bond : map.realm().bonds()) {
-            if (bond.kind() == rafasconquest.people.Realm.Bond.Kind.RIVAL) {
+            if (bond.kind() == rafasconquest.people.Realm.Bond.Kind.RIVAL && person(bond.a()).hold().kind() != rafasconquest.people.Person.Kind.DEAD
+                    && person(bond.b()).hold().kind() != rafasconquest.people.Person.Kind.DEAD) {
                 pairs.add(new int[]{bond.a(), bond.b()});
             }
         }

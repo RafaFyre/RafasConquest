@@ -431,7 +431,7 @@ public final class RealmPlanner {
     }
 
     /** A holder: name of their culture, skills from their schooling and traits, prowess now and then superhuman. */
-    private static Person person(Random random, Culture culture, int cultureId, int faith, int race, Person.Hold hold, int nation,
+    static Person person(Random random, Culture culture, int cultureId, int faith, int race, Person.Hold hold, int nation,
                                  boolean sanctum, int[] titles) {
         boolean female = random.nextDouble() < 0.25;
         int age = 18 + random.nextInt(53);

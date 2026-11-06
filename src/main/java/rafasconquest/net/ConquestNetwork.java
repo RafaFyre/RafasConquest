@@ -319,7 +319,8 @@ public final class ConquestNetwork {
      * news, and the feuds' fights called (duel? 1 : 0, x, z) with what each is (a line).
      */
     public record PoliticsView(java.util.List<int[]> wars, java.util.List<int[]> armies, java.util.List<int[]> alliances, java.util.Map<Integer, Integer> conquered,
-                               java.util.List<String> news, java.util.List<int[]> clashes, java.util.List<String> clashNames) {
+                               java.util.List<String> news, java.util.List<int[]> clashes, java.util.List<String> clashNames,
+                               byte[] succession) {
         void write(FriendlyByteBuf buf) {
             buf.writeCollection(wars, FriendlyByteBuf::writeVarIntArray);
             buf.writeCollection(armies, FriendlyByteBuf::writeVarIntArray);
@@ -328,13 +329,14 @@ public final class ConquestNetwork {
             buf.writeCollection(news, FriendlyByteBuf::writeUtf);
             buf.writeCollection(clashes, FriendlyByteBuf::writeVarIntArray);
             buf.writeCollection(clashNames, FriendlyByteBuf::writeUtf);
+            buf.writeByteArray(succession);
         }
 
         static PoliticsView read(FriendlyByteBuf buf) {
             return new PoliticsView(buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf),
-                    buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readUtf));
+                    buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readUtf), buf.readByteArray());
         }
     }
 

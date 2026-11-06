@@ -129,6 +129,62 @@ class RealmPlannerTest {
     }
 
     @Test
+    void aRulersEldestHeirInheritsTheirHoldLiegeVassalsAndLine() {
+        World w = world(9);
+        Realm realm = w.realm();
+        int nation = 0;
+        int d = realm.ruler(nation);
+        Person dead = realm.people().get(d);
+        List<Integer> line = realm.line(d);
+        List<Integer> vassals = realm.vassals(d);
+        assertFalse(line.isEmpty());
+        Succession s = new Succession();
+        int h = s.died(realm, d, new java.util.Random(1));
+        assertEquals(line.get(0), h, "not the first in line");
+        assertEquals(Person.Kind.DEAD, realm.people().get(d).hold().kind());
+        assertEquals(h, realm.ruler(nation), "the heir doesn't rule");
+        assertEquals(h, realm.holderOf(dead.hold().province()));
+        assertEquals(vassals, realm.vassals(h));
+        assertEquals(line.subList(1, line.size()), realm.line(h));
+        // Kept, sent, and written over the realm as drawn, it comes out the same.
+        Realm drawn = world(9).realm();
+        Succession.decode(s.encode()).apply(drawn);
+        for (int i = 0; i < realm.people().size(); i++) {
+            assertEquals(realm.people().get(i).name(), drawn.people().get(i).name());
+            assertEquals(realm.people().get(i).hold(), drawn.people().get(i).hold());
+            assertEquals(realm.people().get(i).liege(), drawn.people().get(i).liege());
+        }
+    }
+
+    @Test
+    void withNoOneInLineACousinOfTheFamilyHoldsIt() {
+        Realm realm = world(9).realm();
+        Succession s = new Succession();
+        java.util.Random random = new java.util.Random(2);
+        int d = realm.ruler(0);
+        for (int heir : realm.line(d)) {
+            s.died(realm, heir, random);
+        }
+        assertTrue(realm.line(d).isEmpty());
+        int size = realm.people().size();
+        int h = s.died(realm, d, random);
+        assertEquals(size, h, "the cousin isn't someone new");
+        assertEquals(realm.people().get(d).family(), realm.people().get(h).family());
+        assertEquals(h, realm.ruler(0));
+    }
+
+    @Test
+    void everyoneAgesAtTheYearsTurnAndTheOldDieLikelier() {
+        Realm realm = world(9).realm();
+        int age = realm.people().get(0).age();
+        Succession s = new Succession();
+        s.day(Succession.YEAR_DAYS, realm, new java.util.Random(3), java.util.Set.of());
+        assertEquals(age + 1, realm.people().get(0).age());
+        assertEquals(1, s.years());
+        assertTrue(Succession.yearly(75) > 5 * Succession.yearly(30));
+    }
+
+    @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.
         List<List<Homeland>> styles = new ArrayList<>();

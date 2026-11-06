@@ -12,7 +12,7 @@ import java.util.Map;
  */
 public final class ClientPolitics {
     private static ConquestNetwork.PoliticsView view = new ConquestNetwork.PoliticsView(List.of(), List.of(), List.of(), Map.of(), List.of(),
-            List.of(), List.of());
+            List.of(), List.of(), new byte[0]);
 
     private ClientPolitics() {
     }
@@ -25,8 +25,9 @@ public final class ClientPolitics {
         }
     }
 
-    /** Writes the conquests into a map's holders. */
+    /** Writes the conquests into a map's holders, and who has died and inherited over its people. */
     public static void apply(BaseMap map) {
+        rafasconquest.people.Succession.decode(view.succession()).apply(map.realm());
         view.conquered().forEach((p, n) -> {
             if (p >= 0 && p < map.holders().length && n < map.nations().size()) {
                 map.holders()[p] = n;

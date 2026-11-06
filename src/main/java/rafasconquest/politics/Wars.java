@@ -60,6 +60,7 @@ public final class Wars {
                 map.holders()[p] = n;
             }
         });
+        PoliticsData.get(overworld).politics.succession().apply(map.realm());
         mustered.clear();
         pendingWar = -1;
         MusterBars.clear();
@@ -91,6 +92,7 @@ public final class Wars {
         }
         Random random = new Random(server.overworld().getSeed() ^ day * 0x9E3779B97F4A7C15L);
         data.politics.day(day, MapLands.of(map), random, front(server, map));
+        rafasconquest.peerage.Peerage.get(server).inherited(data.politics.succession().drainDeaths());
         data.setDirty();
         claimCities(map, data.politics);
         heralds(server, data.politics, day);

@@ -130,6 +130,33 @@ public final class Peerage extends SavedData {
         return heldBy.containsKey(province) || fates.containsKey(province);
     }
 
+    /**
+     * Characters have died, each {the dead, their heir or -1}: a player sworn to one is sworn to their heir now, and one
+     * sworn to a player is followed by their heir, if any.
+     */
+    public void inherited(List<int[]> deaths) {
+        for (int[] d : deaths) {
+            for (Peer p : peers.values()) {
+                if (p.liege == d[0]) {
+                    p.liege = d[1];
+                }
+                if (p.vassals.remove(d[0]) && d[1] >= 0) {
+                    p.vassals.add(d[1]);
+                    rafasconquest.character.Job job = p.vassalJobs.remove(d[0]);
+                    if (job != null) {
+                        p.vassalJobs.put(d[1], job);
+                    }
+                }
+                if (p.known.contains(d[0]) && d[1] >= 0) {
+                    p.known.add(d[1]); // the heir knows what the player did for their family
+                }
+            }
+        }
+        if (!deaths.isEmpty()) {
+            setDirty();
+        }
+    }
+
     public void changed() {
         setDirty();
     }

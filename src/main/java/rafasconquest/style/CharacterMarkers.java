@@ -202,7 +202,7 @@ public final class CharacterMarkers {
         double chosenScore = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < realm.people().size(); i++) {
             Person p = realm.people().get(i);
-            if (nation >= 0 && p.nation() != nation || !spec.twoPlaces() && placed.has(i) || !ranked(realm, spec.rank(), i, p)) {
+            if (p.hold().kind() == Person.Kind.DEAD || nation >= 0 && p.nation() != nation || !spec.twoPlaces() && placed.has(i) || !ranked(realm, spec.rank(), i, p)) {
                 continue;
             }
             if (other >= 0 && !related(realm, spec.relation(), i, other)) {

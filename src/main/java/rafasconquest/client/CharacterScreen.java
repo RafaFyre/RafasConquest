@@ -419,6 +419,7 @@ public class CharacterScreen extends Screen {
             case RETAINER -> "lives at the sanctum of";
             case CHILD -> "a child of the holder of";
             case SIBLING -> "a sibling of the holder of";
+            case DEAD -> "is dead; they lived at";
         };
     }
 

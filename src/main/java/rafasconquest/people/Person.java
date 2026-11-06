@@ -21,7 +21,9 @@ public record Person(String given, String family, boolean female, int age, int c
         /** One who lives at a sword sanctum, trained there, holding nothing: its Sword Kings and Saints. */
         RETAINER,
         /** A title holder's child or sibling, living at their hold, in line for their titles (children first). */
-        CHILD, SIBLING;
+        CHILD, SIBLING,
+        /** One who has died, remembered where they last lived; they hold nothing and stand nowhere. */
+        DEAD;
 
         /** Whether this is one in line for a holder's titles rather than one holding anything. */
         public boolean heir() {
@@ -33,7 +35,7 @@ public record Person(String given, String family, boolean female, int age, int c
     public boolean noble() {
         return switch (hold.kind()) {
             case CAPITAL, CITY, TOWN, CASTLE, CHILD, SIBLING -> true;
-            case LORD, RETAINER -> false;
+            case LORD, RETAINER, DEAD -> false;
         };
     }
 

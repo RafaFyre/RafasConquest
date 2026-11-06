@@ -467,6 +467,9 @@ final class Feuds {
             politics.log(day, wc + ", for " + name(winner, lands, front) + ", beat " + lc + " in a duel; " + lc + " yielded.");
         }
         yielded(politics, f, day, lands, random, front, holdings(lands, front.playerCounties()));
+        if (loserDied && c != null && c.champion(!aWon) >= 0) {
+            politics.died(c.champion(!aWon), day, lands, random, "fell in a duel to the death"); // after the yielding, so the feud ends first
+        }
     }
 
     private static String champion(int champion, Feud.Lord lord, Lands lands, Politics.Front front) {

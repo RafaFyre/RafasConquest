@@ -116,7 +116,7 @@ public final class Organizations {
             saints.sort((a, b) -> people.get(b).stat(Stat.PROWESS) - people.get(a).stat(Stat.PROWESS));
             filled.add(new Organization(o.name(), o.nation(), o.head(), List.copyOf(kings), List.copyOf(saints)));
         }
-        return new Realm(realm.cultures(), realm.faiths(), List.copyOf(people), realm.bonds(), realm.nationCulture(), realm.nationFaith(),
+        return new Realm(realm.cultures(), realm.faiths(), people, realm.bonds(), realm.nationCulture(), realm.nationFaith(),
                 realm.nationPiety(), realm.demographics(), filled, realm.holds());
     }
 

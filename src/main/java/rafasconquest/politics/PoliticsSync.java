@@ -63,6 +63,7 @@ public final class PoliticsSync {
                         + Feuds.name(f.lord(false), lands, front));
             }
         }
-        return new ConquestNetwork.PoliticsView(wars, armies, politics.alliances(), politics.conquered(), news, clashes, clashNames);
+        return new ConquestNetwork.PoliticsView(wars, armies, politics.alliances(), politics.conquered(), news, clashes, clashNames,
+                politics.succession().encode());
     }
 }

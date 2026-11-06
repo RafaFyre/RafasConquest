@@ -89,7 +89,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     public List<Integer> vassals(int a) {
         List<Integer> found = new ArrayList<>();
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).liege() == a && !people.get(i).hold().kind().heir()) {
+            if (people.get(i).liege() == a && !people.get(i).hold().kind().heir() && people.get(i).hold().kind() != Person.Kind.DEAD) {
                 found.add(i);
             }
         }
@@ -112,7 +112,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     /** The character keeping the hold in a province, or -1. */
     public int holderOf(int province) {
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).hold().province() == province) {
+            if (people.get(i).hold().province() == province && people.get(i).hold().kind() != Person.Kind.DEAD) {
                 return i;
             }
         }
@@ -190,27 +190,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         }
         out.writeShort(people.size());
         for (Person p : people) {
-            out.writeUTF(p.given());
-            out.writeUTF(p.family());
-            out.writeBoolean(p.female());
-            out.writeByte(p.age());
-            out.writeShort(p.culture());
-            out.writeShort(p.faith());
-            out.writeByte(p.race());
-            for (int s : p.stats()) {
-                out.writeByte(s);
-            }
-            out.writeByte(p.traits().size());
-            for (Personality t : p.traits()) {
-                out.writeByte(t.ordinal());
-            }
-            out.writeByte(p.hold().kind().ordinal());
-            out.writeShort(p.hold().province());
-            out.writeInt(p.hold().x());
-            out.writeInt(p.hold().z());
-            out.writeShort(p.liege());
-            out.writeShort(p.nation());
-            out.writeBoolean(p.away());
+            writePerson(out, p);
         }
         out.writeInt(bonds.size());
         for (Bond b : bonds) {
@@ -247,6 +227,52 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         }
     }
 
+    static void writePerson(DataOutputStream out, Person p) throws IOException {
+        out.writeUTF(p.given());
+        out.writeUTF(p.family());
+        out.writeBoolean(p.female());
+        out.writeByte(p.age());
+        out.writeShort(p.culture());
+        out.writeShort(p.faith());
+        out.writeByte(p.race());
+        for (int s : p.stats()) {
+            out.writeByte(s);
+        }
+        out.writeByte(p.traits().size());
+        for (Personality t : p.traits()) {
+            out.writeByte(t.ordinal());
+        }
+        out.writeByte(p.hold().kind().ordinal());
+        out.writeShort(p.hold().province());
+        out.writeInt(p.hold().x());
+        out.writeInt(p.hold().z());
+        out.writeShort(p.liege());
+        out.writeShort(p.nation());
+        out.writeBoolean(p.away());
+    }
+
+    static Person readPerson(DataInputStream in) throws IOException {
+        String given = in.readUTF();
+        String family = in.readUTF();
+        boolean female = in.readBoolean();
+        int age = in.readUnsignedByte();
+        int culture = in.readShort();
+        int faith = in.readShort();
+        int race = in.readUnsignedByte();
+        int[] stats = new int[Stat.values().length];
+        for (int s = 0; s < stats.length; s++) {
+            stats[s] = in.readUnsignedByte();
+        }
+        int traitCount = in.readUnsignedByte();
+        List<Personality> traits = new ArrayList<>(traitCount);
+        for (int t = 0; t < traitCount; t++) {
+            traits.add(Personality.values()[in.readUnsignedByte()]);
+        }
+        Person.Hold hold = new Person.Hold(Person.Kind.values()[in.readUnsignedByte()], in.readShort(), in.readInt(), in.readInt());
+        return new Person(given, family, female, age, culture, faith, race, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
+                in.readBoolean());
+    }
+
     public static Realm read(DataInputStream in) throws IOException {
         int cultureCount = in.readUnsignedShort();
         List<Culture> cultures = new ArrayList<>(cultureCount);
@@ -261,25 +287,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         int personCount = in.readUnsignedShort();
         List<Person> people = new ArrayList<>(personCount);
         for (int i = 0; i < personCount; i++) {
-            String given = in.readUTF();
-            String family = in.readUTF();
-            boolean female = in.readBoolean();
-            int age = in.readUnsignedByte();
-            int culture = in.readShort();
-            int faith = in.readShort();
-            int race = in.readUnsignedByte();
-            int[] stats = new int[Stat.values().length];
-            for (int s = 0; s < stats.length; s++) {
-                stats[s] = in.readUnsignedByte();
-            }
-            int traitCount = in.readUnsignedByte();
-            List<Personality> traits = new ArrayList<>(traitCount);
-            for (int t = 0; t < traitCount; t++) {
-                traits.add(Personality.values()[in.readUnsignedByte()]);
-            }
-            Person.Hold hold = new Person.Hold(Person.Kind.values()[in.readUnsignedByte()], in.readShort(), in.readInt(), in.readInt());
-            people.add(new Person(given, family, female, age, culture, faith, race, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
-                    in.readBoolean()));
+            people.add(readPerson(in));
         }
         int bondCount = in.readInt();
         List<Bond> bonds = new ArrayList<>(bondCount);

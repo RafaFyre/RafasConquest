@@ -106,6 +106,8 @@ public final class Politics {
     final List<Event> chronicle = new ArrayList<>();
     /** The lords' feuds, and the land feuds gave them. */
     Feuds feuds = new Feuds();
+    /** Who has grown old, died and inherited. */
+    rafasconquest.people.Succession succession = new rafasconquest.people.Succession();
     /** Wars whose battle is being fought for real. */
     private final Set<Long> awaiting = new HashSet<>();
     private long nextWar = 1;
@@ -118,6 +120,32 @@ public final class Politics {
 
     public Map<Integer, Integer> conquered() {
         return Collections.unmodifiableMap(conquered);
+    }
+
+    public rafasconquest.people.Succession succession() {
+        return succession;
+    }
+
+    /**
+     * A character dies ({@code how}: "died, aged 71", "fell in a duel"): the news if they held a hold, and their heir takes
+     * it; feuds they were in end with them, and land a feud gave them goes to their heir.
+     */
+    void died(int d, long day, Lands lands, Random random, String how) {
+        rafasconquest.people.Realm realm = lands.realm();
+        if (realm == null || d < 0 || d >= realm.people().size()) {
+            return;
+        }
+        Person dead = lands.person(d);
+        String hold = realm.holdName(dead.hold().province());
+        boolean held = dead.noble() && !dead.hold().kind().heir();
+        int h = succession.died(realm, d, random);
+        if (held) {
+            log(day, dead.name() + " " + how + (h >= 0 ? "; " + lands.person(h).name() + " now holds " + (hold.isEmpty() ? "their lands" : hold) : "") + ".");
+        }
+        feuds.list.removeIf(f -> f.a.person() == d || f.b.person() == d);
+        if (h >= 0) {
+            feuds.lords.replaceAll((p, lord) -> lord.person() == d ? Feud.Lord.of(h) : lord);
+        }
     }
 
     public List<Event> chronicle() {
@@ -244,6 +272,12 @@ public final class Politics {
             }
         }
         feuds.day(this, day, lands, random, front);
+        rafasconquest.people.Realm realm = lands.realm();
+        if (realm != null) {
+            for (int d : succession.day(day, realm, random, front.playerCounties().keySet())) {
+                died(d, day, lands, random, "died, aged " + lands.person(d).age());
+            }
+        }
         while (chronicle.size() > CHRONICLE) {
             chronicle.remove(0);
         }
@@ -951,6 +985,7 @@ public final class Politics {
         tag.putLong("nextWar", nextWar);
         tag.putDouble("moved", moved);
         tag.put("feuds", feuds.save());
+        tag.putByteArray("succession", succession.encode());
         return tag;
     }
 
@@ -981,6 +1016,7 @@ public final class Politics {
         p.nextWar = Math.max(1, tag.getLong("nextWar"));
         p.moved = tag.contains("moved") ? tag.getDouble("moved") : -1;
         p.feuds = Feuds.load(tag.getCompound("feuds"));
+        p.succession = rafasconquest.people.Succession.decode(tag.getByteArray("succession"));
         return p;
     }
 }
