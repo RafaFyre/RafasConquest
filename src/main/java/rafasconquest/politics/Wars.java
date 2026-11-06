@@ -61,6 +61,7 @@ public final class Wars {
             }
         });
         PoliticsData.get(overworld).politics.succession().apply(map.realm());
+        MapLands.of(map).regroup();
         mustered.clear();
         pendingWar = -1;
         MusterBars.clear();

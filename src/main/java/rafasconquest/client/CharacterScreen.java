@@ -159,7 +159,7 @@ public class CharacterScreen extends Screen {
         int nameW = (int) (width * 0.43);
         int nameH = Math.max(16, (int) (height * 0.074));
         Portraits.box(g, nameX, nameY, nameW, nameH);
-        String name = header(p, nation, ruler, place);
+        String name = header(p, nation, ruler, place, base.titles().rank(p.hold().province()));
         float size = Math.min(1.5F, (nameW - 10F) / Math.max(1, font.width(name)));
         g.pose().pushPose();
         g.pose().translate(nameX + nameW / 2F - font.width(name) * size / 2, nameY + nameH / 2F - 4 * size, 0);
@@ -311,10 +311,10 @@ public class CharacterScreen extends Screen {
     }
 
     /** "EMPRESS CALANTHE OF ULDARESH": their title, given name and where they hold; a sanctum's ruler by their sword. */
-    private static String header(Person p, @Nullable BaseMap.Nation nation, boolean ruler, String place) {
+    private static String header(Person p, @Nullable BaseMap.Nation nation, boolean ruler, String place, @Nullable rafasconquest.core.TitleMap.Tier rank) {
         String sword = Stat.superhumanTier(p.stat(Stat.PROWESS));
         String title = nation != null && nation.sanctum() && ruler && !sword.isEmpty() ? sword
-                : Realm.title(p, nation == null ? 0 : nation.tier().ordinal());
+                : Realm.title(p, rank);
         String where = ruler && nation != null && !nation.sanctum()
                 ? nation.name().endsWith(" Empire") ? nation.name().substring(0, nation.name().length() - " Empire".length()) : nation.name()
                 : place;

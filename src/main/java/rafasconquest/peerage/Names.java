@@ -21,7 +21,7 @@ public final class Names {
         if (nation != null && nation.sanctum() && nation.seat() == p.hold().province() && !sword.isEmpty()) {
             return sword + " " + p.name() + where;
         }
-        String title = Realm.title(p, nation == null ? 0 : nation.tier().ordinal()) + " " + p.name() + where;
+        String title = Realm.title(p, base.titles().rank(p.hold().province())) + " " + p.name() + where;
         return sword.isEmpty() ? title : title + ", " + sword;
     }
 

@@ -33,6 +33,7 @@ public final class ClientPolitics {
                 map.holders()[p] = n;
             }
         });
+        rafasconquest.politics.MapLands.of(map).regroup();
     }
 
     /** Each war: attacker, defender, duchy? 1 : 0, the title, the county fought for next, counties taken, counties in all, site x, z. */

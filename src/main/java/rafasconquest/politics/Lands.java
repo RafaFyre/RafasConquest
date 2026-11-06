@@ -129,6 +129,11 @@ public interface Lands {
         return Politics.MIN_ARMY;
     }
 
+    /** Every province under the highest title seated at a province (none if no title is seated there). */
+    default java.util.List<Integer> fief(int seat) {
+        return java.util.List.of();
+    }
+
     /** The realm's people, for who lives, dies and inherits; null where there is none to keep (as in tests). */
     default rafasconquest.people.Realm realm() {
         return null;

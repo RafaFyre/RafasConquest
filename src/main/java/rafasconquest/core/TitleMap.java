@@ -101,6 +101,95 @@ public record TitleMap(int[] county, int[] duchy, int[] kingdom, int[] empire,
         return provinces;
     }
 
+    /** A title's rank as its fief now stands: a duchy's worth of land or more is a duke's, and so on; at least a count's. */
+    public static final double[] RANK_WORTH = {0, 3, 6, 18};
+
+    /**
+     * The rank of whoever holds the hold at {@code seat}, by the size of its fief in counties' worth (provinces over the
+     * drawn map's average county): its titles keep their names, but a duchy left with one county is a count's, a county
+     * grown to three counties' worth a duke's. Null if no title is seated there.
+     */
+    public Tier rank(int seat) {
+        if (seatOf(seat) == null) {
+            return null;
+        }
+        int land = 0;
+        for (int c : county) {
+            land += c >= 0 ? 1 : 0;
+        }
+        double worth = fief(seat).size() / ((double) land / Math.max(1, counties()));
+        Tier rank = Tier.COUNTY;
+        for (Tier t : Tier.values()) {
+            if (worth >= RANK_WORTH[t.ordinal()]) {
+                rank = t;
+            }
+        }
+        return rank;
+    }
+
+    /** Each title map's groups as drawn, before any conquest moved land between them. */
+    private static final java.util.Map<TitleMap, int[][]> DRAWN = new java.util.IdentityHashMap<>();
+
+    /**
+     * Moves land between titles as it has changed hands, in place, from the titles as drawn: a province held by someone
+     * other than the holder of its county's seat joins a neighbouring county whose seat its holder holds, if one touches
+     * it (and land beyond it, once that has); likewise a county between duchies, a duchy between kingdoms and a kingdom
+     * between empires. A seat never leaves its title, and land given back goes back where it was drawn.
+     * {@code holders[province]} is who holds each province; {@code adjacent} which provinces touch.
+     */
+    public void regroup(int[] holders, List<? extends java.util.Set<Integer>> adjacent) {
+        int[][] drawn;
+        synchronized (DRAWN) {
+            if (DRAWN.size() > 8 && !DRAWN.containsKey(this)) {
+                DRAWN.clear(); // old worlds' maps, long gone
+            }
+            drawn = DRAWN.computeIfAbsent(this, t -> new int[][]{t.county.clone(), t.duchy.clone(), t.kingdom.clone(), t.empire.clone()});
+        }
+        int[][] seats = {countySeat, duchySeat, kingdomSeat, empireSeat};
+        int[][] unitSeats = {null, countySeat, duchySeat, kingdomSeat};
+        List<? extends java.util.Set<Integer>> adj = adjacent;
+        int[] below = null;
+        for (int level = 0; level < 4; level++) {
+            int[] of = drawn[level].clone();
+            if (level > 0) {
+                adj = lift(adj, below, of.length);
+            }
+            int[] owner = new int[of.length];
+            for (int u = 0; u < of.length; u++) {
+                int at = level == 0 ? u : unitSeats[level][u];
+                owner[u] = at >= 0 && at < holders.length ? holders[at] : -1;
+            }
+            shift(of, seats[level], owner, holders, adj);
+            System.arraycopy(of, 0, new int[][]{county, duchy, kingdom, empire}[level], 0, of.length);
+            below = of;
+        }
+    }
+
+    /** Moves each unit held apart from its group's seat into a touching group whose seat its holder holds, until none moves. */
+    private static void shift(int[] of, int[] seat, int[] owner, int[] holders, List<? extends java.util.Set<Integer>> adjacent) {
+        boolean moved = true;
+        while (moved) {
+            moved = false;
+            for (int u = 0; u < of.length; u++) {
+                int o = owner[u];
+                if (of[u] < 0 || o < 0 || holders[seat[of[u]]] == o) {
+                    continue;
+                }
+                int best = -1;
+                for (int v : adjacent.get(u)) {
+                    int g = of[v];
+                    if (g >= 0 && g != of[u] && holders[seat[g]] == o && (best < 0 || g < best)) {
+                        best = g;
+                    }
+                }
+                if (best >= 0) {
+                    of[u] = best;
+                    moved = true;
+                }
+            }
+        }
+    }
+
     /** The title of this tier a province lies in. */
     public int titleOf(int province, Tier tier) {
         int t = county[province];
@@ -248,14 +337,14 @@ public record TitleMap(int[] county, int[] duchy, int[] kingdom, int[] empire,
     }
 
     /** Which groups neighbour which, from which of their members do. */
-    static List<TreeSet<Integer>> lift(List<TreeSet<Integer>> adjacent, int[] of, int groups) {
+    static List<TreeSet<Integer>> lift(List<? extends java.util.Set<Integer>> adjacent, int[] of, int groups) {
         List<TreeSet<Integer>> lifted = new ArrayList<>(groups);
         for (int g = 0; g < groups; g++) {
             lifted.add(new TreeSet<>());
         }
         for (int i = 0; i < adjacent.size(); i++) {
             for (int q : adjacent.get(i)) {
-                if (of[i] != of[q]) {
+                if (of[i] >= 0 && of[q] >= 0 && of[i] != of[q]) {
                     lifted.get(of[i]).add(of[q]);
                 }
             }

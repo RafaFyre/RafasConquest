@@ -82,6 +82,17 @@ public final class MapLands implements Lands {
     @Override
     public void transfer(int province, int nation) {
         map.holders()[province] = nation;
+        regroup();
+    }
+
+    /** Moves land between the titles as it now lies ({@link rafasconquest.core.TitleMap#regroup}). */
+    public void regroup() {
+        map.titles().regroup(map.holders(), adjacent);
+    }
+
+    @Override
+    public List<Integer> fief(int seat) {
+        return map.titles().fief(seat);
     }
 
     @Override

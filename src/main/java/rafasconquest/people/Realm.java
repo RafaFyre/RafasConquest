@@ -153,20 +153,19 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     }
 
     /**
-     * What a character is called with their hold: a nation's ruler by its rank (Emperor, King, Count of a City-state),
-     * a city's lord a Duke, a town's a Count, a castle's a Lord; "Duchess", "Queen" and so on for women.
+     * What a character is called: one holding a hold by its rank as its fief now stands ({@link
+     * rafasconquest.core.TitleMap#rank}: Emperor, King, Duke, Count), else a Lord; "Duchess", "Queen" and so on for women.
      */
-    public static String title(Person p, int nationTier) {
+    public static String title(Person p, @org.jetbrains.annotations.Nullable rafasconquest.core.TitleMap.Tier rank) {
         String[] male;
         switch (p.hold().kind()) {
-            case CAPITAL -> male = switch (nationTier) {
+            case CAPITAL, CITY, TOWN, CASTLE -> male = switch (rank == null ? -1 : rank.ordinal()) {
                 case 3 -> new String[]{"Emperor", "Empress"};
                 case 2 -> new String[]{"King", "Queen"};
                 case 1 -> new String[]{"Duke", "Duchess"};
-                default -> new String[]{"Count", "Countess"};
+                case 0 -> new String[]{"Count", "Countess"};
+                default -> new String[]{"Lord", "Lady"};
             };
-            case CITY -> male = new String[]{"Duke", "Duchess"};
-            case TOWN -> male = new String[]{"Count", "Countess"};
             default -> male = new String[]{"Lord", "Lady"};
         }
         return male[p.female() ? 1 : 0];

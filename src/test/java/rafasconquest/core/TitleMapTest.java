@@ -152,4 +152,91 @@ class TitleMapTest {
         assertArrayEquals(a.county(), b.county());
         assertArrayEquals(a.empireSeat(), b.empireSeat());
     }
+
+    /** Which provinces touch which, on the land's grid. */
+    private static java.util.List<java.util.TreeSet<Integer>> adjacency(Land l) {
+        java.util.List<java.util.TreeSet<Integer>> adj = new java.util.ArrayList<>();
+        for (int i = 0; i < l.count(); i++) {
+            adj.add(new java.util.TreeSet<>());
+        }
+        int w = l.width();
+        for (int z = 0; z < w; z++) {
+            for (int x = 0; x < w; x++) {
+                int p = l.provinces()[z * w + x];
+                for (int q : new int[]{x + 1 < w ? l.provinces()[z * w + x + 1] : -1, z + 1 < w ? l.provinces()[(z + 1) * w + x] : -1}) {
+                    if (p >= 0 && q >= 0 && p != q) {
+                        adj.get(p).add(q);
+                        adj.get(q).add(p);
+                    }
+                }
+            }
+        }
+        return adj;
+    }
+
+    @Test
+    void aProvinceTakenJoinsTheTakersTitleNextToItAndGoesBackWhenReturned() {
+        Land l = land(30, 4);
+        TitleMap t = titles(l, 13);
+        var adj = adjacency(l);
+        int[] holders = new int[l.count()];
+        for (int p = 0; p < holders.length; p++) {
+            holders[p] = t.county()[p]; // each county its own lord
+        }
+        // A province that isn't a seat, touching another county.
+        int moved = -1;
+        int into = -1;
+        for (int p = 0; p < l.count() && moved < 0; p++) {
+            if (t.countySeat()[t.county()[p]] == p) {
+                continue;
+            }
+            for (int q : adj.get(p)) {
+                if (t.county()[q] != t.county()[p]) {
+                    moved = p;
+                    into = t.county()[q];
+                    break;
+                }
+            }
+        }
+        int from = t.county()[moved];
+        int[] seatsBefore = t.countySeat().clone();
+        holders[moved] = into;
+        t.regroup(holders, adj);
+        assertEquals(into, t.county()[moved], "the province didn't join its taker's county");
+        assertArrayEquals(seatsBefore, t.countySeat());
+        for (int c = 0; c < t.counties(); c++) {
+            assertEquals(c, t.county()[t.countySeat()[c]], "a seat left its title");
+        }
+        holders[moved] = from;
+        t.regroup(holders, adj);
+        assertEquals(from, t.county()[moved], "given back, it didn't go back");
+    }
+
+    @Test
+    void rankFollowsTheFiefAsDrawnAndAsItShrinks() {
+        Land l = land(30, 4);
+        TitleMap t = titles(l, 17);
+        int seats = 0;
+        int matching = 0;
+        for (int c = 0; c < t.counties(); c++) {
+            int seat = t.countySeat()[c];
+            seats++;
+            matching += t.rank(seat) == t.seatOf(seat) ? 1 : 0;
+        }
+        assertTrue(matching >= seats * 0.85, "ranks as drawn too far from the titles: " + matching + " of " + seats);
+        // A duchy's holder losing all but their own county is a count's rank.
+        int seat = t.duchySeat()[0];
+        int[] holders = new int[l.count()];
+        java.util.Arrays.fill(holders, 1);
+        for (int p = 0; p < holders.length; p++) {
+            if (t.county()[p] == t.county()[seat]) {
+                holders[p] = 0;
+            }
+        }
+        holders[seat] = 0;
+        t.regroup(holders, adjacency(l));
+        if (t.seatOf(seat) == TitleMap.Tier.DUCHY) {
+            assertEquals(TitleMap.Tier.COUNTY, t.rank(seat));
+        }
+    }
 }

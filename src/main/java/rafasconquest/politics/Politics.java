@@ -922,14 +922,28 @@ public final class Politics {
                 + lands.nationName(w.attacker) + ".");
     }
 
-    /** The defender's provinces in a county go to the attacker. */
+    /**
+     * The defender's provinces in a county go to the attacker; where one is the hold of a higher title, the rest of that
+     * title the defender holds goes with it.
+     */
     private void take(War w, int county, Lands lands) {
+        Set<Integer> taking = new TreeSet<>();
         for (int p = 0; p < lands.provinces(); p++) {
             if (lands.county(p) == county && lands.owner(p) == w.defender) {
-                lands.transfer(p, w.attacker);
-                conquered.put(p, w.attacker);
-                feuds.lords.remove(p); // the conqueror's now, by its own lords
+                taking.add(p);
             }
+        }
+        for (int seat : new ArrayList<>(taking)) {
+            for (int q : lands.fief(seat)) {
+                if (lands.owner(q) == w.defender) {
+                    taking.add(q);
+                }
+            }
+        }
+        for (int p : taking) {
+            lands.transfer(p, w.attacker);
+            conquered.put(p, w.attacker);
+            feuds.lords.remove(p); // the conqueror's now, by its own lords
         }
         if (!w.taken.contains(county)) {
             w.taken.add(county);
