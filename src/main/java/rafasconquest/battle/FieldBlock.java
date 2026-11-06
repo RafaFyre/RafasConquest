@@ -12,6 +12,18 @@ import rafasconquest.battle.BattlePlan.Point;
  * wounded as it was.
  */
 public final class FieldBlock {
+    /** What a formation's ship is for, at sea; its captain sails it accordingly ({@link FieldBattle}). */
+    public enum ShipKind {
+        /** Full of archers: keeps behind its allies, at bow range, and shoots. */
+        ARCHERS,
+        /** Full of foot (swordsmen, shieldwall): sails straight at the enemy and grapples bow first. */
+        SWORDSMEN,
+        /** Fast, full of swordsmen: keeps clear, then rams an enemy already grappled at its bow, in the side. */
+        SHOCK,
+        /** The fleet's camp: food, gear and the cavalry's horses; keeps to the rear, nobody on deck. */
+        CAMP
+    }
+
     /** What a block is doing in its army. */
     public enum Duty {
         /** Holding its file of the front line, marching or fighting. */
@@ -90,6 +102,11 @@ public final class FieldBlock {
     boolean braced;
     /** Aboard its ship: it sails, and its soldiers fight from the deck, until it comes ashore (if ever). */
     boolean afloat;
+    /** At sea, what its ship is for (null for the general's, guard's and standard-bearer's, and ashore). */
+    @Nullable
+    ShipKind ship;
+    /** At sea, the enemy ships grappled to its own: their soldiers may board each other's decks. */
+    final java.util.List<FieldBlock> lashed = new java.util.ArrayList<>();
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
@@ -242,6 +259,16 @@ public final class FieldBlock {
     /** Braced against charging cavalry. */
     public boolean afloat() {
         return afloat;
+    }
+
+    @Nullable
+    public ShipKind ship() {
+        return ship;
+    }
+
+    /** The enemy ships grappled to its own. */
+    public java.util.List<FieldBlock> lashed() {
+        return java.util.Collections.unmodifiableList(lashed);
     }
 
     public boolean braced() {

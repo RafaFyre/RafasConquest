@@ -435,19 +435,48 @@ class FieldBattleTest {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
         java.util.Map<FieldBlock, Point> last = new java.util.HashMap<>();
+        java.util.Set<FieldBlock.ShipKind> kinds = java.util.EnumSet.noneOf(FieldBlock.ShipKind.class);
+        boolean grappled = false;
         while (!battle.over()) {
             for (int side = 0; side < 2; side++) {
                 for (FieldBlock b : battle.army(side).blocks()) {
                     assertTrue(b.afloat(), "a formation ashore in open water");
                     last.put(b, b.pos());
+                    if (b.ship() != null) {
+                        kinds.add(b.ship());
+                    }
                 }
             }
             battle.second();
             for (java.util.Map.Entry<FieldBlock, Point> e : last.entrySet()) {
-                assertTrue(e.getKey().pos().distanceTo(e.getValue()) <= FieldBattle.SHIP_SPEED + 1e-6, "faster than a ship sails");
+                FieldBlock b = e.getKey();
+                assertTrue(b.pos().distanceTo(e.getValue()) <= FieldBattle.shipSpeed(b) + 1e-6, "faster than its ship sails");
+                assertTrue(!b.inMelee() || !b.lashed().isEmpty() || b.alive() == 0, "hand to hand at sea without grappling");
+                grappled |= !b.lashed().isEmpty();
             }
         }
+        assertTrue(grappled, "no ships grappled");
+        assertTrue(kinds.containsAll(java.util.EnumSet.of(FieldBlock.ShipKind.SWORDSMEN, FieldBlock.ShipKind.SHOCK, FieldBlock.ShipKind.ARCHERS)),
+                "ship kinds sailed: " + kinds);
         assertTrue(battle.army(0).alive() < battle.army(0).started() && battle.army(1).alive() < battle.army(1).started(), "no one fell");
+    }
+
+    @Test
+    void aFleetsLinesStandAShipsLengthApart() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        for (int side = 0; side < 2; side++) {
+            java.util.List<FieldBlock> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != null).toList();
+            for (FieldBlock a : ships) {
+                for (FieldBlock b : ships) {
+                    // The battle's axis is x: ships abreast of each other (within a beam's width across) are lines apart.
+                    if (a != b && Math.abs(a.pos().z() - b.pos().z()) < 8) {
+                        assertTrue(Math.abs(a.pos().x() - b.pos().x()) >= FieldBattle.SHIP_LENGTH * 0.9,
+                                "ships " + a.pos() + " and " + b.pos() + " overlap");
+                    }
+                }
+            }
+        }
     }
 
     @Test

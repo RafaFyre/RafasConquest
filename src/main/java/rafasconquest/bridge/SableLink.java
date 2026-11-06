@@ -14,10 +14,20 @@ public final class SableLink {
     private static boolean enabled = ModList.get() != null && ModList.get().isLoaded("sable");
 
     /**
-     * A battle ship's orders this tick: formation {@code id}'s ship sails for (toX, toZ) at up to {@code speed} blocks a
-     * second, bow along its course (or along (faceX, faceZ) once there). {@code flagship}: the general's, a size up.
+     * A battle ship's orders this tick: formation {@code id}'s ship (of {@code side}) sails for (toX, toZ) at up to
+     * {@code speed} blocks a second, bow along its course (or along (faceX, faceZ) once there). {@code flagship}: the
+     * general's, a size up; {@code cargo}: one of the fleet's camp, stores on deck; {@code lashed}: the formations whose
+     * ships it is grappled to, which it keeps alongside.
      */
-    public record Helm(int id, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed, boolean flagship) {
+    public record Helm(int id, int side, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed,
+                       boolean flagship, boolean cargo, java.util.Set<Integer> lashed) {
+    }
+
+    /**
+     * Formation {@code rammer}'s ship drove its bow into formation {@code struck}'s, throwing the soldiers aboard it at
+     * (knockX, knockZ) blocks a tick (zero for a head-on blow).
+     */
+    public record Ram(int rammer, int struck, double knockX, double knockZ) {
     }
 
     private SableLink() {
@@ -44,16 +54,33 @@ public final class SableLink {
         }
     }
 
-    /** Each tick of a battle: a ship for each of these, sailing as it says; every other battle ship is taken away. */
-    public static void sailBattle(ServerLevel level, List<Helm> helms) {
+    /**
+     * Each tick of a battle: a ship for each of these, sailing as it says; every other battle ship is taken away. Returns
+     * the rams this tick between ships not yet grappled.
+     */
+    public static List<Ram> sailBattle(ServerLevel level, List<Helm> helms) {
         if (!enabled) {
-            return;
+            return List.of();
         }
         try {
-            BattleShips.tick(level, helms);
+            return BattleShips.tick(level, helms);
         } catch (LinkageError e) {
             enabled = false;
             RafasConquest.LOGGER.warn("Sable found, but its API doesn't match; no real ships will sail", e);
+            return List.of();
+        }
+    }
+
+    /** Where formation {@code id}'s battle ship is and which way its bow points: {x, z, dirX, dirZ}; null with none sailing. */
+    @org.jetbrains.annotations.Nullable
+    public static double[] shipAt(int id) {
+        if (!enabled) {
+            return null;
+        }
+        try {
+            return BattleShips.where(id);
+        } catch (LinkageError e) {
+            return null;
         }
     }
 }

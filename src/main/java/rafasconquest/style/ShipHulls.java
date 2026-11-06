@@ -25,6 +25,9 @@ public final class ShipHulls {
     public record Part(int x, int y, int z, BlockState state) {
     }
 
+    /** The plain hull's deck height above its keel; soldiers stand a block above it. */
+    public static final int DECK = 1;
+
     private static final Map<StructureTemplate, List<Part>> READ = new WeakHashMap<>();
     private static final Map<SeaLanes.Size, List<Part>> PLAIN = new java.util.EnumMap<>(SeaLanes.Size.class);
 
@@ -75,10 +78,32 @@ public final class ShipHulls {
         return parts.isEmpty() ? PLAIN.get(SeaLanes.Size.MEDIUM) : List.copyOf(parts);
     }
 
-    /** A plain open boat: a keel, planked sides narrowing to bow and stern, a deck, and one mast with a sail. */
+    /**
+     * A battle ship's hull: always the plain flat-topped one of its size (a style's ship may have no open deck for a
+     * formation to stand on), with hay, barrels and chests on deck if it is a {@code cargo} ship (the fleet's camp).
+     */
+    public static List<Part> battle(SeaLanes.Size size, boolean cargo) {
+        if (!cargo) {
+            return PLAIN.get(size);
+        }
+        List<Part> parts = new ArrayList<>(PLAIN.get(size));
+        BlockState[] goods = {Blocks.HAY_BLOCK.defaultBlockState(), Blocks.BARREL.defaultBlockState(), Blocks.CHEST.defaultBlockState()};
+        int half = size.length / 2;
+        for (int z = -half / 2; z <= half / 2; z += 2) {
+            for (int x = -1; x <= 1; x += 2) {
+                parts.add(new Part(x, DECK + 1, z, goods[Math.floorMod(x + z, goods.length)]));
+            }
+        }
+        return List.copyOf(parts);
+    }
+
+    /**
+     * A plain flat-topped boat: a keel, a flat deck over it narrowing to bow and stern, a rail one block high round the
+     * deck's edge, and one mast with a sail stepped near the stern, clear of the deck's middle where soldiers stand.
+     */
     private static List<Part> plain(int length, int width) {
         BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
-        BlockState side = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState deck = Blocks.OAK_PLANKS.defaultBlockState();
         BlockState mast = Blocks.SPRUCE_LOG.defaultBlockState();
         BlockState sail = Blocks.WHITE_WOOL.defaultBlockState();
         List<Part> parts = new ArrayList<>();
@@ -89,21 +114,22 @@ public final class ShipHulls {
             int w = Math.min(width / 2, end * 2 * (width / 2) / Math.max(1, half / 2));
             for (int x = -w; x <= w; x++) {
                 parts.add(new Part(x, 0, z, keel));
+                parts.add(new Part(x, DECK, z, deck));
                 if (Math.abs(x) == w || end == 0) {
-                    parts.add(new Part(x, 1, z, side));
-                    parts.add(new Part(x, 2, z, side));
+                    parts.add(new Part(x, DECK + 1, z, keel));
                 }
             }
         }
+        int stern = -half + 2;
         int top = 3 + length / 2;
-        for (int y = 1; y <= top; y++) {
-            parts.add(new Part(0, y, 0, mast));
+        for (int y = DECK + 1; y <= top; y++) {
+            parts.add(new Part(0, y, stern, mast));
         }
         int sailHalf = width / 2 + 1;
-        for (int y = 4; y < top; y++) {
+        for (int y = DECK + 4; y < top; y++) {
             for (int x = -sailHalf; x <= sailHalf; x++) {
                 if (x != 0) {
-                    parts.add(new Part(x, y, 0, sail));
+                    parts.add(new Part(x, y, stern, sail));
                 }
             }
         }

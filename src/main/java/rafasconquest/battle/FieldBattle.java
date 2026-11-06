@@ -92,10 +92,179 @@ public final class FieldBattle {
         }
         this.type = type;
         for (FieldArmy army : armies) {
+            int swordsmen = 0;
             for (FieldBlock b : army.blocks) {
                 b.afloat = type == BattleType.OCEAN || type == BattleType.AMPHIBIOUS && army.side == 0;
+                b.ship = null;
+                if (!b.afloat || b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER) {
+                    continue;
+                }
+                b.ship = switch (b.arm) {
+                    case ARCHERS -> FieldBlock.ShipKind.ARCHERS;
+                    case CAVALRY -> FieldBlock.ShipKind.CAMP; // no horses on a fighting deck: they sail with the stores
+                    case SWORDSMEN -> swordsmen++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
+                    case SHIELDWALL -> FieldBlock.ShipKind.SWORDSMEN;
+                };
+            }
+            spreadShips(army);
+        }
+    }
+
+    /**
+     * A ship is longer than a formation is deep: front to back, each ship afloat drops astern until it is clear of
+     * every ship ahead of it.
+     */
+    private static void spreadShips(FieldArmy army) {
+        java.util.function.ToDoubleFunction<FieldBlock> ahead =
+                b -> (b.pos.x() - army.origin.x()) * army.facingX + (b.pos.z() - army.origin.z()) * army.facingZ;
+        List<FieldBlock> placed = new ArrayList<>();
+        for (FieldBlock b : army.blocks.stream().filter(o -> o.afloat).sorted(Comparator.comparingDouble(ahead).reversed()).toList()) {
+            for (boolean fouled = true; fouled; ) {
+                fouled = false;
+                for (FieldBlock p : placed) {
+                    double gap = ahead.applyAsDouble(p) - ahead.applyAsDouble(b);
+                    double across = (b.pos.x() - p.pos.x()) * -army.facingZ + (b.pos.z() - p.pos.z()) * army.facingX;
+                    if (Math.abs(across) < SHIP_BEAM && gap < SHIP_LENGTH) {
+                        b.pos = b.pos.plus(-army.facingX * (SHIP_LENGTH - gap), -army.facingZ * (SHIP_LENGTH - gap));
+                        fouled = true;
+                    }
+                }
+            }
+            b.line = b.pos;
+            b.deployed = b.pos;
+            placed.add(b);
+        }
+    }
+
+    /** The room a battle ship needs abeam: its beam (the general's, a size up) and a few blocks clear. */
+    static final double SHIP_BEAM = 12;
+
+    /** A battle ship's length, the room it needs fore and aft (a large ship, {@link rafasconquest.core.SeaLanes.Size}). */
+    public static final double SHIP_LENGTH = 25;
+    /** Shock ships sail this much faster than the others. */
+    static final double SHOCK_PACE = 1.6;
+    /** Archer ships keep this far from the nearest enemy ship; shock ships waiting for their chance, a little further. */
+    static final double ARCHER_STANDOFF = FieldRules.ARCHER_RANGE * 0.6;
+    static final double SHOCK_STANDOFF = 32;
+    /** A shock ship comes about this far off an engaged enemy's side before it turns in to ram it. */
+    static final double RAM_OFFING = 18;
+
+    /** How many blocks a second a formation's ship sails. */
+    public static double shipSpeed(FieldBlock block) {
+        return block.ship == FieldBlock.ShipKind.SHOCK ? SHIP_SPEED * SHOCK_PACE : SHIP_SPEED;
+    }
+
+    /** Two enemy ships grapple: their soldiers may now board each other's decks (and only now, at sea, fight hand to hand). */
+    public void lash(FieldBlock a, FieldBlock b) {
+        if (a.side != b.side && a.afloat && b.afloat && !a.lashed.contains(b)) {
+            a.lashed.add(b);
+            b.lashed.add(a);
+        }
+    }
+
+    /**
+     * At sea, each ship's captain decides where it sails, by what it is for: a grappled ship holds fast while its
+     * soldiers board; a swordsman ship makes straight for the nearest enemy fighting ship; an archer ship keeps at bow
+     * range behind its allies; a shock ship keeps clear until an enemy is grappled bow to bow with one of its own, then
+     * comes round off that enemy's side and rams it there; the camp's ships keep where they deployed. Ships that are
+     * only numbers grapple when they meet; real ships grapple when they really ram ({@link #lash}).
+     */
+    private void captains() {
+        for (int side = 0; side < 2; side++) {
+            FieldArmy enemy = armies[1 - side];
+            for (FieldBlock b : armies[side].blocks) {
+                b.lashed.removeIf(o -> o.alive == 0 || !o.afloat);
+                if (!b.afloat || b.ship == null || b.alive == 0 || b.duty == Duty.FLEEING || b.duty == Duty.ROUTED
+                        || b.duty == Duty.RALLYING) {
+                    continue;
+                }
+                b.strikeAt = null;
+                b.approaching = false;
+                b.waypoint = null;
+                b.charged = false;
+                if (!b.lashed.isEmpty()) {
+                    b.prey = b.lashed.get(0);
+                    b.line = b.pos;
+                    continue;
+                }
+                b.prey = null;
+                FieldBlock foe = nearestShip(b, enemy);
+                if (foe == null) {
+                    b.line = b.pos;
+                    continue;
+                }
+                switch (b.ship) {
+                    case CAMP -> b.line = b.deployed != null ? b.deployed : b.pos;
+                    case ARCHERS -> b.line = standOff(b, foe, ARCHER_STANDOFF);
+                    case SWORDSMEN -> {
+                        b.charged = true;
+                        b.prey = foe;
+                    }
+                    case SHOCK -> {
+                        FieldBlock engaged = nearestEngaged(b, enemy);
+                        if (engaged == null) {
+                            b.line = standOff(b, foe, SHOCK_STANDOFF);
+                            break;
+                        }
+                        // Its side toward this ship; abreast of it on that side, turn in and ram.
+                        double nx = -engaged.facingZ;
+                        double nz = engaged.facingX;
+                        double ox = b.pos.x() - engaged.pos.x();
+                        double oz = b.pos.z() - engaged.pos.z();
+                        if (ox * nx + oz * nz < 0) {
+                            nx = -nx;
+                            nz = -nz;
+                        }
+                        boolean abreast = Math.abs(ox * engaged.facingX + oz * engaged.facingZ) < SHIP_LENGTH / 2;
+                        if (abreast && ox * nx + oz * nz > 0) {
+                            b.charged = true;
+                            b.prey = engaged;
+                        } else {
+                            b.line = engaged.pos.plus(nx * RAM_OFFING, nz * RAM_OFFING);
+                        }
+                    }
+                }
+                if (b.charged && b.distanceTo(b.prey) <= FieldRules.CLOSE_REACH && !(b.live && b.prey.live)) {
+                    lash(b, b.prey); // real ships grapple when they really ram
+                }
             }
         }
+    }
+
+    /** The point {@code keep} blocks from {@code foe}, on the line from it to {@code b}. */
+    private static Point standOff(FieldBlock b, FieldBlock foe, double keep) {
+        double d = Math.max(1e-6, b.pos.distanceTo(foe.pos));
+        return foe.pos.plus((b.pos.x() - foe.pos.x()) / d * keep, (b.pos.z() - foe.pos.z()) / d * keep);
+    }
+
+    /** The nearest enemy ship afloat: a fighting ship if any, else one of the camp's. */
+    @Nullable
+    private static FieldBlock nearestShip(FieldBlock b, FieldArmy enemy) {
+        FieldBlock best = null;
+        boolean bestCamp = false;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive == 0 || !e.afloat) {
+                continue;
+            }
+            boolean camp = e.ship == FieldBlock.ShipKind.CAMP;
+            if (best == null || bestCamp && !camp || bestCamp == camp && b.pos.distanceTo(e.pos) < b.pos.distanceTo(best.pos)) {
+                best = e;
+                bestCamp = camp;
+            }
+        }
+        return best;
+    }
+
+    /** The nearest enemy ship grappled with one of this side's (an engaged front, for a shock ship to take in the side). */
+    @Nullable
+    private static FieldBlock nearestEngaged(FieldBlock b, FieldArmy enemy) {
+        FieldBlock best = null;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.afloat && !e.lashed.isEmpty() && (best == null || b.pos.distanceTo(e.pos) < b.pos.distanceTo(best.pos))) {
+                best = e;
+            }
+        }
+        return best;
     }
 
     /** The defenders' harbour ships wait this far out past their walls, between them and the attacker's fleet. */
@@ -120,6 +289,7 @@ public final class FieldBattle {
             FieldBlock b = new FieldBlock(id++, 1, i % 3 == 2 ? Arm.ARCHERS : Arm.SWORDSMEN, BattlePlan.SOLDIERS_PER_FORMATION,
                     FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false, at, d.facingX, d.facingZ, Duty.RESTING);
             b.afloat = true;
+            b.ship = b.arm == Arm.ARCHERS ? FieldBlock.ShipKind.ARCHERS : FieldBlock.ShipKind.SWORDSMEN;
             b.deployed = at;
             d.blocks.add(b);
             d.started += b.started();
@@ -586,6 +756,9 @@ public final class FieldBattle {
         }
         if (type == BattleType.AMPHIBIOUS) {
             harbourFleet();
+        }
+        if (type == BattleType.OCEAN) {
+            captains();
         }
         for (FieldArmy army : armies) {
             move(army);
@@ -2245,7 +2418,7 @@ public final class FieldBattle {
             double dx = target.x() - block.pos.x();
             double dz = target.z() - block.pos.z();
             double distance = Math.hypot(dx, dz);
-            double step = block.afloat ? SHIP_SPEED : rates.speed(block.arm);
+            double step = block.afloat ? shipSpeed(block) : rates.speed(block.arm);
             if (pursuing && block.duty == Duty.FLEEING) {
                 step *= FieldRules.FLEE_SPEED; // running for their lives, gear thrown down
             }
@@ -2275,7 +2448,9 @@ public final class FieldBattle {
                 }
                 boolean holding = !block.charged && !block.approaching && block.duty != Duty.LINE && block.duty != Duty.GENERAL && block.duty != Duty.GUARD;
                 double reach = holding ? FieldRules.HOLDING_REACH : FieldRules.CLOSE_REACH;
-                FieldBlock foe = hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestWithin(block, enemy, reach);
+                FieldBlock foe = block.afloat && type == BattleType.OCEAN
+                        ? block.lashed.stream().filter(o -> o.alive > 0).findFirst().orElse(null) // at sea, hand to hand only once grappled
+                        : hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestWithin(block, enemy, reach);
                 if (foe != null) {
                     block.contactSeconds++;
                     if (block.duty == Duty.FRONT) {
@@ -2283,7 +2458,7 @@ public final class FieldBattle {
                     }
                     block.contactFoe = foe;
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
-                    if (block.live && foe.live && !block.afloat && !foe.afloat) {
+                    if (block.live && foe.live && (type == BattleType.OCEAN || !block.afloat && !foe.afloat)) {
                         // Real soldiers on both sides: Recruits fights it out between them. Those of the block still
                         // only numbers fight on as numbers.
                         int figures = block.alive - block.real;

@@ -104,7 +104,7 @@ final class SableShips {
 
     /** Builds the ship's hull on the water where it is, bow to +z, and hands it to Sable, then turns it to its heading. */
     private static void build(ServerLevel level, SeaLanes.Ship ship) {
-        ServerSubLevel sub = assemble(level, ship, TAG);
+        ServerSubLevel sub = assemble(level, ship, TAG, ShipHulls.of(ship));
         if (sub != null) {
             live.put(ship.id(), sub);
             steer(sub, ship);
@@ -112,17 +112,16 @@ final class SableShips {
     }
 
     /**
-     * Builds a ship's hull on the water where it is, bow to +z, and hands it to Sable, tagged {@code key} = its id, with
+     * Builds a ship's hull ({@code parts}) on the water where it is, bow to +z, and hands it to Sable, tagged {@code key} = its id, with
      * its waterline height kept as "y"; null if it can't be built there yet.
      */
     @org.jetbrains.annotations.Nullable
-    static ServerSubLevel assemble(ServerLevel level, SeaLanes.Ship ship, String key) {
+    static ServerSubLevel assemble(ServerLevel level, SeaLanes.Ship ship, String key, List<ShipHulls.Part> parts) {
         int sea = level.getSeaLevel();
         BlockPos centre = BlockPos.containing(ship.x(), sea, ship.z());
         if (!level.hasChunkAt(centre) || !level.getFluidState(centre.below()).is(FluidTags.WATER)) {
             return null; // not loaded yet, or the point lies over land at this block (a lane's smoothing cut a corner)
         }
-        List<ShipHulls.Part> parts = ShipHulls.of(ship);
         List<BlockPos> blocks = new ArrayList<>();
         for (ShipHulls.Part part : parts) {
             BlockPos pos = centre.offset(part.x(), part.y(), part.z());
