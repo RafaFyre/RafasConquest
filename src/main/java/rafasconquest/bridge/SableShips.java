@@ -43,7 +43,7 @@ final class SableShips {
     private static final double SNAP = 40;
     /** How hard a ship is pulled back onto its lane and turned to its heading, per second. */
     private static final double PULL = 2;
-    private static final double TURN = 3;
+    static final double TURN = 3;
     /** The pull back to the lane is at most this many blocks a second, so steering clear can win over it. */
     private static final double MAX_PULL = 4;
     /** Blocks a second to steer clear of another ship or of land. */

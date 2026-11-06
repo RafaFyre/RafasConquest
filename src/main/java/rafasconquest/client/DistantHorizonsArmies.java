@@ -20,7 +20,6 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.battle.FormationSnapshot.Sprite;
-import rafasconquest.core.SeaLanes;
 import rafasconquest.style.ShipHulls;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -28,6 +27,7 @@ import net.minecraft.world.level.EmptyBlockGetter;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Draws the soldiers beyond the game's own terrain inside Distant Horizons' terrain, as little figures of coloured
@@ -195,16 +195,19 @@ final class DistantHorizonsArmies {
                 new Figure(group, formation, sprite).build();
             }
         }
-        // The sea lanes' ships between the real ones and the sprites, each block of the hull a box, turned to its heading.
+        // Ships as their level of detail, between the real ones and the sprites (DistantShips): each block of the hull a
+        // box, turned to its heading, right where the real ship is, so the real one fades into it.
+        float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(false);
         double keel = DistantShips.keel();
-        for (SeaLanes.Ship ship : DistantShips.now(mc.getTimer().getGameTimeDeltaPartialTick(false))) {
+        double fade = fadeStart(partialTick);
+        for (DistantShips.Far ship : DistantShips.all(partialTick)) {
             double flat = Math.hypot(ship.x() - eye.x, ship.z() - eye.z);
-            if (flat <= renderBlocks || flat > DistantShips.SPRITE_PAST) {
+            if (!ship.boxes(flat, fade, renderBlocks)) {
                 continue;
             }
             double cos = Math.cos(ship.yaw());
             double sin = Math.sin(ship.yaw());
-            for (ShipHulls.Part part : ShipHulls.of(ship)) {
+            for (ShipHulls.Part part : ship.parts()) {
                 int rgb = part.state().getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).col;
                 if (rgb == 0) {
                     continue; // glass and the like

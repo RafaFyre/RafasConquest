@@ -21,10 +21,23 @@ import java.util.List;
  * @param soldierIds the entity ids of its living soldiers, so a client that still has them can draw each where it
  *                  really stands
  * @param leaderId  the leader's entity id, or -1 once the leader has fallen
+ * @param ship      its ship, at sea (the client draws it in the distance, as the real one is built); null ashore
  */
 public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive, double x, double y, double z,
                                 double facingX, double facingZ, double halfWidth, double halfDepth, boolean fighting,
-                                boolean leader, int[] soldierIds, int leaderId) {
+                                boolean leader, int[] soldierIds, int leaderId, @Nullable Ship ship) {
+    /**
+     * A formation's ship at sea, as its real one is built ({@link rafasconquest.style.ShipHulls#battle}): its sail's and
+     * its stripe's dye colours (DyeColor ids), and whether it is a supply ship, stores on deck and nobody showing.
+     */
+    public record Ship(int sail, int stripe, boolean cargo) {
+    }
+
+    /** Aboard its ship, at sea. */
+    public boolean afloat() {
+        return ship != null;
+    }
+
     public enum Kind {
         SWORDSMEN, SHIELDWALL, ARCHERS, CAVALRY, GENERAL, BEARER;
 
@@ -60,7 +73,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
      */
     public static FormationSnapshot of(int id, Kind kind, int rgb, int mark, double[] xs, double[] ys, double[] zs,
                                        double facingX, double facingZ, boolean fighting, boolean leader, int[] soldierIds,
-                                       int leaderId) {
+                                       int leaderId, @Nullable Ship ship) {
         int n = xs.length;
         double cx = mean(xs);
         double cy = mean(ys);
@@ -79,7 +92,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         }
         double halfWidth = Math.sqrt(sumRight / n) * HALF_EXTENT_PER_SD;
         double halfDepth = Math.sqrt(sumBack / n) * HALF_EXTENT_PER_SD;
-        return new FormationSnapshot(id, kind, rgb, mark, n, cx, cy, cz, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId);
+        return new FormationSnapshot(id, kind, rgb, mark, n, cx, cy, cz, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship);
     }
 
     private static double mean(double[] values) {
@@ -184,7 +197,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
             fz /= length;
         }
         return new FormationSnapshot(id, kind, rgb, mark, alive, lerp(from.x, x, t), lerp(from.y, y, t), lerp(from.z, z, t),
-                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader, soldierIds, leaderId);
+                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader, soldierIds, leaderId, ship);
     }
 
     private static double lerp(double a, double b, double t) {

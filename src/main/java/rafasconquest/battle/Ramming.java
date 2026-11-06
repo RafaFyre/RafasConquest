@@ -35,6 +35,25 @@ public final class Ramming {
         return speed >= MIN_CLOSING ? speed : 0;
     }
 
+    /** Whether two ships' footprints, each grown by {@code room} all round, overlap (separating axes of two rectangles). */
+    public static boolean overlap(Hull a, Hull b, double room) {
+        double dx = b.x() - a.x();
+        double dz = b.z() - a.z();
+        double[][] axes = {{a.dirX(), a.dirZ()}, {-a.dirZ(), a.dirX()}, {b.dirX(), b.dirZ()}, {-b.dirZ(), b.dirX()}};
+        for (double[] u : axes) {
+            double gap = Math.abs(dx * u[0] + dz * u[1]);
+            if (gap > reach(a, u) + reach(b, u) + 2 * room) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** How far a ship's footprint reaches from its centre along unit axis {@code u}. */
+    private static double reach(Hull h, double[] u) {
+        return h.halfLength() * Math.abs(h.dirX() * u[0] + h.dirZ() * u[1]) + h.halfBeam() * Math.abs(-h.dirZ() * u[0] + h.dirX() * u[1]);
+    }
+
     /**
      * The throw on the soldiers aboard {@code b} when {@code a} strikes it at {@code closing} blocks a second: a velocity
      * (x, z) in blocks a tick, along {@code a}'s heading, as strong as the part of the blow square to {@code b}'s side

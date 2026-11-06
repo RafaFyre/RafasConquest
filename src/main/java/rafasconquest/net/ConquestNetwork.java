@@ -788,10 +788,21 @@ public final class ConquestNetwork {
                 buf.writeFloat((float) f.facingZ());
                 buf.writeFloat((float) f.halfWidth());
                 buf.writeFloat((float) f.halfDepth());
-                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0));
+                FormationSnapshot.Ship ship = f.ship();
+                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0) | (ship != null && ship.cargo() ? 8 : 0));
                 buf.writeVarIntArray(f.soldierIds());
                 buf.writeVarInt(f.leaderId() + 1);
+                if (ship != null) {
+                    buf.writeByte(ship.sail());
+                    buf.writeByte(ship.stripe());
+                }
             }
+        }
+
+        /** A formation's ship, after the rest of it; null if its flags say it is ashore. */
+        @org.jetbrains.annotations.Nullable
+        private static FormationSnapshot.Ship readShip(FriendlyByteBuf buf, int flags) {
+            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), (flags & 8) != 0);
         }
 
         static BattleSnapshot read(FriendlyByteBuf buf) {
@@ -812,7 +823,7 @@ public final class ConquestNetwork {
                 double halfDepth = buf.readFloat();
                 int flags = buf.readByte();
                 formations.add(new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth,
-                        (flags & 1) != 0, (flags & 2) != 0, buf.readVarIntArray(), buf.readVarInt() - 1));
+                        (flags & 1) != 0, (flags & 2) != 0, buf.readVarIntArray(), buf.readVarInt() - 1, readShip(buf, flags)));
             }
             return new BattleSnapshot(formations);
         }

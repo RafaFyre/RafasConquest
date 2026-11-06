@@ -1,31 +1,120 @@
 package rafasconquest.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.DyeColor;
+import org.jetbrains.annotations.Nullable;
+import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.client.map.ClientMapCache;
 import rafasconquest.core.SeaLanes;
 import rafasconquest.map.BaseMap;
+import rafasconquest.style.ShipHulls;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The ships on the sea lanes as the client sees them. Within the render distance the server sails real Sable ships
- * (bridge/SableShips), so nothing is drawn for them here; beyond it, up to {@link #SPRITE_PAST} blocks, Distant
- * Horizons draws each as boxes of its own blocks ({@link DistantHorizonsArmies}); past that, or without Distant
- * Horizons, each is a flat sprite ({@link DistantArmyRenderer#renderShips}).
+ * The ships the client draws, beyond the real ones: the sea lanes', and a battle's (one under each formation afloat).
+ * Going away from the camera, each is first the real Sable ship the server sails, then a level of detail, then a sprite:
+ * <ul>
+ * <li>near, the real ship, drawn by Sable;</li>
+ * <li>from just short of where Distant Horizons starts fading the world into its own terrain, out to
+ * {@link #SPRITE_PAST}, boxes of its blocks in Distant Horizons' terrain ({@link DistantHorizonsArmies}), right where
+ * the real ship is and turned as it is, so the real one fades into them as the land fades into Distant Horizons' (with
+ * nothing under it, it would fade into the sea and look like a ghost);</li>
+ * <li>past that, or beyond the real ships without Distant Horizons, a flat sprite ({@link DistantArmyRenderer#renderShips}).</li>
+ * </ul>
+ * A ship the client has no real one for (not built yet, or beyond what the server sends it) is a sprite within the
+ * render distance, where Distant Horizons' boxes would be faded, and boxes beyond.
  */
 final class DistantShips {
     static final double SPRITE_PAST = 2000;
+    /** A real ship this close to where a ship should be, centre to centre, is that ship. */
+    private static final double OWN_SHIP = 16;
+    /** A real ship's boxes start this much short of the fade, so the fade never shows the sea through its far end. */
+    private static final double FADE_MARGIN = 16;
+    /** Whether battle ships have been drawn yet this session (logged once, so a test can tell they are). */
+    private static boolean announced;
 
     private DistantShips() {
     }
 
-    static List<SeaLanes.Ship> now(float partialTick) {
+    /**
+     * A ship to draw: the middle of its hull, its heading (a turn about the up axis taking +z to its bow), its size, and
+     * whether the client has the real ship there (and so where it really is). A sea lane's ship has its {@code lane}; a
+     * battle's, its formation's {@code battle} ship.
+     */
+    record Far(double x, double z, double yaw, SeaLanes.Size size, boolean real, @Nullable SeaLanes.Ship lane,
+               @Nullable FormationSnapshot.Ship battle) {
+        boolean warship() {
+            return lane == null || lane.warship();
+        }
+
+        /** Its hull's blocks, in its own frame, as the real one is built. */
+        List<ShipHulls.Part> parts() {
+            return lane != null ? ShipHulls.of(lane)
+                    : ShipHulls.battle(size, battle.cargo(), DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
+        }
+
+        /** Whether Distant Horizons draws it as boxes, {@code flat} blocks from the camera. */
+        boolean boxes(double flat, double fadeStart, double renderBlocks) {
+            return flat <= SPRITE_PAST && (real ? flat >= fadeStart - FADE_MARGIN : flat > renderBlocks);
+        }
+
+        /** Whether it is drawn as a sprite, {@code flat} blocks from the camera. */
+        boolean sprite(double flat, boolean inDistantHorizons, double renderBlocks) {
+            return inDistantHorizons ? flat > SPRITE_PAST || !real && flat <= renderBlocks : !real;
+        }
+    }
+
+    /** The sea lanes' ships, where the lanes have them now. */
+    static List<SeaLanes.Ship> lanes(float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         BaseMap map = ClientMapCache.map();
         if (map == null || mc.level == null) {
             return List.of();
         }
         return SeaLanes.at(map.roads().shipping(), mc.level.getGameTime() + partialTick);
+    }
+
+    /** Every ship to draw beyond the real ones, each matched to the real one the client has there, if any. */
+    static List<Far> all(float partialTick) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
+            return List.of();
+        }
+        List<double[]> real = SableSeen.ships(mc.level);
+        List<Far> ships = new ArrayList<>();
+        for (SeaLanes.Ship s : lanes(partialTick)) {
+            ships.add(far(real, s.x(), s.z(), s.yaw(), s.size(), s, null));
+        }
+        int battle = 0;
+        int battleReal = 0;
+        for (FormationSnapshot f : DistantArmies.now()) {
+            if (f.ship() != null) {
+                SeaLanes.Size size = f.kind() == FormationSnapshot.Kind.GENERAL ? SeaLanes.Size.XLARGE : SeaLanes.Size.LARGE;
+                Far ship = far(real, f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()), size, null, f.ship());
+                ships.add(ship);
+                battle++;
+                battleReal += ship.real() ? 1 : 0;
+            }
+        }
+        if (!announced && battle > 0) {
+            announced = true;
+            rafasconquest.RafasConquest.LOGGER.info("Drawing a battle's {} ships beyond the real ones ({} of them real on this client, {} Sable ships in all)",
+                    battle, battleReal, real.size());
+        }
+        return ships;
+    }
+
+    /** A ship that should be at (x, z): where the client's real one is, if it has one there; else where it should be. */
+    private static Far far(List<double[]> real, double x, double z, double yaw, SeaLanes.Size size, @Nullable SeaLanes.Ship lane,
+                           @Nullable FormationSnapshot.Ship battle) {
+        for (double[] r : real) {
+            if (Math.hypot(r[0] - x, r[1] - z) <= OWN_SHIP) {
+                return new Far(r[0], r[1], r[2], size, true, lane, battle);
+            }
+        }
+        return new Far(x, z, yaw, size, false, lane, battle);
     }
 
     /** Where a ship's keel sits: a block down in the water, as the server holds the real ones. */

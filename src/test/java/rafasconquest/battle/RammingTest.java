@@ -41,4 +41,15 @@ class RammingTest {
         double[] hard = Ramming.knock(ship(-14, 0, 1, 0, 100), ship(0, 0, 0, 1, 0), 100);
         assertTrue(hard[0] <= Ramming.MAX_THROW + 1e-9, "thrown too far");
     }
+
+    @Test
+    void footprintsOverlapOnlyWhereTheHullsMeet() {
+        Ramming.Hull a = ship(0, 0, 0, 1, 0);
+        assertTrue(Ramming.overlap(a, ship(5, 0, 0, 1, 0), 0), "side by side, 5 apart, with 7-wide hulls");
+        assertTrue(!Ramming.overlap(a, ship(20, 0, 0, 1, 0), 0), "a line abreast, 20 apart");
+        assertTrue(!Ramming.overlap(a, ship(0, 24, 0, 1, 0), 0), "bow to stern, a hair clear");
+        assertTrue(Ramming.overlap(a, ship(0, 24, 0, 1, 0), 1), "the same, with room kept");
+        assertTrue(Ramming.overlap(a, ship(14, 0, 1, 0, 0), 0), "a bow across the side");
+        assertTrue(!Ramming.overlap(a, ship(16, 0, 1, 0, 0), 0), "a bow just short of the side");
+    }
 }

@@ -107,6 +107,12 @@ public final class FieldBlock {
     ShipKind ship;
     /** At sea, the enemy ships grappled to its own: their soldiers may board each other's decks. */
     final java.util.List<FieldBlock> lashed = new java.util.ArrayList<>();
+    /**
+     * At sea its facing is its ship's heading, the way its bow points, which only turning changes; this is the heading
+     * its captain wants it to lie at once it is where it makes for (zero: as it lies).
+     */
+    double settleX;
+    double settleZ;
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
@@ -384,6 +390,24 @@ public final class FieldBlock {
 
     public double facingX() {
         return facingX;
+    }
+
+    /** At sea, the heading its captain wants its ship to lie at once there ({@link #facingX()} as it lies, if none). */
+    public double settleX() {
+        return settleX == 0 && settleZ == 0 ? facingX : settleX;
+    }
+
+    public double settleZ() {
+        return settleX == 0 && settleZ == 0 ? facingZ : settleZ;
+    }
+
+    /** A real ship's heading, as it really lies: at sea, a real formation's facing is its ship's. */
+    public void steered(double dirX, double dirZ) {
+        double length = Math.hypot(dirX, dirZ);
+        if (afloat && length > 1e-6) {
+            facingX = dirX / length;
+            facingZ = dirZ / length;
+        }
     }
 
     public double facingZ() {

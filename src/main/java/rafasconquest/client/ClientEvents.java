@@ -63,6 +63,12 @@ public final class ClientEvents {
         }
     }
 
+    /** The world map, asked for on joining: the sea lanes in it are what distant ships are drawn from, map opened or not. */
+    @SubscribeEvent
+    public static void onLogin(ClientPlayerNetworkEvent.LoggingIn event) {
+        rafasconquest.net.ConquestNetwork.requestBaseMap();
+    }
+
     @SubscribeEvent
     public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientMapCache.clear();

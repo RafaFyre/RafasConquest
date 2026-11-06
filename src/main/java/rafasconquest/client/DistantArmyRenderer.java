@@ -23,7 +23,6 @@ import org.joml.Vector3f;
 import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.battle.FormationSnapshot.Sprite;
-import rafasconquest.core.SeaLanes;
 
 import java.util.List;
 
@@ -129,11 +128,11 @@ public final class DistantArmyRenderer {
     }
 
     /**
-     * The sea lanes' ships beyond the real ones (the render distance): a flat ship turned to face the camera, a hull
-     * under a mast and sail, wherever Distant Horizons doesn't draw them as boxes ({@link DistantShips}).
+     * Ships beyond the real ones where Distant Horizons doesn't draw them as boxes ({@link DistantShips}): a flat ship
+     * turned to face the camera, a hull under a mast and sail.
      */
     public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
-        List<SeaLanes.Ship> ships = DistantShips.now(partialTick);
+        List<DistantShips.Far> ships = DistantShips.all(partialTick);
         Vector3f left = camera.getLeftVector();
         double length = Math.hypot(left.x(), left.z());
         if (ships.isEmpty() || length < 1e-6) {
@@ -147,12 +146,12 @@ public final class DistantArmyRenderer {
         boolean inDistantHorizons = DistantHorizonsLink.drawsFarSoldiers();
         double dy = DistantShips.keel() - eye.y;
         int drawn = 0;
-        for (SeaLanes.Ship ship : ships) {
+        for (DistantShips.Far ship : ships) {
             double dx = ship.x() - eye.x;
             double dz = ship.z() - eye.z;
             double flat = Math.hypot(dx, dz);
-            if (flat <= renderBlocks || inDistantHorizons && flat <= DistantShips.SPRITE_PAST) {
-                continue; // a real ship, or boxes in Distant Horizons' terrain
+            if (!ship.sprite(flat, inDistantHorizons, renderBlocks)) {
+                continue; // the real ship, or boxes in Distant Horizons' terrain
             }
             double distance = Math.hypot(flat, dy);
             double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;

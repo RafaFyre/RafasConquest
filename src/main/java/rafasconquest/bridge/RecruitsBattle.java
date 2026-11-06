@@ -146,6 +146,8 @@ public final class RecruitsBattle {
     private static final double KEEP_REAL_BIAS = 6;
     /** How far a block's soldiers may stand from its position, for skipping blocks far from everyone. */
     private static final double BLOCK_REACH = 40;
+    /** A formation afloat within this of a player sails a real ship; wherever a client has none, it draws a stand-in. */
+    public static final double SHIPS_WITHIN = NUMBERS_BEYOND + BLOCK_REACH;
     /** Ranks stand this many soldiers' spacings apart, front to back. */
     private static final double SLOT_DEPTH = 1.75;
     /**
@@ -1296,7 +1298,8 @@ public final class RecruitsBattle {
             l.appliedCharge = false;
             // They know the plan: nobody swims for the enemy. Once their ship is grappled, they board, or fight off
             // boarders, against the soldiers of the ships grappled to theirs; until then they hold their places on deck
-            // (sail), and arrows fly as the numbers say.
+            // (sail). Archers loose from the deck at any enemy in bow range, the ship their captain marks first; arrows
+            // fly as the numbers say for those still figures.
             List<AbstractRecruitEntity> boarders = new ArrayList<>();
             for (FieldBlock foe : block.lashed()) {
                 Live f = live.get(foe);
@@ -1304,14 +1307,30 @@ public final class RecruitsBattle {
                     boarders.addAll(f.living());
                 }
             }
+            boolean shooting = boarders.isEmpty() && block.arm() == Arm.ARCHERS && mayFight(block.side());
+            List<AbstractRecruitEntity> marked = shooting ? preyOf(block, List.of()) : List.of();
+            List<AbstractRecruitEntity> anyone = shooting ? enemiesOf(block.side(), false) : List.of();
             for (AbstractRecruitEntity s : living) {
-                if (boarders.isEmpty()) {
+                if (shooting) {
+                    if (s.getState() != 0) {
+                        s.setAggroState(0);
+                    }
+                    LivingEntity target = s.getTarget();
+                    boolean keep = target != null && target.isAlive() && target.distanceTo(s) <= FieldRules.ARCHER_RANGE
+                            && (marked.isEmpty() || marked.contains(target));
+                    if (!keep) {
+                        // The captain's mark if any of its soldiers are in range (it may have changed), else anyone in range.
+                        AbstractRecruitEntity mark = nearestTo(s, marked).filter(f -> f.distanceTo(s) <= FieldRules.ARCHER_RANGE)
+                                .or(() -> nearestTo(s, anyone).filter(f -> f.distanceTo(s) <= FieldRules.ARCHER_RANGE)).orElse(null);
+                        s.setTarget(mark);
+                    }
+                } else if (boarders.isEmpty()) {
                     s.setTarget(null);
                     if (s.getState() != 3) {
                         s.setAggroState(3);
                     }
                 } else {
-                    if (s.getState() != 0) {
+                    if (s.getState() != 0 || s.isInFormation) {
                         s.setAggroState(0);
                         s.isInFormation = false;
                         s.holdFormation = false;
@@ -1797,7 +1816,7 @@ public final class RecruitsBattle {
                 for (Point w : watchers) {
                     near = Math.min(near, w.distanceTo(block.pos()));
                 }
-                if (near > NUMBERS_BEYOND + BLOCK_REACH) {
+                if (near > SHIPS_WITHIN) {
                     continue;
                 }
                 boolean real = live.containsKey(block);
@@ -1807,7 +1826,10 @@ public final class RecruitsBattle {
                 block.lashed().forEach(o -> lashed.add(o.id()));
                 byId.put(block.id(), block);
                 FactionBanner flag = FactionBanner.of(sides[side].faction.id());
-                helms.add(new SableLink.Helm(block.id(), side, at.x(), at.z(), to.x(), to.z(), block.facingX(), block.facingZ(),
+                // There, it lies as its captain wants (a real formation's), or as its numbers do (one still only numbers).
+                double faceX = real ? block.settleX() : block.facingX();
+                double faceZ = real ? block.settleZ() : block.facingZ();
+                helms.add(new SableLink.Helm(block.id(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.duty() == Duty.GENERAL,
                         block.ship() == FieldBlock.ShipKind.CAMP, lashed, flag.base(),
                         flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()));
@@ -1830,11 +1852,19 @@ public final class RecruitsBattle {
             }
         }
         byId.clear();
-        if (level.getGameTime() % DECK_TICKS == 0) {
-            for (Live l : live.values()) {
-                if (l.block.afloat()) {
-                    keepDeck(l);
-                }
+        for (Live l : live.values()) {
+            if (!l.block.afloat()) {
+                continue;
+            }
+            double[] ship = SableLink.shipAt(l.block.id());
+            if (ship != null) {
+                l.block.steered(ship[2], ship[3]); // a real formation lies as its real ship does
+            }
+            if (level.getGameTime() % DECK_TICKS == 0) {
+                keepDeck(l);
+            }
+            if (l.block.lashed().stream().anyMatch(live::containsKey)) {
+                board(l);
             }
         }
     }
@@ -1878,30 +1908,47 @@ public final class RecruitsBattle {
         if (ship == null) {
             return;
         }
-        List<AbstractRecruitEntity> living = l.living();
-        living.removeIf(s -> commanded.contains(s.getId()));
         long now = level.getGameTime();
+        boolean boarding = l.block.lashed().stream().anyMatch(live::containsKey);
         for (int i = 0; i < l.soldiers.length; i++) {
             AbstractRecruitEntity s = l.soldiers[i];
             if (s == null || !s.isAlive() || commanded.contains(s.getId())) {
                 continue;
             }
+            Point spot = deckSpot(l.block, i);
             if (!s.isInWater()) {
                 overboard.remove(s.getId());
             } else if (now - overboard.computeIfAbsent(s.getId(), k -> now) >= CLIMB_TICKS) {
-                Point spot = deckSpot(l.block, i);
                 s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z());
                 overboard.remove(s.getId());
             }
+            if (!boarding) {
+                // Each to their own place on deck, the same one they were put aboard at. (Recruits' lineFormation spaces
+                // ranks 1.75 times wider than files, which ran the column off the stern.)
+                s.setHoldPos(new Vec3(spot.x(), s.getY(), spot.z()));
+                s.setFollowState(3);
+                s.isInFormation = true;
+                s.holdFormation = true;
+            }
         }
-        boolean boarding = l.block.lashed().stream().anyMatch(live::containsKey);
-        if (boarding || living.size() < 2) {
-            return;
+    }
+
+    /**
+     * Boarding: each soldier of a grappled ship who has someone to fight walks straight at them, over the rails and
+     * across onto the enemy's deck. Every tick, since ships' decks aren't the world's blocks and paths can't be found
+     * over them.
+     */
+    private void board(Live l) {
+        for (AbstractRecruitEntity s : l.living()) {
+            LivingEntity target = s.getTarget();
+            if (commanded.contains(s.getId()) || target == null || !target.isAlive() || s.distanceTo(target) < 1.5) {
+                continue;
+            }
+            s.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), 1.1);
+            if (s.horizontalCollision && s.onGround()) {
+                s.getJumpControl().jump(); // the rail
+            }
         }
-        int ranks = (l.block.started() + DECK_FILES - 1) / DECK_FILES;
-        Point front = BattlePlan.place(new Point(ship[0], ship[1]), ship[2], ship[3], 0, -(ranks - 1) / 2.0 * BattlePlan.SPACING);
-        FormationUtils.lineFormation(new Vec3(ship[2], 0, ship[3]), new ArrayList<>(living),
-                new Vec3(front.x(), level.getSeaLevel() + 1, front.z()), DECK_FILES, BattlePlan.SPACING, true);
     }
 
     /**
@@ -4825,8 +4872,10 @@ public final class RecruitsBattle {
         lastCentre.clear();
         everReal.clear();
         dismissEnlisted();
+        BattleType type = field.type();
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
                 level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
+        field.setType(type); // a sea battle stays at sea the next day
         if (terrain != null) {
             GroundPlan.deploy(field, terrain);
         }
@@ -5283,18 +5332,40 @@ public final class RecruitsBattle {
                 Live l = live.get(block);
                 List<AbstractRecruitEntity> living = l == null ? List.of() : l.living();
                 if (!living.isEmpty()) {
-                    all.add(liveSnapshot(block, kind, s, army, l, living));
+                    all.add(liveSnapshot(block, kind, s, army, l, living, shipOf(block)));
                     continue;
                 }
                 boolean lone = block.started() == 1;
+                if (block.afloat()) {
+                    // Aboard: on its ship's deck, centred where the ship is, DECK_FILES abreast down its length. A
+                    // supply ship's riders are below with the horses and stores: nobody shows on deck.
+                    int shown = block.ship() == FieldBlock.ShipKind.CAMP ? 0 : block.alive();
+                    int ranks = (Math.max(1, shown) + DECK_FILES - 1) / DECK_FILES;
+                    all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, shown, block.pos().x(),
+                            level.getSeaLevel() + 1, block.pos().z(), block.facingX(), block.facingZ(), // feet on the deck
+                            lone ? 0 : DECK_FILES * BattlePlan.SPACING / 2, lone ? 0 : ranks * BattlePlan.SPACING / 2,
+                            block.fighting(), block.captainAlive(), new int[0], -1, shipOf(block)));
+                    continue;
+                }
                 Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
                 all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
                         groundY(block, middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
                         lone ? 0 : block.halfWidth(), lone ? 0 : BattlePlan.SPACING, block.fighting(),
-                        block.captainAlive(), new int[0], -1));
+                        block.captainAlive(), new int[0], -1, null));
             }
         }
         return all;
+    }
+
+    /** A formation's ship, as the client is told of it: built as its real one is (sail()); null ashore. */
+    @Nullable
+    private FormationSnapshot.Ship shipOf(FieldBlock block) {
+        if (!block.afloat()) {
+            return null;
+        }
+        FactionBanner flag = FactionBanner.of(sides[block.side()].faction.id());
+        return new FormationSnapshot.Ship(flag.base(), flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(),
+                block.ship() == FieldBlock.ShipKind.CAMP);
     }
 
     /**
@@ -5302,7 +5373,7 @@ public final class RecruitsBattle {
      * the rest stand in its ranks (with no id, so the client draws them as figures there), in the order of the ranks.
      */
     private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, FieldArmy army, Live l,
-                                                  List<AbstractRecruitEntity> soldiers) {
+                                                  List<AbstractRecruitEntity> soldiers, @Nullable FormationSnapshot.Ship ship) {
         float[] health = block.health();
         Point front = front(block, health);
         double groundY = 0;
@@ -5343,7 +5414,7 @@ public final class RecruitsBattle {
             leaderId = c != null && c.isAlive() ? c.getId() : -1;
         }
         return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, army.facingX(), army.facingZ(),
-                block.fighting(), leaderId >= 0, ids, leaderId);
+                block.fighting(), leaderId >= 0, ids, leaderId, ship);
     }
 
     /** Tells everyone in the level that the battle's formations are gone. */

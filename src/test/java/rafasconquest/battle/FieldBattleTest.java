@@ -437,6 +437,7 @@ class FieldBattleTest {
         java.util.Map<FieldBlock, Point> last = new java.util.HashMap<>();
         java.util.Set<FieldBlock.ShipKind> kinds = java.util.EnumSet.noneOf(FieldBlock.ShipKind.class);
         boolean grappled = false;
+        boolean rammed = false;
         while (!battle.over()) {
             for (int side = 0; side < 2; side++) {
                 for (FieldBlock b : battle.army(side).blocks()) {
@@ -450,32 +451,173 @@ class FieldBattleTest {
             battle.second();
             for (java.util.Map.Entry<FieldBlock, Point> e : last.entrySet()) {
                 FieldBlock b = e.getKey();
-                assertTrue(b.pos().distanceTo(e.getValue()) <= FieldBattle.shipSpeed(b) + 1e-6, "faster than its ship sails");
+                assertTrue(b.pos().distanceTo(e.getValue()) <= FieldBattle.shipSpeed(b) + FieldBattle.SHIP_SHOVE + 1e-6,
+                        "a " + b.ship() + " ship (" + b.duty() + ", charged " + b.charged() + ", grappled " + b.lashed().size()
+                                + ") moved " + b.pos().distanceTo(e.getValue()) + " in second " + battle.seconds()
+                                + ": faster than its ship sails, shoved clear of its own");
                 assertTrue(!b.inMelee() || !b.lashed().isEmpty() || b.alive() == 0, "hand to hand at sea without grappling");
                 grappled |= !b.lashed().isEmpty();
+                rammed |= b.ship() == FieldBlock.ShipKind.SHOCK && !b.lashed().isEmpty();
             }
         }
         assertTrue(grappled, "no ships grappled");
+        assertTrue(rammed, "no shock ship rammed");
         assertTrue(kinds.containsAll(java.util.EnumSet.of(FieldBlock.ShipKind.SWORDSMEN, FieldBlock.ShipKind.SHOCK, FieldBlock.ShipKind.ARCHERS)),
                 "ship kinds sailed: " + kinds);
         assertTrue(battle.army(0).alive() < battle.army(0).started() && battle.army(1).alive() < battle.army(1).started(), "no one fell");
     }
 
     @Test
-    void aFleetsLinesStandAShipsLengthApart() {
+    void aFleetDeploysInOneLineAbreastTwentyBlocksApart() {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
+        boolean camps = false;
         for (int side = 0; side < 2; side++) {
-            java.util.List<FieldBlock> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != null).toList();
-            for (FieldBlock a : ships) {
-                for (FieldBlock b : ships) {
-                    // The battle's axis is x: ships abreast of each other (within a beam's width across) are lines apart.
-                    if (a != b && Math.abs(a.pos().z() - b.pos().z()) < 8) {
-                        assertTrue(Math.abs(a.pos().x() - b.pos().x()) >= FieldBattle.SHIP_LENGTH * 0.9,
-                                "ships " + a.pos() + " and " + b.pos() + " overlap");
+            // The battle's axis is x: a line abreast stands at one x, its ships along z.
+            java.util.List<Point> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != FieldBlock.ShipKind.CAMP)
+                    .map(FieldBlock::pos).sorted(java.util.Comparator.comparingDouble(Point::z)).toList();
+            for (int i = 1; i < ships.size(); i++) {
+                assertEquals(ships.get(0).x(), ships.get(i).x(), 1e-6, "not in one line abreast");
+                assertEquals(FieldBattle.FLEET_SPACING, ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not 20 apart");
+            }
+            double facing = battle.army(side).facingX();
+            for (FieldBlock camp : battle.army(side).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.CAMP).toList()) {
+                camps = true;
+                assertEquals(-FieldBattle.CAMP_ASTERN, (camp.pos().x() - ships.get(0).x()) * facing, 1e-6, "a supply ship not well astern");
+            }
+        }
+        assertTrue(camps, "no supply ships to check");
+    }
+
+    @Test
+    void aShipPlacedOnAnotherDropsClearOfIt() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        java.util.List<FieldBlock> ships = battle.army(0).blocks();
+        battle.place(ships.get(1), ships.get(0).pos());
+        assertTrue(ships.get(1).pos().distanceTo(ships.get(0).pos()) >= FieldBattle.SHIP_LENGTH - 1e-6, "placed on top of another ship");
+    }
+
+    /** A swordsman ship of a sea battle, alone at (0, 0) with its bow to +x. */
+    private static FieldBlock loneShip() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        FieldBlock ship = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.SWORDSMEN).findFirst().orElseThrow();
+        ship.pos = new Point(0, 0);
+        ship.facingX = 1;
+        ship.facingZ = 0;
+        return ship;
+    }
+
+    @Test
+    void aShipComesRoundInAnArcNeverSidewaysAndNoFasterThanItTurns() {
+        FieldBlock ship = loneShip();
+        Point target = new Point(0, 60); // abeam of it
+        boolean arced = false;
+        for (int s = 0; s < 120 && ship.pos().distanceTo(target) > FieldBattle.AT_PLACE; s++) {
+            Point before = ship.pos();
+            double hx = ship.facingX();
+            double hz = ship.facingZ();
+            FieldBattle.sail(ship, target);
+            double dx = ship.pos().x() - before.x();
+            double dz = ship.pos().z() - before.z();
+            double moved = Math.hypot(dx, dz);
+            double turned = Math.abs(Math.atan2(hx * ship.facingZ() - hz * ship.facingX(), hx * ship.facingX() + hz * ship.facingZ()));
+            assertTrue(turned <= FieldBattle.TURN_RATE + 1e-9, "turned " + Math.toDegrees(turned) + " degrees in a second");
+            // It moves along its heading halfway through the turn, never sideways.
+            assertTrue(Math.abs(hx * dz - hz * dx) <= moved * Math.sin(turned / 2) + 1e-6, "moved sideways at second " + s);
+            assertTrue(moved <= FieldBattle.shipSpeed(ship) + 1e-9, "faster than it sails");
+            arced |= turned > Math.toRadians(1) && moved > 0.5;
+        }
+        assertTrue(ship.pos().distanceTo(target) <= FieldBattle.AT_PLACE, "never got there: " + ship.pos());
+        assertTrue(arced, "turned where it lay instead of sailing round");
+    }
+
+    @Test
+    void aShipBacksAtHalfSpeedToAPlaceCloseAstern() {
+        FieldBlock ship = loneShip();
+        Point target = new Point(-10, 0); // close astern
+        for (int s = 0; s < 30 && ship.pos().distanceTo(target) > FieldBattle.AT_PLACE; s++) {
+            Point before = ship.pos();
+            FieldBattle.sail(ship, target);
+            assertTrue(ship.pos().distanceTo(before) <= FieldBattle.shipSpeed(ship) / 2 + 1e-9, "astern faster than half speed");
+            assertTrue(ship.pos().x() < before.x() + 1e-9, "didn't back toward it");
+            assertEquals(1, ship.facingX(), 1e-9, "turned round instead of backing");
+        }
+        assertTrue(ship.pos().distanceTo(target) <= FieldBattle.AT_PLACE, "never got there: " + ship.pos());
+    }
+
+    @Test
+    void anArcherCaptainShootsIntoABoardingFightAndOtherwiseKeepsItsMark() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        FieldBlock archers = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.ARCHERS).findFirst().orElseThrow();
+        FieldBlock ally = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.SWORDSMEN).findFirst().orElseThrow();
+        java.util.List<FieldBlock> enemies = battle.army(1).blocks().stream().filter(b -> b.ship() != null).toList();
+        for (FieldBlock e : battle.army(1).blocks()) {
+            e.pos = new Point(1000, 1000); // out of the way
+        }
+        FieldBlock near = enemies.get(0);
+        FieldBlock nearer = enemies.get(1);
+        FieldBlock boarded = enemies.get(2);
+        archers.pos = new Point(0, 0);
+        near.pos = new Point(20, 0);
+        nearer.pos = new Point(10, 0);
+        boarded.pos = new Point(30, 0);
+        assertEquals(nearer, FieldBattle.mark(archers, battle.army(1), null), "not the nearest in range");
+        assertEquals(near, FieldBattle.mark(archers, battle.army(1), near), "dropped its mark for a nearer one");
+        boarded.lashed.add(ally);
+        assertEquals(boarded, FieldBattle.mark(archers, battle.army(1), near), "didn't shoot into the boarding fight");
+        boarded.pos = new Point(FieldRules.ARCHER_RANGE + 10, 0);
+        assertEquals(nearer, FieldBattle.mark(archers, battle.army(1), boarded), "kept a mark out of range");
+    }
+
+    @Test
+    void noTwoShipsOfASideMakeForTheSameWater() {
+        FieldBattle battle = battle(30, 30, 4);
+        battle.setType(BattleType.OCEAN);
+        boolean boarded = false;
+        for (int s = 0; s < 240 && !battle.over(); s++) {
+            battle.second();
+            for (int side = 0; side < 2; side++) {
+                java.util.List<FieldBlock> sailing = battle.army(side).blocks().stream()
+                        .filter(b -> b.alive() > 0 && b.afloat() && b.lashed().isEmpty() && b.prey() != null && !b.charged()).toList();
+                for (int i = 0; i < sailing.size(); i++) {
+                    for (int j = i + 1; j < sailing.size(); j++) {
+                        assertTrue(sailing.get(i).line.distanceTo(sailing.get(j).line) > 1,
+                                "two ships making for " + sailing.get(i).line + " at second " + battle.seconds());
                     }
                 }
+                boarded |= battle.army(side).blocks().stream().anyMatch(b -> !b.lashed().isEmpty());
             }
+        }
+        assertTrue(boarded, "nobody came alongside");
+    }
+
+    @Test
+    void shipsOfOneSideThatEndUpInEachOtherEdgeApart() {
+        FieldBattle battle = battle(20, 20, 3);
+        battle.setType(BattleType.OCEAN);
+        java.util.List<FieldBlock> fleet = battle.army(0).blocks();
+        FieldBlock a = fleet.get(0);
+        FieldBlock b = fleet.get(1);
+        b.pos = a.pos;
+        b.facingX = a.facingX;
+        b.facingZ = a.facingZ;
+        for (int s = 0; s < 6; s++) {
+            battle.second();
+        }
+        // Clear, hull to hull (23 long, 7 wide), whichever way they now lie to each other.
+        assertTrue(a.pos().distanceTo(b.pos()) > 7, "still in each other: " + a.pos() + " and " + b.pos());
+    }
+
+    @Test
+    void fleetsSpreadOnAnyHeadingWithoutHanging() {
+        for (int degrees = 0; degrees < 360; degrees += 7) {
+            double a = Math.toRadians(degrees);
+            FieldBattle battle = new FieldBattle(40, 40, new Point(123.4, -567.8), Math.cos(a), Math.sin(a), degrees);
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(2),
+                    () -> battle.setType(BattleType.OCEAN), "spreading the fleets hung at " + degrees + " degrees");
         }
     }
 

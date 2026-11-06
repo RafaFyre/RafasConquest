@@ -23,7 +23,7 @@ class FormationSnapshotTest {
             ys[i] = 63;
             zs[i] = (i % 10 - 4.5) * BattlePlan.SPACING;
         }
-        return FormationSnapshot.of(3, Kind.SWORDSMEN, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true, IDS, IDS[BattlePlan.LEADER_INDEX]);
+        return FormationSnapshot.of(3, Kind.SWORDSMEN, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true, IDS, IDS[BattlePlan.LEADER_INDEX], null);
     }
 
     @Test
@@ -69,7 +69,7 @@ class FormationSnapshotTest {
     @Test
     void aGeneralIsOneSpriteWhereTheyStand() {
         FormationSnapshot general = FormationSnapshot.of(6, Kind.GENERAL, 0, 0, new double[]{5}, new double[]{70}, new double[]{-2}, 0, 1, false, false,
-                new int[]{900}, -1);
+                new int[]{900}, -1, null);
         List<Sprite> sprites = general.layout();
         assertEquals(1, sprites.size());
         assertEquals(5, sprites.get(0).x(), 1e-9);
@@ -79,7 +79,7 @@ class FormationSnapshotTest {
     @Test
     void glidesBetweenSnapshots() {
         FormationSnapshot a = twoRanksFacingEast(false);
-        FormationSnapshot b = new FormationSnapshot(3, Kind.SWORDSMEN, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false, new int[18], -1);
+        FormationSnapshot b = new FormationSnapshot(3, Kind.SWORDSMEN, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false, new int[18], -1, null);
         FormationSnapshot half = b.from(a, 0.5);
         assertEquals(a.x() + 5, half.x(), 1e-9);
         assertEquals(1, Math.hypot(half.facingX(), half.facingZ()), 1e-9, "still a direction");
@@ -110,7 +110,7 @@ class FormationSnapshotTest {
     void aBlockThatIsOnlyNumbersStandsInItsRanks() {
         FormationSnapshot s = twoRanksFacingEast(false);
         FormationSnapshot numbers = new FormationSnapshot(s.id(), s.kind(), s.rgb(), s.mark(), s.alive(), s.x(), s.y(), s.z(),
-                s.facingX(), s.facingZ(), s.halfWidth(), s.halfDepth(), false, true, new int[0], -1);
+                s.facingX(), s.facingZ(), s.halfWidth(), s.halfDepth(), false, true, new int[0], -1, null);
         assertEquals(numbers.layout(), numbers.place(id -> null));
     }
 
