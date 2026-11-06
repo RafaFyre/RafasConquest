@@ -277,6 +277,9 @@ public final class Politics {
             for (int d : succession.day(day, realm, random, front.playerCounties().keySet())) {
                 died(d, day, lands, random, "died, aged " + lands.person(d).age());
             }
+            for (int[] w : succession.drainWeddings()) {
+                wedded(w[0], w[1], w[2], w[3], day, lands);
+            }
         }
         while (chronicle.size() > CHRONICLE) {
             chronicle.remove(0);
@@ -363,6 +366,25 @@ public final class Politics {
             };
         }
         return Math.max(0.02, a);
+    }
+
+    /**
+     * A wedding: one of a ruling house marrying into another nation's ruling house binds the two nations in alliance
+     * (unless they are at war); a ruler's own wedding is news either way.
+     */
+    void wedded(int moved, int stayed, int from, int to, long day, Lands lands) {
+        Person m = lands.person(moved);
+        Person s = lands.person(stayed);
+        int rf = from >= 0 ? lands.ruler(from) : -1;
+        int rt = to >= 0 ? lands.ruler(to) : -1;
+        boolean royal = from != to && rf >= 0 && rt >= 0 && m.family().equals(lands.person(rf).family())
+                && s.family().equals(lands.person(rt).family());
+        if (royal && !atWar(from) && !atWar(to) && alliances.add(pair(from, to))) {
+            log(day, s.name() + " of " + lands.nationName(to) + " married " + m.name() + " of " + lands.nationName(from)
+                    + ", and the two nations are allied by it.");
+        } else if (stayed == rt) {
+            log(day, s.name() + ", ruler of " + lands.nationName(to) + ", married " + m.name() + ".");
+        }
     }
 
     /** An offer of alliance; taken if the other ruler doesn't think too ill of the one asking. */

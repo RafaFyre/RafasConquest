@@ -89,7 +89,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     public List<Integer> vassals(int a) {
         List<Integer> found = new ArrayList<>();
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).liege() == a && !people.get(i).hold().kind().heir() && people.get(i).hold().kind() != Person.Kind.DEAD) {
+            if (people.get(i).liege() == a && !people.get(i).hold().kind().household() && people.get(i).hold().kind() != Person.Kind.DEAD) {
                 found.add(i);
             }
         }
@@ -112,7 +112,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
     /** The character keeping the hold in a province, or -1. */
     public int holderOf(int province) {
         for (int i = 0; i < people.size(); i++) {
-            if (people.get(i).hold().province() == province && people.get(i).hold().kind() != Person.Kind.DEAD) {
+            if (people.get(i).hold().province() == province && people.get(i).hold().kind() != Person.Kind.DEAD && !people.get(i).hold().kind().household()) {
                 return i;
             }
         }
@@ -142,6 +142,9 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
             opinion += 15;
         } else if (pb.liege() == a) {
             opinion += 5;
+        }
+        if (pa.spouse() == b) {
+            opinion += 40; // husband and wife
         }
         Bond.Kind bond = bond(a, b);
         if (bond == Bond.Kind.FRIEND) {
@@ -248,6 +251,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         out.writeShort(p.liege());
         out.writeShort(p.nation());
         out.writeBoolean(p.away());
+        out.writeShort(p.spouse());
     }
 
     static Person readPerson(DataInputStream in) throws IOException {
@@ -269,7 +273,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         }
         Person.Hold hold = new Person.Hold(Person.Kind.values()[in.readUnsignedByte()], in.readShort(), in.readInt(), in.readInt());
         return new Person(given, family, female, age, culture, faith, race, stats, List.copyOf(traits), hold, in.readShort(), in.readShort(),
-                in.readBoolean());
+                in.readBoolean(), in.readShort());
     }
 
     public static Realm read(DataInputStream in) throws IOException {

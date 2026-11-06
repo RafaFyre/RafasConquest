@@ -277,6 +277,13 @@ public final class RealmPlanner {
 
         List<Realm.Bond> bonds = bonds(random, people);
         heirs(new Random(seed ^ SALT ^ 0x4B494EL), people, cultures, titles);
+        Marriages.atStart(people, cultures, new Random(seed ^ SALT ^ 0x574544L), (i, p) -> {
+            if (i == people.size()) {
+                people.add(p);
+            } else {
+                people.set(i, p);
+            }
+        });
         return new Realm(cultures, faiths, people, bonds, nationCulture, nationFaith, nationPiety,
                 demographics, List.of(), holdNames(seed, t, cultures, nationCulture, holder, homeland));
     }
@@ -564,7 +571,7 @@ public final class RealmPlanner {
 
     private static Person withLiege(Person p, int liege) {
         return new Person(p.given(), p.family(), p.female(), p.age(), p.culture(), p.faith(), p.race(), p.stats(), p.traits(), p.hold(), liege,
-                p.nation(), p.away());
+                p.nation(), p.away(), p.spouse());
     }
 
     /** A province's highest seat as a number: -1 none, 0 county ... 3 empire. */

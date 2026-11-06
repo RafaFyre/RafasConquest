@@ -59,7 +59,7 @@ public final class Retinues {
             case CAPITAL, LORD -> 3;
             case CITY -> 2;
             case TOWN -> 1;
-            case CASTLE, RETAINER, CHILD, SIBLING, DEAD -> 0;
+            case CASTLE, RETAINER, CHILD, SIBLING, SPOUSE, DEAD -> 0;
         };
     }
 

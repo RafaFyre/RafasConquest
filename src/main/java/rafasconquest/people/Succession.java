@@ -38,6 +38,8 @@ public final class Succession {
     private final Map<Integer, Person> changed = new TreeMap<>();
     /** Each death not yet seen to by the players' side: {the dead, their heir or -1}. */
     private final List<int[]> deaths = new ArrayList<>();
+    /** The weddings not yet seen to by the politics. */
+    private final List<Marriages.Wedding> weddings = new ArrayList<>();
 
     public int years() {
         return years;
@@ -77,6 +79,8 @@ public final class Succession {
         if (day > 0 && day % YEAR_DAYS == 0) {
             years++;
             apply(realm);
+            List<Person> all = realm.people();
+            weddings.addAll(Marriages.year(all, realm.cultures(), random, (i, p) -> set(all, i, p)));
         }
         List<Integer> dying = new ArrayList<>();
         List<Person> people = realm.people();
@@ -138,6 +142,16 @@ public final class Succession {
         return h;
     }
 
+    /** The weddings since last asked: each {who moved, whom they married, the nation they came from, the nation they joined}. */
+    public List<int[]> drainWeddings() {
+        List<int[]> w = new ArrayList<>();
+        for (Marriages.Wedding m : weddings) {
+            w.add(new int[]{m.moved(), m.stayed(), m.fromNation(), m.toNation()});
+        }
+        weddings.clear();
+        return w;
+    }
+
     /** The deaths since last asked, each {the dead, their heir or -1}, for the players' side to see to. */
     public List<int[]> drainDeaths() {
         List<int[]> d = new ArrayList<>(deaths);
@@ -156,12 +170,12 @@ public final class Succession {
 
     private static Person aged(Person p, int by) {
         return by == 0 ? p : new Person(p.given(), p.family(), p.female(), p.age() + by, p.culture(), p.faith(), p.race(), p.stats(), p.traits(),
-                p.hold(), p.liege(), p.nation(), p.away());
+                p.hold(), p.liege(), p.nation(), p.away(), p.spouse());
     }
 
     private static Person with(Person p, Person.Hold hold, int liege, int nation) {
         return new Person(p.given(), p.family(), p.female(), p.age(), p.culture(), p.faith(), p.race(), p.stats(), p.traits(), hold, liege,
-                nation, p.away());
+                nation, p.away(), p.spouse());
     }
 
     public byte[] encode() {

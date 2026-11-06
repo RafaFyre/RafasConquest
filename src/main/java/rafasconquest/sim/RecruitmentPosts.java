@@ -111,7 +111,7 @@ public final class RecruitmentPosts {
             rafasconquest.people.Person p = map.realm().people().get(i);
             rafasconquest.people.Person.Hold hold = p.hold();
             // Not where a player has taken the hold, nor where it was conquered in war.
-            if (hold.kind() == rafasconquest.people.Person.Kind.RETAINER || hold.kind().heir()) { // shortcut: heirs not placed in the world yet; give them spots of their own when courts get more places
+            if (hold.kind() == rafasconquest.people.Person.Kind.RETAINER || hold.kind().household() || hold.kind() == rafasconquest.people.Person.Kind.DEAD) { // shortcut: heirs and spouses not placed in the world yet; give them spots of their own when courts get more places
                 continue; // a sanctum's retainers stand at their sanctum (sanctumMembers)
             }
             if (p.nation() < 0 || peerage.replaced(hold.province()) && hold.kind() != rafasconquest.people.Person.Kind.LORD

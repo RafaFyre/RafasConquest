@@ -102,6 +102,7 @@ class RealmPlannerTest {
     void everyTitleHolderHasAnHeirOfTheirFamilyInLine() {
         Realm realm = world(9).realm();
         int holders = 0;
+        int withHeirs = 0;
         for (int i = 0; i < realm.people().size(); i++) {
             Person h = realm.people().get(i);
             if (!h.noble() || h.hold().kind().heir()) {
@@ -109,7 +110,8 @@ class RealmPlannerTest {
             }
             holders++;
             List<Integer> line = realm.line(i);
-            assertTrue(line.size() >= 1 && line.size() <= RealmPlanner.MAX_KIN, "a holder with " + line.size() + " heirs");
+            assertTrue(line.size() <= RealmPlanner.MAX_KIN, "a holder with " + line.size() + " heirs");
+            withHeirs += line.isEmpty() ? 0 : 1; // an heir may have married into another house
             int lastAge = Integer.MAX_VALUE;
             for (int heir : line) {
                 Person p = realm.people().get(heir);
@@ -126,6 +128,7 @@ class RealmPlannerTest {
             }
         }
         assertTrue(holders > 20, "too few holders to tell: " + holders);
+        assertTrue(withHeirs >= holders * 0.8, "too few holders with heirs: " + withHeirs + " of " + holders);
     }
 
     @Test
@@ -133,6 +136,9 @@ class RealmPlannerTest {
         World w = world(9);
         Realm realm = w.realm();
         int nation = 0;
+        while (realm.line(realm.ruler(nation)).isEmpty()) {
+            nation++; // one whose heirs didn't all marry away
+        }
         int d = realm.ruler(nation);
         Person dead = realm.people().get(d);
         List<Integer> line = realm.line(d);
@@ -185,6 +191,66 @@ class RealmPlannerTest {
     }
 
     @Test
+    void mostHoldersAreMarriedAndSpousesLiveWithThem() {
+        Realm realm = world(9).realm();
+        List<Person> people = realm.people();
+        int holders = 0;
+        int married = 0;
+        int fromOtherHouses = 0;
+        for (int i = 0; i < people.size(); i++) {
+            Person p = people.get(i);
+            if (Marriages.holds(p) && p.age() >= 20) {
+                holders++;
+                married += p.married(people) ? 1 : 0;
+            }
+            if (p.spouse() >= 0) {
+                assertEquals(i, people.get(p.spouse()).spouse(), "a marriage only one way");
+                assertTrue(p.female() != people.get(p.spouse()).female());
+            }
+            if (p.hold().kind() == Person.Kind.SPOUSE) {
+                Person partner = people.get(p.liege());
+                assertEquals(p.spouse(), p.liege(), "a spouse not living with whom they married");
+                assertEquals(partner.hold().province(), p.hold().province());
+                assertFalse(realm.line(p.liege()).contains(i), "a spouse in the line");
+                assertFalse(realm.vassals(p.liege()).contains(i), "a spouse counted a vassal");
+                assertTrue(realm.holderOf(p.hold().province()) != i, "a spouse taken for the holder");
+                fromOtherHouses += partner.family().equals(p.family()) ? 0 : 1;
+            }
+        }
+        assertTrue(married >= holders / 2, married + " of " + holders + " holders married");
+        assertTrue(fromOtherHouses > 0);
+    }
+
+    @Test
+    void holdersHaveChildrenBornIntoTheirLine() {
+        Realm realm = world(9).realm();
+        Succession s = new Succession();
+        java.util.Random random = new java.util.Random(4);
+        int before = realm.people().size();
+        for (int year = 1; year <= 3; year++) {
+            s.day(year * Succession.YEAR_DAYS, realm, random, java.util.Set.of());
+        }
+        int born = 0;
+        for (int i = before; i < realm.people().size(); i++) {
+            Person c = realm.people().get(i);
+            if (c.hold().kind() == Person.Kind.CHILD) {
+                born++;
+                Person parent = realm.people().get(c.liege());
+                assertEquals(parent.family(), c.family());
+                assertTrue(realm.line(c.liege()).contains(i), "a child born outside the line");
+                assertTrue(c.age() <= 2);
+            }
+        }
+        assertTrue(born > 0, "no one born in three years");
+        // Kept and sent, the newborn come out the same over the realm as drawn.
+        Realm drawn = world(9).realm();
+        Succession.decode(s.encode()).apply(drawn);
+        assertEquals(realm.people().size(), drawn.people().size());
+        assertEquals(realm.people().get(realm.people().size() - 1).name(), drawn.people().get(drawn.people().size() - 1).name());
+        assertEquals(realm.people().get(realm.people().size() - 1).age(), drawn.people().get(drawn.people().size() - 1).age());
+    }
+
+    @Test
     void aStyleNoNationIsSeatedInIsTakenByOneSharingItsStyle() {
         // Every homeland its own style but the last two, which share one.
         List<List<Homeland>> styles = new ArrayList<>();
@@ -231,7 +297,7 @@ class RealmPlannerTest {
         World w = world(5);
         Set<Integer> holds = new HashSet<>();
         for (Person p : w.realm().people()) {
-            if (p.hold().kind() == Person.Kind.LORD || p.hold().kind().heir()) {
+            if (p.hold().kind() == Person.Kind.LORD || p.hold().kind().household()) {
                 // A capital city's own lord, sworn to the ruler who holds it; or an heir, living at their family's hold.
                 Person liege = w.realm().people().get(p.liege());
                 assertTrue(liege.hold().province() == p.hold().province() && liege.hold().kind() != Person.Kind.LORD,
@@ -265,7 +331,7 @@ class RealmPlannerTest {
         for (int i = 0; i < people.size(); i++) {
             Person p = people.get(i);
             if (p.nation() < 0) {
-                if (!p.hold().kind().heir()) {
+                if (!p.hold().kind().household()) {
                     assertEquals(-1, p.liege(), "an unowned hold's holder with a liege");
                 }
                 continue;
@@ -304,7 +370,7 @@ class RealmPlannerTest {
                 for (Personality t : p.traits()) {
                     assertFalse(p.has(t.opposite()), "both " + t + " and its opposite");
                 }
-                if (p.nation() >= 0) {
+                if (p.nation() >= 0 && p.hold().kind() != Person.Kind.SPOUSE) { // one married in keeps their own
                     assertEquals(realm.nationCulture()[p.nation()], p.culture(), "a character not of the nation's culture");
                 }
             }
@@ -385,7 +451,7 @@ class RealmPlannerTest {
             assertEquals(w.homeland()[w.nations().nations().get(n).seat()], realm.nationCulture()[n], "a nation not of its seat's culture");
         }
         for (Person p : realm.people()) {
-            if (p.nation() < 0) {
+            if (p.nation() < 0 && p.hold().kind() != Person.Kind.SPOUSE) {
                 assertEquals(w.homeland()[p.hold().province()], p.culture(), "an unowned hold's holder not of its land's culture");
             }
         }

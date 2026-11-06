@@ -186,7 +186,10 @@ public class CharacterScreen extends Screen {
         Race race = Race.values()[p.race()];
         x = info(g, x, infoY, race.title(), 0xFF3CC26A, "Race", "Of the " + race.title() + ", the people of the "
                 + race.homeland().title().toLowerCase(Locale.ROOT) + " lands.");
-        x = info(g, x, infoY, "Unmarried", 0xFFE07AB0, "Marriage", "Not married.");
+        String spouse = p.spouse() >= 0 && p.spouse() < realm.people().size() ? realm.people().get(p.spouse()).name() : null;
+        x = p.married(realm.people()) ? info(g, x, infoY, "Married", 0xFFE07AB0, "Marriage", "Married to " + spouse + ".")
+                : spouse != null ? info(g, x, infoY, p.female() ? "Widow" : "Widower", 0xFFE07AB0, "Marriage", "Widowed: " + spouse + " has died.")
+                : info(g, x, infoY, "Unmarried", 0xFFE07AB0, "Marriage", "Not married.");
         info(g, x, infoY, (p.female() ? "Female, " : "Male, ") + p.age(), 0xFFE08A8A, "Age", p.age() + " years old.");
 
         // They stand in their court on the left (drawn above); their nation's banner on the right.
@@ -377,6 +380,9 @@ public class CharacterScreen extends Screen {
         if (p.liege() >= 0) {
             y = people(g, p.hold().kind().heir() ? "Heir to" : "Liege", List.of(p.liege()), x, y, w, mouseX, mouseY);
         }
+        if (p.spouse() >= 0) {
+            y = people(g, p.married(realm.people()) ? "Spouse" : "Late spouse", List.of(p.spouse()), x, y, w, mouseX, mouseY);
+        }
         y = people(g, "Line of succession", realm.line(index), x, y, w, mouseX, mouseY);
         y = people(g, "Friends", realm.bonded(index, Realm.Bond.Kind.FRIEND), x, y, w, mouseX, mouseY);
         people(g, "Rivals", realm.bonded(index, Realm.Bond.Kind.RIVAL), x, y, w, mouseX, mouseY);
@@ -419,6 +425,7 @@ public class CharacterScreen extends Screen {
             case RETAINER -> "lives at the sanctum of";
             case CHILD -> "a child of the holder of";
             case SIBLING -> "a sibling of the holder of";
+            case SPOUSE -> "married to the holder of";
             case DEAD -> "is dead; they lived at";
         };
     }
