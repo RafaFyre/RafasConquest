@@ -14,7 +14,7 @@ public final class NobleAnnex {
     public static final int GAP_MIN = 35;
     public static final int GAP_MAX = 50;
     public static final int OFFSET_MAX = 15;
-    public static final int RISE = 20;
+    public static final int RISE = 40;
     /** The path's longest climb: one block up for this many along. */
     public static final int RUN = 2;
     /** How far out the platform's cliff easing (3 up for 1 out) shapes the land: enough for 96 blocks of relief. */
@@ -104,6 +104,21 @@ public final class NobleAnnex {
                     int v = cv + dv;
                     int near = (int) Math.round(1000 * (Math.pow(u - p[0], 2) + Math.pow(v - p[1], 2)));
                     columns.merge(((long) u << 32) ^ (v & 0xffffffffL), new int[]{u, v, half, near}, (old, now) -> now[3] < old[3] ? now : old);
+                }
+            }
+        }
+        // On a tight bend the inside columns sit by others far along the path: raise each to a block under its highest neighbour.
+        for (boolean changed = true; changed; ) {
+            changed = false;
+            for (int[] c : columns.values()) {
+                for (int du = -1; du <= 1; du++) {
+                    for (int dv = -1; dv <= 1; dv++) {
+                        int[] n = columns.get(((long) (c[0] + du) << 32) ^ ((c[1] + dv) & 0xffffffffL));
+                        if (n != null && n[2] - 2 > c[2]) {
+                            c[2] = n[2] - 2;
+                            changed = true;
+                        }
+                    }
                 }
             }
         }
