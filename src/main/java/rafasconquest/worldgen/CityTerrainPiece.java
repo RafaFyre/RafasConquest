@@ -239,17 +239,29 @@ public class CityTerrainPiece extends StructurePiece {
         while (solid > level.getMinBuildHeight() && !isSolidGround(level.getBlockState(pos.set(x, solid, z)))) {
             solid--;
         }
-        BlockState surface = surfaceFrom(level.getBlockState(pos.set(x, solid, z)));
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        BlockState surface = column.stone() ? stone : surfaceFrom(level.getBlockState(pos.set(x, solid, z)));
+        int laid;
         if (column.fill() && solid < column.low()) {
             for (int y = solid + 1; y < column.low(); y++) {
-                level.setBlock(pos.set(x, y, z), Blocks.STONE.defaultBlockState(), 2);
+                level.setBlock(pos.set(x, y, z), stone, 2);
             }
-            level.setBlock(pos.set(x, column.low(), z), surface, 2);
+            laid = column.low();
         } else if (top > column.high() && original.getFluidState().isEmpty()) {
             for (int y = top; y > column.high(); y--) {
                 level.setBlock(pos.set(x, y, z), Blocks.AIR.defaultBlockState(), 2);
             }
-            level.setBlock(pos.set(x, column.high(), z), surface, 2);
+            laid = column.high();
+        } else if (column.stone() && solid == column.low()) {
+            laid = solid;
+        } else {
+            return;
+        }
+        level.setBlock(pos.set(x, laid, z), surface, 2);
+        if (column.stone()) {
+            // The easing's steps stand 2 apart: their faces too, not the dirt a carve cuts into.
+            level.setBlock(pos.set(x, laid - 1, z), stone, 2);
+            level.setBlock(pos.set(x, laid - 2, z), stone, 2);
         }
     }
 

@@ -19,6 +19,8 @@ public final class NobleAnnex {
     public static final int RUN = 2;
     /** How far out the platform's easing runs, from its top down to the city's height ({@link #RISE} over this). */
     public static final int EASE_REACH = 20;
+    /** How far out it keeps filling, as steeply, down to land below the city's height. */
+    public static final int FILL_REACH = 2 * EASE_REACH;
     /** Room the world map keeps for a style's wall ring (either city's or the annex's), which it can't know yet. */
     static final int WALL_ROOM = 40;
     /** How far past a city's square its annex and the land it shapes may reach, at most (a 9-district city's). */

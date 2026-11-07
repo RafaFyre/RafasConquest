@@ -176,9 +176,13 @@ public final class CityTerrain {
         NONE
     }
 
-    /** What to do with one column. */
-    public record Column(Kind kind, int low, int high, boolean fill) {
+    /** What to do with one column; a {@code stone} one (an outside noble district's easing) is laid in bare stone. */
+    public record Column(Kind kind, int low, int high, boolean fill, boolean stone) {
         static final Column NONE = new Column(Kind.NONE, 0, 0, false);
+
+        public Column(Kind kind, int low, int high, boolean fill) {
+            this(kind, low, high, fill, false);
+        }
     }
 
     /**
@@ -332,7 +336,7 @@ public final class CityTerrain {
         }
         boolean fill = c.fill() || p.fill();
         int low = c.fill() && p.fill() ? Math.max(c.low(), p.low()) : p.fill() ? p.low() : c.fill() ? c.low() : Math.min(c.low(), p.low());
-        return new Column(Kind.SLOPE, low, Math.max(low, Math.min(c.high(), p.high())), fill);
+        return new Column(Kind.SLOPE, low, Math.max(low, Math.min(c.high(), p.high())), fill, p.stone() && low == p.low());
     }
 
     public static Column column(Plan plan, int lx, int lz) {
@@ -346,8 +350,13 @@ public final class CityTerrain {
         }
         int d = Math.max(dx, dz);
         if (plan.run() < 0) {
-            // An outside noble district's platform: its easing, carved and filled, ends on the city's height.
-            return d > NobleAnnex.EASE_REACH ? Column.NONE : new Column(Kind.SLOPE, plate - plan.rise(d), plate - plan.rise(d), true);
+            // An outside noble district's platform: its easing, carved and filled, reaches the city's height; past that
+            // it only fills, as steeply, so land lower than the city's meets it instead of dropping away.
+            if (d > NobleAnnex.FILL_REACH) {
+                return Column.NONE;
+            }
+            int low = plate - plan.rise(d);
+            return new Column(Kind.SLOPE, low, d > NobleAnnex.EASE_REACH ? Integer.MAX_VALUE : low, true, true);
         }
         if (d > SLOPE_REACH) {
             return Column.NONE;

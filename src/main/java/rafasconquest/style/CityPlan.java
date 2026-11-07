@@ -200,7 +200,7 @@ public final class CityPlan {
     }
 
     private static int[] annexRegion(int[] a, List<int[]> path) {
-        int r = a[3] + 2 + NobleAnnex.EASE_REACH; // the platform's walls, box margin and easing
+        int r = a[3] + 2 + NobleAnnex.FILL_REACH; // the platform's walls, box margin and easing
         int[] region = {a[0] - r, a[1] - r, a[0] + a[2] - 1 + r, a[1] + a[2] - 1 + r};
         for (int[] c : path) {
             region[0] = Math.min(region[0], c[0]);

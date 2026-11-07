@@ -55,6 +55,9 @@ class NobleAnnexTest {
         CityTerrain.Column foot = CityTerrain.column(platform, platform.boxMin() - NobleAnnex.EASE_REACH, 10);
         assertEquals(city.plateY(), foot.low(), "the easing's foot on the city's height");
         assertTrue(foot.fill() && foot.high() == foot.low(), "filled and carved to the easing");
-        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(platform, platform.boxMin() - NobleAnnex.EASE_REACH - 1, 10).kind(), "nothing past it");
+        CityTerrain.Column past = CityTerrain.column(platform, platform.boxMin() - NobleAnnex.EASE_REACH - 1, 10);
+        assertEquals(foot.low() - 2, past.low(), "past it, still filling down as steeply: no drop to lower land");
+        assertTrue(past.fill() && past.stone() && past.high() == Integer.MAX_VALUE, "fill only, in stone");
+        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(platform, platform.boxMin() - NobleAnnex.FILL_REACH - 1, 10).kind(), "nothing past the fill");
     }
 }
