@@ -50,7 +50,7 @@ public class CityPlacement extends StructurePlacement {
         long seed = state.getLevelSeed();
         return switch (kind) {
             case 1 -> CityLayout.districtInChunk(seed, settings, chunkX, chunkZ).isPresent();
-            case 2 -> CityLayout.slopeTileInChunk(seed, settings, chunkX, chunkZ).isPresent();
+            case 2 -> !CityLayout.slopeTilesInChunk(seed, settings, chunkX, chunkZ).isEmpty();
             default -> CityLayout.siteInChunk(seed, settings, chunkX, chunkZ).isPresent();
         };
     }

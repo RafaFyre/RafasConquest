@@ -40,6 +40,9 @@ public class CityTerrainPiece extends StructurePiece {
     private final int platformX;
     private final int platformZ;
     private final boolean annexOnly;
+    /** A port's {@link rafasconquest.core.HarbourCut} box, city-local, or null: its own pieces shape that ground, not this one. */
+    @org.jetbrains.annotations.Nullable
+    private final int[] harbour;
 
     public CityTerrainPiece(CityLayout.Site site, int cellX, int cellZ, CityVariant variant, CityTerrain.Plan plan, int minY, int maxY,
                             CityGridBuilder.@org.jetbrains.annotations.Nullable Platform platform) {
@@ -55,12 +58,14 @@ public class CityTerrainPiece extends StructurePiece {
         this.platformX = platform == null ? 0 : platform.x();
         this.platformZ = platform == null ? 0 : platform.z();
         this.annexOnly = false;
+        this.harbour = CityLayout.harbourCut(site);
         setOrientation(null);
     }
 
     /** A stretch of the city's outer slope, or ({@code annexOnly}) of its outside noble district's ground, {@code box} in world coordinates. */
     public CityTerrainPiece(int originX, int originZ, CityVariant variant, CityTerrain.Plan plan, BoundingBox box,
-                            CityGridBuilder.@org.jetbrains.annotations.Nullable Platform platform, boolean annexOnly) {
+                            CityGridBuilder.@org.jetbrains.annotations.Nullable Platform platform, boolean annexOnly,
+                            @org.jetbrains.annotations.Nullable int[] harbour) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, box);
         this.originX = originX;
         this.originZ = originZ;
@@ -70,6 +75,7 @@ public class CityTerrainPiece extends StructurePiece {
         this.platformX = platform == null ? 0 : platform.x();
         this.platformZ = platform == null ? 0 : platform.z();
         this.annexOnly = annexOnly && platform != null;
+        this.harbour = harbour;
         setOrientation(null);
     }
 
@@ -83,6 +89,7 @@ public class CityTerrainPiece extends StructurePiece {
         this.platformX = tag.getInt("platformX");
         this.platformZ = tag.getInt("platformZ");
         this.annexOnly = platform != null && tag.getBoolean("annexOnly");
+        this.harbour = tag.contains("harbour") ? tag.getIntArray("harbour") : null;
     }
 
     /** A plan saved under {@code prefix}; a city's, with its old defaults, where a size or run is missing. */
@@ -136,6 +143,9 @@ public class CityTerrainPiece extends StructurePiece {
             tag.putInt("platformZ", platformZ);
             tag.putBoolean("annexOnly", annexOnly);
         }
+        if (harbour != null) {
+            tag.putIntArray("harbour", harbour);
+        }
     }
 
     @Override
@@ -146,6 +156,9 @@ public class CityTerrainPiece extends StructurePiece {
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(originX, originZ, plan.cells());
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
+                if (rafasconquest.core.HarbourCut.inBox(harbour, x - originX, z - originZ)) {
+                    continue;
+                }
                 CityTerrain.Column column;
                 if (platform == null) {
                     column = CityTerrain.column(plan, x - originX, z - originZ);

@@ -40,6 +40,7 @@ public final class ConquestWorldgen {
 
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> HARBOUR_PIECE = PIECE_TYPES.register("harbour", () -> (context, tag) -> new HarbourPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> HARBOUR_CUT_PIECE = PIECE_TYPES.register("harbour_cut", () -> (context, tag) -> new HarbourCutPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_TERRAIN_PIECE =PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> BARRACKS_PIECE = PIECE_TYPES.register("recruitment_post", // the old name, kept so saved worlds load
             () -> (context, tag) -> new BarracksPiece(tag));

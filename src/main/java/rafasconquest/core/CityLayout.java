@@ -144,6 +144,19 @@ public final class CityLayout {
         annexRegions = regions;
     }
 
+    /** The side each port city's harbour faces, or null for an inland city; set when the overworld loads. */
+    private static volatile java.util.function.Function<Site, Side> harbourSides = site -> null;
+
+    public static void publishHarbourSides(java.util.function.Function<Site, Side> sides) {
+        harbourSides = sides;
+    }
+
+    /** The city-local box a port's {@link HarbourCut} may clear, or null for an inland city. */
+    public static int[] harbourCut(Site site) {
+        Side side = harbourSides.apply(site);
+        return side == null ? null : HarbourCut.box(side, site.size(), wallOutsets.applyAsInt(site));
+    }
+
     /**
      * World coordinate, along one axis, of the start of a cell: its middle, except that an edge cell's start moves
      * outward, by whole chunks, until its terrain's slope is within the engine's 8-chunk reach of it, as long as the
@@ -485,7 +498,7 @@ public final class CityLayout {
      * and the land about it, which also builds that district's pieces whose middles it holds. {@code minX}..{@code maxZ}
      * are city-local.
      */
-    public record SlopeTile(Site city, int minX, int minZ, int maxX, int maxZ, boolean annex) {
+    public record SlopeTile(Site city, int minX, int minZ, int maxX, int maxZ, boolean annex, boolean harbour) {
         public boolean holds(int lx, int lz) {
             return lx >= minX && lx <= maxX && lz >= minZ && lz <= maxZ;
         }
@@ -502,9 +515,15 @@ public final class CityLayout {
     public static List<SlopeTile> slopeTiles(Site city) {
         List<SlopeTile> tiles = new ArrayList<>();
         for (int[] t : CityTerrain.slopeTiles(city.cells(), wallOutsets.applyAsInt(city))) {
-            tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], false));
+            tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], false, false));
         }
         tiles.addAll(annexTiles(city));
+        int[] h = harbourCut(city);
+        if (h != null) {
+            for (int[] t : CityTerrain.tiles(h[0], h[1], h[2], h[3])) {
+                tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], false, true));
+            }
+        }
         return tiles;
     }
 
@@ -514,26 +533,27 @@ public final class CityLayout {
         List<SlopeTile> tiles = new ArrayList<>();
         if (r != null) {
             for (int[] t : CityTerrain.tiles(r[0], r[1], r[2], r[3])) {
-                tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], true));
+                tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], true, false));
             }
         }
         return tiles;
     }
 
-    /** The slope tile whose start block lies in this chunk, if any. */
-    public static Optional<SlopeTile> slopeTileInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
+    /** The slope tiles whose start blocks lie in this chunk: a harbour tile's may share one with a slope tile's. */
+    public static List<SlopeTile> slopeTilesInChunk(long seed, WorldSettings s, int chunkX, int chunkZ) {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
         // shortcut: assumes no style's wall stands more than ~130 blocks out past the square.
-        int r = MAX_HALF_EXTENT + 128 + CityTerrain.SLOPE_REACH + NobleAnnex.MAX_REACH;
+        int r = MAX_HALF_EXTENT + 128 + Math.max(CityTerrain.SLOPE_REACH + NobleAnnex.MAX_REACH, HarbourCut.REACH + HarbourCut.WHARF);
+        List<SlopeTile> found = new ArrayList<>();
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (SlopeTile t : slopeTiles(city)) {
                 if (t.x() >= minX && t.x() <= minX + 15 && t.z() >= minZ && t.z() <= minZ + 15) {
-                    return Optional.of(t);
+                    found.add(t);
                 }
             }
         }
-        return Optional.empty();
+        return found;
     }
 
     /** True if (x, z) lies within a city's footprint plus {@code margin} blocks. Site-level, so it ignores biome checks. */

@@ -31,22 +31,32 @@ public class CitySlopeStructure extends Structure {
         if (settings == null) {
             return Optional.empty();
         }
-        return CityLayout.slopeTileInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z).flatMap(t ->
-                CityVariant.forSite(ctx, t.city()).map(variant -> {
-                    BlockPos pos = new BlockPos(t.x(), CityGridBuilder.ground(ctx, t.x(), t.z()).y(), t.z());
-                    return new GenerationStub(pos, pieces -> {
-                        CityTerrain.Plan plan = CityGridBuilder.terrainPlan(ctx, t.city());
-                        CityGridBuilder.Platform platform = CityGridBuilder.platform(ctx, t.city());
-                        int ox = t.city().originX();
-                        int oz = t.city().originZ();
-                        BoundingBox box = new BoundingBox(ox + t.minX(), ctx.heightAccessor().getMinBuildHeight(), oz + t.minZ(),
-                                ox + t.maxX(), ctx.heightAccessor().getMaxBuildHeight() - 1, oz + t.maxZ());
-                        pieces.addPiece(new CityTerrainPiece(ox, oz, variant, plan, box, platform, t.annex()));
-                        if (t.annex()) {
-                            annex(t, plan.plateY(), pieces);
-                        }
-                    });
-                }));
+        List<CityLayout.SlopeTile> tiles = CityLayout.slopeTilesInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z);
+        if (tiles.isEmpty()) {
+            return Optional.empty();
+        }
+        // Tiles sharing a chunk share its start: each is within a tile's half-width of it, well in the engine's reach.
+        CityLayout.SlopeTile first = tiles.get(0);
+        BlockPos pos = new BlockPos(first.x(), CityGridBuilder.ground(ctx, first.x(), first.z()).y(), first.z());
+        return Optional.of(new GenerationStub(pos, pieces -> {
+            for (CityLayout.SlopeTile t : tiles) {
+                CityTerrain.Plan plan = CityGridBuilder.terrainPlan(ctx, t.city());
+                if (t.harbour()) {
+                    Harbour.cut(ctx, t, plan.plateY(), pieces);
+                    continue;
+                }
+                CityVariant variant = CityVariant.forSite(ctx, t.city()).orElseThrow();
+                int ox = t.city().originX();
+                int oz = t.city().originZ();
+                BoundingBox box = new BoundingBox(ox + t.minX(), ctx.heightAccessor().getMinBuildHeight(), oz + t.minZ(),
+                        ox + t.maxX(), ctx.heightAccessor().getMaxBuildHeight() - 1, oz + t.maxZ());
+                CityGridBuilder.Platform platform = CityGridBuilder.platform(ctx, t.city());
+                pieces.addPiece(new CityTerrainPiece(ox, oz, variant, plan, box, platform, t.annex(), CityLayout.harbourCut(t.city())));
+                if (t.annex()) {
+                    annex(t, plan.plateY(), pieces);
+                }
+            }
+        }));
     }
 
     /**

@@ -1,33 +1,88 @@
 package rafasconquest.worldgen;
 
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
 import rafasconquest.core.CityLayout;
+import rafasconquest.core.HarbourCut;
 import rafasconquest.core.SeatCities;
 
 /**
  * A port city's harbour ({@link SeatCities.City#harbour}): outside the wall on its harbour side, a wharf
  * {@link #WHARF} blocks wide the length of the side, and from it a pier out over the water at the sea gate's avenue and
- * every second road either side of it. A pier runs out to where the water starts, then {@link #OVER_WATER} blocks
- * on; one that finds no water within its cell's reach is left out. All at the city's plate height.
+ * every second road either side of it. The {@link HarbourCut} clears any land between the wharf and the sea, so the
+ * water starts at the wharf and a pier runs {@link #OVER_WATER} blocks out over it, as far as its cell reaches. All at
+ * the city's plate height.
  * <p>
  * Each edge cell on that side builds its own stretch, and keeps every pier within the engine's 8-chunk reach of its
- * structure start.
+ * structure start. The cut is laid by the city's harbour tiles ({@link CityLayout.SlopeTile#harbour}).
  */
-final class Harbour {
-    static final int WHARF = 5;
+public final class Harbour {
+    static final int WHARF = HarbourCut.WHARF;
     static final int PIER_WIDTH = 5;
     static final int OVER_WATER = 32;
     /** A pier with less than this over the water is not worth building. */
     static final int MIN_OVER_WATER = 8;
-    private static final int SCAN_STEP = 2;
+    /** Blocks between the lanes the cut looks for the sea along, and between its looks along each. */
+    private static final int LANE = 8;
 
     private Harbour() {
     }
 
+    /**
+     * Adds one harbour tile's {@link HarbourCutPiece}: each column runs out to where the nearer of its two lanes found
+     * the sea, a look past it so the cut opens into the water, or the cut's whole reach if neither did.
+     */
+    static void cut(Structure.GenerationContext ctx, CityLayout.SlopeTile t, int plate, StructurePiecesBuilder pieces) {
+        CityLayout.Side side = sideOf(t.city());
+        if (side == null) {
+            return;
+        }
+        Frame f = new Frame(t.city(), side);
+        boolean alongX = side == CityLayout.Side.NORTH || side == CityLayout.Side.SOUTH;
+        int a0 = alongX ? t.minX() : t.minZ();
+        int a1 = alongX ? t.maxX() : t.maxZ();
+        int start = HarbourCut.start(rafasconquest.style.CityPlan.wallOutset(t.city()));
+        int[] ends = new int[a1 - a0 + 1];
+        int below = coast(ctx, f, a0, start);
+        for (int lane = a0; lane <= a1; lane += LANE) {
+            int next = Math.min(a1, lane + LANE);
+            int above = coast(ctx, f, next, start);
+            for (int a = lane; a <= next; a++) {
+                ends[a - a0] = Math.max(below, above);
+            }
+            below = above;
+        }
+        int[] line = f.world(a0, start);
+        int ox = t.city().originX();
+        int oz = t.city().originZ();
+        BoundingBox box = new BoundingBox(ox + t.minX(), plate - HarbourCut.DEEPEST, oz + t.minZ(),
+                ox + t.maxX(), ctx.heightAccessor().getMaxBuildHeight() - 1, oz + t.maxZ());
+        pieces.addPiece(new HarbourCutPiece(box, side, line[0], line[1], plate, ends));
+    }
+
+    /** How far out past the wharf the lane at {@code along} must be cut to open into the sea. */
+    private static int coast(Structure.GenerationContext ctx, Frame f, int along, int start) {
+        for (int d = 1; d <= HarbourCut.REACH; d += LANE) {
+            int[] at = f.world(along, start + d - 1);
+            if (wet(ctx, at[0], at[1])) {
+                return Math.min(HarbourCut.REACH, d + LANE);
+            }
+        }
+        return HarbourCut.REACH;
+    }
+
+    /** Whether the noise terrain at (x, z) has water on top. */
+    private static boolean wet(Structure.GenerationContext ctx, int x, int z) {
+        var gen = ctx.chunkGenerator();
+        return gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, ctx.heightAccessor(), ctx.randomState())
+                < gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, ctx.heightAccessor(), ctx.randomState());
+    }
+
     /** The side a built city's harbour faces, or null for an inland city. */
-    static CityLayout.Side sideOf(CityLayout.Site site) {
-        for (SeatCities.City c : ConquestRuntime.cities().all()) {
+    public static CityLayout.Side sideOf(CityLayout.Site site) {
+        for (SeatCities.City c : ConquestRuntime.cities().inBox(site.x(), site.z(), site.x(), site.z())) {
             if (c.x() == site.x() && c.z() == site.z()) {
                 return c.port() ? CityLayout.Side.values()[c.harbour()] : null;
             }
@@ -74,15 +129,8 @@ final class Harbour {
                 continue;
             }
             int middle = CityLayout.roadStart(k) + CityLayout.ROAD_WIDTH / 2;
-            Integer water = null;
-            for (int out = wharfOut + 1; out <= reach; out += SCAN_STEP) {
-                int[] at = f.world(middle, out);
-                if (CityGridBuilder.ground(ctx, at[0], at[1]).water()) {
-                    water = out;
-                    break;
-                }
-            }
-            if (water == null || water + MIN_OVER_WATER > reach) {
+            int water = wharfOut + 1; // the cut floods right up to the wharf
+            if (water + MIN_OVER_WATER > reach) {
                 continue;
             }
             int end = Math.min(reach, water + OVER_WATER);

@@ -1,0 +1,53 @@
+package rafasconquest.core;
+
+/**
+ * Where a port's land stands between its wharf and the sea, the harbour cut clears it so the water reaches the planks:
+ * from the wharf's outer edge the floor drops {@link #STEP_RISE} blocks for each block out, {@link #STEPS} times
+ * ({@code 15} deep), then falls on at the city's gentle 1-in-2 slope, no deeper than {@link #DEEPEST}. Everything above
+ * the floor goes: below sea level it becomes water, above it air. Each lane runs out to where it meets the sea, at most
+ * {@link #REACH} blocks; along the side it spans the wall from corner to corner.
+ */
+public final class HarbourCut {
+    /** The wharf's width, out past the wall. */
+    public static final int WHARF = 5;
+    static final int STEP_RISE = 5;
+    static final int STEPS = 3;
+    /** How far below the plate the floor may fall. */
+    public static final int DEEPEST = 24;
+    /** The furthest out past the wharf the cut runs. */
+    public static final int REACH = 192;
+
+    private HarbourCut() {
+    }
+
+    /** Blocks out past the city square of the cut's first column, for a wall standing {@code outset} out. */
+    public static int start(int outset) {
+        return outset + WHARF + 1;
+    }
+
+    /** The floor's y {@code d} blocks out past the wharf (the first column is 1). */
+    public static int floor(int plate, int d) {
+        if (d <= STEPS) {
+            return plate - STEP_RISE * d;
+        }
+        return Math.max(plate - STEP_RISE * STEPS - CityTerrain.rise(d - STEPS), plate - DEEPEST);
+    }
+
+    /** The cut's city-local box {minX, minZ, maxX, maxZ} on {@code side} of a square {@code size} a side. */
+    public static int[] box(CityLayout.Side side, int size, int outset) {
+        int in = start(outset);
+        int out = in + REACH - 1;
+        int lo = -outset;
+        int hi = size - 1 + outset;
+        return switch (side) {
+            case NORTH -> new int[]{lo, -out, hi, -in};
+            case SOUTH -> new int[]{lo, size - 1 + in, hi, size - 1 + out};
+            case WEST -> new int[]{-out, lo, -in, hi};
+            case EAST -> new int[]{size - 1 + in, lo, size - 1 + out, hi};
+        };
+    }
+
+    public static boolean inBox(int[] box, int lx, int lz) {
+        return box != null && lx >= box[0] && lx <= box[2] && lz >= box[1] && lz <= box[3];
+    }
+}
