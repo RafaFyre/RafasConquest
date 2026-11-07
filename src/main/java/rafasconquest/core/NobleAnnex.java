@@ -17,6 +17,8 @@ public final class NobleAnnex {
     public static final int RISE = 40;
     /** The path's longest climb: one block up for this many along. */
     public static final int RUN = 2;
+    /** The path's width: twice a city road's. */
+    public static final int WIDTH = 2 * CityLayout.ROAD_WIDTH;
     /** How far out the platform's easing runs, from its top down to the city's height ({@link #RISE} over this). */
     public static final int EASE_REACH = 20;
     /** How far out it keeps filling, as steeply, down to land below the city's height. */
@@ -74,7 +76,7 @@ public final class NobleAnnex {
 
     /**
      * The path's columns, each {u, v, half}: u across and v out from the city, from the city gate's middle (u0, v0) to
-     * the annex gate's (u1, v1), {@link CityLayout#ROAD_WIDTH} wide; {@code half} is its height above the city's plate
+     * the annex gate's (u1, v1), {@link #WIDTH} wide; {@code half} is its height above the city's plate
      * in half blocks, 0 at the city's gate to {@code 2 * RISE} at the annex's. Where the gap is too short to climb at
      * 1 in {@link #RUN}, the path bows out sideways until it is long enough; with the gates out of line it bends, an S.
      */
@@ -92,18 +94,24 @@ public final class NobleAnnex {
         Map<Long, int[]> columns = new LinkedHashMap<>();
         double s = 0;
         double[] last = at(u0, v0, u1, v1, b, 0);
-        int w = CityLayout.ROAD_WIDTH / 2;
+        // WIDTH blocks a side about the middle line: those with -WIDTH/2 < offset <= WIDTH/2 (even, so half a block off centre).
+        int w = WIDTH / 2;
+        int vMin = Math.min(v0, v1) - 1;
+        int vMax = Math.max(v0, v1) + 1;
         for (int i = 0; i <= samples; i++) {
             double[] p = at(u0, v0, u1, v1, b, (double) i / samples);
             s += Math.hypot(p[0] - last[0], p[1] - last[1]);
             last = p;
             int half = (int) Math.min(2 * RISE, Math.round(2.0 * RISE * s / total));
-            int cu = (int) Math.round(p[0]);
-            int cv = (int) Math.round(p[1]);
-            for (int du = -w; du <= w; du++) {
-                for (int dv = -w; dv <= w; dv++) {
+            int cu = (int) Math.floor(p[0] + w) - WIDTH + 1;
+            int cv = (int) Math.floor(p[1] + w) - WIDTH + 1;
+            for (int du = 0; du < WIDTH; du++) {
+                for (int dv = 0; dv < WIDTH; dv++) {
                     int u = cu + du;
                     int v = cv + dv;
+                    if (v < vMin || v > vMax) {
+                        continue; // no further into either gate than a block
+                    }
                     int near = (int) Math.round(1000 * (Math.pow(u - p[0], 2) + Math.pow(v - p[1], 2)));
                     columns.merge(((long) u << 32) ^ (v & 0xffffffffL), new int[]{u, v, half, near}, (old, now) -> now[3] < old[3] ? now : old);
                 }

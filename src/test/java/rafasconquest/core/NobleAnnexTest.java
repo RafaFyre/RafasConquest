@@ -20,6 +20,8 @@ class NobleAnnexTest {
                 path.forEach(c -> half.put(((long) c[0] << 32) ^ (c[1] & 0xffffffffL), c[2]));
                 assertEquals(0, half.get((100L << 32) ^ 10), gap + " " + offset + ": level with the city's gate");
                 assertEquals(2 * NobleAnnex.RISE, half.get(((long) (100 + offset) << 32) ^ (10 + gap - 1)), gap + " " + offset + ": level with the district's");
+                // It bows away to +u, so its -u edge at the gate shows the width: 2 to that side of the middle, 3 on the other.
+                assertTrue(offset < 0 || half.containsKey((98L << 32) ^ 10) && !half.containsKey((97L << 32) ^ 10), gap + " " + offset + ": 6 wide at the city's gate");
                 for (int[] c : path) {
                     for (int dx = -1; dx <= 1; dx++) {
                         for (int dz = -1; dz <= 1; dz++) {
