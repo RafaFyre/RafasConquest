@@ -3,6 +3,10 @@
   "minVersion": "0.8",
   "package": "rafasconquest.mixin",
   "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CityVegetationMixin",
+    "RecruitsArrowCleanerMixin"
+  ],
   "client": [
     "SodiumShaderInterfaceMixin",
     "SodiumShaderLoaderMixin"

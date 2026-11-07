@@ -194,11 +194,50 @@ public final class RoadNetwork {
                 double f = span == 0 ? 0 : (s - cum[seg]) / span;
                 int x = (int) Math.floor(road.xs()[seg] + (road.xs()[seg + 1] - road.xs()[seg]) * f);
                 int z = (int) Math.floor(road.zs()[seg] + (road.zs()[seg + 1] - road.zs()[seg]) * f);
-                ground[j] = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random);
-                water[j] = generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random);
+                int[] eased = eased(level, x, z, generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, random),
+                        generator.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, random));
+                ground[j] = eased[0];
+                water[j] = eased[1];
             }
             return new float[][]{ground, water};
         });
+    }
+
+    /**
+     * The ground and the water's top at (x, z) (each the first free block, as the generator reads them) once a city
+     * nearby has eased its land, as {@link CityTerrainPiece} does: its plate inside its box, its slope carved down or
+     * filled up around it. As generated where no city reaches.
+     */
+    private static int[] eased(ServerLevel level, int x, int z, int ground, int water) {
+        int reach = rafasconquest.core.CityTerrain.SLOPE_REACH;
+        for (rafasconquest.core.SeatCities.City c : ConquestRuntime.cities().inBox(x - reach, z - reach, x + reach, z + reach)) {
+            rafasconquest.core.CityLayout.Site site = new rafasconquest.core.CityLayout.Site(c.x(), c.z(), false, c.districts());
+            var chunks = level.getChunkSource();
+            var ctx = new net.minecraft.world.level.levelgen.structure.Structure.GenerationContext(level.registryAccess(),
+                    chunks.getGenerator(), chunks.getGenerator().getBiomeSource(), chunks.randomState(), level.getStructureManager(),
+                    level.getSeed(), new net.minecraft.world.level.ChunkPos(c.x() >> 4, c.z() >> 4), level, b -> true);
+            rafasconquest.core.CityTerrain.Plan plan = CityGridBuilder.terrainPlan(ctx, site);
+            rafasconquest.core.CityTerrain.Column col = rafasconquest.core.CityTerrain.column(plan, x - site.originX(), z - site.originZ());
+            // Column heights are top blocks; the generator's are the free block above.
+            switch (col.kind()) {
+                case NONE -> {
+                    continue;
+                }
+                case SLOPE -> {
+                    if (col.fill() && ground - 1 < col.low()) {
+                        ground = col.low() + 1;
+                    } else if (ground - 1 > col.high() && water <= ground) {
+                        ground = col.high() + 1;
+                        water = ground;
+                    }
+                    return new int[]{ground, Math.max(water, ground)};
+                }
+                default -> {
+                    return new int[]{plan.plateY() + 1, plan.plateY() + 1};
+                }
+            }
+        }
+        return new int[]{ground, water};
     }
 
     /** The segment of a road (its points k, k + 1) that {@code s} blocks along it falls in. */

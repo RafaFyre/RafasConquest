@@ -275,6 +275,17 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
         }
     }
 
+    /** Whether (x, z) lies within a city's walls (the square {@link #weedCities} weeds). */
+    public static boolean inCity(int x, int z) {
+        for (SeatCities.City c : ConquestRuntime.cities().inBox(x, z, x, z)) {
+            int half = c.size() / 2 + CityLayout.WALL_OUTSET;
+            if (Math.abs(x - c.x()) <= half && Math.abs(z - c.z()) <= half) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The squares kept from roads near a chunk: city walls, settlements, and the ground about a dojo. */
     private static List<int[]> keeps(BaseMap map, int x0, int z0) {
         List<int[]> keeps = new java.util.ArrayList<>();
