@@ -29,4 +29,13 @@ class NobleDistrictTest {
             assertEquals(0, CityPlan.district(bps, 3)[0]);
         }
     }
+
+    @Test
+    void bigBuildingsMergeAsManyBlocksAsTheyNeed() {
+        assertEquals(1, CityPlan.blocksFor(14));
+        assertEquals(1, CityPlan.blocksFor(29)); // a whole block: 32 less its road
+        assertEquals(2, CityPlan.blocksFor(30));
+        assertEquals(2, CityPlan.blocksFor(61)); // two blocks and the road between them
+        assertEquals(3, CityPlan.blocksFor(62));
+    }
 }

@@ -17,10 +17,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li>its walls from its style's wall files (corners, a gate on each side's avenue, segments with watchtowers
  *   between), where its style has its own;</li>
- *   <li>its noble district, a quarter of its blocks with no streets inside, in the middle or against one wall, where
- *   its style has a Palace: the Palace in the middle, the Barracks (or the mod's own post) and the church beside it,
+ *   <li>its noble district, about a sixth of its blocks with no streets inside, in the middle or against one wall, where
+ *   its style has a Palace: the Palace in the middle, the Barracks (or the mod's own post) beside it,
  *   the rest filled with the style's noble buildings; in cities of 3+ districts a side, a second ring of the style's
- *   walls around it (a U meeting the outer wall, with corner towers there, when it stands against one).</li>
+ *   walls around it (a U meeting the outer wall, with corner towers there, when it stands against one);</li>
+ *   <li>its church (and, with no Palace, a Barracks too big for the post's plot), outside the noble district near the
+ *   town centre (the post), taking the plots it covers; one bigger than a block merges as many as it needs, the roads
+ *   between them gone.</li>
  * </ul>
  * Each piece is built by the cell holding its middle, and is kept within reach of that cell's start (a start's pieces
  * reach at most 8 chunks from it). Coordinates are city-local.
@@ -166,6 +169,7 @@ public final class CityPlan {
         int[] outer = {inner, site.size() - inner, inner, site.size() - inner};
         if (CityStyles.palace(site) == null) {
             boolean styledWalls = walls(site, outer, avenue, avenue, -1, -1, null, random, pieces);
+            addCityBuildings(site, 0, 0, 0, 0, pieces);
             return new Plan(0, 0, 0, 0, styledWalls, lifted(pieces));
         }
         int edge = random.nextBoolean() ? -1 : random.nextInt(4);
@@ -210,7 +214,92 @@ public final class CityPlan {
             }
         }
         noble(site, area[0], area[1] - 1, area[2], area[3] - 1, random, pieces);
+        addCityBuildings(site, d[0], x1, d[1], z1, pieces);
         return new Plan(d[0], x1, d[1], z1, walls, lifted(pieces));
+    }
+
+    /**
+     * The city's own buildings outside the noble district [nx0, nx1) × [nz0, nz1), placed before its houses: the church
+     * nearest the town centre and, where there is no Palace, a Barracks too big for the post's plot nearest the post.
+     */
+    private static void addCityBuildings(CityLayout.Site site, int nx0, int nx1, int nz0, int nz1, List<Piece> pieces) {
+        int c = site.centerBlock();
+        inCity(site, Kind.CHURCH, CityStyles.building(CityStyles.church(site)), c, c, nx0, nx1, nz0, nz1, pieces);
+        CityStyles.Building barracks = CityStyles.building(CityStyles.barracks(site));
+        if (nx1 <= nx0 && barracks != null && Math.max(barracks.x(), barracks.z()) > CityLayout.PLOT_SIZE
+                && rafasconquest.worldgen.CityGridBuilder.heldByANation(site)) {
+            inCity(site, Kind.BARRACKS, barracks, RecruitmentPost.blockX(site), RecruitmentPost.blockZ(site), nx0, nx1, nz0, nz1, pieces);
+        }
+    }
+
+    /**
+     * A building centred on as many blocks as it needs, merged into one (the plots, and the roads between them, given up
+     * to it), as near block (nearX, nearZ) as it goes: clear of the noble district, the town centre's and the post's
+     * blocks, the gate avenues and what the plan has placed already. Left out if no run of blocks holds it.
+     */
+    private static void inCity(CityLayout.Site site, Kind kind, @Nullable CityStyles.Building b, int nearX, int nearZ,
+                               int nx0, int nx1, int nz0, int nz1, List<Piece> pieces) {
+        if (b == null) {
+            return;
+        }
+        int bps = site.blocksPerSide();
+        int gate = bps / 2; // the avenue runs along the west and north edges of this block
+        List<Piece> taken = pieces.stream().filter(p -> p.kind() != Kind.WALL && p.kind() != Kind.NOBLE).toList();
+        List<int[]> tries = new ArrayList<>(); // first block x and z, blocks along x and z, turns
+        for (int turns = 0; turns < 2; turns++) {
+            int nx = blocksFor(turns == 0 ? b.x() : b.z());
+            int nz = blocksFor(turns == 0 ? b.z() : b.x());
+            for (int x = 0; x + nx <= bps; x++) {
+                for (int z = 0; z + nz <= bps; z++) {
+                    if (!(x < gate && x + nx > gate) && !(z < gate && z + nz > gate)) {
+                        tries.add(new int[]{x, z, nx, nz, turns});
+                    }
+                }
+            }
+        }
+        // Nearest first, by the doubled distance between the run's middle and the wanted block's.
+        tries.sort(java.util.Comparator.comparingInt(t -> sq(2 * t[0] + t[2] - 1 - 2 * nearX) + sq(2 * t[1] + t[3] - 1 - 2 * nearZ)));
+        for (int[] t : tries) {
+            if (!blocksFree(site, t, nx0, nx1, nz0, nz1)) {
+                continue;
+            }
+            int w = t[4] == 0 ? b.x() : b.z();
+            int d = t[4] == 0 ? b.z() : b.x();
+            int sx0 = CityLayout.blockSpan(bps, t[0])[0];
+            int sx1 = CityLayout.blockSpan(bps, t[0] + t[2] - 1)[1];
+            int sz0 = CityLayout.blockSpan(bps, t[1])[0];
+            int sz1 = CityLayout.blockSpan(bps, t[1] + t[3] - 1)[1];
+            if (w > sx1 - sx0 + 1 || d > sz1 - sz0 + 1) {
+                continue; // the ring road or the avenue's extra width leaves an edge run too short
+            }
+            Piece p = new Piece(kind, b.file(), (sx0 + sx1 + 1 - w) / 2, (sz0 + sz1 + 1 - d) / 2, w, d, b.y(), t[4]);
+            if (clear(p, taken) && reachable(site, p)) {
+                pieces.add(p);
+                return;
+            }
+        }
+    }
+
+    /** Blocks needed side by side to hold {@code length}: n blocks merged hold n road periods less one road. */
+    static int blocksFor(int length) {
+        return Math.max(1, (length + CityLayout.ROAD_WIDTH + CityLayout.ROAD_PERIOD - 1) / CityLayout.ROAD_PERIOD);
+    }
+
+    private static int sq(int v) {
+        return v * v;
+    }
+
+    /** Whether none of a run's blocks is the noble district's, the town centre's or the post's. */
+    private static boolean blocksFree(CityLayout.Site site, int[] t, int nx0, int nx1, int nz0, int nz1) {
+        for (int x = t[0]; x < t[0] + t[2]; x++) {
+            for (int z = t[1]; z < t[1] + t[3]; z++) {
+                if (x >= nx0 && x < nx1 && z >= nz0 && z < nz1 || x == site.centerBlock() && z == site.centerBlock()
+                        || x == RecruitmentPost.blockX(site) && z == RecruitmentPost.blockZ(site)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** The pieces with their height counted from the plate, their folder's y offset included (read once here, not per column). */
@@ -380,8 +469,8 @@ public final class CityPlan {
     }
 
     /**
-     * The noble district within [x0, x1] × [z0, z1] (inclusive): the Palace, the Barracks (or the mod's post), the
-     * church, then the noble buildings.
+     * The noble district within [x0, x1] × [z0, z1] (inclusive): the Palace, the Barracks (or the mod's post), then
+     * the noble buildings.
      */
     private static void noble(CityLayout.Site site, int x0, int x1, int z0, int z1, Random random, List<Piece> pieces) {
         int middleX = (x0 + x1) / 2;
@@ -411,10 +500,6 @@ public final class CityPlan {
             taken.add(b);
         } else if (barracks != null && clear(ownPost, taken)) {
             taken.add(ownPost);
-        }
-        Piece church = place(site, Kind.CHURCH, CityStyles.building(CityStyles.church(site)), nearX, nearZ, x0, x1, z0, z1, taken);
-        if (church != null) {
-            taken.add(church);
         }
         pieces.addAll(taken);
         // The rest: the noble buildings, packed as a city block is, each facing the nearer edge of the district.

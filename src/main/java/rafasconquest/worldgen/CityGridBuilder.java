@@ -184,19 +184,23 @@ public final class CityGridBuilder {
         // The styled walls and the noble district, laid out for the whole city.
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site); // by its founder, held or not
         boolean noble = styled.noble();
+        // The plan's buildings outside the noble district (the church, a big Barracks) take the plots they cover.
+        List<rafasconquest.style.CityPlan.Piece> claims = styled.pieces().stream()
+                .filter(p -> p.kind() != rafasconquest.style.CityPlan.Kind.WALL && p.kind() != rafasconquest.style.CityPlan.Kind.NOBLE).toList();
 
-        // Roads next, so buildings placed afterwards win wherever they touch; none inside the noble district.
+        // Roads next, so buildings placed afterwards win wherever they touch; none inside the noble district, nor
+        // between the blocks merged under one of the plan's buildings.
         for (int k : CityLayout.roadsInCell(site.cells(), cellX)) {
             int x = ox + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.x0() && k < styled.x1();
-            for (int[] run : runs(cellMinZ - oz, cellMaxZ - oz, cut ? styled.areaMinZ() : 0, cut ? styled.areaMaxZ() : -1)) {
+            for (int[] run : merged(runs(cellMinZ - oz, cellMaxZ - oz, cut ? styled.areaMinZ() : 0, cut ? styled.areaMaxZ() : -1), k, true, claims)) {
                 pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), variant));
             }
         }
         for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.z0() && k < styled.z1();
-            for (int[] run : runs(cellMinX - ox, cellMaxX - ox, cut ? styled.areaMinX() : 0, cut ? styled.areaMaxX() : -1)) {
+            for (int[] run : merged(runs(cellMinX - ox, cellMaxX - ox, cut ? styled.areaMinX() : 0, cut ? styled.areaMaxX() : -1), k, false, claims)) {
                 pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), variant));
             }
         }
@@ -241,10 +245,13 @@ public final class CityGridBuilder {
                 if (noble && styled.nobleBlock(bx, bz)) {
                     continue; // the noble district's, below
                 }
+                int[] bsx = CityLayout.blockSpan(site.blocksPerSide(), bx);
+                int[] bsz = CityLayout.blockSpan(site.blocksPerSide(), bz);
+                List<rafasconquest.style.CityPlan.Piece> here = claims.stream().filter(p -> overlaps(p, bsx[0], bsz[0], bsx[1] - bsx[0] + 1, bsz[1] - bsz[0] + 1)).toList();
                 if (bx == site.centerBlock() && bz == site.centerBlock()) {
                     townCenter(blockX, blockZ);
                 } else if (!(bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)) && styledHouses().any()) {
-                    packBlock(bx, bz); // the style's own houses, of any size
+                    packBlock(bx, bz, here); // the style's own houses, of any size
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
@@ -255,7 +262,8 @@ public final class CityGridBuilder {
                                 if (qx == 0 && qz == 0 && styled.has(rafasconquest.style.CityPlan.Kind.POST)) {
                                     continue;
                                 }
-                            } else if (qx == 0 && qz == 0 && postBlock && heldByANation(site)) {
+                            } else if (qx == 0 && qz == 0 && postBlock && heldByANation(site)
+                                    && !styled.has(rafasconquest.style.CityPlan.Kind.BARRACKS)) { // a Barracks too big for the plot has its own ground
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = barracks == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(barracks,
@@ -283,13 +291,18 @@ public final class CityGridBuilder {
                             // Plots against the ring road or the wide avenue are that much shallower.
                             int[] sx = CityLayout.blockSpan(site.blocksPerSide(), bx);
                             int[] sz = CityLayout.blockSpan(site.blocksPerSide(), bz);
+                            if (here.stream().anyMatch(p -> overlaps(p, px - ox, pz - oz, CityLayout.PLOT_SIZE, CityLayout.PLOT_SIZE))) {
+                                continue; // merged under one of the plan's buildings
+                            }
                             house(new BoundingBox(Math.max(px, ox + sx[0]), minY, Math.max(pz, oz + sz[0]),
                                             Math.min(px + CityLayout.PLOT_SIZE - 1, ox + sx[1]), maxY, Math.min(pz + CityLayout.PLOT_SIZE - 1, oz + sz[1])),
                                     facing(bx, bz, qx, qz));
                         }
                     }
                 }
-                lamps(bx, bz);
+                if (here.isEmpty()) {
+                    lamps(bx, bz); // the alleys of merged plots are gone
+                }
             }
         }
 
@@ -339,6 +352,36 @@ public final class CityGridBuilder {
         }
         if (cutTo < to) {
             runs.add(new int[]{cutTo + 1, to});
+        }
+        return runs;
+    }
+
+    /** Whether a piece overlaps city-local [x, x + w) × [z, z + d). */
+    private static boolean overlaps(rafasconquest.style.CityPlan.Piece p, int x, int z, int w, int d) {
+        return x < p.minX() + p.w() && p.minX() < x + w && z < p.minZ() + p.d() && p.minZ() < z + d;
+    }
+
+    /**
+     * The stretches of {@code runs} along road k (running along z if {@code alongZ}) left where none of {@code claims}
+     * stands across it: a building across a road gets the whole of the blocks it covers, the road between them gone.
+     */
+    private static List<int[]> merged(List<int[]> runs, int k, boolean alongZ, List<rafasconquest.style.CityPlan.Piece> claims) {
+        int r0 = CityLayout.roadStart(k);
+        for (rafasconquest.style.CityPlan.Piece p : claims) {
+            int a0 = alongZ ? p.minX() : p.minZ();
+            int a1 = a0 + (alongZ ? p.w() : p.d()) - 1;
+            if (a1 < r0 || a0 > r0 + CityLayout.ROAD_WIDTH - 1) {
+                continue;
+            }
+            int c0 = alongZ ? p.minZ() : p.minX();
+            int c1 = c0 + (alongZ ? p.d() : p.w()) - 1;
+            int from = CityLayout.blockStart(Math.floorDiv(c0, CityLayout.ROAD_PERIOD));
+            int to = CityLayout.roadStart(Math.floorDiv(c1, CityLayout.ROAD_PERIOD) + 1) - 1;
+            List<int[]> left = new java.util.ArrayList<>();
+            for (int[] run : runs) {
+                left.addAll(runs(run[0], run[1], from, to));
+            }
+            runs = left;
         }
         return runs;
     }
@@ -448,7 +491,7 @@ public final class CityGridBuilder {
     }
 
     /** A block filled with the style's houses (BlockPacker): as many as fit, any size, each facing the nearer road. */
-    private void packBlock(int bx, int bz) {
+    private void packBlock(int bx, int bz, List<rafasconquest.style.CityPlan.Piece> claims) {
         rafasconquest.style.CityStyles.Houses houses = styledHouses();
         int[] sx = CityLayout.blockSpan(site.blocksPerSide(), bx);
         int[] sz = CityLayout.blockSpan(site.blocksPerSide(), bz);
@@ -456,7 +499,10 @@ public final class CityGridBuilder {
         int d = sz[1] - sz[0] + 1;
         java.util.Random packing = new java.util.Random(random.nextLong());
         List<rafasconquest.style.BlockPacker.Rect> free = List.of(new rafasconquest.style.BlockPacker.Rect(0, 0, w, d));
-        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing)) {
+        for (rafasconquest.style.CityPlan.Piece c : claims) { // the plan's buildings have their ground first
+            free = rafasconquest.style.BlockPacker.cut(free, new rafasconquest.style.BlockPacker.Rect(c.minX() - sx[0], c.minZ() - sz[0], c.w(), c.d()));
+        }
+        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing))) {
             rafasconquest.style.StylePiece.at(houses.files().get(p.building()), site.originX() + sx[0] + p.x(), plate, site.originZ() + sz[0] + p.z(), p.turns())
                     .forEach(pieces::addPiece);
         }
