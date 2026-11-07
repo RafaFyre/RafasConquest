@@ -220,11 +220,11 @@ public final class CityPlan {
     }
 
     /**
-     * The noble district's first block along x and z and its side, in blocks: half the city's side, a quarter of its
-     * area, in the middle ({@code edge} -1) or along the middle of its north, east, south or west edge (0 to 3).
+     * The noble district's first block along x and z and its side, in blocks: two fifths of the city's side, about a
+     * sixth of its area, in the middle ({@code edge} -1) or along the middle of its north, east, south or west edge (0 to 3).
      */
     static int[] district(int blocksPerSide, int edge) {
-        int side = Math.max(1, blocksPerSide / 2);
+        int side = Math.max(1, blocksPerSide * 2 / 5);
         int middle = (blocksPerSide - side) / 2;
         int x = edge == 3 ? 0 : edge == 1 ? blocksPerSide - side : middle;
         int z = edge == 0 ? 0 : edge == 2 ? blocksPerSide - side : middle;
