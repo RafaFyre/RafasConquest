@@ -119,6 +119,7 @@ public final class ConquestEvents {
             }
             rafasconquest.bridge.SableLink.tick(level);
         }
+            rafasconquest.core.Swell.weather(level.getRainLevel(1), level.getThunderLevel(1));
     }
 
     /** Drives the debug battle and times whole server ticks while it runs. */

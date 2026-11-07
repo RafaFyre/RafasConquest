@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Real ships on the sea lanes: where a lane's ship ({@link SeaLanes}) comes within a player's view distance, its hull
@@ -52,6 +53,8 @@ final class SableShips {
 
     /** The ships sailing now, by lane ship id; found again from Sable's sub-levels every second. */
     private static final Map<String, ServerSubLevel> live = new HashMap<>();
+    /** Each ship's float on the swell, kept as long as its Sable body is. */
+    private static final Map<ServerSubLevel, Swell.Ride> rides = new WeakHashMap<>();
 
     private SableShips() {
     }
@@ -148,9 +151,20 @@ final class SableShips {
         return sub;
     }
 
-    /** Turns a ship toward a heading (a turn about the up axis), heeling with the swell under it, by setting its spin. */
-    static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin, long time) {
-        double[] slope = Swell.slope(pose.position().x(), pose.position().z(), time);
+    /**
+     * A ship's float on the swell ({@link Swell.Ride}), ticked on to now at its middle, heading as it does: once a tick.
+     */
+    static Swell.Ride ride(ServerSubLevel sub, double x, double z, double dirX, double dirZ, long time) {
+        Swell.Ride ride = rides.computeIfAbsent(sub, s -> new Swell.Ride());
+        ride.tick(x, z, dirX, dirZ, time, Sea.calm(sub.getLevel()));
+        return ride;
+    }
+
+    /**
+     * Turns a ship toward a heading (a turn about the up axis), pitched and rolled to lie along a slope (rise per block
+     * along x, then z: {@link Swell.Ride#slope}), by setting its spin.
+     */
+    static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin, double[] slope) {
         Quaterniond heading = new Quaterniond().rotationTo(0, 1, 0, -slope[0], 1, -slope[1]).mul(new Quaterniond().rotationY(yaw));
         AxisAngle4d turn = new AxisAngle4d(heading.mul(new Quaterniond(pose.orientation()).invert()));
         double angle = turn.angle > Math.PI ? turn.angle - 2 * Math.PI : turn.angle;
@@ -169,7 +183,8 @@ final class SableShips {
         }
         Pose3dc pose = sub.logicalPose();
         CompoundTag tag = sub.getUserDataTag();
-        Vector3d target = new Vector3d(ship.x(), tag.getDouble("y") + Swell.height(ship.x(), ship.z(), time), ship.z());
+        Swell.Ride ride = ride(sub, ship.x(), ship.z(), ship.dirX(), ship.dirZ(), time);
+        Vector3d target = new Vector3d(ship.x(), tag.getDouble("y") + ride.offset(), ship.z());
         Quaterniond heading = new Quaterniond().rotationY(ship.yaw());
         Vector3d off = target.sub(pose.position(), new Vector3d());
         Vector3d velocity = body.getLinearVelocity(new Vector3d());
@@ -183,8 +198,8 @@ final class SableShips {
         if (pull.length() > MAX_PULL) {
             pull.normalize(MAX_PULL);
         }
-        Vector3d want = new Vector3d(ship.vx() * 20, Swell.rise(ship.x(), ship.z(), time), ship.vz() * 20).add(pull).add(avoid(sub, pose, ship));
-        body.addLinearAndAngularVelocity(want.sub(velocity), spinToward(pose, ship.yaw(), spin, time));
+        Vector3d want = new Vector3d(ship.vx() * 20, ride.rise(), ship.vz() * 20).add(pull).add(avoid(sub, pose, ship));
+        body.addLinearAndAngularVelocity(want.sub(velocity), spinToward(pose, ship.yaw(), spin, ride.slope()));
     }
 
     /**

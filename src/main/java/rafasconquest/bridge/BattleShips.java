@@ -237,11 +237,12 @@ final class BattleShips {
         Vector3d spin = body.getAngularVelocity(new Vector3d());
         Ramming.Hull me = hulls.get(h.id());
         double heading = Math.atan2(me.dirX(), me.dirZ());
-        // Rides the swell under its middle: up and down with it, and pulled back to it.
-        double waterline = Swell.rise(me.x(), me.z(), time) + (y + Swell.height(me.x(), me.z(), time) - pose.position().y()) * PULL;
+        // Floats on the swell: up and down with it, pulled back to it, and rolling and pitching with it.
+        Swell.Ride ride = SableShips.ride(sub, me.x(), me.z(), me.dirX(), me.dirZ(), time);
+        double waterline = ride.rise() + (y + ride.offset() - pose.position().y()) * PULL;
         if (h.lashed().stream().anyMatch(sailing::containsKey)) {
             // Grappled: it lies still alongside, or bow in, as it is.
-            body.addLinearAndAngularVelocity(new Vector3d(0, waterline, 0).sub(velocity), SableShips.spinToward(pose, heading, spin, time));
+            body.addLinearAndAngularVelocity(new Vector3d(0, waterline, 0).sub(velocity), SableShips.spinToward(pose, heading, spin, ride.slope()));
             return;
         }
         if (Math.hypot(me.x() - h.x(), me.z() - h.z()) > SNAP && clearAt(h, h.x(), h.z())) {
@@ -275,7 +276,7 @@ final class BattleShips {
         pace = Math.max(-h.speed() / 2, Math.min(h.speed(), pace));
         double turn = Math.max(-FieldBattle.TURN_RATE, Math.min(FieldBattle.TURN_RATE, off)) / SableShips.TURN;
         Vector3d want = new Vector3d(me.dirX() * pace, waterline, me.dirZ() * pace);
-        body.addLinearAndAngularVelocity(want.sub(velocity), SableShips.spinToward(pose, heading + turn, spin, time));
+        body.addLinearAndAngularVelocity(want.sub(velocity), SableShips.spinToward(pose, heading + turn, spin, ride.slope()));
     }
 
     /** An angle brought to between -pi and pi. */
