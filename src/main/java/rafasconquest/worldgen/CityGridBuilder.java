@@ -502,10 +502,46 @@ public final class CityGridBuilder {
         for (rafasconquest.style.CityPlan.Piece c : claims) { // the plan's buildings have their ground first
             free = rafasconquest.style.BlockPacker.cut(free, new rafasconquest.style.BlockPacker.Rect(c.minX() - sx[0], c.minZ() - sz[0], c.w(), c.d()));
         }
-        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing))) {
+        for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing, houseShares(bx, bz))) {
             rafasconquest.style.StylePiece.at(houses.files().get(p.building()), site.originX() + sx[0] + p.x(), plate, site.originZ() + sz[0] + p.z(), p.turns())
                     .forEach(pieces::addPiece);
         }
+    }
+
+    /**
+     * How many of each house this block may build, or null if none is limited. A city's cells are built apart, so a
+     * limited house's allowance is dealt over the city's house blocks in an order fixed by the house: the same on every cell.
+     */
+    @org.jetbrains.annotations.Nullable
+    private int[] houseShares(int bx, int bz) {
+        List<String> files = styledHouses().files();
+        int[] most = rafasconquest.style.CityStyles.allowances(site, files);
+        if (most == null) {
+            return null;
+        }
+        rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site);
+        List<int[]> blocks = new java.util.ArrayList<>();
+        for (int x = 0; x < site.blocksPerSide(); x++) {
+            for (int z = 0; z < site.blocksPerSide(); z++) {
+                if (!(styled.noble() && styled.nobleBlock(x, z)) && !(x == site.centerBlock() && z == site.centerBlock())
+                        && !(x == RecruitmentPost.blockX(site) && z == RecruitmentPost.blockZ(site))) {
+                    blocks.add(new int[]{x, z});
+                }
+            }
+        }
+        for (int i = 0; i < most.length; i++) {
+            if (most[i] == Integer.MAX_VALUE || blocks.isEmpty()) {
+                continue;
+            }
+            long seed = files.get(i).hashCode();
+            blocks.sort(java.util.Comparator.comparingLong(b -> rafasconquest.style.CityStyles.mix(seed, b[0], b[1])));
+            int rank = 0;
+            while (rank < blocks.size() && (blocks.get(rank)[0] != bx || blocks.get(rank)[1] != bz)) {
+                rank++;
+            }
+            most[i] = most[i] / blocks.size() + (rank < most[i] % blocks.size() ? 1 : 0);
+        }
+        return most;
     }
 
     private void house(BoundingBox plot, Direction toRoad) {

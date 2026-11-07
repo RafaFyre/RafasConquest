@@ -44,6 +44,8 @@ public final class CityStyles {
     /** Choices made, by slot and city, until the library reloads. */
     private static final Map<String, Optional<String>> CHOSEN = new ConcurrentHashMap<>();
     private static final Map<String, List<String>> PALACES = new ConcurrentHashMap<>();
+    /** Each world-limited structure's share per city ("x|z"), until the library reloads. */
+    private static final Map<String, Map<String, Integer>> SHARES = new ConcurrentHashMap<>();
 
     private CityStyles() {
     }
@@ -51,12 +53,14 @@ public final class CityStyles {
     static void forget() {
         CHOSEN.clear();
         PALACES.clear();
+        SHARES.clear();
     }
 
     /** Forgets every choice and plan made for the cities of the world before. */
     public static void forgetAll() {
         CHOSEN.clear();
         PALACES.clear();
+        SHARES.clear();
         CityPlan.forget();
         rafasconquest.sim.RecruitmentPosts.forgetSanctums();
     }
@@ -134,7 +138,7 @@ public final class CityStyles {
             }
             List<String> palaces = new ArrayList<>();
             if (sanctum(site)) {
-                String sanctum = StyleLibrary.pick(land, SWORD_SANCTUM, seed(site));
+                String sanctum = StyleLibrary.pick(land, SWORD_SANCTUM, seed(site), f -> allowance(site, f) > 0);
                 if (sanctum != null) {
                     palaces.add(sanctum);
                 }
@@ -170,7 +174,7 @@ public final class CityStyles {
                 return null;
             }
             List<String> churches = new ArrayList<>(StyleLibrary.all(homeland(site), CHURCHES));
-            churches.removeIf(f -> StyleLibrary.size(f) == null);
+            churches.removeIf(f -> StyleLibrary.size(f) == null || allowance(site, f) <= 0);
             if (churches.isEmpty()) {
                 return null;
             }
@@ -252,13 +256,68 @@ public final class CityStyles {
         }
         for (String style : new String[]{StyleLibrary.styleOf(land), StyleLibrary.DEFAULT}) {
             for (int i : order) {
-                String file = StyleLibrary.pickIn(style, MANDATORY + kind + "/" + sizes.get(i), seed(site));
+                String file = StyleLibrary.pickIn(style, MANDATORY + kind + "/" + sizes.get(i), seed(site), f -> allowance(site, f) > 0);
                 if (file != null) {
                     found.add(file);
                 }
             }
         }
         return found;
+    }
+
+    /**
+     * How many of a structure a city may build, from its {@link StyleLibrary#PLACEMENT}: its "Uniqueness City", and of
+     * its "Uniqueness Global" the share dealt to this city (the world's cities that build its slot take turns, in an
+     * order fixed by the structure, each up to its city limit, until the world's runs out). MAX_VALUE if unlimited.
+     */
+    public static int allowance(CityLayout.Site site, String file) {
+        StyleLibrary.Placement p = StyleLibrary.placement(file);
+        int city = p.city() > 0 ? p.city() : Integer.MAX_VALUE;
+        if (p.global() <= 0) {
+            return city;
+        }
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return 0;
+        }
+        Map<String, Integer> shares = SHARES.computeIfAbsent(file, f -> {
+            String slot = f.substring(f.indexOf('/', "style/".length()) + 1, f.lastIndexOf('/')); // style/<style>/<slot>/<name>.nbt
+            List<SeatCities.City> builders = new ArrayList<>();
+            for (SeatCities.City c : map.cities()) {
+                Homeland land = homeland(new CityLayout.Site(c.x(), c.z(), false, c.districts()));
+                if (land != null && StyleLibrary.all(land, slot).contains(f)) {
+                    builders.add(c);
+                }
+            }
+            builders.sort(Comparator.comparingLong(c -> mix(f.hashCode(), c.x(), c.z())));
+            Map<String, Integer> dealt = new java.util.HashMap<>();
+            int left = p.global();
+            for (int i = 0; i < builders.size() && left > 0; i++) {
+                int n = Math.min(city, left);
+                dealt.put(builders.get(i).x() + "|" + builders.get(i).z(), n);
+                left -= n;
+            }
+            return dealt;
+        });
+        return shares.getOrDefault(site.x() + "|" + site.z(), 0);
+    }
+
+    /** Each of {@code files}' allowance in a city, or null if none is limited. */
+    @Nullable
+    public static int[] allowances(CityLayout.Site site, List<String> files) {
+        int[] most = new int[files.size()];
+        boolean any = false;
+        for (int i = 0; i < most.length; i++) {
+            most[i] = allowance(site, files.get(i));
+            any |= most[i] != Integer.MAX_VALUE;
+        }
+        return any ? most : null;
+    }
+
+    /** A fixed, well-stirred order key. */
+    public static long mix(long a, int x, int z) {
+        long h = a * 0x9E3779B97F4A7C15L ^ x * 0xC2B2AE3D27D4EB4FL ^ z * 0x165667B19E3779F9L;
+        return h ^ (h >>> 31);
     }
 
     private static long seed(CityLayout.Site site) {

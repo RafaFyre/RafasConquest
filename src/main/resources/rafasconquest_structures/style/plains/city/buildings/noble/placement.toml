@@ -1,0 +1,9 @@
+# How far up (+) or down (-) each structure in this folder is built, from where its .nbt would stand.
+# Name a structure by its file name without .nbt, e.g.  "Example House" = { y = -10 }
+# Read when the structure is next placed (or after /pve style reload).
+# "Uniqueness Global": how many of it the whole world may hold; "Uniqueness City": how many one city may.
+# 0 is no limit. Read after /pve style reload, for cities generated after it.
+"plains_central_tower1" = { y = 0, "Uniqueness Global" = 0, "Uniqueness City" = 1 }
+"plains_central_tower2" = { y = 0, "Uniqueness Global" = 0, "Uniqueness City" = 1 }
+"plains_central_tower3" = { y = 0, "Uniqueness Global" = 0, "Uniqueness City" = 1 }
+"plains_central_tower4" = { y = 0, "Uniqueness Global" = 0, "Uniqueness City" = 1 }

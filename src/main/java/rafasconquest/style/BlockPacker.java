@@ -44,14 +44,23 @@ public final class BlockPacker {
      * nearer edge.
      */
     public static List<Placed> pack(List<Rect> free, int width, int depth, List<Size> sizes, Random random) {
+        return pack(free, width, depth, sizes, random, null);
+    }
+
+    /** {@link #pack}, building each no more times than {@code most} gives it (null: no limit). */
+    public static List<Placed> pack(List<Rect> free, int width, int depth, List<Size> sizes, Random random, int[] most) {
         List<Placed> placed = new ArrayList<>();
-        if (sizes.isEmpty()) {
-            return placed;
+        int[] left = most == null ? null : most.clone();
+        List<Integer> open = new ArrayList<>();
+        for (int i = 0; i < sizes.size(); i++) {
+            if (left == null || left[i] > 0) {
+                open.add(i);
+            }
         }
         free = new ArrayList<>(free);
         int misses = 0;
-        while (misses < GIVE_UP && !free.isEmpty()) {
-            int b = random.nextInt(sizes.size());
+        while (misses < GIVE_UP && !free.isEmpty() && !open.isEmpty()) {
+            int b = open.get(random.nextInt(open.size()));
             Size s = sizes.get(b);
             boolean turnedFirst = random.nextBoolean();
             boolean done = false;
@@ -79,6 +88,9 @@ public final class BlockPacker {
                 double centreZ = best.z() + d / 2.0;
                 int turns = turned ? (centreX < width / 2.0 ? 3 : 1) : (centreZ < depth / 2.0 ? 0 : 2);
                 placed.add(new Placed(b, best.x(), best.z(), turns));
+                if (left != null && --left[b] <= 0) {
+                    open.remove((Integer) b);
+                }
                 done = true;
                 break;
             }

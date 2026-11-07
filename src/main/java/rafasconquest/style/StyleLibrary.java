@@ -7,14 +7,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
-import net.neoforged.fml.ModList;
 import net.neoforged.fml.loading.FMLPaths;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.RafasConquest;
 import rafasconquest.people.Homeland;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -96,29 +94,11 @@ public final class StyleLibrary {
                     Files.createDirectories(root.resolve("world").resolve(land.name().toLowerCase(Locale.ROOT)).resolve(slot));
                 }
             }
-            copyShipped(root);
+            rafasconquest.data.DataFiles.copyShipped(SHIPPED, root);
         } catch (IOException | RuntimeException e) {
             RafasConquest.LOGGER.warn("[style] Could not lay out {}: {}", root(), e.toString());
         }
         reload();
-    }
-
-    private static void copyShipped(Path root) throws IOException {
-        Path shipped = ModList.get().getModFileById(RafasConquest.MOD_ID).getFile().findResource(SHIPPED);
-        if (!Files.isDirectory(shipped)) {
-            return;
-        }
-        try (Stream<Path> files = Files.walk(shipped)) {
-            for (Path file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
-                Path to = root.resolve(shipped.relativize(file).toString());
-                if (!Files.exists(to)) {
-                    Files.createDirectories(to.getParent());
-                    try (InputStream in = Files.newInputStream(file)) {
-                        Files.copy(in, to, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                }
-            }
-        }
     }
 
     /** Forgets the templates read, and reads again which homeland builds in which style. */
@@ -157,11 +137,22 @@ public final class StyleLibrary {
 
     /** The file in every structure folder that moves its structures up or down. */
     public static final String PLACEMENT = "placement.toml";
-    private record Offsets(long modified, Map<String, Integer> byName) {
+    private record Offsets(long modified, Map<String, Placement> byName) {
+    }
+
+    /**
+     * What a {@link #PLACEMENT} says of one structure: how far up or down it is built, and how many of it the world
+     * ({@code "Uniqueness Global"}) and one city ({@code "Uniqueness City"}) may hold; 0 is no limit.
+     */
+    public record Placement(int y, int global, int city) {
+        static final Placement NONE = new Placement(0, 0, 0);
     }
     private static final Map<Path, Offsets> OFFSETS = new ConcurrentHashMap<>();
 
-    /** Writes a {@link #PLACEMENT} into every slot folder of every style and land that has none, naming its structures. */
+    /**
+     * Writes a {@link #PLACEMENT} into every slot folder of every style and land, or brings the one there up to date:
+     * a line for each of its structures, each with both uniqueness limits.
+     */
     private static void writePlacements() {
         List<Path> folders = new ArrayList<>();
         for (String kind : new String[]{"style", "world"}) {
@@ -183,65 +174,136 @@ public final class StyleLibrary {
         }
         for (Path folder : folders) {
             Path toml = folder.resolve(PLACEMENT);
-            if (Files.exists(toml)) {
-                continue;
-            }
-            StringBuilder text = new StringBuilder("""
-                    # How far up (+) or down (-) each structure in this folder is built, from where its .nbt would stand.
-                    # Name a structure by its file name without .nbt, e.g.  "Example House" = { y = -10 }
-                    # Read when the structure is next placed (or after /pve style reload).
-                    """);
-            for (Path nbt : files(folder)) {
-                String name = nbt.getFileName().toString();
-                text.append('"').append(name, 0, name.length() - 4).append("\" = { y = 0 }\n");
-            }
+            // A palace stands once in its city.
+            int city = folder.toString().replace('\\', '/').contains("/mandatory/palace/") ? 1 : 0;
             try {
-                Files.writeString(toml, text, StandardCharsets.UTF_8);
-            } catch (IOException e) {
+                String old = Files.exists(toml) ? Files.readString(toml, StandardCharsets.UTF_8) : HEADER;
+                String text = upgrade(old, files(folder).stream()
+                        .map(p -> p.getFileName().toString().replaceFirst("\\.nbt$", "")).toList(), city);
+                if (!text.equals(old) || !Files.exists(toml)) {
+                    Files.writeString(toml, text, StandardCharsets.UTF_8);
+                }
+            } catch (IOException | RuntimeException e) {
                 RafasConquest.LOGGER.warn("[style] Could not write {}: {}", toml, e.toString());
             }
         }
     }
 
+    private static final String OLD_HEADER_END = "# Read when the structure is next placed (or after /pve style reload).\n";
+    private static final String LIMITS_HELP = """
+            # "Uniqueness Global": how many of it the whole world may hold; "Uniqueness City": how many one city may.
+            # 0 is no limit. Read after /pve style reload, for cities generated after it.
+            """;
+    private static final String HEADER = """
+            # How far up (+) or down (-) each structure in this folder is built, from where its .nbt would stand.
+            # Name a structure by its file name without .nbt, e.g.  "Example House" = { y = -10 }
+            """ + OLD_HEADER_END + LIMITS_HELP;
+    private static final java.util.regex.Pattern TABLE_LINE = java.util.regex.Pattern.compile("^(\\s*(?:\"[^\"]*\"|[\\w.-]+)\\s*=\\s*\\{)(.*)}(\\s*)$");
+    private static final java.util.regex.Pattern NUMBER_LINE = java.util.regex.Pattern.compile("^(\\s*(?:\"[^\"]*\"|[\\w.-]+)\\s*=\\s*)(-?\\d+)(\\s*)$");
+
+    /**
+     * A placement file with both limits on every line (0, or {@code city} for "Uniqueness City", where a line has
+     * none), a line for every structure it names not, and the limits explained under its header.
+     */
+    static String upgrade(String text, List<String> structures, int city) {
+        String limits = "\"Uniqueness Global\" = 0, \"Uniqueness City\" = " + city;
+        StringBuilder out = new StringBuilder();
+        for (String line : text.split("\n", -1)) {
+            java.util.regex.Matcher t = TABLE_LINE.matcher(line);
+            java.util.regex.Matcher n = NUMBER_LINE.matcher(line);
+            if (!line.trim().startsWith("#") && !line.contains("Uniqueness") && t.matches()) {
+                String inner = t.group(2).trim();
+                line = t.group(1) + " " + (inner.isEmpty() ? "" : inner + ", ") + limits + " }" + t.group(3);
+            } else if (!line.trim().startsWith("#") && n.matches()) {
+                line = n.group(1) + "{ y = " + n.group(2) + ", " + limits + " }" + n.group(3);
+            }
+            out.append(line).append('\n');
+        }
+        out.setLength(out.length() - 1); // split's last piece had no newline after it
+        String result = out.toString();
+        if (!result.contains("\"Uniqueness Global\": how many") && result.contains(OLD_HEADER_END)) {
+            result = result.replace(OLD_HEADER_END, OLD_HEADER_END + LIMITS_HELP);
+        }
+        java.util.Set<String> named = readPlacements(result).keySet();
+        StringBuilder missing = new StringBuilder();
+        for (String name : structures) {
+            if (!named.contains(name)) {
+                missing.append('"').append(name).append("\" = { y = 0, ").append(limits).append(" }\n");
+            }
+        }
+        if (missing.length() > 0 && !result.isEmpty() && !result.endsWith("\n")) {
+            result += "\n";
+        }
+        return result + missing;
+    }
+
     /** How far up or down a structure is built, from its folder's {@link #PLACEMENT}; 0 if it names it not. */
     public static int yOffset(String relative) {
+        return placement(relative).y();
+    }
+
+    /** A structure's line in its folder's {@link #PLACEMENT}; all 0 if it names it not. */
+    public static Placement placement(String relative) {
         Path file = root().resolve(relative);
         String name = file.getFileName().toString().replaceFirst("\\.nbt$", "");
         Path toml = file.resolveSibling(PLACEMENT);
         try {
             if (!Files.exists(toml)) {
-                return 0;
+                return Placement.NONE;
             }
             long modified = Files.getLastModifiedTime(toml).toMillis();
             Offsets offsets = OFFSETS.get(toml);
             if (offsets == null || offsets.modified() != modified) {
-                offsets = new Offsets(modified, readOffsets(Files.readString(toml, StandardCharsets.UTF_8)));
+                offsets = new Offsets(modified, readPlacements(Files.readString(toml, StandardCharsets.UTF_8)));
                 OFFSETS.put(toml, offsets);
             }
-            return offsets.byName().getOrDefault(name, 0);
+            return offsets.byName().getOrDefault(name, Placement.NONE);
         } catch (IOException | RuntimeException e) {
             RafasConquest.LOGGER.warn("[style] Could not read {}: {}", toml, e.toString());
             OFFSETS.put(toml, new Offsets(-1, Map.of()));
-            return 0;
+            return Placement.NONE;
         }
     }
 
     /** A placement file's offsets: {@code "Name" = { y = -10 }}, or just {@code "Name" = -10}. */
     static Map<String, Integer> readOffsets(String toml) {
         Map<String, Integer> byName = new java.util.HashMap<>();
+        readPlacements(toml).forEach((name, p) -> byName.put(name, p.y()));
+        return byName;
+    }
+
+    /** A placement file's lines: {@code "Name" = { y = -10, "Uniqueness Global" = 1, "Uniqueness City" = 0 }}, or just {@code "Name" = -10}. */
+    static Map<String, Placement> readPlacements(String toml) {
+        Map<String, Placement> byName = new java.util.HashMap<>();
         com.electronwill.nightconfig.core.Config config = new com.electronwill.nightconfig.toml.TomlParser().parse(toml);
         for (com.electronwill.nightconfig.core.Config.Entry e : config.entrySet()) {
             Object v = e.getValue();
+            int global = 0;
+            int city = 0;
             if (v instanceof com.electronwill.nightconfig.core.Config table) {
                 v = table.contains("y") ? table.get("y") : table.get("Y");
+                global = count(table, "Uniqueness Global", e.getKey());
+                city = count(table, "Uniqueness City", e.getKey());
             }
-            if (v instanceof Number n) {
-                byName.put(e.getKey(), n.intValue());
-            } else if (v != null) {
+            if (v == null || v instanceof Number) {
+                byName.put(e.getKey(), new Placement(v == null ? 0 : ((Number) v).intValue(), global, city));
+            } else {
                 RafasConquest.LOGGER.warn("[style] {} in a {} is not a number of blocks: {}", e.getKey(), PLACEMENT, v);
             }
         }
         return byName;
+    }
+
+    /** A limit in a placement line: a whole number, else 0 (no limit). */
+    private static int count(com.electronwill.nightconfig.core.Config table, String key, String name) {
+        Object v = table.get(List.of(key)); // a quoted key with spaces, read as one name, not a dotted path
+        if (v instanceof Number n && n.intValue() >= 0) {
+            return n.intValue();
+        }
+        if (v != null) {
+            RafasConquest.LOGGER.warn("[style] {} of {} in a {} is not a count: {}", key, name, PLACEMENT, v);
+        }
+        return 0;
     }
 
     /** The style a homeland builds in. */
@@ -278,8 +340,14 @@ public final class StyleLibrary {
      */
     @Nullable
     public static String pick(Homeland land, String slot, long seed) {
+        return pick(land, slot, seed, f -> true);
+    }
+
+    /** {@link #pick}, of the structures {@code ok} allows. */
+    @Nullable
+    public static String pick(Homeland land, String slot, long seed, java.util.function.Predicate<String> ok) {
         for (String style : new String[]{styleOf(land), DEFAULT}) {
-            String found = choose("style/" + style + "/" + slot, seed);
+            String found = choose("style/" + style + "/" + slot, seed, ok);
             if (found != null) {
                 return found;
             }
@@ -290,7 +358,13 @@ public final class StyleLibrary {
     /** A structure from one style's own slot (no default), chosen by {@code seed}; null if that slot is empty. */
     @Nullable
     public static String pickIn(String style, String slot, long seed) {
-        return choose("style/" + style + "/" + slot, seed);
+        return pickIn(style, slot, seed, f -> true);
+    }
+
+    /** {@link #pickIn}, of the structures {@code ok} allows. */
+    @Nullable
+    public static String pickIn(String style, String slot, long seed, java.util.function.Predicate<String> ok) {
+        return choose("style/" + style + "/" + slot, seed, ok);
     }
 
     /** Every structure of a homeland's own style in a slot (none if it builds in the default style). */
@@ -321,17 +395,17 @@ public final class StyleLibrary {
  ({@link #WORLD_SLOTS}), chosen by {@code seed}; null if it has none. */
     @Nullable
     public static String pickWorld(Homeland land, String slot, long seed) {
-        return choose("world/" + land.name().toLowerCase(Locale.ROOT) + "/" + slot, seed);
+        return choose("world/" + land.name().toLowerCase(Locale.ROOT) + "/" + slot, seed, f -> true);
     }
 
     @Nullable
-    private static String choose(String folder, long seed) {
-        List<Path> files = files(root().resolve(folder));
+    private static String choose(String folder, long seed, java.util.function.Predicate<String> ok) {
+        List<String> files = files(root().resolve(folder)).stream()
+                .map(p -> root().relativize(p).toString().replace('\\', '/')).filter(ok).toList();
         if (files.isEmpty()) {
             return null;
         }
-        Path chosen = files.get((int) Math.floorMod(seed * 0x9E3779B97F4A7C15L >>> 17, (long) files.size()));
-        return root().relativize(chosen).toString().replace('\\', '/');
+        return files.get((int) Math.floorMod(seed * 0x9E3779B97F4A7C15L >>> 17, (long) files.size()));
     }
 
     /** A structure file of one tile (no more than {@link #TILE} blocks across), whole; null if it is bigger or can't be read. */

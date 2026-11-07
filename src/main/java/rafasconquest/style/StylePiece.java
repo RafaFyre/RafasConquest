@@ -87,6 +87,11 @@ public class StylePiece extends StructurePiece {
         this.tileZ = tag.contains("tileZ") ? tag.getInt("tileZ") : -1;
     }
 
+    /** The style file this piece is built from. */
+    public String file() {
+        return file;
+    }
+
     @Override
     protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
         tag.putString("file", file);

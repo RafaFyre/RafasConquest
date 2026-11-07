@@ -515,7 +515,8 @@ public final class CityPlan {
                     p.w() + 2 * CLEARANCE, p.d() + 2 * CLEARANCE));
         }
         List<BlockPacker.Size> sizes = noble.stream().map(n -> new BlockPacker.Size(n.x(), n.z())).toList();
-        for (BlockPacker.Placed p : BlockPacker.pack(free, spanX, spanZ, sizes, random)) {
+        int[] most = CityStyles.allowances(site, noble.stream().map(CityStyles.Building::file).toList());
+        for (BlockPacker.Placed p : BlockPacker.pack(free, spanX, spanZ, sizes, random, most)) {
             CityStyles.Building n = noble.get(p.building());
             boolean turned = p.turns() % 2 == 1;
             Piece piece = new Piece(Kind.NOBLE, n.file(), x0 + p.x(), z0 + p.z(), turned ? n.z() : n.x(), turned ? n.x() : n.z(), n.y(), p.turns());
