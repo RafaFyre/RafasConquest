@@ -51,6 +51,9 @@ public final class ConquestWorldgen {
     public static final ResourceKey<Structure> FARM = key("farm");
     public static final ResourceKey<Structure> CITY = key("city");
     public static final ResourceKey<Structure> CITY_DISTRICT = key("city_district");
+    public static final ResourceKey<Structure> CITY_SLOPE = key("city_slope");
+    public static final ResourceKey<Structure> DOJO = key("dojo");
+    public static final ResourceKey<Structure> HIDDEN_DOJO = key("hidden_dojo");
 
     private ConquestWorldgen() {
     }

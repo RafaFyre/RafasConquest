@@ -4,5 +4,8 @@
       "text": "${mod_id} resources"
     },
     "pack_format": 34
+  },
+  "sodium": {
+    "ignored_shaders": ["rendertype_translucent.vsh", "rendertype_translucent.fsh", "rendertype_translucent.json"]
   }
 }
