@@ -316,8 +316,8 @@ public final class CityTerrain {
 
     /**
      * A column of a city with an outside noble district: the platform's own inside its box, else the city's inside its;
-     * else, where both shape the land, fill to the higher of their fills and carve to the lower of their carves (but
-     * never below that fill), so the platform's easing and the city's meet.
+     * else, where both shape the land, fill to the higher of their fills and carve to the higher of their carves, so
+     * the platform's easing and the city's merge as one.
      */
     public static Column column(Plan city, int lx, int lz, Plan platform, int px, int pz) {
         if (platform.inBox(px, pz)) {
@@ -336,7 +336,10 @@ public final class CityTerrain {
         }
         boolean fill = c.fill() || p.fill();
         int low = c.fill() && p.fill() ? Math.max(c.low(), p.low()) : p.fill() ? p.low() : c.fill() ? c.low() : Math.min(c.low(), p.low());
-        return new Column(Kind.SLOPE, low, Math.max(low, Math.min(c.high(), p.high())), fill, p.stone() && low == p.low());
+        // The higher of the two easings stands, so neither cuts into the other; the platform's fill-only reach never carves.
+        boolean filling = p.high() == Integer.MAX_VALUE;
+        int high = Math.max(low, filling ? c.high() : Math.max(c.high(), p.high()));
+        return new Column(Kind.SLOPE, low, high, fill, p.stone() && low == p.low() && (filling || high == p.high()));
     }
 
     public static Column column(Plan plan, int lx, int lz) {
