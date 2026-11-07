@@ -46,10 +46,15 @@ class NobleAnnexTest {
         CityLayout.Site site = new CityLayout.Site(0, 0, false, 2);
         CityTerrain.Plan city = CityTerrain.plan(site, (x, z) -> 70, 63);
         int size = 125;
-        CityTerrain.Plan platform = CityTerrain.platform(0, 0, size, 0, 80, (x, z) -> 70);
-        assertEquals(80, CityTerrain.column(city, -100, -100, platform, 10, 10).low(), "the platform's plate on it");
+        int top = city.plateY() + NobleAnnex.RISE;
+        CityTerrain.Plan platform = CityTerrain.platform(0, 0, size, 0, top, (x, z) -> 70);
+        assertEquals(top, CityTerrain.column(city, -100, -100, platform, 10, 10).low(), "the platform's plate on it");
         CityTerrain.Column out = CityTerrain.column(platform, -5, 10);
         assertEquals(CityTerrain.Kind.SLOPE, out.kind());
-        assertEquals(80 - 9, out.low(), "a cliff, 3 down for 1 out: 3 out past its box");
+        assertEquals(top - 3 * NobleAnnex.RISE / NobleAnnex.EASE_REACH, out.low(), "easing down: 3 out past its box");
+        CityTerrain.Column foot = CityTerrain.column(platform, platform.boxMin() - NobleAnnex.EASE_REACH, 10);
+        assertEquals(city.plateY(), foot.low(), "the easing's foot on the city's height");
+        assertTrue(foot.fill() && foot.high() == foot.low(), "filled and carved to the easing");
+        assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(platform, platform.boxMin() - NobleAnnex.EASE_REACH - 1, 10).kind(), "nothing past it");
     }
 }

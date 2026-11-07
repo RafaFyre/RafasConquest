@@ -213,10 +213,11 @@ public final class CityTerrain {
 
     /**
      * An outside noble district's platform ({@link NobleAnnex}): its square {@code size} a side from world (originX,
-     * originZ), its walls {@code outset} out, its plate {@code plateY}; a box margin of 2 and easing 3 up for 1 out.
+     * originZ), its walls {@code outset} out, its plate {@code plateY}; a box margin of 2 and easing straight down to
+     * the city's height over {@link NobleAnnex#EASE_REACH} blocks.
      */
     public static Plan platform(int originX, int originZ, int size, int outset, int plateY, Heights heights) {
-        return edges(originX, originZ, heights, new Plan(plateY, null, null, 1, outset, size, -3));
+        return edges(originX, originZ, heights, new Plan(plateY, null, null, 1, outset, size, -NobleAnnex.RISE / NobleAnnex.EASE_REACH));
     }
 
     /** {@code box}'s plan with its edges read from the land around it. */
@@ -344,6 +345,10 @@ public final class CityTerrain {
             return insideBox(plan, lx, lz);
         }
         int d = Math.max(dx, dz);
+        if (plan.run() < 0) {
+            // An outside noble district's platform: its easing, carved and filled, ends on the city's height.
+            return d > NobleAnnex.EASE_REACH ? Column.NONE : new Column(Kind.SLOPE, plate - plan.rise(d), plate - plan.rise(d), true);
+        }
         if (d > SLOPE_REACH) {
             return Column.NONE;
         }

@@ -17,8 +17,8 @@ public final class NobleAnnex {
     public static final int RISE = 40;
     /** The path's longest climb: one block up for this many along. */
     public static final int RUN = 2;
-    /** How far out the platform's cliff easing (3 up for 1 out) shapes the land: enough for 96 blocks of relief. */
-    public static final int EASE_REACH = 32;
+    /** How far out the platform's easing runs, from its top down to the city's height ({@link #RISE} over this). */
+    public static final int EASE_REACH = 20;
     /** Room the world map keeps for a style's wall ring (either city's or the annex's), which it can't know yet. */
     static final int WALL_ROOM = 40;
     /** How far past a city's square its annex and the land it shapes may reach, at most (a 9-district city's). */
