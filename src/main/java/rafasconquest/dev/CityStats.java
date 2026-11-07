@@ -178,6 +178,11 @@ public final class CityStats {
             }
             lines.add(side + ": " + sb + "  carve to:" + carve);
         }
+        // Same choice as CityPlan.palaceStands: the noble district's placed Palace, else the style's first.
+        rafasconquest.style.CityPlan.Plan cityPlan = rafasconquest.style.CityPlan.of(site);
+        rafasconquest.style.CityPlan.Piece palace = cityPlan.first(rafasconquest.style.CityPlan.Kind.PALACE);
+        String file = cityPlan.noble() ? (palace == null ? null : palace.file()) : rafasconquest.style.CityStyles.palace(site);
+        lines.add("Palace: " + (file == null ? "none (gold church)" : file));
         return lines;
     }
 
