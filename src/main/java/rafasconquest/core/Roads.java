@@ -81,11 +81,16 @@ public final class Roads {
 
     /**
      * A place a road can reach: a city (its square {@code half} blocks each way), a castle, village or dojo (a point);
-     * {@code harbour} is the {@link CityLayout.Side} ordinal a port city's harbour faces, or -1.
+     * {@code harbour} is the {@link CityLayout.Side} ordinal a port city's harbour faces, or -1; {@code noble} the side
+     * its noble district stands outside it on, or -1.
      */
-    public record Place(String name, int x, int z, int half, int districts, int harbour) {
+    public record Place(String name, int x, int z, int half, int districts, int harbour, int noble) {
         public Place(String name, int x, int z, int half, int districts) {
-            this(name, x, z, half, districts, -1);
+            this(name, x, z, half, districts, -1, -1);
+        }
+
+        public Place(String name, int x, int z, int half, int districts, int harbour) {
+            this(name, x, z, half, districts, harbour, -1);
         }
     }
 
@@ -124,7 +129,7 @@ public final class Roads {
 
     /** A city as a place roads reach: named after its province, its square its walls. */
     public static Place place(SeatCities.City city, String name) {
-        return new Place(name, city.x(), city.z(), city.size() / 2, city.districts(), city.harbour());
+        return new Place(name, city.x(), city.z(), city.size() / 2, city.districts(), city.harbour(), city.noble());
     }
 
     /**
@@ -230,7 +235,7 @@ public final class Roads {
 
     /**
      * The way out (dx, dz) of the gate a road to {@code toward} leaves a city by: the side facing it, unless that side
-     * is the harbour, then the side facing it next best.
+     * is the harbour or the outside noble district's, then the side facing it next best (and so on).
      */
     static int[] side(Place place, Place toward) {
         int dx = toward.x() - place.x();
@@ -239,9 +244,15 @@ public final class Roads {
         int[] z = {0, dz >= 0 ? 1 : -1};
         boolean alongX = Math.abs(dx) >= Math.abs(dz);
         int[] best = alongX ? x : z;
-        CityLayout.Side s = best[0] > 0 ? CityLayout.Side.EAST : best[0] < 0 ? CityLayout.Side.WEST
-                : best[1] > 0 ? CityLayout.Side.SOUTH : CityLayout.Side.NORTH;
-        return s.ordinal() == place.harbour() ? (alongX ? z : x) : best;
+        int[] next = alongX ? z : x;
+        for (int[] d : new int[][]{best, next, {-next[0], -next[1]}, {-best[0], -best[1]}}) {
+            int s = (d[0] > 0 ? CityLayout.Side.EAST : d[0] < 0 ? CityLayout.Side.WEST
+                    : d[1] > 0 ? CityLayout.Side.SOUTH : CityLayout.Side.NORTH).ordinal();
+            if (s != place.harbour() && s != place.noble()) {
+                return d;
+            }
+        }
+        return best;
     }
 
     /** Where a road to {@code toward} leaves a place: a city's gate (see {@link #side}), just outside the walls; else the place. */
@@ -309,16 +320,24 @@ public final class Roads {
                 c += Math.max(0, land.ground()[i] - land.seaLevel() - 40) * HIGH_GROUND_COST;
                 cost[i] = c;
             }
-            // The cities' squares: roads go round, not through.
+            // The cities' squares, and their outside noble districts: roads go round, not through.
             for (Place city : cities) {
-                int x0 = clamp(Math.floorDiv(city.x() - city.half() - land.minX(), land.bpp()), land.width());
-                int x1 = clamp(Math.floorDiv(city.x() + city.half() - land.minX(), land.bpp()), land.width());
-                int z0 = clamp(Math.floorDiv(city.z() - city.half() - land.minZ(), land.bpp()), land.height());
-                int z1 = clamp(Math.floorDiv(city.z() + city.half() - land.minZ(), land.bpp()), land.height());
-                for (int pz = z0; pz <= z1; pz++) {
-                    for (int px = x0; px <= x1; px++) {
-                        cost[land.index(px, pz)] += CITY_COST;
-                    }
+                avoid(city.x() - city.half(), city.z() - city.half(), city.x() + city.half(), city.z() + city.half());
+                if (city.noble() >= 0) {
+                    int[] a = NobleAnnex.reserve(city.x(), city.z(), city.half(), city.districts(), city.noble());
+                    avoid(a[0], a[1], a[2], a[3]);
+                }
+            }
+        }
+
+        private void avoid(int minX, int minZ, int maxX, int maxZ) {
+            int x0 = clamp(Math.floorDiv(minX - land.minX(), land.bpp()), land.width());
+            int x1 = clamp(Math.floorDiv(maxX - land.minX(), land.bpp()), land.width());
+            int z0 = clamp(Math.floorDiv(minZ - land.minZ(), land.bpp()), land.height());
+            int z1 = clamp(Math.floorDiv(maxZ - land.minZ(), land.bpp()), land.height());
+            for (int pz = z0; pz <= z1; pz++) {
+                for (int px = x0; px <= x1; px++) {
+                    cost[land.index(px, pz)] += CITY_COST;
                 }
             }
         }

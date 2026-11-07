@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class RecruitmentPostTest {
+class BarracksTest {
     @Test
     void thePostStandsOnAPlotBesideTheTownCentre() {
         for (int cells = 2; cells <= 9; cells++) {
             CityLayout.Site city = new CityLayout.Site(500, -300, false, cells);
-            RecruitmentPost post = RecruitmentPost.of(city);
+            Barracks post = Barracks.of(city);
             int lx = post.plotX() - city.originX();
             int lz = post.plotZ() - city.originZ();
             assertEquals(CityLayout.blockStart(city.centerBlock() + 1), lx, "not on the block east of the town centre");
@@ -22,7 +22,7 @@ class RecruitmentPostTest {
 
     @Test
     void theRecruiterStandsBehindTheCounterFacingTheDoorWithFiveGuards() {
-        RecruitmentPost post = RecruitmentPost.of(new CityLayout.Site(0, 0, false, 3));
+        Barracks post = Barracks.of(new CityLayout.Site(0, 0, false, 3));
         int[] door = post.door();
         int[] counter = post.counter();
         int[] recruiter = post.recruiter();

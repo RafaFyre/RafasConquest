@@ -40,12 +40,32 @@ public final class SeatCities {
 
     /**
      * A seat city: its centre, how many districts a side, the highest title it seats, its seat province, and the side
-     * its harbour faces (a {@link CityLayout.Side}'s ordinal), or -1 for an inland city.
+     * its harbour faces (a {@link CityLayout.Side}'s ordinal), or -1 for an inland city; the side its noble district
+     * stands outside it on ({@link NobleAnnex}), or -1.
      */
-    public record City(int x, int z, int districts, TitleMap.Tier tier, int province, int harbour) {
+    public record City(int x, int z, int districts, TitleMap.Tier tier, int province, int harbour, int noble) {
         /** An inland city. */
         public City(int x, int z, int districts, TitleMap.Tier tier, int province) {
             this(x, z, districts, tier, province, -1);
+        }
+
+        public City(int x, int z, int districts, TitleMap.Tier tier, int province, int harbour) {
+            this(x, z, districts, tier, province, harbour, -1);
+        }
+
+        /** The world box kept for its outside noble district, or null. */
+        public int[] annex() {
+            return noble < 0 ? null : NobleAnnex.reserve(x, z, size() / 2, districts, noble);
+        }
+
+        /** Whether (x, z) lies within {@code margin} of its reach or of its outside noble district's box. */
+        public boolean keeps(int px, int pz, int margin) {
+            int r = reach() + margin;
+            if (Math.abs(x - px) < r && Math.abs(z - pz) < r) {
+                return true;
+            }
+            int[] a = annex();
+            return a != null && px > a[0] - margin && px < a[2] + margin && pz > a[1] - margin && pz < a[3] + margin;
         }
 
         public boolean port() {
@@ -146,7 +166,7 @@ public final class SeatCities {
                     }
                 }
                 if (city != null) {
-                    cities.add(city);
+                    cities.add(withAnnex(seed, g, notLand, cities, city));
                 }
             }
         }
@@ -358,12 +378,50 @@ public final class SeatCities {
 
     private static boolean crowded(List<City> cities, int x, int z, int reach) {
         for (City c : cities) {
-            int apart = reach + c.reach() + CLEARANCE;
-            if (Math.abs(c.x() - x) < apart && Math.abs(c.z() - z) < apart) {
+            if (c.keeps(x, z, reach + CLEARANCE)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The city with its noble district outside, for half the cities: on the first side (in a turn from one picked by
+     * its place) that is not its harbour, is all land and keeps clear of the other cities. As it was where none has room.
+     */
+    static City withAnnex(long seed, Grid g, int[] notLand, List<City> cities, City c) {
+        if (!NobleAnnex.wanted(seed, c.x(), c.z())) {
+            return c;
+        }
+        int first = NobleAnnex.firstSide(seed, c.x(), c.z());
+        for (int i = 0; i < 4; i++) {
+            int side = (first + i) % 4;
+            if (side == c.harbour()) {
+                continue;
+            }
+            int[] a = NobleAnnex.reserve(c.x(), c.z(), c.size() / 2, c.districts(), side);
+            if (box(g, notLand, a[0], a[1], a[2], a[3]) != 0) {
+                continue;
+            }
+            boolean clear = true;
+            for (City o : cities) {
+                // Its box against the other's square and outside district, as a new city's square is.
+                int[] r = {o.x() - o.reach(), o.z() - o.reach(), o.x() + o.reach(), o.z() + o.reach()};
+                int[] oa = o.annex();
+                if (overlaps(a, r, CLEARANCE) || oa != null && overlaps(a, oa, CLEARANCE)) {
+                    clear = false;
+                    break;
+                }
+            }
+            if (clear) {
+                return new City(c.x(), c.z(), c.districts(), c.tier(), c.province(), c.harbour(), side);
+            }
+        }
+        return c;
+    }
+
+    private static boolean overlaps(int[] a, int[] b, int margin) {
+        return a[0] < b[2] + margin && b[0] < a[2] + margin && a[1] < b[3] + margin && b[1] < a[3] + margin;
     }
 
     /** The provinces a city stands on any part of (its own included), from the map's pixels. */

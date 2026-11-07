@@ -25,11 +25,11 @@ import rafasconquest.worldgen.ConquestRuntime;
 import rafasconquest.worldgen.ConquestWorldgen;
 import rafasconquest.worldgen.GoldChurchPiece;
 import rafasconquest.worldgen.HarbourPiece;
-import rafasconquest.worldgen.RecruitmentPostPiece;
+import rafasconquest.worldgen.BarracksPiece;
 
 /**
  * The music of where each player stands, told to their client once a second: "To Shores, Distant" at sea, on a beach
- * or in a harbour; "Dancing Steps of War" in a recruitment post, a sword sanctum, a dojo, or the war council's tent;
+ * or in a harbour; "Dancing Steps of War" in a barracks, a sword sanctum, a dojo, or the war council's tent;
  * and whether they are in a city's streets, where its ambient sound is heard unless one of those plays.
  */
 public final class PlaceMusic {
@@ -120,7 +120,7 @@ public final class PlaceMusic {
                 if (!piece.getBoundingBox().isInside(pos)) {
                     continue;
                 }
-                if (piece instanceof RecruitmentPostPiece
+                if (piece instanceof BarracksPiece
                         || piece instanceof StylePiece style && style.file().contains(CityStyles.SWORD_SANCTUM)) {
                     return WAR;
                 }

@@ -208,7 +208,7 @@ public final class ConquestServer {
             if (chunk != null) {
                 CityBanners.paintChunk(overworld, chunk, data, precomputer);
                 CityGuards.postChunk(overworld, chunk, data, precomputer, recruits);
-                RecruitmentPosts.postChunk(overworld, chunk, data, precomputer, recruits);
+                BarracksPeople.postChunk(overworld, chunk, data, precomputer, recruits);
             }
         }
     }

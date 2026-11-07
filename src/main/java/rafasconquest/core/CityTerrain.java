@@ -80,9 +80,11 @@ public final class CityTerrain {
      * {@code edges[side][segment]}; segment 0 is at the box's west end (north/south sides) or north end (east/west).
      * {@code carveTo[side][segment]} is how far above the plate the carve must reach at the end of its reach, measured
      * at that stretch (0 or less if 1:2 already clears the land). {@code outset} is how far the city's wall stands out
-     * past its square; the box is that plus {@link #BOX_MARGIN}.
+     * past its square; the box is that plus {@link #BOX_MARGIN}. {@code size} is the square's side ({@link #size(int)}
+     * for a city's), and {@code run} how many blocks out the easing goes for each block up: 2 for a city; negative,
+     * blocks up for each one out: -3 for an outside noble district's platform ({@link NobleAnnex}), a cliff face.
      */
-    public record Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset) {
+    public record Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset, int size, int run) {
         /** A 3 × 3 city's plan. */
         public Plan(int plateY, Edge[][] edges, int[][] carveTo) {
             this(plateY, edges, carveTo, CityLayout.CELLS_PER_SIDE);
@@ -92,12 +94,31 @@ public final class CityTerrain {
             this(plateY, edges, carveTo, cells, CityLayout.WALL_OUTSET);
         }
 
+        public Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset) {
+            this(plateY, edges, carveTo, cells, outset, CityTerrain.size(cells), 2);
+        }
+
         public int boxMin() {
             return CityTerrain.boxMin(cells, outset);
         }
 
         public int boxMax() {
-            return CityTerrain.boxMax(cells, outset);
+            return size - 1 + outset + margin(cells);
+        }
+
+        /** The stretches along each side. */
+        public int segments() {
+            return (boxMax() - boxMin() + EDGE_SEGMENT) / EDGE_SEGMENT;
+        }
+
+        /** How high the easing rises {@code d} blocks out: one block per {@code run}, or {@code -run} per block. */
+        public int rise(int d) {
+            return run < 0 ? -run * d : (d + run - 1) / run;
+        }
+
+        /** Whether local (x, z) lies in the box. */
+        public boolean inBox(int x, int z) {
+            return x >= boxMin() && x <= boxMax() && z >= boxMin() && z <= boxMax();
         }
 
         public Edge edge(Side side, int segment) {
@@ -105,20 +126,15 @@ public final class CityTerrain {
             return side0[Math.max(0, Math.min(side0.length - 1, segment))];
         }
 
-        /** The city's side, edge roads included. */
-        public int size() {
-            return CityTerrain.size(cells);
-        }
-
         @Override
         public boolean equals(Object o) {
-            return o instanceof Plan p && p.plateY == plateY && p.cells == cells && p.outset == outset
+            return o instanceof Plan p && p.plateY == plateY && p.cells == cells && p.outset == outset && p.size == size && p.run == run
                     && Arrays.deepEquals(p.edges, edges) && Arrays.deepEquals(p.carveTo, carveTo);
         }
 
         @Override
         public int hashCode() {
-            return 31 * (31 * (31 * (31 * plateY + cells) + outset) + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo);
+            return 31 * (31 * (31 * (31 * (31 * plateY + cells) + outset) + size * 7 + run) + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo);
         }
     }
 
@@ -184,7 +200,6 @@ public final class CityTerrain {
         Plan box = new Plan(0, null, null, cells, outset); // only its box and reach are read
         int boxMin = box.boxMin();
         int boxMax = box.boxMax();
-        int segments = segments(cells, outset);
         List<Integer> samples = new ArrayList<>();
         for (int lx = boxMin; lx <= boxMax; lx = next(lx, boxMax)) {
             for (int lz = boxMin; lz <= boxMax; lz = next(lz, boxMax)) {
@@ -193,17 +208,30 @@ public final class CityTerrain {
         }
         samples.sort(Integer::compare);
         int plate = port ? seaLevel - 1 : Math.max(seaLevel - 1, samples.get(samples.size() / 2));
+        return edges(site.originX(), site.originZ(), heights, new Plan(plate, null, null, cells, outset));
+    }
 
+    /**
+     * An outside noble district's platform ({@link NobleAnnex}): its square {@code size} a side from world (originX,
+     * originZ), its walls {@code outset} out, its plate {@code plateY}; a box margin of 2 and easing 3 up for 1 out.
+     */
+    public static Plan platform(int originX, int originZ, int size, int outset, int plateY, Heights heights) {
+        return edges(originX, originZ, heights, new Plan(plateY, null, null, 1, outset, size, -3));
+    }
+
+    /** {@code box}'s plan with its edges read from the land around it. */
+    private static Plan edges(int originX, int originZ, Heights heights, Plan box) {
+        int segments = box.segments();
         Edge[][] edges = new Edge[Side.values().length][segments];
         int[][] carveTo = new int[Side.values().length][segments];
         for (Side side : Side.values()) {
             for (int seg = 0; seg < segments; seg++) {
-                int along = center(seg, boxMin, boxMax);
-                edges[side.ordinal()][seg] = classify(site, heights, plate, side, along, box);
-                carveTo[side.ordinal()][seg] = carveTarget(site, heights, plate, side, along, box);
+                int along = center(seg, box.boxMin(), box.boxMax());
+                edges[side.ordinal()][seg] = classify(originX, originZ, heights, box.plateY(), side, along, box);
+                carveTo[side.ordinal()][seg] = carveTarget(originX, originZ, heights, box.plateY(), side, along, box);
             }
         }
-        return new Plan(plate, edges, carveTo, cells, outset);
+        return new Plan(box.plateY(), edges, carveTo, box.cells(), box.outset(), box.size(), box.run());
     }
 
     private static int next(int l, int boxMax) {
@@ -220,13 +248,13 @@ public final class CityTerrain {
     }
 
     /** Looks straight out from the box edge: does the land fall away, and if so does a 1:2 fill reach it? */
-    static Edge classify(CityLayout.Site site, Heights heights, int plate, Side side, int along, Plan box) {
+    static Edge classify(int originX, int originZ, Heights heights, int plate, Side side, int along, Plan box) {
         long sum = 0;
         boolean fillMeets = false;
         for (int d = RAY_STEP; d <= SLOPE_REACH; d += RAY_STEP) {
-            int y = height(site, heights, side, along, d, box);
+            int y = height(originX, originZ, heights, side, along, d, box);
             sum += y - plate;
-            if (y >= plate - rise(d)) {
+            if (y >= plate - box.rise(d)) {
                 fillMeets = true;
             }
         }
@@ -237,20 +265,20 @@ public final class CityTerrain {
     }
 
     /** The highest land around the end of the carve's reach, relative to the plate: what the carve has to meet. */
-    static int carveTarget(CityLayout.Site site, Heights heights, int plate, Side side, int along, Plan box) {
+    static int carveTarget(int originX, int originZ, Heights heights, int plate, Side side, int along, Plan box) {
         int highest = Integer.MIN_VALUE;
         for (int offset = -RAY_SPREAD; offset <= RAY_SPREAD; offset += RAY_SPREAD) {
             int a = Math.max(box.boxMin(), Math.min(box.boxMax(), along + offset));
             for (int d = SLOPE_REACH - RAY_STEP; d <= SLOPE_REACH + BEYOND_REACH; d += RAY_STEP) {
-                highest = Math.max(highest, height(site, heights, side, a, d, box) - plate);
+                highest = Math.max(highest, height(originX, originZ, heights, side, a, d, box) - plate);
             }
         }
         return highest;
     }
 
-    private static int height(CityLayout.Site site, Heights heights, Side side, int along, int d, Plan box) {
+    private static int height(int originX, int originZ, Heights heights, Side side, int along, int d, Plan box) {
         int[] l = outward(side, along, d, box.boxMin(), box.boxMax());
-        return heights.at(site.originX() + l[0], site.originZ() + l[1]);
+        return heights.at(originX + l[0], originZ + l[1]);
     }
 
     /** Local (x, z) {@code d} blocks straight out from the box edge at position {@code along} on {@code side}. */
@@ -273,8 +301,37 @@ public final class CityTerrain {
      * reach ({@code target} above the plate) is higher than the gentle slope gets there.
      */
     public static int carveRise(int d, int target) {
+        return carveRise(d, target, rise(d));
+    }
+
+    private static int carveRise(int d, int target, int gentle) {
         int steep = target <= 0 ? 0 : (int) Math.ceil((double) target * d / SLOPE_REACH);
-        return Math.max(rise(d), steep);
+        return Math.max(gentle, steep);
+    }
+
+    /**
+     * A column of a city with an outside noble district: the platform's own inside its box, else the city's inside its;
+     * else, where both shape the land, fill to the higher of their fills and carve to the lower of their carves (but
+     * never below that fill), so the platform's easing and the city's meet.
+     */
+    public static Column column(Plan city, int lx, int lz, Plan platform, int px, int pz) {
+        if (platform.inBox(px, pz)) {
+            return column(platform, px, pz);
+        }
+        Column c = column(city, lx, lz);
+        if (c.kind() != Kind.SLOPE && c.kind() != Kind.NONE) {
+            return c;
+        }
+        Column p = column(platform, px, pz);
+        if (p.kind() == Kind.NONE) {
+            return c;
+        }
+        if (c.kind() == Kind.NONE) {
+            return p;
+        }
+        boolean fill = c.fill() || p.fill();
+        int low = c.fill() && p.fill() ? Math.max(c.low(), p.low()) : p.fill() ? p.low() : c.fill() ? c.low() : Math.min(c.low(), p.low());
+        return new Column(Kind.SLOPE, low, Math.max(low, Math.min(c.high(), p.high())), fill);
     }
 
     public static Column column(Plan plan, int lx, int lz) {
@@ -306,7 +363,7 @@ public final class CityTerrain {
             target = carveTarget(plan, side, along);
             fill = plan.edge(side, segment(plan, along)) == Edge.FILL;
         }
-        return new Column(Kind.SLOPE, plate - rise(d), plate + carveRise(d, target), fill);
+        return new Column(Kind.SLOPE, plate - plan.rise(d), plate + carveRise(d, target, plan.rise(d)), fill);
     }
 
     /** Inside the box: the plate, except under and outside the wall on valley stretches. */
@@ -369,7 +426,7 @@ public final class CityTerrain {
     }
 
     static int segment(Plan plan, int along) {
-        return Math.max(0, Math.min(segments(plan.cells(), plan.outset()) - 1, (along - plan.boxMin()) / EDGE_SEGMENT));
+        return Math.max(0, Math.min(plan.segments() - 1, (along - plan.boxMin()) / EDGE_SEGMENT));
     }
 
     /**
@@ -429,6 +486,17 @@ public final class CityTerrain {
         for (int[] a : split(inMin, inMax)) {
             tiles.add(new int[]{outMin, a[0], inMin - 1, a[1]});
             tiles.add(new int[]{inMax + 1, a[0], outMax, a[1]});
+        }
+        return tiles;
+    }
+
+    /** A box cut into a grid of tiles no longer than {@link #SLOPE_TILE} a side: each {minX, minZ, maxX, maxZ}. */
+    public static List<int[]> tiles(int minX, int minZ, int maxX, int maxZ) {
+        List<int[]> tiles = new ArrayList<>();
+        for (int[] x : split(minX, maxX)) {
+            for (int[] z : split(minZ, maxZ)) {
+                tiles.add(new int[]{x[0], z[0], x[1], z[1]});
+            }
         }
         return tiles;
     }

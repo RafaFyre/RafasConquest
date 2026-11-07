@@ -430,7 +430,7 @@ public final class PveCommands {
 
     /**
      * Knights a player (or takes their knighthood) without their earning it, for testing: a noble enlists at a
-     * recruitment post as a Major (rank 5). A landed player keeps their county.
+     * barracks as a Major (rank 5). A landed player keeps their county.
      */
     private static int nobleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, boolean noble) {
         rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(ctx.getSource().getServer());

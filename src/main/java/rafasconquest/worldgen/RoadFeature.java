@@ -279,7 +279,8 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
     public static boolean inCity(int x, int z) {
         for (SeatCities.City c : ConquestRuntime.cities().inBox(x, z, x, z)) {
             int half = c.size() / 2 + CityLayout.WALL_OUTSET;
-            if (Math.abs(x - c.x()) <= half && Math.abs(z - c.z()) <= half) {
+            int[] a = c.annex(); // and the ground kept for its outside noble district
+            if (Math.abs(x - c.x()) <= half && Math.abs(z - c.z()) <= half || a != null && x >= a[0] && x <= a[2] && z >= a[1] && z <= a[3]) {
                 return true;
             }
         }
@@ -291,6 +292,10 @@ public class RoadFeature extends Feature<NoneFeatureConfiguration> {
         List<int[]> keeps = new java.util.ArrayList<>();
         for (SeatCities.City c : ConquestRuntime.cities().inBox(x0, z0, x0 + 15, z0 + 15)) {
             keep(keeps, c.x(), c.z(), c.size() / 2 + CITY_MARGIN, x0, z0);
+            int[] a = c.annex();
+            if (a != null && a[2] >= x0 && a[0] <= x0 + 15 && a[3] >= z0 && a[1] <= z0 + 15) {
+                keeps.add(a);
+            }
         }
         for (Countryside.Settlement s : map.settlements()) {
             keep(keeps, s.x(), s.z(), s.reach() + SETTLEMENT_MARGIN, x0, z0);

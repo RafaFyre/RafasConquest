@@ -170,7 +170,7 @@ public class RecruitsFactions implements RecruitsBridge {
         return true;
     }
 
-    /** A swordsman in iron, on the owner's team, standing guard at a recruitment post. */
+    /** A swordsman in iron, on the owner's team, standing guard at a barracks. */
     @Override
     public boolean spawnPostGuard(Faction owner, BlockPos feet, float yaw) {
         PlayerTeam team = team(owner);

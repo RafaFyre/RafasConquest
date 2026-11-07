@@ -38,7 +38,7 @@ gear. Its items are looked up by name, so it is never needed to build or run.
   (feathers); the swamp's coifs, gambesons and bucklers (two plumes). Each has its own weapons and shield.
 - **Who wears it**: in battle, the **heavy infantry**, the **cavalry** (lances), the **captains** (body armour; the
   banner stays on the head) and the **general** and their guard; the war camps' guards; the cities' wall archers and
-  the recruitment posts' guards and recruiters. Levies and archers keep their dyed leather.
+  the barracks' guards and recruiters. Levies and archers keep their dyed leather.
 - **Colours**: every piece that takes a dye, and each crest, is dyed the side's colour; chestplates (surcoats) and
   shields carry the nation's banner, as Epic Knights' heraldry does.
 - **Nobles** (in the world and on the nation and character pages): a ruler wears a crown and ceremonial dress; a duke
@@ -959,13 +959,13 @@ Hamlets and hidden dojos have none.
   its roads lead to.
 - Roads stop at city walls, at settlements, and short of a dojo.
 
-## Recruitment posts
+## Barracks
 
-Every city a nation holds has a **recruitment post** (`core/RecruitmentPost`, built by `worldgen/RecruitmentPostPiece`)
+Every city a nation holds has a **barracks** (`core/Barracks`, built by `worldgen/BarracksPiece`)
 on the plot beside the town centre (the first plot of the block just east of it): a stone house for now, its door
 facing the road to the west, with a bedrock counter inside.
 
-- **Its people** take their places when its chunk first loads (`sim/RecruitmentPosts`), once: five swordsmen in iron
+- **Its people** take their places when its chunk first loads (`sim/BarracksPeople`), once: five swordsmen in iron
   on the city owner's Recruits team, holding their posts (two beside the door outside, three within), and a
   **recruiter** (`npc/Recruiter`) behind the counter facing the door, named for their nation ("Recruiter of ..."); kept
   with the world, still, and unhurtable.
@@ -1051,9 +1051,21 @@ the overworld loads, and runs once per site, on first use. On seed 12345 it adds
 all 6 storm-wall Empires keep their capitals (4 of them moved). Only a site with no land within 1,024 blocks loses its
 Empire.
 
-- **Grid:** a 483 × 483 square. 3-wide roads run every 32 blocks in both directions, with an edge road all round,
-  making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town centre
-  (well or meeting point).
+- **Grid:** a 483 × 483 square. 3-wide gravel roads run every 32 blocks in both directions, with an edge road all
+  round, making 15 × 15 city blocks. Each block is split into four 14 × 14 plots. The middle block holds a vanilla town
+  centre (well or meeting point).
+- **Noble district** (`style/CityPlan`, where the style has a Palace): cobblestone roads run from its gates to the
+  Palace, and a straight cobblestone spur from each noble building (tower) to the nearest road; the buildings stand 5–10
+  blocks apart. The Barracks stand outside it: on the block east of the town centre's, or the nearest block outside.
+- **Town square:** a blank 14 × 14 plot before the church's door, with the plains village fountain in its middle.
+- **Outside noble district** (`core/NobleAnnex`): for half the seat cities the world map picks a side (never the
+  harbour's) with land and room, and roads leave by another gate and go round it. Where the style has a Palace, the
+  district stands there instead of inside: 15–20 blocks past the city's wall, its middle up to 15 blocks to either side
+  of the gate, on a stone platform 10 blocks above the plate whose easing runs 1 in 1 (the city's carve and fill rules,
+  steeper), walled all round in the style's walls. A 3-wide stone path (slabs on the half steps) climbs from the city's
+  gate to the district's no steeper than 1 in 2, bowing out where the gap is too short and bending when the gates are
+  out of line. The church then stands on the town centre. Its ground and buildings are laid by tiles of the
+  `city_slope` structure.
 - **Buildings:** every plot gets a building from the vanilla village houses pool of the city's style, turned so its
   entrance faces a road and placed against it. Villagers, cats and other add-ons attach through the building's own
   jigsaws, as in vanilla. Zombie variants are skipped.

@@ -26,7 +26,7 @@ public final class ConquestEntities {
                     .updateInterval(3)
                     .build(RafasConquest.MOD_ID + ":townsperson"));
 
-    /** A recruitment post's recruiter: kept with the world, sent to clients within 64 blocks. */
+    /** A barracks' recruiter: kept with the world, sent to clients within 64 blocks. */
     public static final DeferredHolder<EntityType<?>, EntityType<Recruiter>> RECRUITER = ENTITY_TYPES.register("recruiter",
             () -> EntityType.Builder.<Recruiter>of(Recruiter::new, MobCategory.MISC)
                     .sized(0.6F, 1.8F)

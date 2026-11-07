@@ -2,7 +2,11 @@ package rafasconquest.style;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NobleDistrictTest {
@@ -28,6 +32,36 @@ class NobleDistrictTest {
             assertEquals(bps, CityPlan.district(bps, 2)[1] + CityPlan.district(bps, 2)[2]);
             assertEquals(0, CityPlan.district(bps, 3)[0]);
         }
+    }
+
+    @Test
+    void theBarracksStandOutsideTheNobleDistrict() {
+        for (int bps : new int[]{5, 10, 15, 25}) {
+            int c = bps / 2;
+            for (int edge = -1; edge < 4; edge++) {
+                int[] d = CityPlan.district(bps, edge);
+                int[] b = CityPlan.barracksBlock(bps, c, d[0], d[0] + d[2], d[1], d[1] + d[2]);
+                boolean inside = b[0] >= d[0] && b[0] < d[0] + d[2] && b[1] >= d[1] && b[1] < d[1] + d[2];
+                assertTrue(!inside && !(b[0] == c && b[1] == c), bps + " " + edge);
+            }
+        }
+        assertArrayEquals(new int[]{6, 5}, CityPlan.barracksBlock(10, 5, 0, 0, 0, 0)); // no district: east of the centre
+    }
+
+    @Test
+    void aSpurRunsFromTheDoorToTheNearestRoad() {
+        int[] bounds = {0, 100, 0, 100};
+        CityPlan.Piece tower = new CityPlan.Piece(CityPlan.Kind.NOBLE, "t", 40, 40, 10, 10, 5, 0); // door north
+        List<int[]> roads = List.of(new int[]{0, 20, 99, 22});
+        assertArrayEquals(new int[][]{{44, 23, 46, 39}}, CityPlan.spur(tower, List.of(tower), roads, bounds).toArray(int[][]::new));
+        // Another building in the way north: east to the road there instead.
+        CityPlan.Piece other = new CityPlan.Piece(CityPlan.Kind.NOBLE, "o", 40, 25, 10, 10, 5, 0);
+        List<int[]> both = List.of(roads.get(0), new int[]{60, 0, 62, 99});
+        assertArrayEquals(new int[][]{{50, 44, 59, 46}}, CityPlan.spur(tower, List.of(tower, other), both, bounds).toArray(int[][]::new));
+        // Only the road north: out east, then turning north past the other building.
+        assertArrayEquals(new int[][]{{50, 44, 52, 46}, {50, 23, 52, 43}},
+                CityPlan.spur(tower, List.of(tower, other), roads, bounds).toArray(int[][]::new));
+        assertNull(CityPlan.spur(tower, List.of(tower, other), List.of(), bounds));
     }
 
     @Test

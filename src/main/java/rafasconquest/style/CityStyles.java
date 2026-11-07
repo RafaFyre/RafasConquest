@@ -62,7 +62,7 @@ public final class CityStyles {
         PALACES.clear();
         SHARES.clear();
         CityPlan.forget();
-        rafasconquest.sim.RecruitmentPosts.forgetSanctums();
+        rafasconquest.sim.BarracksPeople.forgetSanctums();
     }
 
     /** The homeland of the nation that founded a city, or null if no nation did. */

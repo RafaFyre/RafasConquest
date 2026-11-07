@@ -18,15 +18,15 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
-import rafasconquest.core.RecruitmentPost;
+import rafasconquest.core.Barracks;
 
 /**
- * A city's recruitment post ({@link RecruitmentPost}), built in code for now: a stone house on the city's plate, a
+ * A city's barracks ({@link Barracks}), built in code for now: a stone house on the city's plate, a
  * stone brick floor, cobblestone walls on stone brick corners with windows, an oak door to the west, a stone brick slab
  * roof, lanterns, and the bedrock counter the recruiter stands behind. Its guards and recruiter are set there when its
- * chunk first loads ({@code sim.RecruitmentPosts}).
+ * chunk first loads ({@code sim.BarracksPeople}).
  */
-public class RecruitmentPostPiece extends StructurePiece {
+public class BarracksPiece extends StructurePiece {
     private static final int WALL_HEIGHT = 4;
 
     private final int plotX;
@@ -34,8 +34,8 @@ public class RecruitmentPostPiece extends StructurePiece {
     /** The city's plate: the floor stands on it. */
     private final int floor;
 
-    public RecruitmentPostPiece(RecruitmentPost post, int plate) {
-        super(ConquestWorldgen.RECRUITMENT_POST_PIECE.get(), 0,
+    public BarracksPiece(Barracks post, int plate) {
+        super(ConquestWorldgen.BARRACKS_PIECE.get(), 0,
                 new BoundingBox(post.x0(), plate, post.z0(), post.x1(), plate + WALL_HEIGHT + 1, post.z1()));
         this.plotX = post.plotX();
         this.plotZ = post.plotZ();
@@ -43,8 +43,8 @@ public class RecruitmentPostPiece extends StructurePiece {
         setOrientation(null);
     }
 
-    public RecruitmentPostPiece(CompoundTag tag) {
-        super(ConquestWorldgen.RECRUITMENT_POST_PIECE.get(), tag);
+    public BarracksPiece(CompoundTag tag) {
+        super(ConquestWorldgen.BARRACKS_PIECE.get(), tag);
         this.plotX = tag.getInt("plotX");
         this.plotZ = tag.getInt("plotZ");
         this.floor = tag.getInt("floor");
@@ -60,7 +60,7 @@ public class RecruitmentPostPiece extends StructurePiece {
     @Override
     public void postProcess(WorldGenLevel level, StructureManager structures, ChunkGenerator generator, RandomSource random,
                             BoundingBox chunk, ChunkPos chunkPos, BlockPos pivot) {
-        RecruitmentPost post = new RecruitmentPost(plotX, plotZ);
+        Barracks post = new Barracks(plotX, plotZ);
         BlockState bricks = Blocks.STONE_BRICKS.defaultBlockState();
         BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
         for (int x = post.x0(); x <= post.x1(); x++) {

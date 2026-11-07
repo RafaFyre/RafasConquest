@@ -59,6 +59,7 @@ public final class ConquestEvents {
             ConquestRuntime.publishCountryside(new rafasconquest.worldgen.CountryIndex(map.settlements()));
             rafasconquest.core.CityLayout.publishBuilt((min, max) -> ConquestRuntime.cities().inBox(min[0], min[1], max[0], max[1]));
             rafasconquest.core.CityLayout.publishWallOutsets(rafasconquest.style.CityPlan::wallOutset);
+            rafasconquest.core.CityLayout.publishAnnexRegions(rafasconquest.style.CityPlan::annexRegion);
         }
     }
 
@@ -218,7 +219,7 @@ public final class ConquestEvents {
         WorldSettings settings = ConquestRuntime.settings();
         // Walls (banners, guards), and the inside of cities and castles' keeps (the posts' and churches' people, lords).
         if (settings != null && settings.citiesEnabled() && CityLayout.chunkInCity(level.getSeed(), settings, chunk.getPos().x, chunk.getPos().z)
-                || rafasconquest.sim.RecruitmentPosts.holdInChunk(chunk.getPos().x, chunk.getPos().z)) {
+                || rafasconquest.sim.BarracksPeople.holdInChunk(chunk.getPos().x, chunk.getPos().z)) {
             ConquestServer.queueBannerChunk(chunk.getPos());
         }
         for (Structure structure : chunk.getAllStarts().keySet()) {

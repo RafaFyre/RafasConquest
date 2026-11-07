@@ -19,7 +19,7 @@ import rafasconquest.core.CityLayout;
 /**
  * A city's gold church ({@link GoldChurch}): vanilla's plains temple with its cobblestone turned to gold blocks (its
  * stairs and slabs to smooth sandstone ones, so steps stay steps). The hold's lord stands inside, set there when its
- * chunk first loads ({@code sim.RecruitmentPosts}).
+ * chunk first loads ({@code sim.BarracksPeople}).
  */
 public class GoldChurchPiece extends StructurePiece {
     private final int plotX;

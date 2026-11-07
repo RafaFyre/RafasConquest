@@ -135,6 +135,16 @@ public final class CityLayout {
     }
 
     /**
+     * Where each city's outside noble district ({@link NobleAnnex}) shapes the land, city-local {minX, minZ, maxX,
+     * maxZ}, or null for none; set from the style folders when the overworld loads.
+     */
+    private static volatile java.util.function.Function<Site, int[]> annexRegions = site -> null;
+
+    public static void publishAnnexRegions(java.util.function.Function<Site, int[]> regions) {
+        annexRegions = regions;
+    }
+
+    /**
      * World coordinate, along one axis, of the start of a cell: its middle, except that an edge cell's start moves
      * outward, by whole chunks, until its terrain's slope is within the engine's 8-chunk reach of it, as long as the
      * cell's own far road stays in reach too.
@@ -195,7 +205,7 @@ public final class CityLayout {
     public static final int RING_ROAD_WIDTH = ROAD_WIDTH;
     /**
      * How much wider than the other roads the gate avenue is (5 to their 3). It widens toward the origin, into the block
-     * before it, so the town centre's block and the recruitment post's beside it stay whole.
+     * before it, so the town centre's block and the barracks' beside it stay whole.
      */
     public static final int AVENUE_EXTRA = 2;
 
@@ -471,9 +481,15 @@ public final class CityLayout {
 
     /**
      * A stretch of a city's outer slope ({@link CityTerrain#slopeTiles}), its own structure start at its middle so the
-     * slope can run further than an edge cell reaches. {@code minX}..{@code maxZ} are city-local.
+     * slope can run further than an edge cell reaches; or, with {@code annex}, a stretch of its outside noble district
+     * and the land about it, which also builds that district's pieces whose middles it holds. {@code minX}..{@code maxZ}
+     * are city-local.
      */
-    public record SlopeTile(Site city, int minX, int minZ, int maxX, int maxZ) {
+    public record SlopeTile(Site city, int minX, int minZ, int maxX, int maxZ, boolean annex) {
+        public boolean holds(int lx, int lz) {
+            return lx >= minX && lx <= maxX && lz >= minZ && lz <= maxZ;
+        }
+
         public int x() {
             return city.originX() + Math.floorDiv(minX + maxX, 2);
         }
@@ -486,7 +502,20 @@ public final class CityLayout {
     public static List<SlopeTile> slopeTiles(Site city) {
         List<SlopeTile> tiles = new ArrayList<>();
         for (int[] t : CityTerrain.slopeTiles(city.cells(), wallOutsets.applyAsInt(city))) {
-            tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3]));
+            tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], false));
+        }
+        tiles.addAll(annexTiles(city));
+        return tiles;
+    }
+
+    /** The tiles of a city's outside noble district and the land about it, none if it has none. */
+    public static List<SlopeTile> annexTiles(Site city) {
+        int[] r = annexRegions.apply(city);
+        List<SlopeTile> tiles = new ArrayList<>();
+        if (r != null) {
+            for (int[] t : CityTerrain.tiles(r[0], r[1], r[2], r[3])) {
+                tiles.add(new SlopeTile(city, t[0], t[1], t[2], t[3], true));
+            }
         }
         return tiles;
     }
@@ -496,7 +525,7 @@ public final class CityLayout {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
         // shortcut: assumes no style's wall stands more than ~130 blocks out past the square.
-        int r = MAX_HALF_EXTENT + 128 + CityTerrain.SLOPE_REACH;
+        int r = MAX_HALF_EXTENT + 128 + CityTerrain.SLOPE_REACH + NobleAnnex.MAX_REACH;
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (SlopeTile t : slopeTiles(city)) {
                 if (t.x() >= minX && t.x() <= minX + 15 && t.z() >= minZ && t.z() <= minZ + 15) {

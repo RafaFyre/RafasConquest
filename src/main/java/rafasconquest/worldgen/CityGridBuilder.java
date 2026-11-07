@@ -23,7 +23,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.CityLayout;
-import rafasconquest.core.RecruitmentPost;
+import rafasconquest.core.Barracks;
 import rafasconquest.core.CityTerrain;
 import rafasconquest.core.SeedHash;
 
@@ -99,6 +99,31 @@ public final class CityGridBuilder {
         }
         // computeIfAbsent makes the other cells of this city wait for the first one's plan instead of redoing it.
         return PLANS.computeIfAbsent(key, k -> planAndLog(ctx, site));
+    }
+
+    /** An outside noble district's platform plan and its square's world corner. */
+    public record Platform(CityTerrain.Plan plan, int x, int z) {
+    }
+
+    private static final Map<Long, Optional<Platform>> PLATFORMS = new ConcurrentHashMap<>();
+
+    /** The platform of a city's outside noble district ({@link rafasconquest.core.NobleAnnex}), or null if it has none. */
+    @org.jetbrains.annotations.Nullable
+    public static Platform platform(Structure.GenerationContext ctx, CityLayout.Site site) {
+        int[] a = rafasconquest.style.CityPlan.of(site).annex();
+        if (a == null) {
+            return null;
+        }
+        long key = SeedHash.hash(ctx.seed(), site.x(), site.z());
+        if (PLATFORMS.size() >= MAX_CACHED_PLANS) {
+            PLATFORMS.clear();
+        }
+        return PLATFORMS.computeIfAbsent(key, k -> {
+            int x = site.originX() + a[0];
+            int z = site.originZ() + a[1];
+            int plate = terrainPlan(ctx, site).plateY() + rafasconquest.core.NobleAnnex.RISE;
+            return Optional.of(new Platform(CityTerrain.platform(x, z, a[2], a[3], plate, (hx, hz) -> surface(ctx, hx, hz)), x, z));
+        }).orElse(null);
     }
 
     /** The city survey's threads: a quarter of the CPU's (at least 2), never all of them. */
@@ -179,7 +204,7 @@ public final class CityGridBuilder {
         int cellMaxZ = oz + CityLayout.cellMax(cellZ);
 
         // The ground first: everything else in the cell is built on the flattened plate.
-        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY));
+        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY, platform(ctx, site)));
 
         // The styled walls and the noble district, laid out for the whole city.
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site); // by its founder, held or not
@@ -194,14 +219,14 @@ public final class CityGridBuilder {
             int x = ox + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.x0() && k < styled.x1();
             for (int[] run : merged(runs(cellMinZ - oz, cellMaxZ - oz, cut ? styled.areaMinZ() : 0, cut ? styled.areaMaxZ() : -1), k, true, claims)) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), variant));
+                pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), false));
             }
         }
         for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.z0() && k < styled.z1();
             for (int[] run : merged(runs(cellMinX - ox, cellMaxX - ox, cut ? styled.areaMinX() : 0, cut ? styled.areaMaxX() : -1), k, false, claims)) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), variant));
+                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), false));
             }
         }
         // The gate avenues' extra width, on the side toward the origin.
@@ -248,34 +273,28 @@ public final class CityGridBuilder {
                 int[] bsx = CityLayout.blockSpan(site.blocksPerSide(), bx);
                 int[] bsz = CityLayout.blockSpan(site.blocksPerSide(), bz);
                 List<rafasconquest.style.CityPlan.Piece> here = claims.stream().filter(p -> overlaps(p, bsx[0], bsz[0], bsx[1] - bsx[0] + 1, bsz[1] - bsz[0] + 1)).toList();
-                if (bx == site.centerBlock() && bz == site.centerBlock()) {
-                    townCenter(blockX, blockZ);
-                } else if (!(bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site)) && styledHouses().any()) {
+                if (bx == site.centerBlock() && bz == site.centerBlock() && here.isEmpty()) {
+                    townCenter(blockX, blockZ); // unless the church stands on it (a city whose noble district is outside)
+                } else if (!(bx == Barracks.blockX(site) && bz == Barracks.blockZ(site)) && styledHouses().any()) {
                     packBlock(bx, bz, here); // the style's own houses, of any size
                 } else {
                     for (int qx = 0; qx < 2; qx++) {
                         for (int qz = 0; qz < 2; qz++) {
-                            boolean postBlock = bx == RecruitmentPost.blockX(site) && bz == RecruitmentPost.blockZ(site);
-                            if (noble && postBlock) {
-                                // A noble district against a wall leaves the post's block outside it: the plan has the
-                                // Palace and Barracks, and the mod's post where it stands.
-                                if (qx == 0 && qz == 0 && styled.has(rafasconquest.style.CityPlan.Kind.POST)) {
-                                    continue;
-                                }
-                            } else if (qx == 0 && qz == 0 && postBlock && heldByANation(site)
+                            boolean postBlock = bx == Barracks.blockX(site) && bz == Barracks.blockZ(site);
+                            if (qx == 0 && qz == 0 && postBlock && heldByANation(site)
                                     && !styled.has(rafasconquest.style.CityPlan.Kind.BARRACKS)) { // a Barracks too big for the plot has its own ground
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = barracks == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(barracks,
                                         blockX + CityLayout.PLOT_SIZE / 2, plate, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
                                 if (styledPiece.isEmpty()) {
-                                    pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+                                    pieces.addPiece(new BarracksPiece(Barracks.of(site), plate));
                                 }
                                 styledPiece.forEach(pieces::addPiece);
-                                continue; // the recruitment post has this plot
+                                continue; // the barracks has this plot
                             }
-                            if (!noble && qx == 0 && qz == 1 && postBlock && heldByANation(site)) {
-                                int[] church = RecruitmentPost.of(site).church();
+                            if (!noble && styled.annex() == null && qx == 0 && qz == 1 && postBlock && heldByANation(site)) {
+                                int[] church = Barracks.of(site).church();
                                 // The Palace: from the style folders where its slot has a file, else the gold church.
                                 String palace = rafasconquest.style.CityStyles.palace(site);
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = palace == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(palace,
@@ -306,10 +325,23 @@ public final class CityGridBuilder {
             }
         }
 
-        // The styled pieces this cell builds: the noble district's and the walls.
+        // The noble district's cobbled roads, this cell's share, before its buildings so they win where they touch.
+        for (int[] r : styled.roads()) {
+            if (styled.inAnnex(r)) {
+                continue; // the outside district's tiles lay its own
+            }
+            int rx0 = Math.max(r[0], cellMinX - ox);
+            int rx1 = Math.min(r[2], cellMaxX - ox);
+            int rz0 = Math.max(r[1], cellMinZ - oz);
+            int rz1 = Math.min(r[3], cellMaxZ - oz);
+            if (rx0 <= rx1 && rz0 <= rz1) {
+                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + rx0, plate, oz + rz0, ox + rx1, plate, oz + rz1), true));
+            }
+        }
+        // The styled pieces this cell builds: the noble district's, the church's and the walls.
         for (rafasconquest.style.CityPlan.Piece p : styled.inCell(site.cells(), cellX, cellZ)) {
-            if (p.kind() == rafasconquest.style.CityPlan.Kind.POST) {
-                pieces.addPiece(new RecruitmentPostPiece(RecruitmentPost.of(site), plate));
+            if (p.kind() == rafasconquest.style.CityPlan.Kind.SQUARE) {
+                townCenter(FOUNTAIN, ox + p.centreX(), oz + p.centreZ()); // shortcut: the plains fountain always; later from the data packs
                 continue;
             }
             rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), plate, oz + p.minZ(), p.turns()).forEach(pieces::addPiece);
@@ -336,8 +368,8 @@ public final class CityGridBuilder {
             int ox = site.originX();
             int oz = site.originZ();
             pieces.addPiece(alongX
-                    ? new CityRoadPiece(new BoundingBox(ox + run[0], plate, oz + z0, ox + run[1], plate, oz + z1), variant)
-                    : new CityRoadPiece(new BoundingBox(ox + x0, plate, oz + run[0], ox + x1, plate, oz + run[1]), variant));
+                    ? new CityRoadPiece(new BoundingBox(ox + run[0], plate, oz + z0, ox + run[1], plate, oz + z1), false)
+                    : new CityRoadPiece(new BoundingBox(ox + x0, plate, oz + run[0], ox + x1, plate, oz + run[1]), false));
         }
     }
 
@@ -386,7 +418,7 @@ public final class CityGridBuilder {
         return runs;
     }
 
-    /** Whether a nation holds the city's province (by the world map): only such a city has a recruitment post. */
+    /** Whether a nation holds the city's province (by the world map): only such a city has a barracks. */
     public static boolean heldByANation(CityLayout.Site city) {
         rafasconquest.map.BaseMap map = ConquestRuntime.map();
         return map != null && map.holderOf(map.provinceIndexAt(city.x(), city.z())) != null;
@@ -524,7 +556,7 @@ public final class CityGridBuilder {
         for (int x = 0; x < site.blocksPerSide(); x++) {
             for (int z = 0; z < site.blocksPerSide(); z++) {
                 if (!(styled.noble() && styled.nobleBlock(x, z)) && !(x == site.centerBlock() && z == site.centerBlock())
-                        && !(x == RecruitmentPost.blockX(site) && z == RecruitmentPost.blockZ(site))) {
+                        && !(x == Barracks.blockX(site) && z == Barracks.blockZ(site))) {
                     blocks.add(new int[]{x, z});
                 }
             }
@@ -608,13 +640,21 @@ public final class CityGridBuilder {
             if (element == EmptyPoolElement.INSTANCE || element.toString().contains("/zombie/")) {
                 continue;
             }
-            Rotation rotation = Rotation.getRandom(random);
-            BoundingBox at = element.getBoundingBox(templates, new BlockPos(cx, 0, cz), rotation);
-            // Bottom layer replaces the plate's surface, as vanilla does for a village's town centre.
-            BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), plate - at.minY(), cz + (cz - at.getCenter().getZ()));
-            place(element, pos, rotation, element.getBoundingBox(templates, pos, rotation), 0);
+            townCenter(element, cx, cz);
             return;
         }
+    }
+
+    /** The town square's centrepiece: the village fountain. */
+    private static final StructurePoolElement FOUNTAIN = StructurePoolElement.single("minecraft:village/plains/town_centers/plains_fountain_01")
+            .apply(StructureTemplatePool.Projection.RIGID);
+
+    /** A town centre piece centred on world (cx, cz), turned at random, its bottom layer replacing the plate's surface as vanilla does. */
+    private void townCenter(StructurePoolElement element, int cx, int cz) {
+        Rotation rotation = Rotation.getRandom(random);
+        BoundingBox at = element.getBoundingBox(templates, new BlockPos(cx, 0, cz), rotation);
+        BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), plate - at.minY(), cz + (cz - at.getCenter().getZ()));
+        place(element, pos, rotation, element.getBoundingBox(templates, pos, rotation), 0);
     }
 
     /**

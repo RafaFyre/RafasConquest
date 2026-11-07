@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PlaceMusicTest {
     private static final int SIZE = 3 * CityLayout.BLOCKS_PER_CELL * CityLayout.ROAD_PERIOD + CityLayout.ROAD_WIDTH;
-    private static final CityPlan.Plan PLAIN = new CityPlan.Plan(0, 0, 0, 0, false, List.of());
+    private static final CityPlan.Plan PLAIN = new CityPlan.Plan(0, 0, 0, 0, false, List.of(), -1, -1, List.of());
     /** Noble district over blocks [2, 4) × [2, 4). */
-    private static final CityPlan.Plan NOBLE = new CityPlan.Plan(2, 4, 2, 4, true, List.of());
+    private static final CityPlan.Plan NOBLE = new CityPlan.Plan(2, 4, 2, 4, true, List.of(), -1, -1, List.of());
 
     @Test
     void streetsAreInsideTheWalls() {

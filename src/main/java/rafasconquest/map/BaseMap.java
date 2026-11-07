@@ -35,7 +35,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                       int[] holders, int[] ground, boolean[] wet, rafasconquest.people.Realm realm,
                       List<rafasconquest.core.Dojos.Dojo> dojos, rafasconquest.core.Roads.Plan roads) {
     /** Raise when the drawing changes, so saved maps are redrawn. */
-    private static final int FORMAT = 26;
+    private static final int FORMAT = 27;
 
     /** The pixel (index) at world (x, z), or -1 off the map. */
     public int pixelAt(double x, double z) {
@@ -132,6 +132,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
                 out.writeByte(c.tier().ordinal());
                 out.writeShort(c.province());
                 out.writeByte(c.harbour());
+                out.writeByte(c.noble());
             }
             out.writeInt(settlements.size());
             for (Countryside.Settlement s : settlements) {
@@ -312,7 +313,7 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
             List<SeatCities.City> cities = new ArrayList<>(cityCount);
             for (int i = 0; i < cityCount; i++) {
                 cities.add(new SeatCities.City(in.readInt(), in.readInt(), in.readByte(), TitleMap.Tier.values()[in.readByte()],
-                        in.readShort(), in.readByte()));
+                        in.readShort(), in.readByte(), in.readByte()));
             }
             int settlementCount = in.readInt();
             if (settlementCount < 0 || settlementCount > Short.MAX_VALUE) {

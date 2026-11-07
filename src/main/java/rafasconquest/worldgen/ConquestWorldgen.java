@@ -41,8 +41,10 @@ public final class ConquestWorldgen {
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_ROAD_PIECE = PIECE_TYPES.register("city_road", () -> (context, tag) -> new CityRoadPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> HARBOUR_PIECE = PIECE_TYPES.register("harbour", () -> (context, tag) -> new HarbourPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> CITY_TERRAIN_PIECE =PIECE_TYPES.register("city_terrain", () -> (context, tag) -> new CityTerrainPiece(tag));
-    public static final DeferredHolder<StructurePieceType, StructurePieceType> RECRUITMENT_POST_PIECE = PIECE_TYPES.register("recruitment_post",
-            () -> (context, tag) -> new RecruitmentPostPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> BARRACKS_PIECE = PIECE_TYPES.register("recruitment_post", // the old name, kept so saved worlds load
+            () -> (context, tag) -> new BarracksPiece(tag));
+    public static final DeferredHolder<StructurePieceType, StructurePieceType> NOBLE_PATH_PIECE = PIECE_TYPES.register("noble_path",
+            () -> (context, tag) -> new NoblePathPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> GOLD_CHURCH_PIECE = PIECE_TYPES.register("gold_church",
             () -> (context, tag) -> new GoldChurchPiece(tag));
     public static final DeferredHolder<StructurePieceType, StructurePieceType> STYLE_PIECE = PIECE_TYPES.register("style",

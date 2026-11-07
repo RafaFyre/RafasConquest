@@ -5,7 +5,7 @@ import rafasconquest.RafasConquest;
 import rafasconquest.core.CityLayout;
 import rafasconquest.core.Countryside;
 import rafasconquest.core.Dojos;
-import rafasconquest.core.RecruitmentPost;
+import rafasconquest.core.Barracks;
 import rafasconquest.data.DataFiles;
 import rafasconquest.data.Dialogue;
 import rafasconquest.map.BaseMap;
@@ -111,7 +111,7 @@ public final class Quests {
         int province = map.provinceIndexAt(city.x(), city.z());
         BaseMap.Nation nation = map.holderOf(province);
         int nationIndex = nation == null ? -1 : map.nations().indexOf(nation);
-        RecruitmentPost post = RecruitmentPost.of(city);
+        Barracks post = Barracks.of(city);
         Random random = new Random(seed ^ (province * 0x9E3779B97F4A7C15L) ^ (day * 0xC2B2AE3D27D4EB4FL));
         List<Quest> quests = new ArrayList<>();
         int slot = 0;

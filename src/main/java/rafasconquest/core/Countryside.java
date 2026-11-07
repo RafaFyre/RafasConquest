@@ -195,8 +195,7 @@ public final class Countryside {
 
     private static boolean nearCity(List<SeatCities.City> cities, int x, int z, int reach) {
         for (SeatCities.City c : cities) {
-            int apart = c.reach() + reach + SeatCities.CLEARANCE;
-            if (Math.abs(c.x() - x) < apart && Math.abs(c.z() - z) < apart) {
+            if (c.keeps(x, z, reach + SeatCities.CLEARANCE)) {
                 return true;
             }
         }

@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /**
- * Someone to talk to (right-click: {@link rafasconquest.peerage.Talk}): a recruitment post's recruiter, behind the
+ * Someone to talk to (right-click: {@link rafasconquest.peerage.Talk}): a barracks' recruiter, behind the
  * counter facing the door, the nation's officer there, who enlists players ({@link Recruitment}) and gives military
  * quests; or a hold's noble ({@code person}, a character of the world's realm), at their city's post or in their castle's
  * keep, who gives noble quests, knighthood and land. Kept with the world; never moves, can't be hurt or pushed.

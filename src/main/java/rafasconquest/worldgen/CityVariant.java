@@ -21,11 +21,11 @@ import java.util.Optional;
  * come from the vanilla village pools of the same style.
  */
 public enum CityVariant {
-    DESERT("desert", Blocks.SMOOTH_SANDSTONE.defaultBlockState(), Blocks.SMOOTH_SANDSTONE.defaultBlockState(), Blocks.SAND.defaultBlockState()),
-    SNOWY("snowy", Blocks.DIRT_PATH.defaultBlockState(), Blocks.SPRUCE_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
-    SAVANNA("savanna", Blocks.DIRT_PATH.defaultBlockState(), Blocks.ACACIA_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
-    TAIGA("taiga", Blocks.DIRT_PATH.defaultBlockState(), Blocks.SPRUCE_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
-    PLAINS("plains", Blocks.DIRT_PATH.defaultBlockState(), Blocks.OAK_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState());
+    DESERT("desert", Blocks.SMOOTH_SANDSTONE.defaultBlockState(), Blocks.SAND.defaultBlockState()),
+    SNOWY("snowy", Blocks.SPRUCE_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
+    SAVANNA("savanna", Blocks.ACACIA_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
+    TAIGA("taiga", Blocks.SPRUCE_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState()),
+    PLAINS("plains", Blocks.OAK_PLANKS.defaultBlockState(), Blocks.GRASS_BLOCK.defaultBlockState());
 
     private final String name;
     private final TagKey<Biome> biomes;
@@ -35,11 +35,10 @@ public enum CityVariant {
     private final ResourceKey<StructureTemplatePool> wall;
     private final ResourceKey<StructureTemplatePool> gate;
     private final ResourceKey<StructureTemplatePool> corner;
-    private final BlockState road;
     private final BlockState bridge;
     private final BlockState ground;
 
-    CityVariant(String name, BlockState road, BlockState bridge, BlockState ground) {
+    CityVariant(String name, BlockState bridge, BlockState ground) {
         this.name = name;
         this.biomes = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "city/" + name));
         this.townCenters = vanillaPool(name, "town_centers");
@@ -48,7 +47,6 @@ public enum CityVariant {
         this.wall = modPool("city/wall/" + name);
         this.gate = modPool("city/gate/" + name);
         this.corner = modPool("city/corner/" + name);
-        this.road = road;
         this.bridge = bridge;
         this.ground = ground;
     }
@@ -92,10 +90,6 @@ public enum CityVariant {
     /** rafasconquest:city/corner/&lt;variant&gt;: the first segment of each side, lengthened to cover the corner. */
     public ResourceKey<StructureTemplatePool> corner() {
         return corner;
-    }
-
-    public BlockState road() {
-        return road;
     }
 
     public BlockState bridge() {

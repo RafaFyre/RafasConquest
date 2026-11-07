@@ -49,6 +49,11 @@ public final class BlockPacker {
 
     /** {@link #pack}, building each no more times than {@code most} gives it (null: no limit). */
     public static List<Placed> pack(List<Rect> free, int width, int depth, List<Size> sizes, Random random, int[] most) {
+        return pack(free, width, depth, sizes, random, most, GAP, GAP);
+    }
+
+    /** {@link #pack}, each building kept {@code minGap} to {@code maxGap} blocks (at random) from the next one placed beside it. */
+    public static List<Placed> pack(List<Rect> free, int width, int depth, List<Size> sizes, Random random, int[] most, int minGap, int maxGap) {
         List<Placed> placed = new ArrayList<>();
         int[] left = most == null ? null : most.clone();
         List<Integer> open = new ArrayList<>();
@@ -76,8 +81,9 @@ public final class BlockPacker {
                 }
                 free.remove(best);
                 // The room left: beside it along its own depth, and the whole width beyond it.
-                int rw = w + GAP;
-                int rd = d + GAP;
+                int gap = minGap == maxGap ? minGap : minGap + random.nextInt(maxGap - minGap + 1); // no draw when fixed: houses keep their layout
+                int rw = w + gap;
+                int rd = d + gap;
                 if (best.w() - rw > 0) {
                     free.add(new Rect(best.x() + rw, best.z(), best.w() - rw, Math.min(rd, best.d())));
                 }

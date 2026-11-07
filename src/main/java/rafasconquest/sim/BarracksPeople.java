@@ -8,7 +8,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import rafasconquest.bridge.RecruitsBridge;
 import rafasconquest.core.CityLayout;
-import rafasconquest.core.RecruitmentPost;
+import rafasconquest.core.Barracks;
 import rafasconquest.data.ConquestSavedData;
 import rafasconquest.faction.Faction;
 import rafasconquest.npc.ConquestEntities;
@@ -16,15 +16,15 @@ import rafasconquest.npc.Recruiter;
 import rafasconquest.worldgen.CityGridBuilder;
 
 /**
- * Sets each recruitment post's people at their places ({@link RecruitmentPost}) when its chunk first loads: the five
+ * Sets each barracks' people at their places ({@link Barracks}) when its chunk first loads: the five
  * guards of the city's owner, and the recruiter behind the counter, all facing the door (west). Each place is filled
  * once (and remembered), like the city walls' guards.
  */
-public final class RecruitmentPosts {
+public final class BarracksPeople {
     /** West: toward the door and the road beyond it. */
     private static final float FACING = 90.0F;
 
-    private RecruitmentPosts() {
+    private BarracksPeople() {
     }
 
     /** Returns how many were set at their places. */
@@ -34,7 +34,7 @@ public final class RecruitmentPosts {
         int r = CityLayout.MAX_HALF_EXTENT;
         int placed = 0;
         for (CityLayout.Site site : CityLayout.allSitesInBox(level.getSeed(), data.settings(), minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
-            RecruitmentPost post = RecruitmentPost.of(site);
+            Barracks post = Barracks.of(site);
             if (post.x1() < minX || post.plotX() > minX + 15 || post.z1() < minZ || post.z0() > minZ + 15 || !CityGridBuilder.heldByANation(site)) {
                 continue;
             }
@@ -129,7 +129,7 @@ public final class RecruitmentPosts {
                 if (rafasconquest.style.CityPlan.palaceStands(site)) {
                     continue; // a style's Palace stands here: its Character Markers bring its people
                 }
-                int[] plot = RecruitmentPost.of(site).church();
+                int[] plot = Barracks.of(site).church();
                 if (Math.abs((plot[0] >> 4) - chunk.getPos().x) > 1 || Math.abs((plot[1] >> 4) - chunk.getPos().z) > 1) {
                     continue; // the church lies in other chunks
                 }

@@ -3,12 +3,12 @@ package rafasconquest.core;
 import java.util.List;
 
 /**
- * A city's recruitment post: a stone house on the plot beside the town centre (the first plot of the city block just
+ * A city's barracks: a stone house on the plot beside the town centre (the first plot of the city block just
  * east of it, its door facing the road to the west), where a recruiter stands behind a bedrock counter facing the door,
  * guarded by five soldiers (two flanking the door outside, three within). Only a city a nation holds has one.
  * Positions are in blocks, (x, z); heights are worked out where the post is built.
  */
-public record RecruitmentPost(int plotX, int plotZ) {
+public record Barracks(int plotX, int plotZ) {
     /** The house's walls: from (x0, z0) to (x1, z1), 9 × 9 blocks on the 14 × 14 plot. */
     public int x0() {
         return plotX + 1;
@@ -65,17 +65,17 @@ public record RecruitmentPost(int plotX, int plotZ) {
                 new int[]{plotX + 3, plotZ + 3}, new int[]{plotX + 3, plotZ + 9}, new int[]{plotX + 8, plotZ + 3});
     }
 
-    /** The city block holding the post: just east of the town centre's. */
+    /** The city block holding the barracks: just east of the town centre's, or the nearest one outside the noble district. */
     public static int blockX(CityLayout.Site city) {
-        return city.centerBlock() + 1;
+        return rafasconquest.style.CityPlan.barracksBlock(city)[0];
     }
 
     public static int blockZ(CityLayout.Site city) {
-        return city.centerBlock();
+        return rafasconquest.style.CityPlan.barracksBlock(city)[1];
     }
 
     /** A city's post (whether or not the city has one: only a held city does). */
-    public static RecruitmentPost of(CityLayout.Site city) {
-        return new RecruitmentPost(city.originX() + CityLayout.blockStart(blockX(city)), city.originZ() + CityLayout.blockStart(blockZ(city)));
+    public static Barracks of(CityLayout.Site city) {
+        return new Barracks(city.originX() + CityLayout.blockStart(blockX(city)), city.originZ() + CityLayout.blockStart(blockZ(city)));
     }
 }

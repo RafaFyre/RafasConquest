@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestEvents.java": {
-    "mtime": 1794026487.0262396,
-    "seen": 1794026741.6048033,
-    "ast_hash": "40ef336ce91f11d11e81bcab847b14c2",
+    "mtime": 1794068568.1501164,
+    "seen": 1794069112.681611,
+    "ast_hash": "8474b801fb38aea910c0d8690009f2d6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestGameRules.java": {
@@ -144,9 +144,9 @@
     "semantic_hash": "a195aafc7bd6761e11a506b654311894"
   },
   "src/main/java/rafasconquest/bridge/RecruitsFactions.java": {
-    "mtime": 1793928803.0781603,
-    "seen": 1793929199.9141028,
-    "ast_hash": "c081f7de54305b8ca701987e4532c738",
+    "mtime": 1794066917.4620452,
+    "seen": 1794067385.2038808,
+    "ast_hash": "70eb1d3f22811be081ba61db3f3773d1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/Terrain.java": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1793997814.5563607,
-    "seen": 1793997863.626924,
-    "ast_hash": "0107a75eb61068e7822af0bd39a76ffa",
+    "mtime": 1794066917.4720192,
+    "seen": 1794067385.2039819,
+    "ast_hash": "1d984f92c360ac957474ddc85b5262a1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
@@ -480,9 +480,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/ConquestContent.java": {
-    "mtime": 1793907875.4430053,
-    "seen": 1793908103.8288758,
-    "ast_hash": "739d4bbeb7af79603d5e9a475c3b44e4",
+    "mtime": 1794071987.6540015,
+    "seen": 1794072023.631101,
+    "ast_hash": "67dab52d8927f4965631b946e2172ba2",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/QuestBoardBlock.java": {
@@ -504,22 +504,22 @@
     "semantic_hash": "b89c83a8be1b95eb0a60ba040031dd56"
   },
   "src/main/java/rafasconquest/core/CityLayout.java": {
-    "mtime": 1793926900.1908517,
-    "seen": 1793926997.1572423,
-    "ast_hash": "e3ea74a95f31cbc5a1790bbd419b32ba",
+    "mtime": 1794068561.8136876,
+    "seen": 1794069112.6817636,
+    "ast_hash": "7c189fdf0ccac5b0d8269f96c6471c27",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/CityTerrain.java": {
-    "mtime": 1793926537.0846884,
-    "seen": 1793926652.7511334,
-    "ast_hash": "db29999b3df9157a32e269d3fe299b3f",
+    "mtime": 1794071936.1187997,
+    "seen": 1794072023.6311138,
+    "ast_hash": "d40decbad43bdca22c80c49b9141d52b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Countryside.java": {
-    "mtime": 1793497748.2967188,
-    "seen": 1793865705.7986448,
-    "ast_hash": "168ebe45ad2984d0b1a260a585cb53e8",
-    "semantic_hash": "168ebe45ad2984d0b1a260a585cb53e8"
+    "mtime": 1794068400.3223886,
+    "seen": 1794069112.681766,
+    "ast_hash": "d47fc58873acdeb4bccc158dad8fa5ce",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/DayClock.java": {
     "mtime": 1793054266.5651038,
@@ -575,22 +575,16 @@
     "ast_hash": "b859581559ef5c9ab17ab4a9d0e48bc2",
     "semantic_hash": "b859581559ef5c9ab17ab4a9d0e48bc2"
   },
-  "src/main/java/rafasconquest/core/RecruitmentPost.java": {
-    "mtime": 1793404097.56125,
-    "seen": 1793865705.7986548,
-    "ast_hash": "ab99cc6264d6bbd31c4654c920ae8d8c",
-    "semantic_hash": "ab99cc6264d6bbd31c4654c920ae8d8c"
-  },
   "src/main/java/rafasconquest/core/Roads.java": {
-    "mtime": 1793917471.3607411,
-    "seen": 1793917518.1730638,
-    "ast_hash": "07f56302d2bca1e3b2d49a647032bde8",
+    "mtime": 1794068423.8311133,
+    "seen": 1794069112.681782,
+    "ast_hash": "2910b288bd56a28571099d5b614532b0",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeatCities.java": {
-    "mtime": 1793909037.6855054,
-    "seen": 1793909162.0754743,
-    "ast_hash": "d9d14b493f52ff1ca439c1c37cd51075",
+    "mtime": 1794068395.203715,
+    "seen": 1794069112.681786,
+    "ast_hash": "0134f618ff9af35a38b0f19bfb360be8",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeedHash.java": {
@@ -708,9 +702,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMap.java": {
-    "mtime": 1793938264.1083007,
-    "seen": 1793938671.7813833,
-    "ast_hash": "1ce821e0afd9e66d312d17535f2b8c8c",
+    "mtime": 1794068405.331557,
+    "seen": 1794069112.6818225,
+    "ast_hash": "3b4e1687a64c9730d42a1bac76801624",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMapGenerator.java": {
@@ -768,15 +762,15 @@
     "semantic_hash": "d646e9db09d5b3bda39015033916ef5a"
   },
   "src/main/java/rafasconquest/npc/ConquestEntities.java": {
-    "mtime": 1793877842.210627,
-    "seen": 1793890446.4240603,
-    "ast_hash": "a6fdb39b3df94ce791c51d07dd0ccfad",
+    "mtime": 1794066921.7987845,
+    "seen": 1794067385.2040727,
+    "ast_hash": "1e304129cafae8062fc5a4bb94d6de61",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/npc/Recruiter.java": {
-    "mtime": 1793998514.8036747,
-    "seen": 1793998889.9353127,
-    "ast_hash": "f6ad4d0470c29d80d703c0374135282b",
+    "mtime": 1794066921.806763,
+    "seen": 1794067385.2040737,
+    "ast_hash": "58c76997f7abb45d0106f5dd2a74fa87",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/npc/Recruitment.java": {
@@ -858,9 +852,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/Quests.java": {
-    "mtime": 1793997741.3646336,
-    "seen": 1793997863.6270294,
-    "ast_hash": "5a5a8b449557634381f9054da662692f",
+    "mtime": 1794066917.533276,
+    "seen": 1794067385.2040975,
+    "ast_hash": "c8a67175942a08d0fe09677f4a377962",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/Retinues.java": {
@@ -1038,10 +1032,10 @@
     "semantic_hash": "2ca7bf679c99a87fc3261222a94e6c8c"
   },
   "src/main/java/rafasconquest/sim/ConquestServer.java": {
-    "mtime": 1793407917.4152994,
-    "seen": 1793865705.7987332,
-    "ast_hash": "bca9821192adbd59501180fa775f0a5a",
-    "semantic_hash": "bca9821192adbd59501180fa775f0a5a"
+    "mtime": 1794066917.563195,
+    "seen": 1794067385.2041495,
+    "ast_hash": "6dc567f5931d64d375809846e8ae5580",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/sim/EconomyTick.java": {
     "mtime": 1793054514.7382405,
@@ -1055,16 +1049,10 @@
     "ast_hash": "b685ed510a55fbb29fd06f815d371fbb",
     "semantic_hash": "b685ed510a55fbb29fd06f815d371fbb"
   },
-  "src/main/java/rafasconquest/sim/RecruitmentPosts.java": {
-    "mtime": 1793937477.2767327,
-    "seen": 1793937856.083467,
-    "ast_hash": "49e3c83bfef8a2b046ef46f7244e1c90",
-    "semantic_hash": ""
-  },
   "src/main/java/rafasconquest/style/BlockPacker.java": {
-    "mtime": 1794016965.0214105,
-    "seen": 1794017051.1210117,
-    "ast_hash": "528eddfb388a8c500b999a86af41e19a",
+    "mtime": 1794067027.265296,
+    "seen": 1794067385.2041535,
+    "ast_hash": "4ef5c23ebf8087a60a846641a2a1439f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/CharacterMarkers.java": {
@@ -1074,15 +1062,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/CityPlan.java": {
-    "mtime": 1794036483.2458436,
-    "seen": 1794036503.263649,
-    "ast_hash": "8c27dc2644659def6d7551e7f5849cd3",
+    "mtime": 1794071993.472733,
+    "seen": 1794072023.6312838,
+    "ast_hash": "c9ea131d73208106727ae75b503766f6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/CityStyles.java": {
-    "mtime": 1794016985.056461,
-    "seen": 1794017051.1210163,
-    "ast_hash": "8d4d3f54498dd336a54c87df6360e26f",
+    "mtime": 1794066917.5846448,
+    "seen": 1794067385.2041574,
+    "ast_hash": "9eadfdf2672383ce61febd37343af2f0",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/MarkerBlock.java": {
@@ -1122,16 +1110,16 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityGridBuilder.java": {
-    "mtime": 1794036425.0584154,
-    "seen": 1794036503.263662,
-    "ast_hash": "3af0e77c3939d25bfa8db63da488c794",
+    "mtime": 1794071920.3848915,
+    "seen": 1794072023.6312985,
+    "ast_hash": "4acd94029858da0c09d1d0a0fc69c2ce",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityIndex.java": {
-    "mtime": 1793324837.1726477,
-    "seen": 1793865705.7987485,
-    "ast_hash": "f2c37a9e0687e7566f8ec1122003d010",
-    "semantic_hash": "f2c37a9e0687e7566f8ec1122003d010"
+    "mtime": 1794068827.2125673,
+    "seen": 1794069112.6819456,
+    "ast_hash": "bf9b35c9408afa2d09dbee5f31c84253",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityPlacement.java": {
     "mtime": 1793926585.1487482,
@@ -1140,10 +1128,10 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityRoadPiece.java": {
-    "mtime": 1793067850.6477692,
-    "seen": 1793865705.7987504,
-    "ast_hash": "0fa830b50aab12ad7150f819c6d750b2",
-    "semantic_hash": "0fa830b50aab12ad7150f819c6d750b2"
+    "mtime": 1794067021.434506,
+    "seen": 1794067385.2041736,
+    "ast_hash": "e9e9e708e95c2ddbe8adfd913254e0ae",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityStructure.java": {
     "mtime": 1793890069.5082767,
@@ -1152,15 +1140,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityTerrainPiece.java": {
-    "mtime": 1793926558.9157732,
-    "seen": 1793926652.7512932,
-    "ast_hash": "0a740b770fdc487f23ea73f6020d40df",
+    "mtime": 1794068734.550354,
+    "seen": 1794069112.6819522,
+    "ast_hash": "fe49489691e1a4d2693f7748d6c39c17",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityVariant.java": {
-    "mtime": 1793920583.9372475,
-    "seen": 1793920633.668886,
-    "ast_hash": "d7d81781d7ce9bd5ffabd59b8f1ec0ba",
+    "mtime": 1794067012.617567,
+    "seen": 1794067385.204179,
+    "ast_hash": "76c5b468b3167fe91fd696f3999823fc",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/ConquestRuntime.java": {
@@ -1170,9 +1158,9 @@
     "semantic_hash": "8ef1b12913ba40083de62306fe97c11c"
   },
   "src/main/java/rafasconquest/worldgen/ConquestWorldgen.java": {
-    "mtime": 1794011945.9141765,
-    "seen": 1794012001.3094018,
-    "ast_hash": "2dd536893ce21097b4d888e1152958bf",
+    "mtime": 1794068767.7772489,
+    "seen": 1794069112.6819565,
+    "ast_hash": "71b25b93a76508abf3330719a87c477e",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CountryIndex.java": {
@@ -1230,10 +1218,10 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/GoldChurchPiece.java": {
-    "mtime": 1793404097.66748,
-    "seen": 1793865705.7987654,
-    "ast_hash": "64689366e69964f765579abf381019b5",
-    "semantic_hash": "64689366e69964f765579abf381019b5"
+    "mtime": 1794066917.6245377,
+    "seen": 1794067385.2041953,
+    "ast_hash": "8dee0b6488ec4a0fff7adf7f348618ee",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/HorizontalStretch.java": {
     "mtime": 1793877932.003093,
@@ -1247,16 +1235,10 @@
     "ast_hash": "60ae958112f38cf9212cc956332011cc",
     "semantic_hash": "60ae958112f38cf9212cc956332011cc"
   },
-  "src/main/java/rafasconquest/worldgen/RecruitmentPostPiece.java": {
-    "mtime": 1793399429.1136014,
-    "seen": 1793865705.798768,
-    "ast_hash": "26b56850a8f59e4e6e2216859da2b743",
-    "semantic_hash": "26b56850a8f59e4e6e2216859da2b743"
-  },
   "src/main/java/rafasconquest/worldgen/RoadFeature.java": {
-    "mtime": 1794032525.7942493,
-    "seen": 1794032563.6537578,
-    "ast_hash": "da7c5de7141d52e77e7a0cdc5a265d37",
+    "mtime": 1794068827.1053462,
+    "seen": 1794069112.6819804,
+    "ast_hash": "64ef338b4479aedb04e09655825da7f7",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/RoadNetwork.java": {
@@ -1302,9 +1284,9 @@
     "semantic_hash": "fa1778aa5fe8f45bd2a794cf894fd7fd"
   },
   "src/main/resources/assets/rafasconquest/lang/en_us.json": {
-    "mtime": 1793907875.3313382,
-    "seen": 1793908103.8290908,
-    "ast_hash": "7e4e5ffda9f5ca99cbf6a0a69bfd46b4",
+    "mtime": 1794071977.5303695,
+    "seen": 1794072023.6313572,
+    "ast_hash": "332583828173e08738c92f5a339fc91a",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/models/block/character_marker.json": {
@@ -1787,12 +1769,6 @@
     "ast_hash": "5973ee4b3f7b8248290a8205d821a9b6",
     "semantic_hash": "5973ee4b3f7b8248290a8205d821a9b6"
   },
-  "src/test/java/rafasconquest/core/RecruitmentPostTest.java": {
-    "mtime": 1793391951.4264076,
-    "seen": 1793865705.7988665,
-    "ast_hash": "2109a78d1cae4136ae1468fdac738012",
-    "semantic_hash": "2109a78d1cae4136ae1468fdac738012"
-  },
   "src/test/java/rafasconquest/core/RoadsTest.java": {
     "mtime": 1793917476.982238,
     "seen": 1793917518.173441,
@@ -1890,9 +1866,9 @@
     "semantic_hash": "cac8d3862163101f29fec1b3fd2e580a"
   },
   "README.md": {
-    "mtime": 1793920584.1358154,
-    "seen": 1793920633.6691074,
-    "ast_hash": "7217e6a1d2ff0d812cb4699b9e00225c",
+    "mtime": 1794069101.063773,
+    "seen": 1794069112.6821976,
+    "ast_hash": "9146812897fb3186f9f43a52041fd9fa",
     "semantic_hash": ""
   },
   "docs/index.html": {
@@ -1908,9 +1884,9 @@
     "semantic_hash": "2c6429499b555df59945fbaa717a9de8"
   },
   "src/main/resources/rafasconquest_structures/README.txt": {
-    "mtime": 1793906037.490584,
-    "seen": 1793906177.6256778,
-    "ast_hash": "194eaf3148c284c8b9a233fd9346b8a3",
+    "mtime": 1794066917.6404943,
+    "seen": 1794067385.2044203,
+    "ast_hash": "165a5e1bec445313822b6534cd330f0c",
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest_structures/style/plains/CREDITS.txt": {
@@ -2040,9 +2016,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/style/NobleDistrictTest.java": {
-    "mtime": 1794036455.1553254,
-    "seen": 1794036503.2639067,
-    "ast_hash": "aff8b269adecbb61b00c4e48eb763419",
+    "mtime": 1794067556.4905536,
+    "seen": 1794067591.2489707,
+    "ast_hash": "4a83775cc9550875c31e64329268abcf",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/style/PlacementOffsetsTest.java": {
@@ -2358,9 +2334,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json": {
-    "mtime": 1793907881.790193,
-    "seen": 1793908103.8291252,
-    "ast_hash": "9f0a449cde5db0764834db147cb6e422",
+    "mtime": 1794071977.482903,
+    "seen": 1794072023.6314023,
+    "ast_hash": "7f9248b6025f4d620e42357d947b7984",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/needs_diamond_tool.json": {
@@ -2394,9 +2370,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {
-    "mtime": 1793926558.816474,
-    "seen": 1793926652.75129,
-    "ast_hash": "aad88190a7e53ea22e8e2a50a2812dc7",
+    "mtime": 1794068789.4064908,
+    "seen": 1794069112.6819496,
+    "ast_hash": "e7be85f746dbc7653f81f6062cfb80bc",
     "semantic_hash": ""
   },
   "src/main/resources/data/rafasconquest/worldgen/structure/city_slope.json": {
@@ -2550,9 +2526,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/PlaceMusic.java": {
-    "mtime": 1794015058.6158118,
-    "seen": 1794015161.0888197,
-    "ast_hash": "7a62d098c7fb8feafe6bdee4810187fe",
+    "mtime": 1794066917.5432494,
+    "seen": 1794067385.2038481,
+    "ast_hash": "c108126aeb90b8d10748754781a87176",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/PlaceMusicClient.java": {
@@ -2580,9 +2556,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/PlaceMusicTest.java": {
-    "mtime": 1794013432.2698472,
-    "seen": 1794013474.547311,
-    "ast_hash": "f9433eb6a65da88e7f5c32bd44ecdcf1",
+    "mtime": 1794067209.3456993,
+    "seen": 1794067385.2043464,
+    "ast_hash": "f7d2ee4d54e5a8749630819108b638f5",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/PlaceMusicClientTest.java": {
@@ -2661,6 +2637,78 @@
     "mtime": 1794032525.871555,
     "seen": 1794032563.6536143,
     "ast_hash": "0109cd9e362f09da4fbf8260663e0ab8",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/core/Barracks.java": {
+    "mtime": 1794066932.2736888,
+    "seen": 1794067385.203992,
+    "ast_hash": "12a95a52d2ef98a6f8fad95a4250ca88",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/sim/BarracksPeople.java": {
+    "mtime": 1794066921.815739,
+    "seen": 1794067385.2041452,
+    "ast_hash": "c1c4f14c677c6a8b1e3c26efa4bcb6e3",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/worldgen/BarracksPiece.java": {
+    "mtime": 1794066917.592623,
+    "seen": 1794067385.204167,
+    "ast_hash": "ca217191c9c324c98735e6bf9bea2873",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/core/BarracksTest.java": {
+    "mtime": 1794066917.647476,
+    "seen": 1794067385.2043643,
+    "ast_hash": "2800abf044317765ba8550abe99a3a65",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/core/NobleAnnex.java": {
+    "mtime": 1794071993.5565262,
+    "seen": 1794072023.631124,
+    "ast_hash": "bf1b5cf840ef8865c8c7d0f3264866df",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/worldgen/NoblePathPiece.java": {
+    "mtime": 1794068775.1037972,
+    "seen": 1794069112.6819775,
+    "ast_hash": "68bc5728721f50d8ba40556322b2fa7f",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/core/NobleAnnexTest.java": {
+    "mtime": 1794072041.0516355,
+    "seen": 1794072176.375991,
+    "ast_hash": "5d9cd32a22fd06732df61b48196834a3",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/blockstates/pathfinding_block.json": {
+    "mtime": 1794071977.245501,
+    "seen": 1794072023.6313505,
+    "ast_hash": "d214de5a4ac18bf18b5c4b9fa59a6a86",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/block/pathfinding_block.json": {
+    "mtime": 1794071977.3013024,
+    "seen": 1794072023.631376,
+    "ast_hash": "3bf05776f7f50ae979e1ce4822720af8",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/item/pathfinding_block.json": {
+    "mtime": 1794071977.371656,
+    "seen": 1794072023.6313899,
+    "ast_hash": "bd092e92a28d13325d5f89f602ca2597",
+    "semantic_hash": ""
+  },
+  "src/main/resources/data/rafasconquest/loot_table/blocks/pathfinding_block.json": {
+    "mtime": 1794071977.4292212,
+    "seen": 1794072023.6314187,
+    "ast_hash": "c5cd73ebc979597ceeee9a87cb75a819",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/textures/block/pathfinding_block.png": {
+    "mtime": 1794071987.4488847,
+    "seen": 1794072023.6315942,
+    "ast_hash": "d1f7e0a0da04353deb1bbe16776df488",
     "semantic_hash": ""
   }
 }

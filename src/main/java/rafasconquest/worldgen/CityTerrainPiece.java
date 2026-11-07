@@ -34,8 +34,15 @@ public class CityTerrainPiece extends StructurePiece {
     private final int originZ;
     private final CityVariant variant;
     private final CityTerrain.Plan plan;
+    /** The city's outside noble district's platform, its square's world corner, or null; and whether this piece leaves the city's box alone. */
+    @org.jetbrains.annotations.Nullable
+    private final CityTerrain.Plan platform;
+    private final int platformX;
+    private final int platformZ;
+    private final boolean annexOnly;
 
-    public CityTerrainPiece(CityLayout.Site site, int cellX, int cellZ, CityVariant variant, CityTerrain.Plan plan, int minY, int maxY) {
+    public CityTerrainPiece(CityLayout.Site site, int cellX, int cellZ, CityVariant variant, CityTerrain.Plan plan, int minY, int maxY,
+                            CityGridBuilder.@org.jetbrains.annotations.Nullable Platform platform) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, new BoundingBox(
                 site.originX() + CityTerrain.ownedMin(site.cells(), cellX, plan.outset()), minY, site.originZ() + CityTerrain.ownedMin(site.cells(), cellZ, plan.outset()),
                 site.originX() + CityTerrain.ownedMax(site.cells(), cellX, plan.outset()), maxY,
@@ -44,16 +51,25 @@ public class CityTerrainPiece extends StructurePiece {
         this.originZ = site.originZ();
         this.variant = variant;
         this.plan = plan;
+        this.platform = platform == null ? null : platform.plan();
+        this.platformX = platform == null ? 0 : platform.x();
+        this.platformZ = platform == null ? 0 : platform.z();
+        this.annexOnly = false;
         setOrientation(null);
     }
 
-    /** A stretch of the city's outer slope, {@code box} in world coordinates. */
-    public CityTerrainPiece(int originX, int originZ, CityVariant variant, CityTerrain.Plan plan, BoundingBox box) {
+    /** A stretch of the city's outer slope, or ({@code annexOnly}) of its outside noble district's ground, {@code box} in world coordinates. */
+    public CityTerrainPiece(int originX, int originZ, CityVariant variant, CityTerrain.Plan plan, BoundingBox box,
+                            CityGridBuilder.@org.jetbrains.annotations.Nullable Platform platform, boolean annexOnly) {
         super(ConquestWorldgen.CITY_TERRAIN_PIECE.get(), 0, box);
         this.originX = originX;
         this.originZ = originZ;
         this.variant = variant;
         this.plan = plan;
+        this.platform = platform == null ? null : platform.plan();
+        this.platformX = platform == null ? 0 : platform.x();
+        this.platformZ = platform == null ? 0 : platform.z();
+        this.annexOnly = annexOnly && platform != null;
         setOrientation(null);
     }
 
@@ -62,12 +78,23 @@ public class CityTerrainPiece extends StructurePiece {
         this.originX = tag.getInt("originX");
         this.originZ = tag.getInt("originZ");
         this.variant = CityVariant.valueOf(tag.getString("variant"));
+        this.plan = read(tag, "");
+        this.platform = tag.contains("p.plateY") ? read(tag, "p.") : null;
+        this.platformX = tag.getInt("platformX");
+        this.platformZ = tag.getInt("platformZ");
+        this.annexOnly = platform != null && tag.getBoolean("annexOnly");
+    }
+
+    /** A plan saved under {@code prefix}; a city's, with its old defaults, where a size or run is missing. */
+    private static CityTerrain.Plan read(CompoundTag tag, String prefix) {
         int sides = CityTerrain.Side.values().length;
-        int cells = tag.contains("cells") ? tag.getInt("cells") : CityLayout.CELLS_PER_SIDE;
-        int outset = tag.contains("outset") ? tag.getInt("outset") : CityLayout.WALL_OUTSET;
-        int segments = CityTerrain.segments(cells, outset);
-        String encoded = tag.getString("edges");
-        int[] carve = tag.getIntArray("carveTo");
+        int cells = tag.contains(prefix + "cells") ? tag.getInt(prefix + "cells") : CityLayout.CELLS_PER_SIDE;
+        int outset = tag.contains(prefix + "outset") ? tag.getInt(prefix + "outset") : CityLayout.WALL_OUTSET;
+        int size = tag.contains(prefix + "size") ? tag.getInt(prefix + "size") : CityTerrain.size(cells);
+        int run = tag.contains(prefix + "run") ? tag.getInt(prefix + "run") : 2;
+        int segments = new CityTerrain.Plan(0, null, null, cells, outset, size, run).segments();
+        String encoded = tag.getString(prefix + "edges");
+        int[] carve = tag.getIntArray(prefix + "carveTo");
         CityTerrain.Edge[][] edges = new CityTerrain.Edge[sides][segments];
         int[][] carveTo = new int[sides][segments];
         for (int i = 0; i < sides * segments; i++) {
@@ -75,19 +102,17 @@ public class CityTerrainPiece extends StructurePiece {
                     ? CityTerrain.Edge.values()[encoded.charAt(i) - '0'] : CityTerrain.Edge.CARVE;
             carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
-        this.plan = new CityTerrain.Plan(tag.getInt("plateY"), edges, carveTo, cells, outset);
+        return new CityTerrain.Plan(tag.getInt(prefix + "plateY"), edges, carveTo, cells, outset, size, run);
     }
 
-    @Override
-    protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
-        tag.putInt("originX", originX);
-        tag.putInt("originZ", originZ);
-        tag.putString("variant", variant.name());
-        tag.putInt("plateY", plan.plateY());
-        tag.putInt("cells", plan.cells());
-        tag.putInt("outset", plan.outset());
+    private static void write(CompoundTag tag, String prefix, CityTerrain.Plan plan) {
+        tag.putInt(prefix + "plateY", plan.plateY());
+        tag.putInt(prefix + "cells", plan.cells());
+        tag.putInt(prefix + "outset", plan.outset());
+        tag.putInt(prefix + "size", plan.size());
+        tag.putInt(prefix + "run", plan.run());
         StringBuilder edges = new StringBuilder();
-        int[] carve = new int[CityTerrain.Side.values().length * CityTerrain.segments(plan.cells(), plan.outset())];
+        int[] carve = new int[CityTerrain.Side.values().length * plan.segments()];
         int i = 0;
         for (int side = 0; side < plan.edges().length; side++) {
             for (int seg = 0; seg < plan.edges()[side].length; seg++) {
@@ -95,8 +120,22 @@ public class CityTerrainPiece extends StructurePiece {
                 carve[i++] = plan.carveTo()[side][seg];
             }
         }
-        tag.putString("edges", edges.toString());
-        tag.putIntArray("carveTo", carve);
+        tag.putString(prefix + "edges", edges.toString());
+        tag.putIntArray(prefix + "carveTo", carve);
+    }
+
+    @Override
+    protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
+        tag.putInt("originX", originX);
+        tag.putInt("originZ", originZ);
+        tag.putString("variant", variant.name());
+        write(tag, "", plan);
+        if (platform != null) {
+            write(tag, "p.", platform);
+            tag.putInt("platformX", platformX);
+            tag.putInt("platformZ", platformZ);
+            tag.putBoolean("annexOnly", annexOnly);
+        }
     }
 
     @Override
@@ -107,13 +146,25 @@ public class CityTerrainPiece extends StructurePiece {
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(originX, originZ, plan.cells());
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
-                CityTerrain.Column column = CityTerrain.column(plan, x - originX, z - originZ);
+                CityTerrain.Column column;
+                if (platform == null) {
+                    column = CityTerrain.column(plan, x - originX, z - originZ);
+                } else {
+                    // The city's own ground (its box) is its cells' to shape, not the outside district's tiles.
+                    if (annexOnly && !platform.inBox(x - platformX, z - platformZ)) {
+                        CityTerrain.Kind own = CityTerrain.column(plan, x - originX, z - originZ).kind();
+                        if (own != CityTerrain.Kind.SLOPE && own != CityTerrain.Kind.NONE) {
+                            continue;
+                        }
+                    }
+                    column = CityTerrain.column(plan, x - originX, z - originZ, platform, x - platformX, z - platformZ);
+                }
                 boolean wall = CityLayout.inWallBand(plan.size(), x - originX, z - originZ);
-                int keep = styled.pieces().isEmpty() ? -1 : styled.top(x - originX, z - originZ);
+                int keep = styled.pieces().isEmpty() && styled.path().isEmpty() ? -1 : styled.top(x - originX, z - originZ);
                 switch (column.kind()) {
-                    case PLATE -> flatten(level, pos, x, z, false, wall, keep);
-                    case WALL_BASE -> flatten(level, pos, x, z, true, wall, keep);
-                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, keep > 0 ? plan.plateY() + keep - 1 : plan.plateY());
+                    case PLATE -> flatten(level, pos, x, z, column.low(), false, wall, keep);
+                    case WALL_BASE -> flatten(level, pos, x, z, column.low(), true, wall, keep);
+                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, keep > 0 ? column.low() + keep - 1 : column.low());
                     case SLOPE -> {
                         if (keep < 0) {
                             slope(level, pos, x, z, column); // a wall piece standing out over the slope keeps its ground
@@ -135,8 +186,7 @@ public class CityTerrainPiece extends StructurePiece {
      * into the neighbouring cell, whose terrain may be laid after the wall, and must not erase it. Under a styled piece
      * {@code keep} blocks tall, only what is above it is cleared, and its floor is only filled where it is open.
      */
-    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, boolean bare, boolean wall, int keep) {
-        int plate = plan.plateY();
+    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int plate, boolean bare, boolean wall, int keep) {
         BlockState stone = Blocks.STONE.defaultBlockState();
         clearAbove(level, pos, x, z, keep > 0 ? plate + keep - 1 : plate, wall);
         pos.set(x, plate, z);
