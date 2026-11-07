@@ -23,5 +23,14 @@
       "rafasconquest:battle/din5",
       "rafasconquest:battle/din6"
     ]
+  },
+  "music.to_shores_distant": {
+    "sounds": [{"name": "rafasconquest:music/to_shores_distant", "stream": true}]
+  },
+  "music.dancing_steps_of_war": {
+    "sounds": [{"name": "rafasconquest:music/dancing_steps_of_war", "stream": true}]
+  },
+  "ambient.city_market": {
+    "sounds": [{"name": "rafasconquest:ambient/city_market", "stream": true}]
   }
 }
