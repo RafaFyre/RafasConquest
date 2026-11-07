@@ -60,8 +60,9 @@ class NobleAnnexTest {
         assertTrue(past.fill() && past.stone() && past.high() == Integer.MAX_VALUE, "fill only, in stone");
         assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(platform, platform.boxMin() - NobleAnnex.FILL_REACH - 1, 10).kind(), "nothing past the fill");
         // Where both ease the land, neither carves into the other: the higher one stands.
-        for (int lx = -60; lx <= 60; lx += 3) {
-            for (int lz = -60; lz <= 60; lz += 3) {
+        int overlaps = 0;
+        for (int lx = -200; lx <= 200; lx += 3) {
+            for (int lz = -200; lz <= 200; lz += 3) {
                 CityTerrain.Column c = CityTerrain.column(city, lx, lz);
                 CityTerrain.Column p = CityTerrain.column(platform, lx + 30, lz + 30);
                 if (c.kind() != CityTerrain.Kind.SLOPE || p.kind() != CityTerrain.Kind.SLOPE) {
@@ -70,7 +71,10 @@ class NobleAnnexTest {
                 CityTerrain.Column both = CityTerrain.column(city, lx, lz, platform, lx + 30, lz + 30);
                 assertTrue(both.high() >= c.high(), "not below the city's easing at " + lx + "," + lz);
                 assertTrue(p.high() == Integer.MAX_VALUE || both.high() >= p.high(), "not below the platform's at " + lx + "," + lz);
+                assertTrue(both.stone(), "stone where they merge");
+                overlaps++;
             }
         }
+        assertTrue(overlaps > 0, "the two easings do overlap here");
     }
 }

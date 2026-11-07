@@ -339,7 +339,7 @@ public final class CityTerrain {
         // The higher of the two easings stands, so neither cuts into the other; the platform's fill-only reach never carves.
         boolean filling = p.high() == Integer.MAX_VALUE;
         int high = Math.max(low, filling ? c.high() : Math.max(c.high(), p.high()));
-        return new Column(Kind.SLOPE, low, high, fill, p.stone() && low == p.low() && (filling || high == p.high()));
+        return new Column(Kind.SLOPE, low, high, fill, p.stone()); // all stone where they merge, no grass seam
     }
 
     public static Column column(Plan plan, int lx, int lz) {
