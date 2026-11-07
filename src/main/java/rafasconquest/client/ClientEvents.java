@@ -88,6 +88,7 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY) {
+            WaterSwell.prepare();
             DistantArmyRenderer.prepare(event.getPartialTick().getGameTimeDeltaPartialTick(false));
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantOcclusion.begin();

@@ -79,6 +79,7 @@ public final class ConquestEvents {
     public static void onPlayerLoggedIn(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
+            rafasconquest.net.ConquestNetwork.sendSeaSwell(player, !rafasconquest.core.Swell.calm());
             rafasconquest.peerage.PeerageSync.to(player);
             rafasconquest.politics.PoliticsSync.to(player);
             rafasconquest.peerage.CityManager.close(player); // left mid city view (a crash): put them back
@@ -102,6 +103,7 @@ public final class ConquestEvents {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
+        rafasconquest.core.Swell.calm(!event.getServer().getGameRules().getBoolean(ConquestGameRules.SEA_SWELL));
         ConquestServer server = ConquestServer.get();
         if (server != null) {
             server.onServerStarted();

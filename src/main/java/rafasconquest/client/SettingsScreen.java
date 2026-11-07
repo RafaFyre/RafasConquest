@@ -8,7 +8,10 @@ import net.minecraft.network.chat.Component;
 import rafasconquest.net.ConquestNetwork;
 import rafasconquest.peerage.PlayerStats;
 
-/** The player's settings, from the stats window's wheel: each change goes to the server, which keeps it. */
+/**
+ * The player's settings, from the stats window's wheel: each change goes to the server, which keeps it. The sea swell
+ * is the world's (a game rule), so only the host or an op can change it.
+ */
 public class SettingsScreen extends Screen {
     private static final int WIDTH = 260;
     private static final int GOLD = 0xFFE0C060;
@@ -31,6 +34,15 @@ public class SettingsScreen extends Screen {
                         });
         teleport.setTooltip(Tooltip.create(Component.literal("At the start of each day of a battle, be brought to your place in the line.")));
         addRenderableWidget(teleport);
+        CycleButton<Boolean> swell = CycleButton.onOffBuilder(!rafasconquest.core.Swell.calm())
+                .create(width / 2 - WIDTH / 2, height / 2 + 14, WIDTH, 20, Component.literal("Sea swell"),
+                        (button, value) -> ConquestNetwork.setSetting(ConquestNetwork.SEA_SWELL, value));
+        boolean mayChange = minecraft.hasSingleplayerServer() || minecraft.player.hasPermissions(2);
+        swell.active = mayChange;
+        swell.setTooltip(Tooltip.create(Component.literal(mayChange
+                ? "Waves on the open sea, which ships rise, fall and roll on. For everyone in this world."
+                : "Waves on the open sea. Only the world's host or an operator can change this.")));
+        addRenderableWidget(swell);
     }
 
     @Override

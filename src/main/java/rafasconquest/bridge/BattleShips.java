@@ -14,6 +14,7 @@ import org.joml.Vector3d;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.FieldBattle;
 import rafasconquest.battle.Ramming;
+import rafasconquest.core.Swell;
 import rafasconquest.core.SeaLanes;
 import rafasconquest.style.ShipHulls;
 
@@ -119,7 +120,7 @@ final class BattleShips {
             }
         }
         for (SableLink.Helm h : sailing.values()) {
-            steer(ships.get(key(h)), h, sailing);
+            steer(ships.get(key(h)), h, sailing, level.getGameTime());
         }
         for (Map.Entry<String, ServerSubLevel> e : new HashMap<>(ships).entrySet()) {
             if (!wanted.contains(e.getKey())) {
@@ -225,7 +226,7 @@ final class BattleShips {
      * it sails in an arc, backs to a place close astern, and once there comes round to lie as its helm says. It turns
      * away from ships of its own side it would foul, and drops back from one ahead of it. Grappled, it lies still.
      */
-    private static void steer(ServerSubLevel sub, SableLink.Helm h, Map<Integer, SableLink.Helm> sailing) {
+    private static void steer(ServerSubLevel sub, SableLink.Helm h, Map<Integer, SableLink.Helm> sailing, long time) {
         RigidBodyHandle body = RigidBodyHandle.of(sub);
         if (body == null || !body.isValid()) {
             return;
@@ -236,10 +237,11 @@ final class BattleShips {
         Vector3d spin = body.getAngularVelocity(new Vector3d());
         Ramming.Hull me = hulls.get(h.id());
         double heading = Math.atan2(me.dirX(), me.dirZ());
-        double waterline = (y - pose.position().y()) * PULL;
+        // Rides the swell under its middle: up and down with it, and pulled back to it.
+        double waterline = Swell.rise(me.x(), me.z(), time) + (y + Swell.height(me.x(), me.z(), time) - pose.position().y()) * PULL;
         if (h.lashed().stream().anyMatch(sailing::containsKey)) {
             // Grappled: it lies still alongside, or bow in, as it is.
-            body.addLinearAndAngularVelocity(new Vector3d(0, waterline, 0).sub(velocity), SableShips.spinToward(pose, heading, spin));
+            body.addLinearAndAngularVelocity(new Vector3d(0, waterline, 0).sub(velocity), SableShips.spinToward(pose, heading, spin, time));
             return;
         }
         if (Math.hypot(me.x() - h.x(), me.z() - h.z()) > SNAP && clearAt(h, h.x(), h.z())) {
@@ -273,7 +275,7 @@ final class BattleShips {
         pace = Math.max(-h.speed() / 2, Math.min(h.speed(), pace));
         double turn = Math.max(-FieldBattle.TURN_RATE, Math.min(FieldBattle.TURN_RATE, off)) / SableShips.TURN;
         Vector3d want = new Vector3d(me.dirX() * pace, waterline, me.dirZ() * pace);
-        body.addLinearAndAngularVelocity(want.sub(velocity), SableShips.spinToward(pose, heading + turn, spin));
+        body.addLinearAndAngularVelocity(want.sub(velocity), SableShips.spinToward(pose, heading + turn, spin, time));
     }
 
     /** An angle brought to between -pi and pi. */

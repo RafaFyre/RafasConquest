@@ -20,6 +20,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import rafasconquest.RafasConquest;
 import rafasconquest.core.SeaLanes;
+import rafasconquest.core.Swell;
 import rafasconquest.map.BaseMap;
 import rafasconquest.style.ShipHulls;
 import rafasconquest.worldgen.ConquestRuntime;
@@ -87,7 +88,7 @@ final class SableShips {
             } else if (nearest > range + KEEP_PAST) {
                 remove(container, sub, ship.id());
             } else {
-                steer(sub, ship);
+                steer(sub, ship, time);
             }
         }
         // Ships of lanes that are gone (another world map) sail no more.
@@ -107,7 +108,7 @@ final class SableShips {
         ServerSubLevel sub = assemble(level, ship, TAG, ShipHulls.of(ship));
         if (sub != null) {
             live.put(ship.id(), sub);
-            steer(sub, ship);
+            steer(sub, ship, level.getGameTime());
         }
     }
 
@@ -147,9 +148,10 @@ final class SableShips {
         return sub;
     }
 
-    /** Turns a ship toward a heading (a turn about the up axis), keeping it upright, by setting its spin. */
-    static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin) {
-        Quaterniond heading = new Quaterniond().rotationY(yaw);
+    /** Turns a ship toward a heading (a turn about the up axis), heeling with the swell under it, by setting its spin. */
+    static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin, long time) {
+        double[] slope = Swell.slope(pose.position().x(), pose.position().z(), time);
+        Quaterniond heading = new Quaterniond().rotationTo(0, 1, 0, -slope[0], 1, -slope[1]).mul(new Quaterniond().rotationY(yaw));
         AxisAngle4d turn = new AxisAngle4d(heading.mul(new Quaterniond(pose.orientation()).invert()));
         double angle = turn.angle > Math.PI ? turn.angle - 2 * Math.PI : turn.angle;
         return new Vector3d(turn.x, turn.y, turn.z).mul(angle * TURN).sub(spin);
@@ -157,17 +159,17 @@ final class SableShips {
 
     /**
      * Sets the ship's velocity to its pace on the lane plus a pull back to where the lane says it is, at its
-     * waterline, and pushes it clear of the other ships and of land seen ahead; its spin turns it to its heading and
-     * keeps it upright. Far off, it is moved there at once.
+     * waterline on the swell, and pushes it clear of the other ships and of land seen ahead; its spin turns it to its
+     * heading and heels it with the sea. Far off, it is moved there at once.
      */
-    private static void steer(ServerSubLevel sub, SeaLanes.Ship ship) {
+    private static void steer(ServerSubLevel sub, SeaLanes.Ship ship, long time) {
         RigidBodyHandle body = RigidBodyHandle.of(sub);
         if (body == null || !body.isValid()) {
             return;
         }
         Pose3dc pose = sub.logicalPose();
         CompoundTag tag = sub.getUserDataTag();
-        Vector3d target = new Vector3d(ship.x(), tag.getDouble("y"), ship.z());
+        Vector3d target = new Vector3d(ship.x(), tag.getDouble("y") + Swell.height(ship.x(), ship.z(), time), ship.z());
         Quaterniond heading = new Quaterniond().rotationY(ship.yaw());
         Vector3d off = target.sub(pose.position(), new Vector3d());
         Vector3d velocity = body.getLinearVelocity(new Vector3d());
@@ -181,8 +183,8 @@ final class SableShips {
         if (pull.length() > MAX_PULL) {
             pull.normalize(MAX_PULL);
         }
-        Vector3d want = new Vector3d(ship.vx() * 20, 0, ship.vz() * 20).add(pull).add(avoid(sub, pose, ship));
-        body.addLinearAndAngularVelocity(want.sub(velocity), spinToward(pose, ship.yaw(), spin));
+        Vector3d want = new Vector3d(ship.vx() * 20, Swell.rise(ship.x(), ship.z(), time), ship.vz() * 20).add(pull).add(avoid(sub, pose, ship));
+        body.addLinearAndAngularVelocity(want.sub(velocity), spinToward(pose, ship.yaw(), spin, time));
     }
 
     /**

@@ -182,6 +182,19 @@ public final class ConquestNetwork {
                 .decoder(b -> new CityClose())
                 .consumerMainThread((m, c) -> rafasconquest.client.ClientScreens.closeCityManager())
                 .add();
+        CHANNEL.messageBuilder(SeaSwell.class, 30, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> b.writeBoolean(m.on()))
+                .decoder(b -> new SeaSwell(b.readBoolean()))
+                .consumerMainThread((m, c) -> rafasconquest.core.Swell.calm(!m.on()))
+                .add();
+    }
+
+    /** Server → client: whether the sea swells (the seaSwell game rule), for the water drawn. */
+    public record SeaSwell(boolean on) {
+    }
+
+    public static void sendSeaSwell(ServerPlayer player, boolean on) {
+        CHANNEL.send(player, new SeaSwell(on));
     }
 
     // ---- talking, quest boards, and the players' land ----
@@ -479,7 +492,10 @@ public final class ConquestNetwork {
         rafasconquest.client.ClientScreens.openStats(msg.view());
     }
 
-    /** Client → server: change one of my settings. */
+    /** The {@link SetSetting} key that turns the world's sea swell on or off. */
+    public static final String SEA_SWELL = "seaSwell";
+
+    /** Client → server: change one of my settings (or, for its host or an op, the world's {@link #SEA_SWELL}). */
     public record SetSetting(String key, boolean value) {
         void write(FriendlyByteBuf buf) {
             buf.writeUtf(key);
@@ -497,9 +513,17 @@ public final class ConquestNetwork {
 
     private static void handleSetSetting(SetSetting msg, IPayloadContext context) {
         ServerPlayer player = SimpleChannel.sender(context);
-        if (player != null) {
-            rafasconquest.peerage.PlayerStats.set(player, msg.key(), msg.value());
+        if (player == null) {
+            return;
         }
+        if (msg.key().equals(SEA_SWELL)) {
+            // The world's, not the player's: only its host or an op changes it.
+            if (player.hasPermissions(2) || player.server.isSingleplayerOwner(player.getGameProfile())) {
+                player.server.getGameRules().getRule(rafasconquest.ConquestGameRules.SEA_SWELL).set(msg.value(), player.server);
+            }
+            return;
+        }
+        rafasconquest.peerage.PlayerStats.set(player, msg.key(), msg.value());
     }
 
     /** Client → server: teleport me to the ground at (x, z), from the world map's menu. Creative mode only. */
