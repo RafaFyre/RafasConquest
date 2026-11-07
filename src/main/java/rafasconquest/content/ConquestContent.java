@@ -34,7 +34,7 @@ public final class ConquestContent {
             () -> new net.minecraft.world.level.block.SlabBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.DIRT_PATH)));
     public static final DeferredHolder<Item, Item> DIRT_PATH_SLAB_ITEM = ITEMS.register("dirt_path_slab",
             () -> new BlockItem(DIRT_PATH_SLAB.get(), new Item.Properties()));
-    /** A quest board, in every recruitment post: the city's quests. */
+    /** A quest board, in every barracks: the city's quests. */
     public static final DeferredHolder<Block, Block> QUEST_BOARD = BLOCKS.register("quest_board",
             () -> new QuestBoardBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.CARTOGRAPHY_TABLE)));
     public static final DeferredHolder<Item, Item> QUEST_BOARD_ITEM = ITEMS.register("quest_board",
@@ -65,6 +65,12 @@ public final class ConquestContent {
             () -> new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.OBSIDIAN).mapColor(net.minecraft.world.level.material.MapColor.EMERALD)));
     public static final DeferredHolder<Item, Item> DOCK_BLOCK_ITEM = ITEMS.register("dock_block",
             () -> new BlockItem(DOCK_BLOCK.get(), new Item.Properties()));
+
+    /** Golden cobblestone: placed in a special structure to mark its entrance, and so its front. */
+    public static final DeferredHolder<Block, Block> PATHFINDING_BLOCK = BLOCKS.register("pathfinding_block",
+            () -> new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.COBBLESTONE).mapColor(net.minecraft.world.level.material.MapColor.GOLD)));
+    public static final DeferredHolder<Item, Item> PATHFINDING_BLOCK_ITEM = ITEMS.register("pathfinding_block",
+            () -> new BlockItem(PATHFINDING_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.rafasconquest"))
             .icon(() -> COMMAND_TABLE_ITEM.get().getDefaultInstance())
@@ -78,6 +84,7 @@ public final class ConquestContent {
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
                 output.accept(MARKER_ITEM.get());
                 output.accept(DOCK_BLOCK_ITEM.get());
+                output.accept(PATHFINDING_BLOCK_ITEM.get());
             })
             .build());
 

@@ -1,1 +1,1 @@
-{ "replace": false, "values": ["rafasconquest:dock_block"] }
+{ "replace": false, "values": ["rafasconquest:dock_block", "rafasconquest:pathfinding_block"] }
