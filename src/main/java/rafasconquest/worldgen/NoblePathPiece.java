@@ -17,11 +17,11 @@ import java.util.List;
 
 /**
  * The stone path from a city's gate up to its outside noble district's ({@link rafasconquest.core.NobleAnnex}): each
- * column stone, climbing in half blocks (a stone slab on the half), on stone down to the ground, with the air cleared
- * above it.
+ * column stone, climbing in half blocks (a stone slab on the half), on stone down to the ground, with everything
+ * above it cleared up to the surface.
  */
 public class NoblePathPiece extends StructurePiece {
-    /** Air kept above the path. */
+    /** Air kept above the path at least, even where the ground is lower. */
     private static final int HEADROOM = 4;
 
     /** World x, z and height above the plate in half blocks, one triple per column. */
@@ -76,7 +76,9 @@ public class NoblePathPiece extends StructurePiece {
             int full = plate + columns[i + 2] / 2;
             boolean slab = columns[i + 2] % 2 == 1;
             int top = full + (slab ? 1 : 0);
-            for (int y = top + 1; y <= top + HEADROOM; y++) {
+            // Everything above the path, up to the surface: a hill it cuts through leaves no overhang.
+            int surface = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
+            for (int y = top + 1; y <= Math.max(top + HEADROOM, surface); y++) {
                 level.setBlock(pos.set(x, y, z), Blocks.AIR.defaultBlockState(), 2);
             }
             if (slab) {
