@@ -1,0 +1,59 @@
+# The world's chronicle: what happened each day, as the heralds tell it and the map lists it.
+# Written when it happens; changing a line here changes only what is written from then on.
+
+a_lord = "a lord"
+
+[deaths]
+died = "{name} {how}."
+died_heir = "{name} {how}; {heir} now holds {hold}."
+their_lands = "their lands"
+old_age = "died, aged {age}"
+defending = "fell defending {place}"
+duel = "fell in a duel to the death"
+
+[nations]
+weary_peace = "{a} and {d} made peace, weary of war; each keeps what it holds."
+marriage_alliance = "{groom} of {to} married {bride} of {from}, and the two nations are allied by it."
+ruler_married = "{groom}, ruler of {to}, married {bride}."
+alliance = "{a} and {b} swore an alliance."
+declared = "{a} declared war on {d} for the {title}."
+came_to_defence = " {ally} came to {d}'s defence."
+joined = " {ally} joined {a}."
+
+# Where a battle was fought, after "beat ...".  {fort} is the hold.
+[battles.where]
+field = "in battle"
+ocean = "at sea off {fort}"
+land = "in battle, riding out from {fort}"
+siege = "at the siege of {fort}"
+amphibious = "storming {fort} from the sea"
+
+[battles]
+fleet_beaten = "{a} beat the fleet of {d} {where}, and sails on to land there."
+attacker_won = "{a} beat {d} {where}, and took the {county}."
+won_war = "{a} won the war: the whole {title} is theirs."
+content = "{a} was content with the {county} and made peace."
+defender_won = "{d} beat {a} {where} for the {county}."
+sued_nothing = "{a} sued for peace, and gained nothing."
+sued_keeping = "{a} sued for peace, keeping what it had taken."
+no_army = "{a} had no army left to raise, and made peace."
+ceded = "{d} sued for peace, and ceded the {title} to {a}."
+
+[feuds]
+burned_out = "The feud between {a} and {b} burned out, neither able to finish it."
+began_across = "{a} began a feud with {b}, across the border between {nation_a} and {nation_b}."
+began = "{a} began a feud with {b}."
+apart = "The feud between {a} and {b} ended: their lands no longer touch."
+angered = "Angered by the skirmish, {nation} took up its lord's quarrel."
+slew = "{champion}, for {lord}, slew {loser} in a duel to the death."
+yielded_duel = "{champion}, for {lord}, beat {loser} in a duel; {loser} yielded."
+ransom = "paying a ransom of {count} emeralds for their captives"
+tribute = "paying {count} emeralds"
+yielded = "{loser} yielded to {winner}, {what}."
+raided = "{a}'s men raided the lands of {b} about {place}, and carried off what they could."
+challenged = "{a} challenged {b}: their champions meet at midday by {place} ({x}, {z})."
+called_out = "{a} called out their men against {b}: they meet at midday by {place} ({x}, {z})."
+made_peace = "{a} made peace with {b}, and their feud is over."
+giving_up = "giving up {place}"
+ordered = "{ruler} ordered {a} and {b} to end their feud."
+ordered_favouring = "{ruler} ordered {a} and {b} to end their feud, favouring {favoured}, who was paid {count} emeralds."

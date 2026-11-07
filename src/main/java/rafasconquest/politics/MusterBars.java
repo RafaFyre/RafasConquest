@@ -50,8 +50,8 @@ final class MusterBars {
                         BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.NOTCHED_10));
                 double left = Math.max(0, army.readyAt - now);
                 int seconds = (int) Math.ceil(left * SECONDS_PER_DAY);
-                bar.setName(Component.literal(map.nations().get(leader).name() + "'s army musters at "
-                        + army.place() + String.format(": it marches in %d:%02d", seconds / 60, seconds % 60)));
+                bar.setName(Component.literal(Wars.say("war.muster_bar", "nation", map.nations().get(leader).name(), "place", army.place(),
+                        "time", String.format("%d:%02d", seconds / 60, seconds % 60))));
                 bar.setProgress((float) Math.max(0, Math.min(1, 1 - left / Politics.MUSTER)));
                 // Its nations' members see it; no one else.
                 Set<Faction> side = new HashSet<>();

@@ -43,11 +43,23 @@ public final class Advancement {
             peer.known.add(q.giver());
         }
         peerage.changed();
-        player.sendSystemMessage(Component.literal("Quest done: " + q.title() + ". " + (q.emeralds() > 0 ? q.emeralds() + " emeralds" : "")
-                + (q.renown() > 0 ? ", " + q.renown() + " " + (q.ladder() == Quest.Ladder.NOBLE ? "noble" : "military") + " renown" : "") + "."));
+        player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("quests.done", "quest", q.title(), "reward", reward(q))));
         if (q.ladder() == Quest.Ladder.MILITARY) {
             promote(player, peer);
         }
+    }
+
+    /** What a quest paid, as the quest-done line says it. */
+    private static String reward(Quest q) {
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (q.emeralds() > 0) {
+            parts.add(rafasconquest.data.Dialogue.say("quests.reward_emeralds", "count", q.emeralds()));
+        }
+        if (q.renown() > 0) {
+            parts.add(rafasconquest.data.Dialogue.say("quests.reward_renown", "count", q.renown(), "ladder",
+                    q.ladder().name().toLowerCase(java.util.Locale.ROOT)));
+        }
+        return String.join(", ", parts);
     }
 
     /** Promotes a player up the ranks as far as their military renown carries them. */
@@ -60,7 +72,7 @@ public final class Advancement {
         }
         if (reached != rank) {
             ranks.set(player.getUUID(), reached);
-            player.sendSystemMessage(Component.literal("You are promoted to " + reached.title() + " (rank " + reached.number() + ")."));
+            player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.promoted", "rank", reached.title(), "number", reached.number())));
             rafasconquest.gear.RankKits.issue(player, rank, reached);
         }
     }

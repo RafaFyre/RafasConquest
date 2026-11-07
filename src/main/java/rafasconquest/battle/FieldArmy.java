@@ -185,14 +185,12 @@ public final class FieldArmy {
 
     /** "on the left wing" and so on, for telling what a wing did; nothing for an army without wings. */
     String where(int wing) {
-        if (!winged) {
-            return "";
-        }
-        return switch (wing) {
-            case LEFT -> " on the left wing";
-            case RIGHT -> " on the right wing";
-            default -> " in the centre";
-        };
+        return winged ? rafasconquest.data.Dialogue.say("battle.where." + wingKey(wing)) : "";
+    }
+
+    /** A wing's name in the dialogue files: left, right or centre. */
+    public static String wingKey(int wing) {
+        return wing == LEFT ? "left" : wing == RIGHT ? "right" : "centre";
     }
 
     /** The middle of the front line: the average of its blocks' lines. */

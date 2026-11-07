@@ -1,0 +1,94 @@
+# The war council before a battle: the general, the wings' Marshals and vassal officers.
+# {rank} is the player's rank, {wing} a wing (from [wings]), {general} the enemy general, {name} a Marshal.
+prefix = "[War council] "
+role_set = "Your unit will fight as {role}."
+speak_to_general_first = "Speak to the general at the war council first."
+
+[wings]
+left = "left"
+right = "right"
+
+[general]
+stranger = "You're no officer of ours. Guards!"
+not_officer = "Only officers sit at this council, {rank}. Back to your block."
+again = "Yes, {rank}?"
+brief_open = "{rank}. Good, you've come. Day {day}: here is how we fight."
+brief_numbers = "We have {ours} soldiers against their {theirs}. {odds}"
+brief_doctrine = "We fight by {doctrines}. {plan}"
+brief_stand = "Our troops stand {distribution}."
+brief_enemy = "Against us: {nation}, under General {general}."
+brief_scouts = "Our scouts say: {weakness}"
+brief_role = "As it stands, your men go {role}. Speak, if you'd have it otherwise."
+enemy_doctrine = "General {general} fights by {doctrines}."
+no_weakness = "They have no plain weakness. We'll have to make one."
+bait = "Run ahead of the line, then give ground once they bite. Draw them in, and we'll close the jaws."
+hunt = "Then bring me General {general}. Without their general they'll run."
+propose = "Their weak side, then. Take your men round and strike it. Don't let them see you coming."
+question = "You'll question nothing, {rank}. The plan stands. To your post."
+line = "Then you'll lead the first charge. Make it count."
+dismissed = "Dismissed, {rank}."
+
+[odds]
+more = "We have the numbers."
+fewer = "They outnumber us; every man must count."
+even = "We're evenly matched."
+
+# How the general names their plan.
+[plan]
+no_doctrine = "no particular doctrine"
+doctrine_and = " and "
+hold = "We hold the line and let them break on it."
+great_shield = "our front stands three blocks deep behind its shields"
+great_spear = "all our horse rides as one great wedge"
+unrelenting_charge = "I lead the cavalry myself, in two waves"
+decapitate = "our cavalry goes for their general"
+pincer = "each wing baits them in and closes on them"
+mass_casualties = "we strike wherever they're thickest"
+
+# What the general knows of the enemy's ways.
+[habits]
+unrelenting_charge = "They ride at the head of their own charge. Bring them down and their army breaks."
+great_spear = "All their horse comes as one great wedge. When it comes, brace."
+bait = "Watch for a block that gives ground too easily: it's bait. Don't chase it."
+great_shield = "Their front stands behind a wall of shields, three deep. Go round it, not through it."
+decapitate = "Their cavalry hunts generals. Keep my guard close."
+plain = "A plain fighter: no tricks, no surprises."
+
+[marshal]
+stranger = "Out of my tent, stranger."
+greet_bold = "Come to fight, {rank}? My wing goes in hard on the {wing}, and soon."
+greet_cautious = "{rank}. The {wing} wing holds, and I mean it to keep holding."
+greet = "{rank}. The {wing} wing is ready."
+opener_bold = "The {wing} wing will go in hard. I'd welcome more men at the front of it."
+opener_cautious = "The {wing} wing will hold. I'd sleep better with a reserve behind it."
+opener_cunning = "On the {wing} we'll let them overreach, then make them pay for it."
+opener_proud = "The {wing} wing needs no help. Mine never has."
+flank = "Good! Ride with my wing, and we'll take them in the side."
+support = "Hold your men back of my line and come where it bends. I'll count on you."
+wing = "Glad of them. Keep close behind my line, and come where it bends."
+leave = "Go well."
+
+[vassal]
+not_yours = "I answer to my liege, not to you."
+greet = "My liege. My men are in camp and ready for your word."
+report = "I bring {troops} men, my vassals' with mine. They fight as {job}."
+job = "As you command. My men will fight as {job}."
+leave = "My liege."
+
+# The clickable choices.
+[options]
+ask_enemy = "Ask about General {general}"
+ask_weakness = "Ask where they are weakest"
+join_attack = "Join Marshal {name}'s attack on the {wing}"
+back_wing = "Back Marshal {name}'s {wing} wing in support"
+bait = "Volunteer as bait"
+hunt = "Volunteer to hunt General {general}"
+question = "Question the plan"
+propose = "Propose striking their weak side"
+line = "Ask to lead the first charge"
+leave = "Take your leave"
+marshal_attack = "Join the attack on the {wing}"
+marshal_support = "Back the {wing} wing in support"
+marshal_offer = "Offer your men to the {wing} wing"
+vassal_report = "Ask how many they bring"
+vassal_job = "Change what their troops fight as"

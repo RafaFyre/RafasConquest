@@ -182,6 +182,22 @@ public final class ConquestNetwork {
                 .decoder(b -> new CityClose())
                 .consumerMainThread((m, c) -> rafasconquest.client.ClientScreens.closeCityManager())
                 .add();
+        CHANNEL.messageBuilder(Bark.class, 28, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeCollection(m.names(), FriendlyByteBuf::writeUtf);
+                    b.writeCollection(m.lines(), FriendlyByteBuf::writeUtf);
+                })
+                .decoder(b -> new Bark(b.readList(FriendlyByteBuf::readUtf), b.readList(FriendlyByteBuf::readUtf)))
+                .consumerMainThread((m, c) -> rafasconquest.client.ClientBarks.add(m.names(), m.lines()))
+                .add();
+        CHANNEL.messageBuilder(Place.class, 29, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeByte(m.music());
+                    b.writeBoolean(m.city());
+                })
+                .decoder(b -> new Place(b.readByte(), b.readBoolean()))
+                .consumerMainThread((m, c) -> rafasconquest.client.PlaceMusicClient.set(m.music(), m.city()))
+                .add();
         CHANNEL.messageBuilder(SeaSwell.class, 30, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> b.writeBoolean(m.on()))
                 .decoder(b -> new SeaSwell(b.readBoolean()))
@@ -197,32 +213,58 @@ public final class ConquestNetwork {
         CHANNEL.send(player, new SeaSwell(on));
     }
 
+    /** Server → client: the music of the place the player stands in, and whether it is a city ({@link rafasconquest.PlaceMusic}). */
+    public record Place(int music, boolean city) {
+    }
+
+    public static void sendPlace(ServerPlayer player, int music, boolean city) {
+        CHANNEL.send(player, new Place(music, city));
+    }
+
+    /** Server → client: a scene overheard ({@link rafasconquest.npc.Barks}), each line with who says it. */
+    public record Bark(List<String> names, List<String> lines) {
+    }
+
+    public static void sendBark(ServerPlayer player, List<String> names, List<String> lines) {
+        CHANNEL.send(player, new Bark(names, lines));
+    }
+
     // ---- talking, quest boards, and the players' land ----
 
-    /** Server → client: what someone says, and the player's choices ({@link rafasconquest.peerage.Talk}). */
-    public record TalkView(rafasconquest.peerage.Talk.View view) {
+    /**
+     * Server → client: what is said, page by page (each page one speaker, {@link rafasconquest.peerage.Talk}, the war
+     * council), and the player's choices on the last.
+     */
+    public record TalkView(List<rafasconquest.peerage.Talk.View> pages) {
         void write(FriendlyByteBuf buf) {
-            buf.writeVarInt(view.entity());
-            buf.writeUtf(view.speaker());
-            buf.writeCollection(view.lines(), FriendlyByteBuf::writeUtf);
-            buf.writeCollection(view.options(), (b, o) -> {
-                b.writeUtf(o.key());
-                b.writeUtf(o.label());
+            buf.writeCollection(pages, (b, view) -> {
+                b.writeVarInt(view.entity());
+                b.writeUtf(view.name());
+                b.writeUtf(view.title());
+                b.writeInt(view.colour());
+                b.writeInt(view.accent());
+                b.writeCollection(view.lines(), FriendlyByteBuf::writeUtf);
+                b.writeCollection(view.options(), (o, option) -> {
+                    o.writeUtf(option.key());
+                    o.writeUtf(option.label());
+                });
             });
         }
 
         static TalkView read(FriendlyByteBuf buf) {
-            return new TalkView(new rafasconquest.peerage.Talk.View(buf.readVarInt(), buf.readUtf(), buf.readList(FriendlyByteBuf::readUtf),
-                    buf.readList(b -> new rafasconquest.peerage.Talk.Option(b.readUtf(), b.readUtf()))));
+            return new TalkView(buf.readList(b -> new rafasconquest.peerage.Talk.View(b.readVarInt(), b.readUtf(), b.readUtf(), b.readInt(),
+                    b.readInt(), b.readList(FriendlyByteBuf::readUtf), b.readList(o -> new rafasconquest.peerage.Talk.Option(o.readUtf(), o.readUtf())))));
         }
     }
 
-    public static void sendTalk(ServerPlayer player, rafasconquest.peerage.Talk.View view) {
-        CHANNEL.send(player, new TalkView(view));
+    public static void sendTalk(ServerPlayer player, List<rafasconquest.peerage.Talk.View> pages) {
+        if (!pages.isEmpty()) {
+            CHANNEL.send(player, new TalkView(pages));
+        }
     }
 
     private static void handleTalkView(TalkView msg, IPayloadContext context) {
-        rafasconquest.client.ClientScreens.openTalk(msg.view());
+        rafasconquest.client.ClientScreens.openTalk(msg.pages());
     }
 
     /** Client → server: the player's choice in a conversation. */

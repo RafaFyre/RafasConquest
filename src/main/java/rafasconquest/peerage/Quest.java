@@ -11,10 +11,11 @@ import net.minecraft.nbt.CompoundTag;
  * </ul>
  * Its ladder says whose renown it earns: a noble's quest the noble ladder's, an officer's the military's, a board's
  * general quest none (emeralds only). Its giver is a character (index), {@link #OFFICER} (a post's recruiter) or
- * {@link #BOARD} (taken and reported at the board itself), found at (giverX, giverZ).
+ * {@link #BOARD} (taken and reported at the board itself), found at (giverX, giverZ). Its kind, and so its title, comes from
+ * a file of {@code mods/RafasConquest/quests} ({@link Quests#load}).
  */
 public record Quest(long id, Type type, Ladder ladder, int giver, String giverName, int giverX, int giverZ, String targetName,
-                    int targetX, int targetZ, int need, int renown, int emeralds, String nation) {
+                    int targetX, int targetZ, int need, int renown, int emeralds, String nation, String title) {
     public static final int OFFICER = -1;
     public static final int BOARD = -2;
     /** How near a place counts as reaching it, and how far about it a kill counts toward clearing it. */
@@ -29,8 +30,8 @@ public record Quest(long id, Type type, Ladder ladder, int giver, String giverNa
         NONE, NOBLE, MILITARY
     }
 
-    /** What the quest asks, as the board and the dialogue say it. */
-    public String title() {
+    /** The title of a quest saved before titles came from its kind's file. */
+    private static String oldTitle(Type type, String targetName, int need) {
         return switch (type) {
             case DELIVER -> "Deliver a letter to " + targetName;
             case SCOUT -> "Scout " + targetName;
@@ -54,12 +55,14 @@ public record Quest(long id, Type type, Ladder ladder, int giver, String giverNa
         tag.putInt("renown", renown);
         tag.putInt("emeralds", emeralds);
         tag.putString("nation", nation);
+        tag.putString("title", title);
         return tag;
     }
 
     public static Quest load(CompoundTag tag) {
         return new Quest(tag.getLong("id"), Type.valueOf(tag.getString("type")), Ladder.valueOf(tag.getString("ladder")), tag.getInt("giver"),
                 tag.getString("giverName"), tag.getInt("giverX"), tag.getInt("giverZ"), tag.getString("targetName"), tag.getInt("targetX"),
-                tag.getInt("targetZ"), tag.getInt("need"), tag.getInt("renown"), tag.getInt("emeralds"), tag.getString("nation"));
+                tag.getInt("targetZ"), tag.getInt("need"), tag.getInt("renown"), tag.getInt("emeralds"), tag.getString("nation"),
+                tag.contains("title") ? tag.getString("title") : oldTitle(Type.valueOf(tag.getString("type")), tag.getString("targetName"), tag.getInt("need")));
     }
 }

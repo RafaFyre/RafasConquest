@@ -51,11 +51,11 @@ public final class Recruitment {
         Faction nation = nationOf(recruiter);
         ConquestServer server = ConquestServer.get();
         if (nation == null || server == null) {
-            player.sendSystemMessage(Component.literal("This post recruits for no one."));
+            player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.no_one")));
             return;
         }
         if (!server.recruits().join(player, nation)) {
-            player.sendSystemMessage(Component.literal("You couldn't join " + nation.name() + " just now."));
+            player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.could_not_join", "nation", nation.name())));
             return;
         }
         Ranks ranks = Ranks.get(player.server);
@@ -64,8 +64,7 @@ public final class Recruitment {
             ranks.set(player.getUUID(), start);
         }
         Rank rank = ranks.of(player.getUUID());
-        player.sendSystemMessage(Component.literal("You have joined " + nation.name() + " and enlisted in its army as "
-                + rank.title() + " (rank " + rank.number() + ")."));
+        player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.joined", "nation", nation.name(), "rank", rank.title(), "number", rank.number())));
         rafasconquest.gear.RankKits.issue(player, null, rank); // their arms, with Epic Knights
     }
 

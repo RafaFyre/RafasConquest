@@ -12,9 +12,34 @@ class PeerageTest {
     @Test
     void aQuestIsKeptWhole() {
         Quest q = new Quest(1234567890123L, Quest.Type.CLEAR, Quest.Ladder.MILITARY, Quest.OFFICER, "Recruiter of Shukai", 10, -20,
-                "the hamlet of Mill", 300, 400, 8, 20, 8, "abc");
+                "the hamlet of Mill", 300, 400, 8, 20, 8, "abc", "Clear 8 hostile creatures about the hamlet of Mill");
         assertEquals(q, Quest.load(q.save()));
-        assertTrue(q.title().contains("8") && q.title().contains("the hamlet of Mill"));
+        net.minecraft.nbt.CompoundTag old = q.save();
+        old.remove("title");
+        assertEquals(q.title(), Quest.load(old).title(), "a quest saved before titles were kept loses its title");
+    }
+
+    @Test
+    void aKindOfQuestIsReadFromItsFile() {
+        var toml = new com.electronwill.nightconfig.toml.TomlParser();
+        Quests.Kind k = Quests.kind("clear", toml.parse("""
+                task = "clear"
+                givers = ["officer"]
+                targets = ["hamlet", "village"]
+                title = "Clear {need} about {target}"
+                need = 5
+                renown = 20
+                """));
+        assertEquals(Quest.Type.CLEAR, k.task());
+        assertEquals(5, k.need());
+        assertEquals(1, k.weight());
+        assertEquals("Clear 5 about the hamlet of Mill", rafasconquest.data.Dialogue.fill(k.titles().get(0), "target", "the hamlet of Mill", "need", k.need()));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> Quests.kind("bad", toml.parse("""
+                task = "scout"
+                givers = ["officer"]
+                targets = ["moon"]
+                title = "x"
+                """)), "an unknown target is let through");
     }
 
     @Test

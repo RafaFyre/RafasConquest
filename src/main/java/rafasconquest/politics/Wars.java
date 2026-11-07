@@ -148,7 +148,7 @@ public final class Wars {
                     return p.getName().getString();
                 }
                 var cache = server.getProfileCache();
-                return cache == null ? "a lord" : cache.get(player).map(com.mojang.authlib.GameProfile::getName).orElse("a lord");
+                return cache == null ? say("feud.a_lord") : cache.get(player).map(com.mojang.authlib.GameProfile::getName).orElseGet(() -> say("feud.a_lord"));
             }
 
             @Override
@@ -164,7 +164,7 @@ public final class Wars {
 
             @Override
             public void clashSet(Feud feud, String text) {
-                server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] " + text + " (see the map)")
+                server.getPlayerList().broadcastSystemMessage(Component.literal(say("feud.clash_set", "text", text))
                         .withStyle(ChatFormatting.GOLD), false);
             }
 
@@ -232,8 +232,8 @@ public final class Wars {
             RecruitsBattle.start(server.overworld(), a, Mth.clamp(troopsA, 20, BattlePlan.MAX_SOLDIERS), b,
                     Mth.clamp(troopsB, 20, BattlePlan.MAX_SOLDIERS), new BattlePlan.Point(clash.x(), clash.z()), axis[0], axis[1],
                     feud.lord(true).isPlayer() ? null : nameA, feud.lord(false).isPlayer() ? null : nameB, BattleType.LAND, 0, second,
-                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] The men of " + nameA + " and " + nameB
-                            + " meet in a skirmish. " + line).withStyle(ChatFormatting.RED), false),
+                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal(say("feud.skirmish", "a", nameA, "b", nameB, "line", line))
+                            .withStyle(ChatFormatting.RED), false),
                     why -> {
                         RafasConquest.LOGGER.warn("[feud] The skirmish of {} and {} could not be fought for real: {}", nameA, nameB, why);
                         PoliticsData.get(server).politics.realClashCancelled(feud.id());
@@ -255,7 +255,7 @@ public final class Wars {
             if (p != null) {
                 int paid = p.getInventory().clearOrCountMatchingItems(s -> s.is(net.minecraft.world.item.Items.EMERALD), emeralds,
                         p.inventoryMenu.getCraftSlots());
-                p.sendSystemMessage(Component.literal("You paid " + paid + " emeralds in your feud.").withStyle(ChatFormatting.GOLD));
+                p.sendSystemMessage(Component.literal(say("feud.paid", "count", paid)).withStyle(ChatFormatting.GOLD));
             }
         }
         if (to.isPlayer()) {
@@ -265,7 +265,7 @@ public final class Wars {
                 if (!p.getInventory().add(stack)) {
                     p.drop(stack, false);
                 }
-                p.sendSystemMessage(Component.literal("You were paid " + emeralds + " emeralds in your feud.").withStyle(ChatFormatting.GOLD));
+                p.sendSystemMessage(Component.literal(say("feud.was_paid", "count", emeralds)).withStyle(ChatFormatting.GOLD));
             }
         }
     }
@@ -334,8 +334,8 @@ public final class Wars {
                 } else {
                     defenders += brought;
                 }
-                server.getPlayerList().broadcastSystemMessage(Component.literal("[War] " + p.getName().getString() + " brings "
-                        + brought + " of their vassals' troops and retinue to the field.").withStyle(ChatFormatting.GOLD), false);
+                server.getPlayerList().broadcastSystemMessage(Component.literal(say("war.brings", "player", p.getName().getString(), "count", brought))
+                        .withStyle(ChatFormatting.GOLD), false);
             }
         }
         String county = MapLands.of(map).titleName(new Goal(false, war.target()));
@@ -345,13 +345,9 @@ public final class Wars {
                     Mth.clamp(defenders, 20, BattlePlan.MAX_SOLDIERS),
                     at, axis[0], axis[1], general(map, war, true), general(map, war, false), war.type(),
                     war.type() == BattleType.AMPHIBIOUS ? fort.harbourShips() : 0,
-                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal("[War] The armies of " + a.name() + " and "
-                            + d.name() + switch (war.type()) {
-                                case OCEAN -> " meet at sea, their fleets closing,";
-                                case AMPHIBIOUS -> " meet at " + fort.name() + ", " + a.name() + " landing under its walls from the sea,";
-                                case SIEGE -> " meet at the walls of " + fort.name() + ", " + d.name() + " holding out behind them,";
-                                case LAND -> " meet in battle";
-                            } + " for the " + county + ". " + line).withStyle(ChatFormatting.RED), false),
+                    line -> server.getPlayerList().broadcastSystemMessage(Component.literal(say("war.battle", "a", a.name(), "d", d.name(),
+                            "how", say("war.meet." + war.type().name().toLowerCase(java.util.Locale.ROOT), "fort", fort == null ? "" : fort.name(),
+                                    "a", a.name(), "d", d.name()), "county", county, "line", line)).withStyle(ChatFormatting.RED), false),
                     why -> {
                         RafasConquest.LOGGER.warn("[war] The battle for the {} could not be fought for real: {}", county, why);
                         PoliticsData.get(server).politics.realBattleCancelled(war.id());
@@ -384,7 +380,7 @@ public final class Wars {
             int x = (int) Math.round(at.x() + axis[0] * BEHIND_LINES * side);
             int z = (int) Math.round(at.z() + axis[1] * BEHIND_LINES * side);
             teleport(p, level, x, z);
-            p.sendSystemMessage(Component.literal("Your army has reached the field of battle.").withStyle(ChatFormatting.RED));
+            p.sendSystemMessage(Component.literal(say("war.reached_field")).withStyle(ChatFormatting.RED));
         }
     }
 
@@ -486,9 +482,9 @@ public final class Wars {
             String capital = army != null ? army.place() : map.names().get(map.nations().get(attacking ? war.attacker() : war.defender()).seat());
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                 if (rafasconquest.peerage.Talk.serves(p, nation)) {
-                    p.sendSystemMessage(Component.literal("To arms! " + nation.name() + " raises an army against " + enemy + ", for the "
-                            + title + ". It musters at " + capital + " for a day, then marches. ").withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
-                            .append(Component.literal("[Muster]").withStyle(style -> style.withColor(ChatFormatting.GOLD).withUnderlined(true)
+                    p.sendSystemMessage(Component.literal(say("war.to_arms", "nation", nation.name(), "enemy", enemy, "title", title,
+                                    "capital", capital)).withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
+                            .append(Component.literal(say("war.muster_button")).withStyle(style -> style.withColor(ChatFormatting.GOLD).withUnderlined(true)
                                     .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/pve muster")))));
                 }
             }
@@ -513,14 +509,12 @@ public final class Wars {
                     if (nation != null && rafasconquest.peerage.Talk.serves(player, nation)) {
                         mustered.put(player.getUUID(), new long[]{war.id(), attacking ? 1 : 0});
                         teleport(player, player.server.overworld(), (int) Math.round(army.x()), (int) Math.round(army.z()));
-                        return army.mustering(now(player.server)) ? "You have mustered with the army of " + nation.name()
-                                + ". It marches at dawn; you will go with it into battle"
-                                : "You have joined the army of " + nation.name() + " on the march; you will go with it into battle";
+                        return say(army.mustering(now(player.server)) ? "war.mustered" : "war.joined_march", "nation", nation.name());
                     }
                 }
             }
         }
-        return "Your nation has no army in the field";
+        return say("war.no_army");
     }
 
     /**
@@ -661,7 +655,7 @@ public final class Wars {
         boolean[] attacking = new boolean[1];
         War war = n < 0 ? null : warOf(PoliticsData.get(player.server).politics, n, attacking);
         if (war == null) {
-            return "There is no war to send you to";
+            return say("war.no_war");
         }
         mustered.put(player.getUUID(), new long[]{war.id(), attacking[0] ? 1 : 0});
         ServerLevel level = player.server.overworld();
@@ -673,13 +667,13 @@ public final class Wars {
         String county = MapLands.of(map).titleName(new Goal(false, war.target()));
         if (tent != null) {
             player.teleportTo(level, tent.x, tent.y, tent.z, player.getYRot(), player.getXRot());
-            return "You arrive at the war camp, before the command tent. The battle for the " + county + " is being fought";
+            return say("war.at_camp", "county", county);
         }
         double[] axis = axis(map, war);
         double side = attacking[0] ? -1 : 1;
         teleport(player, level, (int) Math.round(war.siteX() + axis[0] * BEHIND_LINES * side),
                 (int) Math.round(war.siteZ() + axis[1] * BEHIND_LINES * side));
-        return "You arrive behind your lines on the field of the " + county + ". You will fight with your army when it comes";
+        return say("war.behind_lines", "county", county);
     }
 
     /** A faction's nation on the map, by its id; -1 if it is none. */
@@ -880,9 +874,14 @@ public final class Wars {
     private static void heralds(MinecraftServer server, Politics politics, long day) {
         for (Politics.Event e : politics.chronicle()) {
             if (e.day() == day - 1) {
-                server.getPlayerList().broadcastSystemMessage(Component.literal("[Herald] ").withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal("Yesterday: " + e.text()).withStyle(ChatFormatting.YELLOW)), false);
+                server.getPlayerList().broadcastSystemMessage(Component.literal(say("herald.prefix")).withStyle(ChatFormatting.GOLD)
+                        .append(Component.literal(say("herald.yesterday", "text", e.text())).withStyle(ChatFormatting.YELLOW)), false);
             }
         }
+    }
+
+    /** A line from {@code dialogue/wars.toml}. */
+    static String say(String key, Object... vars) {
+        return rafasconquest.data.Dialogue.say("wars." + key, vars);
     }
 }

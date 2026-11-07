@@ -159,7 +159,7 @@ public final class Retinues {
         Peerage.Peer peer = peerage.of(player.getUUID());
         int room = size(level(peer.title));
         if (peer.retinue.size() >= room) {
-            player.sendSystemMessage(Component.literal("Your retinue is full (" + room + "): this recruit serves you as a soldier."));
+            player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.retinue.full", "room", room)));
             return;
         }
         Entity recruit = event.getRecruit();
@@ -168,7 +168,7 @@ public final class Retinues {
         recruit.setCustomNameVisible(true);
         peer.retinue.put(recruit.getUUID(), name);
         peerage.changed();
-        player.sendSystemMessage(Component.literal(name + " joins your retinue (" + peer.retinue.size() + " of " + room + ")."));
+        player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.retinue.joins", "name", name, "count", peer.retinue.size(), "room", room)));
     }
 
     /** A name in the culture of the nation the player serves (else the first culture). */

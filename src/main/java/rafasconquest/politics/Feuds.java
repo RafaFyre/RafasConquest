@@ -166,8 +166,7 @@ final class Feuds {
                 continue;
             }
             if (day - f.started >= LONGEST) {
-                end(politics, f, day, "The feud between " + name(f.a, lands, front) + " and " + name(f.b, lands, front)
-                        + " burned out, neither able to finish it.");
+                end(politics, f, day, Politics.say("feuds.burned_out", "a", name(f.a, lands, front), "b", name(f.b, lands, front)));
                 continue;
             }
             act(politics, f, day, lands, random, front, land);
@@ -218,8 +217,8 @@ final class Feuds {
         }
         Feud f = new Feud(next++, x, y, nx, ny, day);
         list.add(f);
-        politics.log(day, name(x, lands, front) + " began a feud with " + name(y, lands, front)
-                + (nx == ny ? "" : ", across the border between " + lands.nationName(nx) + " and " + lands.nationName(ny)) + ".");
+        politics.log(day, Politics.say(nx == ny ? "feuds.began" : "feuds.began_across", "a", name(x, lands, front), "b", name(y, lands, front),
+                "nation_a", lands.nationName(nx), "nation_b", lands.nationName(ny)));
     }
 
     /** Starts a feud now, whatever the lords think of each other (for {@code /pve politics feud}); null if they can't. */
@@ -233,7 +232,7 @@ final class Feuds {
         }
         Feud f = new Feud(next++, x, y, nx, ny, day);
         list.add(f);
-        politics.log(day, name(x, lands, front) + " began a feud with " + name(y, lands, front) + ".");
+        politics.log(day, Politics.say("feuds.began", "a", name(x, lands, front), "b", name(y, lands, front)));
         return f;
     }
 
@@ -272,8 +271,7 @@ final class Feuds {
         Set<Integer> theirs = land.getOrDefault(f.lord(!byA), Set.of());
         List<Integer> targets = border(theirs, mine, lands);
         if (targets.isEmpty()) {
-            end(politics, f, day, "The feud between " + name(f.a, lands, front) + " and " + name(f.b, lands, front)
-                    + " ended: their lands no longer touch.");
+            end(politics, f, day, Politics.say("feuds.apart", "a", name(f.a, lands, front), "b", name(f.b, lands, front)));
             return;
         }
         int target = targets.get(random.nextInt(targets.size()));
@@ -284,8 +282,8 @@ final class Feuds {
                 f.scoreB++;
             }
             front.pay(f.lord(!byA), actor, RAID_LOOT);
-            politics.log(day, name(actor, lands, front) + "'s men raided the lands of " + name(f.lord(!byA), lands, front) + " about "
-                    + lands.provinceName(target) + ", and carried off what they could.");
+            politics.log(day, Politics.say("feuds.raided", "a", name(actor, lands, front), "b", name(f.lord(!byA), lands, front),
+                    "place", lands.provinceName(target)));
             yielded(politics, f, day, lands, random, front, land);
         } else if (choice == 1 || choice == 2) {
             boolean isDuel = choice == 2;
@@ -303,16 +301,12 @@ final class Feuds {
             int cb = f.b.isPlayer() ? -1 : lands.champion(f.b.person(), fallen);
             f.clash = new Feud.Clash(isDuel ? Feud.Kind.DUEL : Feud.Kind.SKIRMISH, day + CLASH_DELAY, site[0], site[1], byA, ca, cb,
                     isDuel && toTheDeath(ca, f.a, f.b, lands), isDuel && toTheDeath(cb, f.b, f.a, lands));
-            String text = isDuel
-                    ? name(actor, lands, front) + " challenged " + name(f.lord(!byA), lands, front) + ": their champions meet at midday by "
-                    + lands.provinceName(target) + String.format(" (%.0f, %.0f)", site[0], site[1]) + "."
-                    : name(actor, lands, front) + " called out their men against " + name(f.lord(!byA), lands, front)
-                    + ": they meet at midday by " + lands.provinceName(target) + String.format(" (%.0f, %.0f)", site[0], site[1]) + ".";
+            String text = Politics.say(isDuel ? "feuds.challenged" : "feuds.called_out", "a", name(actor, lands, front),
+                    "b", name(f.lord(!byA), lands, front), "place", lands.provinceName(target), "x", Math.round(site[0]), "z", Math.round(site[1]));
             politics.log(day, text);
             front.clashSet(f, text);
         } else if (choice == 3) {
-            end(politics, f, day, name(actor, lands, front) + " made peace with " + name(f.lord(!byA), lands, front)
-                    + ", and their feud is over.");
+            end(politics, f, day, Politics.say("feuds.made_peace", "a", name(actor, lands, front), "b", name(f.lord(!byA), lands, front)));
         }
     }
 
@@ -435,7 +429,7 @@ final class Feuds {
                 }
             }
             if (best != null) {
-                politics.log(day, "Angered by the skirmish, " + lands.nationName(ln) + " took up its lord's quarrel.");
+                politics.log(day, Politics.say("feuds.angered", "nation", lands.nationName(ln)));
                 politics.declare(ln, wn, best.goal(), day, lands, random, front);
                 return; // the feud waits on the war
             }
@@ -462,16 +456,16 @@ final class Feuds {
                 fallen.add(c.champion(!aWon));
             }
             blood.add(winner.key() + ">" + loser.key());
-            politics.log(day, wc + ", for " + name(winner, lands, front) + ", slew " + lc + " in a duel to the death.");
+            politics.log(day, Politics.say("feuds.slew", "champion", wc, "lord", name(winner, lands, front), "loser", lc));
         } else {
-            politics.log(day, wc + ", for " + name(winner, lands, front) + ", beat " + lc + " in a duel; " + lc + " yielded.");
+            politics.log(day, Politics.say("feuds.yielded_duel", "champion", wc, "lord", name(winner, lands, front), "loser", lc));
         }
         if (c != null && !winner.isPlayer() && c.champion(aWon) >= 0 && c.champion(aWon) != winner.person()) {
             politics.succession.hook(c.champion(aWon), winner.person(), rafasconquest.people.Hook.Kind.FAVOUR); // owed for fighting for them
         }
         yielded(politics, f, day, lands, random, front, holdings(lands, front.playerCounties()));
         if (loserDied && c != null && c.champion(!aWon) >= 0) {
-            politics.died(c.champion(!aWon), day, lands, random, "fell in a duel to the death"); // after the yielding, so the feud ends first
+            politics.died(c.champion(!aWon), day, lands, random, Politics.say("deaths.duel")); // after the yielding, so the feud ends first
         }
     }
 
@@ -510,27 +504,28 @@ final class Feuds {
                 politics.conquered.put(p, wn);
             }
             lords.put(p, winner);
-            what = "giving up " + lands.provinceName(p);
+            what = Politics.say("feuds.giving_up", "place", lands.provinceName(p));
         } else if ((roll -= ransom) < 0) {
             front.pay(loser, winner, RANSOM);
-            what = "paying a ransom of " + RANSOM + " emeralds for their captives";
+            what = Politics.say("feuds.ransom", "count", RANSOM);
         } else {
             front.pay(loser, winner, TRIBUTE);
-            what = "paying " + TRIBUTE + " emeralds";
+            what = Politics.say("feuds.tribute", "count", TRIBUTE);
         }
-        end(politics, f, day, name(loser, lands, front) + " yielded to " + name(winner, lands, front) + ", " + what + ".");
+        end(politics, f, day, Politics.say("feuds.yielded", "loser", name(loser, lands, front), "winner", name(winner, lands, front), "what", what));
     }
 
     /** A ruler orders a feud of their lords ended; an arbitrary one favours the lord they like better. */
     void settle(Politics politics, Feud f, int ruler, long day, Lands lands, Politics.Front front) {
         Person r = lands.person(ruler);
-        String text = r.name() + " ordered " + name(f.a, lands, front) + " and " + name(f.b, lands, front) + " to end their feud";
+        String text = Politics.say("feuds.ordered", "ruler", r.name(), "a", name(f.a, lands, front), "b", name(f.b, lands, front));
         if (r.has(Personality.ARBITRARY) && !f.a.isPlayer() && !f.b.isPlayer()) {
             boolean aFavoured = lands.opinion(ruler, f.a.person()) >= lands.opinion(ruler, f.b.person());
             front.pay(f.lord(!aFavoured), f.lord(aFavoured), TRIBUTE);
-            text += ", favouring " + name(f.lord(aFavoured), lands, front) + ", who was paid " + TRIBUTE + " emeralds";
+            text = Politics.say("feuds.ordered_favouring", "ruler", r.name(), "a", name(f.a, lands, front), "b", name(f.b, lands, front),
+                    "favoured", name(f.lord(aFavoured), lands, front), "count", TRIBUTE);
         }
-        end(politics, f, day, text + ".");
+        end(politics, f, day, text);
     }
 
     void end(Politics politics, Feud f, long day, String text) {

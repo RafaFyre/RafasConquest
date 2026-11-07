@@ -1,0 +1,28 @@
+# The officer at a nation's recruitment post.  {nation} {rank} {next} {renown} {war} {number}
+greet_stranger = ["Well met, traveller. {nation} has need of those who can hold a line."]
+offer_noble = "One of your standing would not serve in the ranks: you would join as a {rank}, and lead soldiers of your own."
+offer = "Swear to {nation} and you join its army as a {rank}. Serve well and you will rise."
+greet_soldier = "Well met, {rank}."
+next_rank = "{renown} more renown and you will be a {next}."
+top_rank = "There is no higher rank to give you."
+board_hint = "Read the board for the army's work, then come to me."
+at_war = "We are at war: our army fights for the {war}. I can send you to its camp."
+no_one = "This post recruits for no one."
+could_not_join = "You couldn't join {nation} just now."
+joined = "You have joined {nation} and enlisted in its army as {rank} (rank {number})."
+promoted = "You are promoted to {rank} (rank {number})."
+
+name = "Recruiter of {nation}"
+short_name = "Recruiter"
+title = "Recruiting Officer of {nation}"
+quartermaster = "The quartermaster issues you the arms of a {rank}, in {nation}'s colours."
+
+[options]
+enlist = "Join and enlist"
+camp = "Go to the war camp"
+
+
+# A soldier the player recruits into their own retinue.
+[retinue]
+full = "Your retinue is full ({room}): this recruit serves you as a soldier."
+joins = "{name} joins your retinue ({count} of {room})."

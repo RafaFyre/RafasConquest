@@ -38,6 +38,7 @@ public final class ClientModEvents {
     public static void onAddLayers(EntityRenderersEvent.AddLayers event) {
         if (event.getRenderer(ModEntityTypes.RECRUIT.get()) instanceof LivingEntityRenderer renderer && renderer.getModel() instanceof HumanoidModel) {
             renderer.addLayer(new BackBannerLayer(renderer, event.getContext().getItemInHandRenderer()));
+            renderer.addLayer(new MouthLayer(renderer)); // the war council, as they speak
         }
     }
 }

@@ -19,9 +19,17 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new FactionMainScreen(player));
     }
 
-    /** A conversation with a recruiter or a noble. */
-    public static void openTalk(rafasconquest.peerage.Talk.View view) {
-        Minecraft.getInstance().setScreen(new RecruiterScreen(view));
+    /**
+     * A conversation (a recruiter, a noble, the war council): what follows in one already open, or a new one, unless the
+     * player is busy in another screen (they came near while in their inventory, say).
+     */
+    public static void openTalk(List<rafasconquest.peerage.Talk.View> pages) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen instanceof DialogueScreen talk) {
+            talk.show(pages);
+        } else if (mc.screen == null) {
+            mc.setScreen(new DialogueScreen(pages));
+        }
     }
 
     /** The player's stats, over the screen they were asked from (the inventory), which closing them goes back to. */

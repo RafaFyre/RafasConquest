@@ -1,0 +1,36 @@
+# Wars and feuds as the players hear of them.
+
+[feud]
+clash_set = "[Feud] {text} (see the map)"
+skirmish = "[Feud] The men of {a} and {b} meet in a skirmish. {line}"
+duel = "[Feud] {a} and {b} face each other in a duel for {lord_a} and {lord_b} ({x}, {z})."
+news = "[Feud] {text}"
+paid = "You paid {count} emeralds in your feud."
+was_paid = "You were paid {count} emeralds in your feud."
+a_lord = "a lord"
+
+[war]
+brings = "[War] {player} brings {count} of their vassals' troops and retinue to the field."
+# The armies meet: {how} is one of [war.meet], {county} what they fight for, {line} the battle's own report.
+battle = "[War] The armies of {a} and {d}{how} for the {county}. {line}"
+reached_field = "Your army has reached the field of battle."
+to_arms = "To arms! {nation} raises an army against {enemy}, for the {title}. It musters at {capital} for a day, then marches. "
+muster_button = "[Muster]"
+mustered = "You have mustered with the army of {nation}. It marches at dawn; you will go with it into battle"
+joined_march = "You have joined the army of {nation} on the march; you will go with it into battle"
+no_army = "Your nation has no army in the field"
+no_war = "There is no war to send you to"
+at_camp = "You arrive at the war camp, before the command tent. The battle for the {county} is being fought"
+behind_lines = "You arrive behind your lines on the field of the {county}. You will fight with your army when it comes"
+
+muster_bar = "{nation}'s army musters at {place}: it marches in {time}"
+
+[war.meet]
+ocean = " meet at sea, their fleets closing,"
+amphibious = " meet at {fort}, {a} landing under its walls from the sea,"
+siege = " meet at the walls of {fort}, {d} holding out behind them,"
+land = " meet in battle"
+
+[herald]
+prefix = "[Herald] "
+yesterday = "Yesterday: {text}"

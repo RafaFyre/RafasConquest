@@ -649,16 +649,16 @@ public final class RecruitsBattle {
         diplomacy.setRelation(teamA.getName(), teamB.getName(), DiplomacyStatus.ENEMY, level, false);
         diplomacy.setRelation(teamB.getName(), teamA.getName(), DiplomacyStatus.ENEMY, level, false);
         current = battle;
-        battle.name = battleName(level, centre).replace("The Battle", "The " + field.type().title());
+        battle.name = battleName(level, centre, field.type().title());
         String line = String.format(Locale.ROOT, "%s: %s, %d soldiers, against %s, %d soldiers, at %d, %d", battle.name,
                 battle.describe(0), field.army(0).started(), battle.describe(1), field.army(1).started(),
                 Math.round(centre.x()), Math.round(centre.z()));
         RafasConquest.LOGGER.info("[battle] {}", line);
-        battle.broadcast("[battle] " + battle.name);
+        battle.broadcast(say("begins", "name", battle.name));
         for (Side side : sides) {
             FieldArmy army = battle.field.army(side == sides[0] ? 0 : 1);
-            String title = army.started() >= Rank.GRAND_MARSHAL.leads() ? "Grand Marshal" : "General";
-            battle.broadcast(String.format(Locale.ROOT, "  %s is led by %s %s (%s)", side.faction.name(), title, side.general.name(),
+            String title = say(army.started() >= Rank.GRAND_MARSHAL.leads() ? "title_grand_marshal" : "title_general");
+            battle.broadcast(say("led_by", "nation", side.faction.name(), "title", title, "general", side.general.name(), "plan",
                     side.general.plan().describe()));
             if (army.winged()) {
                 battle.broadcast(String.format(Locale.ROOT, "    Marshals: left wing %s, centre %s, right wing %s", side.marshals[0],
@@ -733,7 +733,7 @@ public final class RecruitsBattle {
      * land there: "The Battle of Shukai Plains". Off the map, at sea or before the map is drawn: "The Battle of the
      * Plains".
      */
-    static String battleName(ServerLevel level, Point centre) {
+    static String battleName(ServerLevel level, Point centre, String type) {
         int x = Mth.floor(centre.x());
         int z = Mth.floor(centre.z());
         String province = null;
@@ -748,7 +748,7 @@ public final class RecruitsBattle {
         int y = level.getChunkSource().getGenerator().getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level,
                 level.getChunkSource().randomState());
         String land = landName(level.getBiome(new BlockPos(x, y, z)));
-        return province != null ? "The Battle of " + province + " " + land : "The Battle of the " + land;
+        return say(province != null ? "name" : "name_no_place", "type", type, "place", province, "land", land);
     }
 
     /** What a battle's land is called, from the biome at its middle. */
@@ -2000,13 +2000,13 @@ public final class RecruitsBattle {
         for (FieldBattle.Order order : field.takeCalls()) {
             soundHorn(order.side());
             if (order.call() == FieldBattle.Call.ADVANCE) {
-                announce(order.side(), "ALL TROOPS CHARGE!");
+                announce(order.side(), say("orders.charge"));
             }
         }
         for (FieldBattle.Event event : field.takeEvents()) {
             Side side = sides[event.side()];
             // The order itself in the nation's colour, so it stands out from the reports.
-            String who = String.format(Locale.ROOT, "[battle %ds] %s's General %s ", field.seconds(), side.faction.name(), side.general.name());
+            String who = say("report", "seconds", field.seconds(), "nation", side.faction.name(), "general", side.general.name());
             TextColor color = color(event.side());
             broadcast(who + event.text(), Component.literal(who).append(Component.literal(event.text()).withStyle(style -> style.withColor(color))));
         }
@@ -2069,7 +2069,7 @@ public final class RecruitsBattle {
         battle.started = true;
         battle.dismissCouncil();
         battle.setPhase(Phase.BATTLE);
-        battle.broadcast(String.format(Locale.ROOT, "[battle day %d] The battle begins", battle.day));
+        battle.broadcast(say("begins_day", "day", battle.day));
         return "The battle begins";
     }
 
@@ -2188,9 +2188,8 @@ public final class RecruitsBattle {
                             yawOf(new Point(army.facingX(), army.facingZ())), 0);
                 }
                 kitPlayer(player, e);
-                player.sendSystemMessage(Component.literal(String.format(Locale.ROOT,
-                        "You fight for %s as a %s of %s, %s, leading %d. Keep to your ring.",
-                        sides[side].faction.name(), rank.title(), job.title(), roleTitle(role), leads)).withStyle(style -> style.withColor(color(e.side))));
+                player.sendSystemMessage(Component.literal(say("your_part", "nation", sides[side].faction.name(), "rank", rank.title(),
+                        "job", job.title(), "role", roleTitle(role), "count", leads)).withStyle(style -> style.withColor(color(e.side))));
             }
         }
     }
@@ -2223,11 +2222,11 @@ public final class RecruitsBattle {
     /** Where a player's unit fights, as told them at the start. */
     private static String roleTitle(BattleRole role) {
         return switch (role) {
-            case FRONTLINE -> "in the first block to charge";
-            case BAIT -> "as bait, running ahead of the line";
-            case SUPPORT -> "in support, reinforcing your wing's losing blocks";
-            case FLANKER -> "flanking: striking enemy blocks from the side or behind";
-            case KILL_SQUAD -> "in a kill squad, hunting the enemy's officers";
+            case FRONTLINE -> say("roles.frontline");
+            case BAIT -> say("roles.bait");
+            case SUPPORT -> say("roles.support");
+            case FLANKER -> say("roles.flanker");
+            case KILL_SQUAD -> say("roles.kill_squad");
         };
     }
 
@@ -2725,20 +2724,19 @@ public final class RecruitsBattle {
         FieldArmy army = field.army(e.side);
         if (!e.toldHold && army.holding(b.wing())) {
             e.toldHold = true;
-            title(e, "Hold the " + wingTitle(b.wing(), army.winged()) + "!");
+            title(e, say("orders.hold", "where", wingTitle(b.wing(), army.winged())));
         }
         FieldBlock strike = b.strikeAt();
         if (strike != null && strike != e.lastStrike && strike.alive() > 0 && strike == field.army(1 - e.side).commander()) {
-            title(e, "Kill General " + sides[1 - e.side].general.name() + "!");
+            title(e, say("orders.kill_general", "general", sides[1 - e.side].general.name()));
         } else if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
-            title(e, "Target " + sides[1 - e.side].faction.name() + "'s " + wingTitle(strike.wing(), field.army(1 - e.side).winged())
-                    + " block!");
+            title(e, say("orders.target", "nation", sides[1 - e.side].faction.name(), "where", wingTitle(strike.wing(), field.army(1 - e.side).winged())));
         }
         e.lastStrike = strike;
         FieldBlock prey = b.prey();
         if (!e.toldKill && prey != null && prey.duty() == Duty.GENERAL && (b.charged() || b.approaching())) {
             e.toldKill = true;
-            title(e, "Kill General " + sides[1 - e.side].general.name() + "!");
+            title(e, say("orders.kill_general", "general", sides[1 - e.side].general.name()));
         }
         showTitle(e, player);
     }
@@ -2771,9 +2769,9 @@ public final class RecruitsBattle {
 
     private static String wingTitle(int wing, boolean winged) {
         if (!winged) {
-            return "line";
+            return say("wings.line");
         }
-        return wing == FieldArmy.LEFT ? "left wing" : wing == FieldArmy.RIGHT ? "right wing" : "centre";
+        return say("wings." + FieldArmy.wingKey(wing));
     }
 
     /** A side's colour for its orders: its faction's main colour. */
@@ -3379,19 +3377,19 @@ public final class RecruitsBattle {
     private void rally(Enlisted e, ServerPlayer player) {
         long now = level.getGameTime();
         if (now < e.rallyAt) {
-            player.displayClientMessage(Component.literal("You can rally again in " + (e.rallyAt - now) / 20 + "s"), true);
+            player.displayClientMessage(Component.literal(say("rally_wait", "seconds", (e.rallyAt - now) / 20)), true);
             return;
         }
         e.rallyAt = now + RALLY_COOLDOWN;
         hearten(e.side, player.position(), RALLY_REACH);
-        player.displayClientMessage(Component.literal("You rally the soldiers about you"), true);
+        player.displayClientMessage(Component.literal(say("rally")), true);
     }
 
     /** Lead charge, off cooldown: these units take heart and can't rout a while, and the player gets a burst of speed. */
     private boolean lead(Enlisted e, List<Unit> us, ServerPlayer player) {
         long now = level.getGameTime();
         if (now < e.leadAt) {
-            player.displayClientMessage(Component.literal("You can lead a charge again in " + (e.leadAt - now) / 20 + "s"), true);
+            player.displayClientMessage(Component.literal(say("lead_wait", "seconds", (e.leadAt - now) / 20)), true);
             return false;
         }
         e.leadAt = now + LEAD_COOLDOWN;
@@ -3400,7 +3398,7 @@ public final class RecruitsBattle {
             u.block.rally(field.seconds() + FieldRules.RALLIED_SECONDS);
             soldiersOf(u).forEach(s -> s.setMoral(100));
         }
-        player.displayClientMessage(Component.literal("You lead the charge!"), true);
+        player.displayClientMessage(Component.literal(say("lead")), true);
         return true;
     }
 
@@ -3734,9 +3732,9 @@ public final class RecruitsBattle {
                 boolean broke = e.support.stream().allMatch(b -> b.alive() == 0 || b.duty() == Duty.ROUTED || b.duty() == Duty.FLEEING);
                 double worst = e.support.stream().mapToDouble(field::routRisk).max().orElse(0);
                 if (broke) {
-                    player.sendSystemMessage(Component.literal("Too late: they broke.").withStyle(style -> style.withColor(color(e.side))));
+                    player.sendSystemMessage(Component.literal(say("too_late")).withStyle(style -> style.withColor(color(e.side))));
                 } else if (worst < SUPPORT_SAFE) {
-                    player.sendSystemMessage(Component.literal("The line holds. Well done.").withStyle(style -> style.withColor(color(e.side))));
+                    player.sendSystemMessage(Component.literal(say("held")).withStyle(style -> style.withColor(color(e.side))));
                 } else if (clock - e.supportSince <= SUPPORT_SECONDS) {
                     continue;
                 }
@@ -3768,14 +3766,13 @@ public final class RecruitsBattle {
                     }
                 }
                 String marshal = sides[e.side].marshals[Math.max(0, Math.min(2, first.wing()))];
-                title(e, "Save the " + where + "!");
-                player.sendSystemMessage(Component.literal("Marshal " + marshal + ": ").withStyle(style -> style.withColor(color(e.side)))
-                        .append(Component.literal(String.format(Locale.ROOT, "%s, %d of our blocks on the %s are about to break. "
-                                + "Bring your men and hold them!", e.rank.title(), e.support.size(), where)).withStyle(net.minecraft.ChatFormatting.WHITE)));
+                title(e, say("orders.save", "where", where));
+                player.sendSystemMessage(Component.literal(say("marshal_says", "name", marshal)).withStyle(style -> style.withColor(color(e.side)))
+                        .append(Component.literal(say("save_marshal", "rank", e.rank.title(), "count", e.support.size(), "where", where)).withStyle(net.minecraft.ChatFormatting.WHITE)));
             } else {
                 e.support.add(first);
-                title(e, "Support the block on the " + where + "!");
-                player.sendSystemMessage(Component.literal("A block on the " + where + " is about to break. Go to them!")
+                title(e, say("orders.support", "where", where));
+                player.sendSystemMessage(Component.literal(say("save_soldier", "where", where))
                         .withStyle(style -> style.withColor(color(e.side))));
             }
             e.supportKey = new Object();
@@ -3960,7 +3957,7 @@ public final class RecruitsBattle {
         }
         if (!meleeAnnounced && field.finalMelee()) {
             meleeAnnounced = true;
-            broadcast("[battle " + field.seconds() + "s] the lines have stalled: everyone left charges");
+            broadcast(say("stalled", "seconds", field.seconds()));
         }
     }
 
@@ -4000,18 +3997,18 @@ public final class RecruitsBattle {
             result = outcome.result();
         } else if (!field.army(1 - outcome.winner()).generalAlive()) {
             Side loser = sides[1 - outcome.winner()];
-            result = describe(outcome.winner()) + " wins: " + loser.faction.name() + "'s General " + loser.general.name()
-                    + " fell, and " + loser.faction.name() + " retreats";
+            result = say("result_general_fell", "winner", describe(outcome.winner()), "nation", loser.faction.name(),
+                    "general", loser.general.name());
         } else {
-            result = describe(outcome.winner()) + " wins; " + describe(1 - outcome.winner()) + " routs";
+            result = say("result_routs", "winner", describe(outcome.winner()), "loser", describe(1 - outcome.winner()));
         }
-        broadcast(String.format(Locale.ROOT, "[" + name + " is over after %ds] %s. %s %d/%d left, %s %d/%d left | whole battle: %s",
-                outcome.seconds(), result, sides[0].faction.name(), field.army(0).alive(), field.army(0).started(),
-                sides[1].faction.name(), field.army(1).alive(), field.army(1).started(), whole.describe()));
+        broadcast(say("over", "name", name, "seconds", outcome.seconds(), "result", result,
+                "nation_a", sides[0].faction.name(), "alive_a", field.army(0).alive(), "started_a", field.army(0).started(),
+                "nation_b", sides[1].faction.name(), "alive_b", field.army(1).alive(), "started_b", field.army(1).started(), "whole", whole.describe()));
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
-            broadcast(String.format(Locale.ROOT, "  %s: general %s, standard %s", describe(side),
-                    army.generalAlive() ? "survived" : "fell", army.standardAlive() ? "still flies" : "fell"));
+            broadcast(say("over_side", "side", describe(side), "general", say(army.generalAlive() ? "general_survived" : "general_fell"),
+                    "standard", say(army.standardAlive() ? "standard_flies" : "standard_fell")));
         }
         reportCalibration();
         merits(outcome);
@@ -4041,8 +4038,7 @@ public final class RecruitsBattle {
             peerage.of(e.player).merits.add(new rafasconquest.peerage.Peerage.Merit(name, (int) Math.round(centre.x()), (int) Math.round(centre.z()),
                     won.faction.id().toString(), List.copyOf(officers)));
             peerage.changed();
-            player.sendSystemMessage(Component.literal("Your part in " + name + " is remembered. A noble of " + won.faction.name()
-                    + " may reward it."));
+            player.sendSystemMessage(Component.literal(say("remembered", "name", name, "nation", won.faction.name())));
         }
     }
 
@@ -4206,6 +4202,19 @@ public final class RecruitsBattle {
         return null;
     }
 
+    /** Whether a player stands in a command tent where the war council meets, in the battle on now. */
+    public static boolean inCouncilTent(ServerPlayer player) {
+        if (current == null || current.over || player.level() != current.level) {
+            return false;
+        }
+        for (WarCamp camp : current.camps) {
+            if (camp != null && camp.inCouncilTent(player.blockPosition())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The camp a player of a wing sleeps in: their wing's, else the general's. */
     @Nullable
     private WarCamp campOf(int side, int wing) {
@@ -4263,11 +4272,11 @@ public final class RecruitsBattle {
             }
             Side s = sides[side];
             AbstractRecruitEntity general = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GENERAL, camp.generalSpot(),
-                    camp.yaw(0), "General " + s.general.name());
+                    camp.yaw(0), say("camp_general", "name", s.general.name()));
             AbstractRecruitEntity left = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GUARD, camp.leftMarshalSpot(),
-                    camp.yaw(1), "Marshal " + s.marshals[0]);
+                    camp.yaw(1), say("camp_marshal", "name", s.marshals[0]));
             AbstractRecruitEntity right = campFigure(ModEntityTypes.RECRUIT.get(), side, Role.GUARD, camp.rightMarshalSpot(),
-                    camp.yaw(3), "Marshal " + s.marshals[2]);
+                    camp.yaw(3), say("camp_marshal", "name", s.marshals[2]));
             String[] roles = {"general", "left", "right"};
             AbstractRecruitEntity[] council = {general, left, right};
             for (int i = 0; i < council.length; i++) {
@@ -4340,22 +4349,30 @@ public final class RecruitsBattle {
      * One of the council said a line to a player. Their own one-on-one talk goes on as it was; anyone else speaking
      * makes it a meeting: the speaker looks at the player, and the rest of the council at the speaker.
      */
-    private void spoke(ServerPlayer player, String name) {
-        for (Map.Entry<UUID, Integer> c : councillors.entrySet()) {
-            Entity figure = level.getEntity(c.getKey());
-            if (figure == null || figure.getCustomName() == null || !figure.getCustomName().getString().equals(name)) {
-                continue;
-            }
-            Object[] one = listening.get(c.getKey());
-            if (one != null && one[0].equals(player.getUUID())) {
-                one[1] = level.getGameTime() + LISTEN_TICKS;
-                return;
-            }
-            int side = c.getValue();
-            listening.keySet().removeIf(id -> side == councillors.getOrDefault(id, -1));
-            speaking.put(side, new Object[]{c.getKey(), player.getUUID(), level.getGameTime() + SPEAKING_TICKS});
+    private void spoke(ServerPlayer player, int entity) {
+        Entity figure = level.getEntity(entity);
+        Integer side = figure == null ? null : councillors.get(figure.getUUID());
+        if (side == null) {
+            return; // not one of the council (a messenger)
+        }
+        Object[] one = listening.get(figure.getUUID());
+        if (one != null && one[0].equals(player.getUUID())) {
+            one[1] = level.getGameTime() + LISTEN_TICKS;
             return;
         }
+        listening.keySet().removeIf(id -> side.equals(councillors.get(id)));
+        speaking.put(side, new Object[]{figure.getUUID(), player.getUUID(), level.getGameTime() + SPEAKING_TICKS});
+    }
+
+    /** The entity id of the council figure of {@code side} whose role starts so ("general", "vassal:12:"), or -1. */
+    private int figure(int side, String role) {
+        for (Map.Entry<UUID, String> r : councilRoles.entrySet()) {
+            Entity e = r.getValue().startsWith(role) && Integer.valueOf(side).equals(councillors.get(r.getKey())) ? level.getEntity(r.getKey()) : null;
+            if (e != null) {
+                return e.getId();
+            }
+        }
+        return -1;
     }
 
     /**
@@ -4457,12 +4474,12 @@ public final class RecruitsBattle {
         Side s = sides[side];
         Side e = sides[1 - side];
         FieldArmy enemy = field.army(1 - side);
-        return new WarCouncil.Facts(side, color(side),
-                new WarCouncil.Officer("General", s.general.name(), s.traits[0]),
-                new WarCouncil.Officer("Marshal", s.marshals[0], s.traits[1]),
-                new WarCouncil.Officer("Marshal", s.marshals[2], s.traits[3]),
+        return new WarCouncil.Facts(side, color(side), markColor(s.faction), s.faction.name(),
+                new WarCouncil.Officer("General", s.general.name(), s.traits[0], figure(side, "general")),
+                new WarCouncil.Officer("Marshal", s.marshals[0], s.traits[1], figure(side, "left")),
+                new WarCouncil.Officer("Marshal", s.marshals[2], s.traits[3], figure(side, "right")),
                 s.general.plan(), field.army(side).alive(), e.faction.name(), e.general.name(), e.general.plan(), enemy.alive(),
-                weaknesses(enemy, e.general.plan()), day);
+                weaknesses(enemy, e.general.plan()), day, person -> figure(side, "vassal:" + person + ":"));
     }
 
     /** What the scouts make of the enemy: a thin wing, few horse or archers, no shield wall. */
@@ -4470,43 +4487,48 @@ public final class RecruitsBattle {
         int all = 0;
         int cavalry = 0;
         int archers = 0;
-        int[] wing = new int[3];
         for (FieldBlock b : enemy.blocks()) {
-            if (b.alive() == 0 || b.duty() == Duty.GENERAL || b.duty() == Duty.GUARD || b.duty() == Duty.BEARER) {
-                continue;
-            }
-            all += b.alive();
-            if (b.arm() == Arm.CAVALRY) {
-                cavalry += b.alive();
-            } else if (b.arm() == Arm.ARCHERS) {
-                archers += b.alive();
-            } else {
-                wing[b.wing()] += b.alive();
+            if (fights(b)) {
+                all += b.alive();
+                cavalry += b.arm() == Arm.CAVALRY ? b.alive() : 0;
+                archers += b.arm() == Arm.ARCHERS ? b.alive() : 0;
             }
         }
         List<String> lines = new ArrayList<>();
-        int infantry = wing[0] + wing[1] + wing[2];
-        if (enemy.winged() && infantry > 0) {
-            int thin = wing[FieldArmy.LEFT] <= wing[FieldArmy.RIGHT] ? FieldArmy.LEFT : FieldArmy.RIGHT;
-            if (wing[thin] < infantry * 0.28) {
-                String name = thin == FieldArmy.LEFT ? "left" : "right";
-                lines.add(String.format(Locale.ROOT, "their %s wing is thin: barely %d foot. Hit it hard and it folds.", name, wing[thin]));
-            }
+        String thin = thinWing(enemy);
+        if (thin != null) {
+            lines.add(thin);
         }
         if (all > 0 && cavalry < all * 0.1) {
-            lines.add("they have few horse. Our cavalry can ride where it likes.");
+            lines.add(say("weaknesses.few_horse"));
         }
         if (all > 0 && archers < all * 0.1) {
-            lines.add("they have few archers. Close in without fear of the arrows.");
+            lines.add(say("weaknesses.few_archers"));
         }
         if (!plan.has(rafasconquest.battle.Doctrine.Formation.GREAT_SHIELD)) {
-            lines.add("they stand no shield wall. A good charge will break their line.");
+            lines.add(say("weaknesses.no_shield_wall"));
         }
-        List<String> capitalised = new ArrayList<>();
-        for (String l : lines) {
-            capitalised.add(Character.toUpperCase(l.charAt(0)) + l.substring(1));
+        return lines;
+    }
+
+    private static boolean fights(FieldBlock b) {
+        return b.alive() > 0 && b.duty() != Duty.GENERAL && b.duty() != Duty.GUARD && b.duty() != Duty.BEARER;
+    }
+
+    /** What the scouts say of the enemy's thinner wing of foot, if it is thin enough to strike; null if not. */
+    private static String thinWing(FieldArmy enemy) {
+        int[] wing = new int[3];
+        for (FieldBlock b : enemy.blocks()) {
+            if (fights(b) && b.arm() != Arm.CAVALRY && b.arm() != Arm.ARCHERS) {
+                wing[b.wing()] += b.alive();
+            }
         }
-        return capitalised;
+        int infantry = wing[0] + wing[1] + wing[2];
+        int thin = wing[FieldArmy.LEFT] <= wing[FieldArmy.RIGHT] ? FieldArmy.LEFT : FieldArmy.RIGHT;
+        if (!enemy.winged() || infantry == 0 || wing[thin] >= infantry * 0.28) {
+            return null;
+        }
+        return say("weaknesses.thin_wing", "wing", say("weaknesses." + FieldArmy.wingKey(thin)), "count", wing[thin]);
     }
 
     /**
@@ -4605,7 +4627,8 @@ public final class RecruitsBattle {
                         : new ServerBossEvent(Component.empty(), BossEvent.BossBarColor.WHITE, BossEvent.BossBarOverlay.PROGRESS);
                 deploymentBars[side] = bar;
             }
-            String text = name + ", day " + day + ": " + (side < 2 ? sides[side].faction.name() + " deploys" : "the armies deploy") + ", " + time;
+            String text = side < 2 ? say("deploy_bar", "name", name, "day", day, "nation", sides[side].faction.name(), "time", time)
+                    : say("deploy_bar_both", "name", name, "day", day, "time", time);
             int s = side;
             bar.setName(side < 2 ? Component.literal(text).withStyle(style -> style.withColor(color(s))) : Component.literal(text));
             bar.setProgress((float) left / total);
@@ -4676,24 +4699,20 @@ public final class RecruitsBattle {
         FieldArmy theirs = field.army(1 - side);
         List<GeneralTask> reasons = new ArrayList<>();
         if (enemy.general.plan().has(Strategy.UNRELENTING_CHARGE) && s.traits[0] != Trait.CAUTIOUS) {
-            reasons.add(new GeneralTask(BattleRole.KILL_SQUAD, "General " + enemy.general.name()
-                    + " rides at the head of their charge. Bring them down, and their army breaks."));
+            reasons.add(new GeneralTask(BattleRole.KILL_SQUAD, say("tasks.kill_squad", "general", enemy.general.name())));
         }
         if (ours.alive() < theirs.alive() * 0.85) {
-            reasons.add(new GeneralTask(BattleRole.SUPPORT, "We're outnumbered now. Hold your men back of the line "
-                    + "and go wherever it bends."));
+            reasons.add(new GeneralTask(BattleRole.SUPPORT, say("tasks.support")));
         }
-        for (String w : weaknesses(theirs, enemy.general.plan())) {
-            if (w.contains("wing is thin")) {
-                reasons.add(new GeneralTask(BattleRole.FLANKER, w + " Take your men round and strike it in the side."));
-            }
+        String thin = thinWing(theirs);
+        if (thin != null) {
+            reasons.add(new GeneralTask(BattleRole.FLANKER, say("tasks.flanker", "weakness", thin)));
         }
         if (s.traits[0] == Trait.CUNNING) {
-            reasons.add(new GeneralTask(BattleRole.BAIT, "Run ahead of the line, then give ground once they bite. "
-                    + "Draw them in, and we'll close on them."));
+            reasons.add(new GeneralTask(BattleRole.BAIT, say("tasks.bait")));
         }
         if (s.traits[0] == Trait.BOLD && ours.alive() >= theirs.alive()) {
-            reasons.add(new GeneralTask(BattleRole.FRONTLINE, "You'll lead the first charge today. Make it count."));
+            reasons.add(new GeneralTask(BattleRole.FRONTLINE, say("tasks.frontline")));
         }
         reasons.removeIf(r -> r.role() == own);
         if (reasons.isEmpty() || level.random.nextDouble() >= NEW_TASK_CHANCE) {
@@ -4730,15 +4749,15 @@ public final class RecruitsBattle {
             boolean placed = rafasconquest.peerage.PlayerStats.teleportAtMuster(player);
             if (dayRoles.containsKey(e.player) && placed) {
                 hearMessenger(e, player); // already at their place: the general's word reaches them there
-                title(e, "In position");
+                title(e, say("orders.in_position"));
             } else if (dayRoles.containsKey(e.player)) {
                 spawnMessenger(e, player);
-                title(e, "A messenger waits at your tent");
+                title(e, say("orders.messenger_waits"));
             } else if (placed) {
-                title(e, "In position");
+                title(e, say("orders.in_position"));
             } else {
-                title(e, "Form up at your position!");
-                player.sendSystemMessage(Component.literal("Dawn. Lead your men out to your ring.")
+                title(e, say("orders.form_up"));
+                player.sendSystemMessage(Component.literal(say("dawn_form_up"))
                         .withStyle(style -> style.withColor(color(e.side))));
             }
         }
@@ -4749,7 +4768,7 @@ public final class RecruitsBattle {
         WarCamp camp = e.tentCamp;
         Vec3 at = camp != null && e.tent >= 0 ? camp.tentDoor(e.tent) : player.position().add(1.5, 0, 0);
         float yaw = camp != null ? camp.intoTent() : player.getYRot() + 180;
-        AbstractRecruitEntity messenger = campFigure(ModEntityTypes.RECRUIT.get(), e.side, Role.SOLDIER, at, yaw, "Messenger");
+        AbstractRecruitEntity messenger = campFigure(ModEntityTypes.RECRUIT.get(), e.side, Role.SOLDIER, at, yaw, say("messenger_name"));
         if (messenger != null) {
             e.messenger = messenger.getUUID();
         }
@@ -4763,17 +4782,16 @@ public final class RecruitsBattle {
         if (task == null) {
             return;
         }
-        List<Component> lines = new ArrayList<>();
-        lines.add(messengerSays(e, e.rank.title() + "! Word from General " + sides[e.side].general.name() + "."));
-        lines.add(messengerSays(e, "The general orders your men to fight " + task.role().title() + " today."));
-        lines.add(messengerSays(e, task.reason()));
-        lines.add(messengerSays(e, "Your ring marks where your men gather."));
+        Entity m = e.messenger == null ? null : level.getEntity(e.messenger);
+        // Not beside them (the word reached them at their place): the box alone, no one to turn to.
+        int who = m != null && m.distanceTo(player) <= 8 ? m.getId() : -1;
+        List<WarCouncil.Said> lines = new ArrayList<>();
+        for (String text : List.of(say("messenger.word", "rank", e.rank.title(), "general", sides[e.side].general.name()),
+                say("messenger.orders", "role", task.role().title()), task.reason(), say("messenger.ring"))) {
+            lines.add(new WarCouncil.Said(who, say("messenger_name"), sides[e.side].faction.name(), mainColor(sides[e.side].faction),
+                    markColor(sides[e.side].faction), text));
+        }
         council.deliver(player, lines, level.getGameTime());
-    }
-
-    private Component messengerSays(Enlisted e, String text) {
-        return Component.literal("Messenger: ").withStyle(style -> style.withColor(color(e.side)))
-                .append(Component.literal(text).withStyle(net.minecraft.ChatFormatting.WHITE));
     }
 
     private void removeMessenger(Enlisted e) {
@@ -4807,7 +4825,7 @@ public final class RecruitsBattle {
             Point spot = e.home.line();
             if (Math.hypot(player.getX() - spot.x(), player.getZ() - spot.z()) <= IN_POSITION) {
                 e.marching = false;
-                title(e, "In position");
+                title(e, say("orders.in_position"));
             }
         }
     }
@@ -4821,9 +4839,9 @@ public final class RecruitsBattle {
         for (Live l : live.values()) {
             l.living().forEach(s -> s.setTarget(null));
         }
-        broadcast(String.format(Locale.ROOT, "[battle day %d] Evening: both armies pull back to their camps", day));
-        announce(0, "Pull back to camp!");
-        announce(1, "Pull back to camp!");
+        broadcast(say("evening", "day", day));
+        announce(0, say("orders.pull_back"));
+        announce(1, say("orders.pull_back"));
     }
 
     /** The pullback and the night: the blocks march to their camps, then rest there until dawn. */
@@ -4840,9 +4858,9 @@ public final class RecruitsBattle {
         if (phase == Phase.PULLBACK && (field.arrived() || nightfall())) {
             setPhase(Phase.NIGHT);
             for (Enlisted e : enlisted.values()) {
-                title(e, "Night falls. Rest in your tent.");
+                title(e, say("orders.night"));
             }
-            broadcast(String.format(Locale.ROOT, "[battle day %d] Night falls; the armies rest in their camps", day));
+            broadcast(say("night", "day", day));
         }
         if (phase == Phase.NIGHT && morning()) {
             regroup();
@@ -4885,8 +4903,8 @@ public final class RecruitsBattle {
         morningMuster();
         // The armies rested in camp: they start the day there and march out to their places.
         field.formUp(CAMP_GAP - PULLBACK_SHORT_OF_CAMP);
-        broadcast(String.format(Locale.ROOT, "[battle day %d] Dawn: %s musters %d, %s %d; the armies deploy", day,
-                sides[0].faction.name(), field.army(0).started(), sides[1].faction.name(), field.army(1).started()));
+        broadcast(say("dawn", "day", day, "nation_a", sides[0].faction.name(), "count_a", field.army(0).started(),
+                "nation_b", sides[1].faction.name(), "count_b", field.army(1).started()));
         spawnCouncil();
     }
 
@@ -4900,7 +4918,7 @@ public final class RecruitsBattle {
         if (winner < 0) {
             setPhase(Phase.DONE);
             restoreRelations();
-            broadcast("Use /pve debug battle clear to remove the survivors and the camps");
+            broadcast(say("clear_hint"));
             return;
         }
         int loser = 1 - winner;
@@ -4913,22 +4931,20 @@ public final class RecruitsBattle {
             if (pursue) {
                 field.pursue();
                 setPhase(Phase.PURSUIT);
-                broadcast(String.format(Locale.ROOT, "[battle] General %s pursues %s's retreating army", w.general.name(),
-                        sides[loser].faction.name()));
-                announce(winner, "Pursue them!");
+                broadcast(say("pursues", "general", w.general.name(), "nation", sides[loser].faction.name()));
+                announce(winner, say("orders.pursue"));
             } else {
                 field.standDown(false);
                 setPhase(Phase.AFTERMATH);
-                broadcast(String.format(Locale.ROOT, "[battle] General %s lets %s's army go", w.general.name(),
-                        sides[loser].faction.name()));
+                broadcast(say("lets_go", "general", w.general.name(), "nation", sides[loser].faction.name()));
             }
         } else {
             surrendered = true;
             field.standDown(true);
             setPhase(Phase.AFTERMATH);
-            broadcast(String.format(Locale.ROOT, "[battle] %s surrenders; the fighting stops", sides[loser].faction.name()));
-            announce(winner, "They surrender! Hold!");
-            announce(loser, "We surrender. Lay down arms.");
+            broadcast(say("surrenders", "nation", sides[loser].faction.name()));
+            announce(winner, say("orders.they_surrender"));
+            announce(loser, say("orders.we_surrender"));
         }
         aftermathSince = field.seconds();
         for (Live l : live.values()) {
@@ -4986,9 +5002,8 @@ public final class RecruitsBattle {
         strikeCamp(side);
         restoreRelations();
         setPhase(Phase.DONE);
-        broadcast(String.format(Locale.ROOT, "[battle] %s's army %s the field", sides[side].faction.name(),
-                surrendered ? "lays down its arms and leaves" : "has fled"));
-        broadcast("Use /pve debug battle clear to remove the survivors and the camps");
+        broadcast(say(surrendered ? "left_field_surrendered" : "left_field_fled", "nation", sides[side].faction.name()));
+        broadcast(say("clear_hint"));
     }
 
     /** A camp is struck: its guards and council go, and its tents come down. */
@@ -5423,6 +5438,11 @@ public final class RecruitsBattle {
     }
 
     /** To every player; the server log gets it too. */
+    /** A battle line from {@code dialogue/battle.toml}. */
+    private static String say(String key, Object... vars) {
+        return rafasconquest.data.Dialogue.say("battle." + key, vars);
+    }
+
     private void broadcast(String line) {
         broadcast(line, Component.literal(line));
     }

@@ -33,22 +33,11 @@ public final class LandGrants {
     static final int RUIN_REACH = 4000;
 
     public enum Way {
-        OWN_COUNTY("grants you one of their counties"),
-        SPARE_COUNTY_VASSAL("takes you as their vassal, and grants you one of their spare counties"),
-        DISLIKED_VASSAL("takes you as their vassal, in place of a vassal they had no love for, who is dismissed"),
-        EMPTY_COUNTY("grants you an empty county of the realm"),
-        RUINS("grants you ruins to restore"),
-        DEAD_VASSAL_FREE("grants you the county of a vassal who has recently died"),
-        DEAD_VASSAL_SWORN("takes you as their vassal, in place of a vassal who has recently died");
+        OWN_COUNTY, SPARE_COUNTY_VASSAL, DISLIKED_VASSAL, EMPTY_COUNTY, RUINS, DEAD_VASSAL_FREE, DEAD_VASSAL_SWORN;
 
-        private final String says;
-
-        Way(String says) {
-            this.says = says;
-        }
-
+        /** How the noble says it, from {@code [ways]} in {@code dialogue/noble.toml}. */
         public String says() {
-            return says;
+            return rafasconquest.data.Dialogue.say("noble.ways." + name().toLowerCase(java.util.Locale.ROOT));
         }
     }
 

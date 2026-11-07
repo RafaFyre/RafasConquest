@@ -68,7 +68,7 @@ public final class Politics {
         }
 
         default String playerName(java.util.UUID player) {
-            return "a lord";
+            return say("a_lord");
         }
 
         default int playerTroops(java.util.UUID player) {
@@ -140,7 +140,8 @@ public final class Politics {
         boolean held = dead.noble() && !dead.hold().kind().heir();
         int h = succession.died(realm, d, random);
         if (held) {
-            log(day, dead.name() + " " + how + (h >= 0 ? "; " + lands.person(h).name() + " now holds " + (hold.isEmpty() ? "their lands" : hold) : "") + ".");
+            log(day, h >= 0 ? say("deaths.died_heir", "name", dead.name(), "how", how, "heir", lands.person(h).name(), "hold", hold.isEmpty() ? say("deaths.their_lands") : hold)
+                    : say("deaths.died", "name", dead.name(), "how", how));
         }
         feuds.list.removeIf(f -> f.a.person() == d || f.b.person() == d);
         if (h >= 0) {
@@ -257,8 +258,7 @@ public final class Politics {
         truces.values().removeIf(until -> until <= day);
         for (War w : new ArrayList<>(wars)) {
             if (day - w.started >= LONGEST_WAR) {
-                peace(w, day, lands, lands.nationName(w.attacker) + " and " + lands.nationName(w.defender)
-                        + " made peace, weary of war; each keeps what it holds.");
+                peace(w, day, lands, say("nations.weary_peace", "a", lands.nationName(w.attacker), "d", lands.nationName(w.defender)));
             }
         }
         List<Integer> order = new ArrayList<>();
@@ -275,7 +275,7 @@ public final class Politics {
         rafasconquest.people.Realm realm = lands.realm();
         if (realm != null) {
             for (int d : succession.day(day, realm, random, front.playerCounties().keySet())) {
-                died(d, day, lands, random, "died, aged " + lands.person(d).age());
+                died(d, day, lands, random, say("deaths.old_age", "age", lands.person(d).age()));
             }
             for (int[] w : succession.drainWeddings()) {
                 wedded(w[0], w[1], w[2], w[3], day, lands);
@@ -380,10 +380,9 @@ public final class Politics {
         boolean royal = from != to && rf >= 0 && rt >= 0 && m.family().equals(lands.person(rf).family())
                 && s.family().equals(lands.person(rt).family());
         if (royal && !atWar(from) && !atWar(to) && alliances.add(pair(from, to))) {
-            log(day, s.name() + " of " + lands.nationName(to) + " married " + m.name() + " of " + lands.nationName(from)
-                    + ", and the two nations are allied by it.");
+            log(day, say("nations.marriage_alliance", "groom", s.name(), "to", lands.nationName(to), "bride", m.name(), "from", lands.nationName(from)));
         } else if (stayed == rt) {
-            log(day, s.name() + ", ruler of " + lands.nationName(to) + ", married " + m.name() + ".");
+            log(day, say("nations.ruler_married", "groom", s.name(), "to", lands.nationName(to), "bride", m.name()));
         }
     }
 
@@ -393,7 +392,7 @@ public final class Politics {
             return;
         }
         alliances.add(pair(n, m));
-        log(day, lands.nationName(n) + " and " + lands.nationName(m) + " swore an alliance.");
+        log(day, say("nations.alliance", "a", lands.nationName(n), "b", lands.nationName(m)));
     }
 
     // ---- what is worth a war ----
@@ -522,8 +521,7 @@ public final class Politics {
     @Nullable
     public War declare(int n, int m, Goal goal, long day, Lands lands, Random random, Front front) {
         War w = new War(nextWar++, n, m, goal, day);
-        StringBuilder text = new StringBuilder(lands.nationName(n) + " declared war on " + lands.nationName(m) + " for the "
-                + lands.titleName(goal) + ".");
+        StringBuilder text = new StringBuilder(say("nations.declared", "a", lands.nationName(n), "d", lands.nationName(m), "title", lands.titleName(goal)));
         for (int a = 0; a < lands.nations(); a++) {
             if (a == n || a == m || !lands.canWage(a) || atWar(a) || lands.ruler(a) < 0) {
                 continue;
@@ -531,10 +529,10 @@ public final class Politics {
             int ruler = lands.ruler(a);
             if (allied(a, m) && !allied(a, n) && lands.opinion(ruler, lands.ruler(m)) >= -20) {
                 w.defenderAllies.add(a);
-                text.append(' ').append(lands.nationName(a)).append(" came to ").append(lands.nationName(m)).append("'s defence.");
+                text.append(say("nations.came_to_defence", "ally", lands.nationName(a), "d", lands.nationName(m)));
             } else if (allied(a, n) && !allied(a, m) && lands.opinion(ruler, lands.ruler(n)) >= 0 && random.nextBoolean()) {
                 w.attackerAllies.add(a);
-                text.append(' ').append(lands.nationName(a)).append(" joined ").append(lands.nationName(n)).append('.');
+                text.append(say("nations.joined", "ally", lands.nationName(a), "a", lands.nationName(n)));
             }
         }
         double now = Math.max(day, moved);
@@ -808,16 +806,11 @@ public final class Politics {
         bury(w.defender, w.defenderArmy, defendersLeft);
         String county = lands.titleName(new Goal(false, w.target));
         Lands.Fort fort = lands.fort(w.target);
-        String where = fort == null ? "in battle" : switch (w.type) {
-            case OCEAN -> "at sea off " + fort.name();
-            case LAND -> "in battle, riding out from " + fort.name();
-            case SIEGE -> "at the siege of " + fort.name();
-            case AMPHIBIOUS -> "storming " + fort.name() + " from the sea";
-        };
+        String where = fort == null ? say("battles.where.field")
+                : say("battles.where." + w.type.name().toLowerCase(java.util.Locale.ROOT), "fort", fort.name());
         if (attackerWon && w.type == BattleType.OCEAN && fort != null) {
             // The sea is theirs: the attacker's army lands under the port's walls next.
-            log(day, lands.nationName(w.attacker) + " beat the fleet of " + lands.nationName(w.defender) + " " + where
-                    + ", and sails on to land there.");
+            log(day, say("battles.fleet_beaten", "a", lands.nationName(w.attacker), "d", lands.nationName(w.defender), "where", where));
             w.seaWon = w.target;
             w.type = BattleType.AMPHIBIOUS;
             w.siteX = fort.x();
@@ -827,9 +820,9 @@ public final class Politics {
         }
         if (attackerWon) {
             take(w, w.target, lands, day, random, front, true);
-            log(day, lands.nationName(w.attacker) + " beat " + lands.nationName(w.defender) + " " + where + ", and took the " + county + ".");
+            log(day, say("battles.attacker_won", "a", lands.nationName(w.attacker), "d", lands.nationName(w.defender), "where", where, "county", county));
             if (!aim(w, lands)) {
-                peace(w, day, lands, lands.nationName(w.attacker) + " won the war: the whole " + lands.titleName(w.goal) + " is theirs.");
+                peace(w, day, lands, say("battles.won_war", "a", lands.nationName(w.attacker), "title", lands.titleName(w.goal)));
                 return;
             }
             if (sues(w, false, lands, random)) {
@@ -837,7 +830,7 @@ public final class Politics {
                 return;
             }
             if (random.nextDouble() < content(lands.person(lands.ruler(w.attacker)))) {
-                peace(w, day, lands, lands.nationName(w.attacker) + " was content with the " + county + " and made peace.");
+                peace(w, day, lands, say("battles.content", "a", lands.nationName(w.attacker), "county", county));
                 return;
             }
             // The beaten army goes home; another is raised, if the people can be found.
@@ -850,16 +843,15 @@ public final class Politics {
             front.raised(w, false);
             w.attackerArmy.readyAt = now + REST;
         } else {
-            log(day, lands.nationName(w.defender) + " beat " + lands.nationName(w.attacker) + " " + where + " for the " + county + ".");
+            log(day, say("battles.defender_won", "d", lands.nationName(w.defender), "a", lands.nationName(w.attacker), "where", where, "county", county));
             if (sues(w, true, lands, random)) {
-                peace(w, day, lands, lands.nationName(w.attacker) + " sued for peace" + (w.taken.isEmpty() ? ", and gained nothing."
-                        : ", keeping what it had taken."));
+                peace(w, day, lands, say(w.taken.isEmpty() ? "battles.sued_nothing" : "battles.sued_keeping", "a", lands.nationName(w.attacker)));
                 return;
             }
             w.attackerArmy = null;
             w.attackerArmy = raise(w, true, now, lands);
             if (w.attackerArmy == null) {
-                peace(w, day, lands, lands.nationName(w.attacker) + " had no army left to raise, and made peace.");
+                peace(w, day, lands, say("battles.no_army", "a", lands.nationName(w.attacker)));
                 return;
             }
             front.raised(w, true);
@@ -940,8 +932,7 @@ public final class Politics {
         for (int c : w.goal.counties(lands)) {
             take(w, c, lands, day, random, front, false);
         }
-        peace(w, day, lands, lands.nationName(w.defender) + " sued for peace, and ceded the " + lands.titleName(w.goal) + " to "
-                + lands.nationName(w.attacker) + ".");
+        peace(w, day, lands, say("battles.ceded", "d", lands.nationName(w.defender), "title", lands.titleName(w.goal), "a", lands.nationName(w.attacker)));
     }
 
     /**
@@ -1013,7 +1004,7 @@ public final class Politics {
             return false;
         }
         String name = lands.realm().holdName(hold);
-        died(holder, day, lands, random, "fell defending " + (name.isEmpty() ? lands.provinceName(hold) : name));
+        died(holder, day, lands, random, say("deaths.defending", "place", name.isEmpty() ? lands.provinceName(hold) : name));
         return true;
     }
 
@@ -1099,5 +1090,10 @@ public final class Politics {
         p.feuds = Feuds.load(tag.getCompound("feuds"));
         p.succession = rafasconquest.people.Succession.decode(tag.getByteArray("succession"));
         return p;
+    }
+
+    /** A chronicle line from {@code dialogue/chronicle.toml}. */
+    static String say(String key, Object... vars) {
+        return rafasconquest.data.Dialogue.say("chronicle." + key, vars);
     }
 }

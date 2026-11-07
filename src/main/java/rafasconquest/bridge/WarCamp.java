@@ -120,6 +120,12 @@ final class WarCamp {
         return d.toYRot();
     }
 
+    /** Whether {@code pos} is inside this camp's command tent, and the war council meets in it. */
+    boolean inCouncilTent(BlockPos pos) {
+        return council && Math.abs(pos.getX() - middle.getX()) < half && Math.abs(pos.getZ() - middle.getZ()) < half
+                && pos.getY() >= middle.getY() - 1 && pos.getY() <= middle.getY() + height;
+    }
+
     /** Where the war council stands, around the bedrock: the general behind it, the wings' Marshals either side. */
     Vec3 generalSpot() {
         return spot(0, -2);

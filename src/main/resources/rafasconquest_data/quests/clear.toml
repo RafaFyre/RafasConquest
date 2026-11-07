@@ -1,0 +1,10 @@
+# See deliver_letter.toml for what each field means.
+task = "clear"
+givers = ["officer", "noble"]
+targets = ["hamlet", "village"]
+title = ["Clear {need} hostile creatures about {target}"]
+need = 8
+renown = 20
+emeralds = 8
+reach = 2000
+weight = 1

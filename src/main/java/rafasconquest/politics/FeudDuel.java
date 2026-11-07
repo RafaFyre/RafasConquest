@@ -74,9 +74,9 @@ final class FeudDuel {
             return false;
         }
         current = new FeudDuel(feud.id(), a, b, c.toTheDeath(true), c.toTheDeath(false));
-        server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] " + a.getName().getString() + " and " + b.getName().getString()
-                + " face each other in a duel for " + Feuds.name(feud.lord(true), lands, front) + " and " + Feuds.name(feud.lord(false), lands, front)
-                + String.format(" (%.0f, %.0f).", c.x(), c.z())).withStyle(ChatFormatting.RED), false);
+        server.getPlayerList().broadcastSystemMessage(Component.literal(Wars.say("feud.duel", "a", a.getName().getString(), "b", b.getName().getString(),
+                "lord_a", Feuds.name(feud.lord(true), lands, front), "lord_b", Feuds.name(feud.lord(false), lands, front),
+                "x", Math.round(c.x()), "z", Math.round(c.z()))).withStyle(ChatFormatting.RED), false);
         return true;
     }
 
@@ -178,7 +178,7 @@ final class FeudDuel {
                 Wars.front(server, map));
         List<Politics.Event> news = data.politics.chronicle();
         for (int i = before; i < news.size(); i++) {
-            server.getPlayerList().broadcastSystemMessage(Component.literal("[Feud] " + news.get(i).text()).withStyle(ChatFormatting.GOLD), false);
+            server.getPlayerList().broadcastSystemMessage(Component.literal(Wars.say("feud.news", "text", news.get(i).text())).withStyle(ChatFormatting.GOLD), false);
         }
         data.setDirty();
         PoliticsSync.toAll(server);

@@ -52,7 +52,7 @@ public class Recruiter extends Mob {
         setYHeadRot(yaw);
         setYBodyRot(yaw);
         entityData.set(SKIN, Math.floorMod(skin, Townsperson.SKINS));
-        setCustomName(Component.literal("Recruiter of " + nationName));
+        setCustomName(Component.literal(rafasconquest.data.Dialogue.say("recruiter.name", "nation", nationName)));
         setCustomNameVisible(true);
     }
 

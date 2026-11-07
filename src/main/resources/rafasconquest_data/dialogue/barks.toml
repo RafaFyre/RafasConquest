@@ -1,0 +1,22 @@
+# What is overheard near people (shown above the hotbar as the player comes within earshot).
+# Each entry is one scene, chosen at random. Lines are split by " | " and said in turn by the people of that kind
+# standing together (one alone says them all). A line may start with "Who: " to name its speaker.  {nation}
+recruiter = [
+    "Soldiers wanted for {nation}! Steady pay, a good sword, and glory besides!",
+    "Who among you can hold a line? {nation} needs you. | The quartermaster has arms for every recruit.",
+    "The muster rolls are thin this season. | Then we shout louder. Enlist for {nation}!",
+    "Our scouts say the roads east are quiet. | Quiet roads worry me more than loud ones. | Double the watch, then.",
+]
+noble = [
+    "Steward: My lord, the day's proceedings: the mill tithe is paid, the bridge toll disputed. | Disputed by whom? | The miller, my lord. Again.",
+    "Have the granaries been counted? | Twice, my lord. We will last the winter.",
+    "Send word to the border holds. I will not be caught unready.",
+    "Herald: News from the capital, my lord. | Read it, then. Briefly.",
+]
+townsfolk = [
+    "Hawker: Bread! Fresh bread, still warm from the oven!",
+    "Fishmonger: Fish, caught this morning! Two coppers the pair!",
+    "Hawker: Cloth from the south, finest weave in the land! Come and feel it!",
+    "Smith's boy: Blades sharpened, pots mended, horses shod!",
+    "Gossip: Did you hear? The lord's steward was seen at the tavern again. | Gossip: At this hour? Shameless.",
+]

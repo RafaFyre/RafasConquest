@@ -1,0 +1,5 @@
+no_nation = "no nation"
+farewell = "Farewell"
+take = "Take: {quest}"
+report = "Report: {quest}"
+no_work = "I have no work for you that you have read of. See the board."

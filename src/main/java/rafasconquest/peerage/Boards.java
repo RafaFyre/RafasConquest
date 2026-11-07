@@ -113,8 +113,8 @@ public final class Boards {
                     peer.read.put(id, quest);
                     peerage.changed();
                     if (quest.giver() != Quest.BOARD) {
-                        player.sendSystemMessage(Component.literal("You read of it: " + quest.title() + ". " + quest.giverName()
-                                + " offers it, at " + quest.giverX() + ", " + quest.giverZ() + "."));
+                        player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("quests.read_of", "quest", quest.title(), "giver", quest.giverName(),
+                                "x", quest.giverX(), "z", quest.giverZ())));
                     }
                 }
             }
@@ -122,8 +122,8 @@ public final class Boards {
                 if (quest != null && quest.giver() == Quest.BOARD && peer.taken(id) == null) {
                     peer.read.remove(id);
                     peerage.take(player.getUUID(), quest);
-                    player.sendSystemMessage(Component.literal("Quest taken: " + quest.title() + " (" + quest.targetX() + ", "
-                            + quest.targetZ() + ")."));
+                    player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("quests.taken", "quest", quest.title(), "x", quest.targetX(),
+                            "z", quest.targetZ())));
                 }
             }
             case "report" -> {

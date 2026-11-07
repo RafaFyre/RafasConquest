@@ -91,6 +91,7 @@ public final class ConquestEvents {
     public static void onPlayerLoggedOut(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.peerage.CityManager.close(player);
+            rafasconquest.npc.Barks.forget(player.getUUID());
         }
     }
 
@@ -98,6 +99,7 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onServerAboutToStart(net.neoforged.neoforge.event.server.ServerAboutToStartEvent event) {
         rafasconquest.style.StyleLibrary.init(); // the style folders, before any land is built
+        rafasconquest.data.DataFiles.init(); // quests and dialogue
         rafasconquest.worldgen.HorizontalStretch.onServerAboutToStart(event.getServer());
     }
 
@@ -117,9 +119,9 @@ public final class ConquestEvents {
             if (server != null) {
                 server.tick();
             }
+            rafasconquest.core.Swell.weather(level.getRainLevel(1), level.getThunderLevel(1));
             rafasconquest.bridge.SableLink.tick(level);
         }
-            rafasconquest.core.Swell.weather(level.getRainLevel(1), level.getThunderLevel(1));
     }
 
     /** Drives the debug battle and times whole server ticks while it runs. */
@@ -133,8 +135,10 @@ public final class ConquestEvents {
         RecruitsBattle.onServerTickEnd();
         BattleMap.tick();
         rafasconquest.npc.Townsfolk.tick(event.getServer());
+        rafasconquest.npc.Barks.tick(event.getServer());
         rafasconquest.peerage.QuestProgress.tick(event.getServer());
         rafasconquest.politics.Wars.tick(event.getServer());
+        PlaceMusic.tick(event.getServer());
     }
 
     @SubscribeEvent

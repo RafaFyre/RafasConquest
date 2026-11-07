@@ -146,6 +146,8 @@ public final class PveCommands {
                                                         .then(Commands.argument("defenderGeneral", com.mojang.brigadier.arguments.StringArgumentType.string())
                                                                 .suggests((ctx, b) -> suggestGenerals(ctx, b, "defender"))
                                                                 .executes(ctx -> war(ctx, arg(ctx, "attackerGeneral"), arg(ctx, "defenderGeneral")))))))))
+                // Reads the quest and dialogue files (mods/RafasConquest/quests, dialogue) again.
+                .then(Commands.literal("data").then(Commands.literal("reload").executes(ctx -> say(ctx, rafasconquest.data.DataFiles.reload()))))
                 .then(Commands.literal("style")
                         // Reads the style folders (mods/RafasConquest/structures) again.
                         .then(Commands.literal("reload").executes(ctx -> say(ctx, rafasconquest.style.StyleLibrary.reload())))

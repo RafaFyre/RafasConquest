@@ -1,0 +1,142 @@
+# Field battles: orders on screen, reports in chat, the messenger and the Marshals in the fight.
+# {nation} {general} {rank} {day} {where} and the like are filled in by the game.
+
+# A battle's name; {type} is the kind of battle (Siege, Battle, ...), {place} the province, {land} the land.
+name = "The {type} of {place} {land}"
+name_no_place = "The {type} of the {land}"
+begins = "[battle] {name}"
+led_by = "  {nation} is led by {title} {general} ({plan})"
+title_general = "General"
+title_grand_marshal = "Grand Marshal"
+camp_general = "General {name}"
+camp_marshal = "Marshal {name}"
+messenger_name = "Messenger"
+report = "[battle {seconds}s] {nation}'s General {general} "
+begins_day = "[battle day {day}] The battle begins"
+over = "[{name} is over after {seconds}s] {result}. {nation_a} {alive_a}/{started_a} left, {nation_b} {alive_b}/{started_b} left | whole battle: {whole}"
+result_general_fell = "{winner} wins: {nation}'s General {general} fell, and {nation} retreats"
+result_routs = "{winner} wins; {loser} routs"
+over_side = "  {side}: general {general}, standard {standard}"
+general_survived = "survived"
+general_fell = "fell"
+standard_flies = "still flies"
+standard_fell = "fell"
+stalled = "[battle {seconds}s] the lines have stalled: everyone left charges"
+evening = "[battle day {day}] Evening: both armies pull back to their camps"
+night = "[battle day {day}] Night falls; the armies rest in their camps"
+dawn = "[battle day {day}] Dawn: {nation_a} musters {count_a}, {nation_b} {count_b}; the armies deploy"
+pursues = "[battle] General {general} pursues {nation}'s retreating army"
+lets_go = "[battle] General {general} lets {nation}'s army go"
+surrenders = "[battle] {nation} surrenders; the fighting stops"
+left_field_surrendered = "[battle] {nation}'s army lays down its arms and leaves the field"
+left_field_fled = "[battle] {nation}'s army has fled the field"
+clear_hint = "Use /pve debug battle clear to remove the survivors and the camps"
+deploy_bar = "{name}, day {day}: {nation} deploys, {time}"
+deploy_bar_both = "{name}, day {day}: the armies deploy, {time}"
+
+# What a player is told when they take the field.
+your_part = "You fight for {nation} as a {rank} of {job}, {role}, leading {count}. Keep to your ring."
+remembered = "Your part in {name} is remembered. A noble of {nation} may reward it."
+dawn_form_up = "Dawn. Lead your men out to your ring."
+rally_wait = "You can rally again in {seconds}s"
+rally = "You rally the soldiers about you"
+lead_wait = "You can lead a charge again in {seconds}s"
+lead = "You lead the charge!"
+too_late = "Too late: they broke."
+held = "The line holds. Well done."
+save_marshal = "{rank}, {count} of our blocks on the {where} are about to break. Bring your men and hold them!"
+save_soldier = "A block on the {where} is about to break. Go to them!"
+marshal_says = "Marshal {name}: "
+
+[roles]
+frontline = "in the first block to charge"
+bait = "as bait, running ahead of the line"
+support = "in support, reinforcing your wing's losing blocks"
+flanker = "flanking: striking enemy blocks from the side or behind"
+kill_squad = "in a kill squad, hunting the enemy's officers"
+
+# Parts of an army, as orders name them.
+[wings]
+line = "line"
+left = "left wing"
+right = "right wing"
+centre = "centre"
+
+# Big letters on screen.
+[orders]
+charge = "ALL TROOPS CHARGE!"
+hold = "Hold the {where}!"
+kill_general = "Kill General {general}!"
+target = "Target {nation}'s {where} block!"
+save = "Save the {where}!"
+support = "Support the block on the {where}!"
+in_position = "In position"
+messenger_waits = "A messenger waits at your tent"
+form_up = "Form up at your position!"
+pull_back = "Pull back to camp!"
+night = "Night falls. Rest in your tent."
+pursue = "Pursue them!"
+they_surrender = "They surrender! Hold!"
+we_surrender = "We surrender. Lay down arms."
+
+# The messenger with the general's orders for the day.
+[messenger]
+prefix = "Messenger: "
+word = "{rank}! Word from General {general}."
+orders = "The general orders your men to fight {role} today."
+ring = "Your ring marks where your men gather."
+
+# Why the general gives a player a new task.
+[tasks]
+kill_squad = "General {general} rides at the head of their charge. Bring them down, and their army breaks."
+support = "We're outnumbered now. Hold your men back of the line and go wherever it bends."
+flanker = "{weakness} Take your men round and strike it in the side."
+bait = "Run ahead of the line, then give ground once they bite. Draw them in, and we'll close on them."
+frontline = "You'll lead the first charge today. Make it count."
+
+# What the scouts make of the enemy.  {wing} is left or right, {count} the foot on it.
+[weaknesses]
+thin_wing = "Their {wing} wing is thin: barely {count} foot. Hit it hard and it folds."
+few_horse = "They have few horse. Our cavalry can ride where it likes."
+few_archers = "They have few archers. Close in without fear of the arrows."
+no_shield_wall = "They stand no shield wall. A good charge will break their line."
+left = "left"
+right = "right"
+
+# Reports of what a general does, after "[battle 30s] Nation's General Name ".  {where} is a place from [where].
+[events]
+harbour_ships = "The harbour ships put back in, and their soldiers man the walls"
+first_ships = "The first ships come in under the walls, and their soldiers land"
+bait_falls_back = "has a bait fall back{where}, drawing the enemy in"
+exposed_block = "strikes an exposed enemy block with cavalry{where}"
+guard_rides_out = "has their guard ride out to meet the enemy coming for them"
+wedge_forms = "forms the wedge behind the established front line"
+wedge = "{verb} {half}the wedge at {target}{around}"
+wedge_leads = "leads"
+wedge_sends = "sends"
+wedge_first_half = "the first half of "
+wedge_second_half = "the second half of "
+wedge_at_general = "the enemy general"
+wedge_at_lured = "the lured enemy block"
+wedge_at_line = "the enemy line"
+wedge_around = ", around its flank"
+pincer_wedge = "springs the pincer{where}: the wedge charges the lured block"
+pincer_cavalry = "springs the pincer{where}: cavalry charges the lured block"
+pincer_surround = "springs the pincer{where}: infantry surrounds the lured block"
+pincer_flank = "springs the pincer{where}: infantry strikes the lured block's flank"
+wheels = "wheels {wing} onto the enemy's exposed flank"
+hunt_cavalry = "sends infantry at stopped enemy cavalry{where}"
+ambush = "springs an ambush from the woods{where}"
+
+# Where on the field, after an event; empty for an army in one line.
+[where]
+left = " on the left wing"
+right = " on the right wing"
+centre = " in the centre"
+
+# What wheels, in the wheels event.
+[wheel]
+line = "the line's end"
+left = "the left wing"
+right = "the right wing"
+centre = "the centre"

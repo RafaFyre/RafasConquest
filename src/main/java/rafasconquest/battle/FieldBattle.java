@@ -54,6 +54,12 @@ public final class FieldBattle {
     /** The calls made this second, for the live battle to sound, and what the strategies did. */
     private final List<Order> calls = new ArrayList<>();
     private final List<Event> events = new ArrayList<>();
+
+    /** A battle line from {@code dialogue/battle.toml}. */
+    private static String say(String key, Object... vars) {
+        return rafasconquest.data.Dialogue.say("battle." + key, vars);
+    }
+
     private final List<Volley> volleys = new ArrayList<>();
     /** The armies are marching out of camp to their places for the day (see {@link #formUp}). */
     private boolean forming;
@@ -520,7 +526,7 @@ public final class FieldBattle {
                     d.join(b, file);
                 }
                 if (d.blocks.stream().noneMatch(o -> o.afloat && o.alive > 0)) {
-                    events.add(new Event(1, "The harbour ships put back in, and their soldiers man the walls"));
+                    events.add(new Event(1, rafasconquest.data.Dialogue.say("battle.events.harbour_ships")));
                 }
             }
         }
@@ -542,7 +548,7 @@ public final class FieldBattle {
             if (b.afloat && b.alive > 0 && pastWalls(b.pos) <= LANDING) {
                 b.afloat = false;
                 if (armies[0].blocks.stream().noneMatch(o -> o != b && !o.afloat && o.alive > 0)) {
-                    events.add(new Event(0, "The first ships come in under the walls, and their soldiers land"));
+                    events.add(new Event(0, rafasconquest.data.Dialogue.say("battle.events.first_ships")));
                 }
             }
         }
@@ -1165,7 +1171,7 @@ public final class FieldBattle {
             if (!army.baitSprung[block.wing]) {
                 army.baitSprung[block.wing] = true;
                 calls.add(new Order(army.side, Call.BAIT));
-                events.add(new Event(army.side, "has a bait fall back" + army.where(block.wing) + ", drawing the enemy in"));
+                events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.bait_falls_back", "where", army.where(block.wing))));
             }
             if (behind < FieldRules.BAIT_POCKET) {
                 block.line = block.line.plus(-army.facingX, -army.facingZ);
@@ -1324,7 +1330,7 @@ public final class FieldBattle {
                 && army.plan.has(Strategy.PRECISION_STRIKES)) {
             FieldBlock exposed = mostExposed(enemy, block.pos, FieldRules.WING_REACH);
             if (exposed != null) {
-                events.add(new Event(army.side, "strikes an exposed enemy block with cavalry" + army.where(block.wing)));
+                events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.exposed_block", "where", army.where(block.wing))));
                 charge(army, block, exposed);
                 return;
             }
@@ -1586,7 +1592,7 @@ public final class FieldBattle {
         guard.prey = threat;
         guard.charged = true;
         calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
-        events.add(new Event(army.side, "has their guard ride out to meet the enemy coming for them"));
+        events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.guard_rides_out")));
     }
 
     private void guard(FieldArmy army, FieldArmy enemy, FieldBlock guard) {
@@ -1642,7 +1648,7 @@ public final class FieldBattle {
         }
         if (seconds - army.frontlineSince >= FieldRules.FRONTLINE_SECONDS) {
             army.wedgeFormed = true;
-            events.add(new Event(army.side, "forms the wedge behind the established front line"));
+            events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.wedge_forms")));
         }
     }
 
@@ -1716,10 +1722,10 @@ public final class FieldBattle {
         if (led) {
             calls.add(new Order(army.side, Call.GENERAL_CHARGES));
         }
-        String who = target.duty == Duty.GENERAL ? "the enemy general" : target == army.pincerTarget[FieldArmy.CENTRE] ? "the lured enemy block"
-                : "the enemy line";
-        events.add(new Event(army.side, (led ? "leads " : "sends ") + (unrelenting ? (half == 0 ? "the first half of " : "the second half of ") : "")
-                + "the wedge at " + who + (waypoint != null ? ", around its flank" : "")));
+        String who = target.duty == Duty.GENERAL ? "general" : target == army.pincerTarget[FieldArmy.CENTRE] ? "lured" : "line";
+        events.add(new Event(army.side, say("events.wedge", "verb", say(led ? "events.wedge_leads" : "events.wedge_sends"),
+                "half", unrelenting ? say(half == 0 ? "events.wedge_first_half" : "events.wedge_second_half") : "",
+                "target", say("events.wedge_at_" + who), "around", waypoint != null ? say("events.wedge_around") : "")));
         steerWedge(army);
     }
 
@@ -1911,7 +1917,7 @@ public final class FieldBattle {
         // A prepared cavalry charge: in the centre the wedge goes for the lured block (wedgeTarget), else the wing's
         // cavalry that is ready.
         if (wing == FieldArmy.CENTRE && wedgeReady(army)) {
-            events.add(new Event(army.side, "springs the pincer" + where + ": the wedge charges the lured block"));
+            events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_wedge", "where", where)));
             return;
         }
         boolean cavalry = false;
@@ -1923,7 +1929,7 @@ public final class FieldBattle {
             }
         }
         if (cavalry) {
-            events.add(new Event(army.side, "springs the pincer" + where + ": cavalry charges the lured block"));
+            events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_cavalry", "where", where)));
             return;
         }
         // Else the wing's infantry not fighting, nearest first: three surround it, or one strikes its flank.
@@ -1932,10 +1938,10 @@ public final class FieldBattle {
             send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
             send(free.get(1), lured, -free.get(0).strikeSide);
             send(free.get(2), lured, 0);
-            events.add(new Event(army.side, "springs the pincer" + where + ": infantry surrounds the lured block"));
+            events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_surround", "where", where)));
         } else if (!free.isEmpty()) {
             send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
-            events.add(new Event(army.side, "springs the pincer" + where + ": infantry strikes the lured block's flank"));
+            events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_flank", "where", where)));
         } else {
             army.pincerTarget[wing] = null;
         }
@@ -2034,8 +2040,7 @@ public final class FieldBattle {
         }
         for (int wing = 0; wing < 3; wing++) {
             if (wheeling[wing] && !army.enveloping[wing]) {
-                events.add(new Event(army.side, "wheels" + (army.where(wing).isEmpty() ? " the line's end" : army.where(wing).replace(" on the", " the").replace(" in the", " the"))
-                        + " onto the enemy's exposed flank"));
+                events.add(new Event(army.side, say("events.wheels", "wing", say("wheel." + (army.where(wing).isEmpty() ? "line" : FieldArmy.wingKey(wing))))));
             }
             army.enveloping[wing] = wheeling[wing] || army.enveloping[wing] && struckBy(army, wing);
         }
@@ -2086,7 +2091,7 @@ public final class FieldBattle {
                 FieldBlock hunter = near.get(i);
                 send(hunter, c, i == 0 ? sideNearer(c, hunter.pos) : -sideNearer(c, near.get(0).pos));
                 if (i == 0) {
-                    events.add(new Event(army.side, "sends infantry at stopped enemy cavalry" + army.where(hunter.wing)));
+                    events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.hunt_cavalry", "where", army.where(hunter.wing))));
                 }
             }
         }
@@ -2135,7 +2140,7 @@ public final class FieldBattle {
             if (target != null) {
                 if (b.task == FieldBlock.Task.AMBUSH && !b.sprung) {
                     b.sprung = true;
-                    events.add(new Event(army.side, "springs an ambush from the woods" + army.where(b.wing)));
+                    events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.ambush", "where", army.where(b.wing))));
                 }
                 send(b, target, b.task == FieldBlock.Task.FLANK && struck(army, target) ? 0 : sideNearer(target, b.pos));
             }

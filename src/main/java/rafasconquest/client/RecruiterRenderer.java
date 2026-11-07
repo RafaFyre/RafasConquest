@@ -24,6 +24,7 @@ public class RecruiterRenderer extends HumanoidMobRenderer<Recruiter, PlayerMode
         addLayer(new net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer<>(this,
                 new net.minecraft.client.model.HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
                 new net.minecraft.client.model.HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager()));
+        addLayer(new MouthLayer<>(this));
     }
 
     @Override

@@ -1,0 +1,14 @@
+# A kind of quest on the city boards.
+#   task     what finishes it: deliver (reach the target), scout (reach it, then report), clear (kill `need` hostiles about it, then report)
+#   givers   who posts it: officer (a post's recruiter), noble (the city's noble and nearby castle lords), board (the board itself, emeralds only)
+#   targets  where it sends you: ally_hold (a hold of the giver's nation), ruin, dojo, foreign_city, hamlet, village
+#   title    what the board says; one of a list at random. {target} is the place, {need} the count to clear
+#   reach    how far away (blocks) a target may be;  weight  how often it is picked against the others (0: never)
+task = "deliver"
+givers = ["noble", "board"]
+targets = ["ally_hold"]
+title = ["Deliver a letter to {target}", "Carry sealed word to {target}"]
+renown = 10
+emeralds = 4
+reach = 4000
+weight = 1

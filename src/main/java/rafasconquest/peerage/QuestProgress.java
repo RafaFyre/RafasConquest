@@ -39,8 +39,7 @@ public final class QuestProgress {
                 if (q.type() == Quest.Type.DELIVER) {
                     Advancement.complete(player, peerage, t);
                 } else {
-                    player.sendSystemMessage(Component.literal("You have scouted " + q.targetName() + ". Report to "
-                            + (q.giver() == Quest.BOARD ? "the board" : q.giverName()) + "."));
+                    player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("quests.scouted", "target", q.targetName(), "giver", giverOf(q))));
                 }
             }
         }
@@ -62,9 +61,14 @@ public final class QuestProgress {
                     && Math.hypot(victim.getX() - q.targetX(), victim.getZ() - q.targetZ()) <= Quest.CLEAR_REACH) {
                 t.kills++;
                 peerage.changed();
-                player.sendSystemMessage(Component.literal(q.targetName() + ": " + t.kills + " / " + q.need() + " cleared"
-                        + (t.ready() ? ". Report to " + (q.giver() == Quest.BOARD ? "the board" : q.giverName()) + "." : ".")));
+                player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say(t.ready() ? "quests.cleared" : "quests.clearing", "target", q.targetName(),
+                        "kills", t.kills, "need", q.need(), "giver", giverOf(q))));
             }
         }
+    }
+
+    /** Whom to report to. */
+    private static String giverOf(Quest q) {
+        return q.giver() == Quest.BOARD ? rafasconquest.data.Dialogue.say("quests.the_board") : q.giverName();
     }
 }

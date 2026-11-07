@@ -1,0 +1,34 @@
+# A noble in their hold.  {speaker} is the noble, {player} the player as styled, {nation} {job} {way} {county}
+not_mine = "This land is no longer mine to give."
+not_serving = "I have no dealings with those who do not serve {nation}. Enlist at the barracks first."
+greet = ["Well met, {player}."]
+known = "You have served me well."
+knight_offer = "Your name is spoken well of in my hall. Kneel, and rise a knight."
+land_offer = "I have heard what you did in battle. Such service deserves land."
+knighted = "{speaker} knights you. Rise, {player}."
+vassal_yes = "{speaker} kneels and swears fealty to you. They will ride with you to war."
+vassal_no = "{speaker}: I do not know you well enough to bend the knee. Serve me first."
+released = "You release {speaker} from your fealty."
+sworn = "You kneel and swear fealty to {speaker}. You are their vassal."
+renounced = "You renounce your fealty to {speaker}."
+no_land = "{speaker}: I have no land to give you now."
+land_granted = "{speaker} {way}: the county of {county}. You are now {player}."
+
+[options]
+kneel = "Kneel to be knighted"
+land = "Ask for land"
+release = "Release them from your fealty"
+job = "Their troops fight as: {job} (change)"
+vassalize = "Ask them to swear fealty to you"
+renounce = "Renounce your fealty to them"
+swear = "Swear fealty to them"
+
+# How a noble grants land, after their name.
+[ways]
+own_county = "grants you one of their counties"
+spare_county_vassal = "takes you as their vassal, and grants you one of their spare counties"
+disliked_vassal = "takes you as their vassal, in place of a vassal they had no love for, who is dismissed"
+empty_county = "grants you an empty county of the realm"
+ruins = "grants you ruins to restore"
+dead_vassal_free = "grants you the county of a vassal who has recently died"
+dead_vassal_sworn = "takes you as their vassal, in place of a vassal who has recently died"

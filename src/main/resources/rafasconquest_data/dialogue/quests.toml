@@ -1,0 +1,24 @@
+# Quest messages.  {quest} is its title, {target} its place, {giver} who gave it, {x} {z} where
+taken = "Quest taken: {quest} ({x}, {z})."
+read_of = "You read of it: {quest}. {giver} offers it, at {x}, {z}."
+done = "Quest done: {quest}. {reward}."
+reward_emeralds = "{count} emeralds"
+reward_renown = "{count} {ladder} renown"
+scouted = "You have scouted {target}. Report to {giver}."
+clearing = "{target}: {kills} / {need} cleared."
+cleared = "{target}: {kills} / {need} cleared. Report to {giver}."
+the_board = "the board"
+
+# Who posts a quest.  {nation}, {place}
+[givers]
+officer = "Recruiter of {nation}"
+board = "the board of {place}"
+
+# What a quest's target is called.  {place} is the province (or the hold, or the dojo's school)
+[targets]
+ally_hold = "{place}"
+ruin = "the ruins of {place}"
+dojo = "the dojo of the {place} school"
+foreign_city = "the city of {place}"
+hamlet = "the hamlet of {place}"
+village = "the village of {place}"

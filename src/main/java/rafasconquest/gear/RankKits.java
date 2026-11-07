@@ -46,8 +46,8 @@ public final class RankKits {
                 player.drop(stack.copy(), false);
             }
         }
-        player.sendSystemMessage(Component.literal("The quartermaster issues you the arms of a " + to.title() + ", in "
-                + nation.name() + "'s colours.").withStyle(ChatFormatting.GOLD));
+        player.sendSystemMessage(Component.literal(rafasconquest.data.Dialogue.say("recruiter.quartermaster", "rank", to.title(), "nation", nation.name()))
+                .withStyle(ChatFormatting.GOLD));
     }
 
     /** The nation a player serves, or null. */

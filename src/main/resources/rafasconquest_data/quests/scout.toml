@@ -1,0 +1,9 @@
+# See deliver_letter.toml for what each field means.
+task = "scout"
+givers = ["officer", "noble", "board"]
+targets = ["ruin", "dojo", "foreign_city"]
+title = ["Scout {target}", "Look over {target} and report back"]
+renown = 15
+emeralds = 6
+reach = 3500
+weight = 1
