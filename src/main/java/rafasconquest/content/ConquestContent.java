@@ -57,6 +57,14 @@ public final class ConquestContent {
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<rafasconquest.style.MarkerBlockEntity>> MARKER_ENTITY =
             BLOCK_ENTITIES.register("character_marker", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
                     .of(rafasconquest.style.MarkerBlockEntity::new, MARKER.get()).build(null));
+    /** The Gate Block: a black lectern that works a gate's two doors, Sable ships on hinges. */
+    public static final DeferredHolder<Block, Block> GATE_BLOCK = BLOCKS.register("gate_block",
+            () -> new GateBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.LECTERN).mapColor(net.minecraft.world.level.material.MapColor.COLOR_BLACK)));
+    public static final DeferredHolder<Item, Item> GATE_BLOCK_ITEM = ITEMS.register("gate_block",
+            () -> new BlockItem(GATE_BLOCK.get(), new Item.Properties()));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<GateBlockEntity>> GATE_ENTITY =
+            BLOCK_ENTITIES.register("gate_block", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(GateBlockEntity::new, GATE_BLOCK.get()).build(null));
     public static final DeferredHolder<Item, Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -85,6 +93,7 @@ public final class ConquestContent {
                 output.accept(MARKER_ITEM.get());
                 output.accept(DOCK_BLOCK_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
+                output.accept(GATE_BLOCK_ITEM.get());
             })
             .build());
 

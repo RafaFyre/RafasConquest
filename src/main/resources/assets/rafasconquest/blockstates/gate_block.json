@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "rafasconquest:block/gate_block" },
+    "facing=east": { "model": "rafasconquest:block/gate_block", "y": 90 },
+    "facing=south": { "model": "rafasconquest:block/gate_block", "y": 180 },
+    "facing=west": { "model": "rafasconquest:block/gate_block", "y": 270 }
+  }
+}

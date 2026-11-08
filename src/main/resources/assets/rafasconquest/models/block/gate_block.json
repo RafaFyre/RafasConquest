@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/lectern",
+  "textures": {
+    "particle": "rafasconquest:block/gate_block_sides",
+    "bottom": "rafasconquest:block/gate_block_base",
+    "base": "rafasconquest:block/gate_block_base",
+    "front": "rafasconquest:block/gate_block_front",
+    "sides": "rafasconquest:block/gate_block_sides",
+    "top": "rafasconquest:block/gate_block_top"
+  }
+}

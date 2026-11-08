@@ -72,6 +72,60 @@ public final class SableLink {
         }
     }
 
+    /** Each tick of a Gate Block: its doors made ships, hinged and swung ({@link GateDoors}). Without Sable they stay blocks. */
+    public static void gate(ServerLevel level, rafasconquest.content.GateBlockEntity gate) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            GateDoors.tick(level, gate);
+        } catch (LinkageError e) {
+            enabled = false;
+            RafasConquest.LOGGER.warn("Sable found, but its API doesn't match; gate doors stay blocks", e);
+        }
+    }
+
+    /** A Gate Block's new door boxes; says what was done. */
+    public static String saveGate(rafasconquest.content.GateBlockEntity gate, @org.jetbrains.annotations.Nullable int[] left,
+                                  @org.jetbrains.annotations.Nullable int[] right) {
+        if (enabled) {
+            try {
+                return GateDoors.save(gate, left, right);
+            } catch (LinkageError e) {
+                enabled = false;
+            }
+        }
+        gate.setBoxes(left, right);
+        return "Gate doors saved (without Sable they stay blocks)";
+    }
+
+    /**
+     * A blow of {@code amount} to the block at {@code pos}: if it is part of a gate door, the door takes it (and is gone at
+     * 0 hit points) and true is returned, for the block not to be broken.
+     */
+    public static boolean hitDoor(ServerLevel level, net.minecraft.core.BlockPos pos, double amount) {
+        if (!enabled) {
+            return false;
+        }
+        try {
+            return GateDoors.hit(level, pos, amount);
+        } catch (LinkageError e) {
+            return false;
+        }
+    }
+
+    /** Whether the block at {@code pos} is part of a gate door (which can't be mined). */
+    public static boolean isDoor(ServerLevel level, net.minecraft.core.BlockPos pos) {
+        if (!enabled) {
+            return false;
+        }
+        try {
+            return GateDoors.doorAt(level, pos) != null;
+        } catch (LinkageError e) {
+            return false;
+        }
+    }
+
     /** Where formation {@code id}'s battle ship is and which way its bow points: {x, z, dirX, dirZ}; null with none sailing. */
     @org.jetbrains.annotations.Nullable
     public static double[] shipAt(int id) {

@@ -30,6 +30,7 @@ public final class ClientModEvents {
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.TOWNSPERSON.get(), TownspersonRenderer::new);
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.RECRUITER.get(), RecruiterRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.MARKER_ENTITY.get(), MarkerRenderer::new);
+        event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.GATE_ENTITY.get(), GateRenderer::new);
     }
 
     /** Generals are Recruits' plain recruits; their back banner is a layer on that renderer (either look). */

@@ -37,6 +37,11 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new StatsScreen(Minecraft.getInstance().screen, view));
     }
 
+    /** A Gate Block's door boxes, to edit. */
+    public static void openGate(net.minecraft.core.BlockPos pos, int[] left, int[] right) {
+        Minecraft.getInstance().setScreen(new GateScreen(pos, left, right));
+    }
+
     /** A Character Marker's settings, to edit. */
     public static void openMarker(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
         Minecraft.getInstance().setScreen(new MarkerScreen(pos, spec));

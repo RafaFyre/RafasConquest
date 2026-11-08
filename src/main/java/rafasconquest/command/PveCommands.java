@@ -171,6 +171,8 @@ public final class PveCommands {
                 .then(Commands.literal("debug")
                         .then(Commands.literal("recruits").executes(PveCommands::recruitsFactions))
                         .then(Commands.literal("cityterrain").executes(PveCommands::cityTerrain))
+                        // A castle 35 blocks ahead, its gate toward you.
+                        .then(Commands.literal("castle").executes(PveCommands::castle))
                         .then(Commands.literal("column")
                                 .then(Commands.argument("x", IntegerArgumentType.integer())
                                         .then(Commands.argument("z", IntegerArgumentType.integer())
@@ -277,6 +279,27 @@ public final class PveCommands {
     private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
                               int secondSoldiers) throws CommandSyntaxException {
         return battle(ctx, first, firstSoldiers, second, secondSoldiers, BattleType.LAND);
+    }
+
+    /** Builds a castle (with its gate's doors and Gate Block) 35 blocks ahead of the caller, its gate facing them. */
+    private static int castle(CommandContext<CommandSourceStack> ctx) {
+        net.minecraft.server.level.ServerLevel level = ctx.getSource().getLevel();
+        Vec3 here = ctx.getSource().getPosition();
+        net.minecraft.core.Direction look = net.minecraft.core.Direction.fromYRot(ctx.getSource().getRotation().y);
+        int x = (int) Math.floor(here.x) + look.getStepX() * 35;
+        int z = (int) Math.floor(here.z) + look.getStepZ() * 35;
+        int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE_WG, x, z);
+        // The gate is on local +x (east, unturned): turn it clockwise until it faces back at the caller.
+        int turns = 0;
+        for (net.minecraft.core.Direction d = net.minecraft.core.Direction.EAST; d != look.getOpposite(); d = d.getClockWise()) {
+            turns++;
+        }
+        var piece = new rafasconquest.worldgen.CountryPiece(rafasconquest.worldgen.CountryPiece.Build.CASTLE, x, y, z, turns);
+        piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.random, piece.getBoundingBox(),
+                new net.minecraft.world.level.ChunkPos(x >> 4, z >> 4), new net.minecraft.core.BlockPos(x, y, z));
+        ctx.getSource().sendSuccess(() -> Component.literal("A castle stands at " + x + " " + y + " " + z
+                + "; power its Gate Block to swing the doors"), true);
+        return 1;
     }
 
     private static BattleType battleType(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

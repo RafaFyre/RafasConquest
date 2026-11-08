@@ -203,6 +203,16 @@ public final class ConquestNetwork {
                 .decoder(b -> new SeaSwell(b.readBoolean()))
                 .consumerMainThread((m, c) -> rafasconquest.core.Swell.calm(!m.on()))
                 .add();
+        CHANNEL.messageBuilder(GateView.class, 31, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(GateView::write)
+                .decoder(GateView::read)
+                .consumerMainThread((m, c) -> rafasconquest.client.ClientScreens.openGate(m.pos(), m.left(), m.right()))
+                .add();
+        CHANNEL.messageBuilder(GateSet.class, 32, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> new GateView(m.pos(), m.left(), m.right()).write(b))
+                .decoder(b -> { GateView v = GateView.read(b); return new GateSet(v.pos(), v.left(), v.right()); })
+                .consumerMainThread(ConquestNetwork::handleGateSet)
+                .add();
     }
 
     /** Server → client: whether the sea swells (the seaSwell game rule), for the water drawn. */
@@ -392,6 +402,58 @@ public final class ConquestNetwork {
                     buf.readList(FriendlyByteBuf::readVarIntArray),
                     buf.readMap(FriendlyByteBuf::readVarInt, FriendlyByteBuf::readVarInt), buf.readList(FriendlyByteBuf::readUtf),
                     buf.readList(FriendlyByteBuf::readVarIntArray), buf.readList(FriendlyByteBuf::readUtf), buf.readByteArray());
+        }
+    }
+
+    // ---- Gate Blocks ----
+
+    /** Both ways: a Gate Block's door boxes (to the client, to edit; back to the server, to keep); null: no door. */
+    public record GateView(net.minecraft.core.BlockPos pos, @org.jetbrains.annotations.Nullable int[] left, @org.jetbrains.annotations.Nullable int[] right) {
+        void write(FriendlyByteBuf buf) {
+            buf.writeBlockPos(pos);
+            for (int[] box : new int[][]{left, right}) {
+                buf.writeBoolean(box != null);
+                if (box != null) {
+                    for (int v : box) {
+                        buf.writeVarInt(v);
+                    }
+                }
+            }
+        }
+
+        static GateView read(FriendlyByteBuf buf) {
+            net.minecraft.core.BlockPos pos = buf.readBlockPos();
+            int[][] boxes = new int[2][];
+            for (int i = 0; i < 2; i++) {
+                if (buf.readBoolean()) {
+                    boxes[i] = new int[6];
+                    for (int k = 0; k < 6; k++) {
+                        boxes[i][k] = buf.readVarInt();
+                    }
+                }
+            }
+            return new GateView(pos, boxes[0], boxes[1]);
+        }
+    }
+
+    public static void openGate(ServerPlayer player, net.minecraft.core.BlockPos pos, int[] left, int[] right) {
+        CHANNEL.send(player, new GateView(pos, left, right));
+    }
+
+    public static void setGate(net.minecraft.core.BlockPos pos, int[] left, int[] right) {
+        CHANNEL.sendToServer(new GateSet(pos, left, right));
+    }
+
+    /** Client → server: a Gate Block's new door boxes (creative, within reach). */
+    public record GateSet(net.minecraft.core.BlockPos pos, int[] left, int[] right) {
+    }
+
+    private static void handleGateSet(GateSet msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
+        if (player != null && player.isCreative() && player.blockPosition().closerThan(msg.pos(), 16)
+                && player.level().getBlockEntity(msg.pos()) instanceof rafasconquest.content.GateBlockEntity gate) {
+            String why = rafasconquest.bridge.SableLink.saveGate(gate, msg.left(), msg.right());
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(why));
         }
     }
 

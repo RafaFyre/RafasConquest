@@ -289,7 +289,7 @@ public class CountryPiece extends StructurePiece {
     }
 
     /**
-     * A castle: a curtain wall 41 blocks square (6 high, crenellated, a 3-wide gate on the +x side), a 7 × 7 tower at
+     * A castle: a curtain wall 41 blocks square (6 high, crenellated, a 5 × 3 gate with oak doors on the +x side), a 7 × 7 tower at
      * each corner, and an 11 × 11 keep in the middle with a door, a floor halfway up and a ladder.
      */
     private void castle(WorldGenLevel level, BoundingBox chunk) {
@@ -315,12 +315,10 @@ public class CountryPiece extends StructurePiece {
                 }
             }
         }
-        // The gate.
-        for (int z = -1; z <= 1; z++) {
-            for (int y = 0; y < 4; y++) {
-                set(level, chunk, r, y, z, Blocks.AIR.defaultBlockState());
-            }
-        }
+        // The gate: 5 wide and 3 high, shut by two oak doors (3 wide on the left, looking out, and 2 on the right), worked
+        // by a Gate Block just inside, out of the right door's swing.
+        rafasconquest.content.GateBlockEntity.install(level, chunk, at(r - 1, 0, 3), rotate(Direction.WEST),
+                BoundingBox.fromCorners(at(r, 0, -2), at(r, 2, 0)), BoundingBox.fromCorners(at(r, 0, 1), at(r, 2, 2)));
         // The corner towers.
         for (int cx : new int[]{-r, r}) {
             for (int cz : new int[]{-r, r}) {

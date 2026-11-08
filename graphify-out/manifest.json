@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestEvents.java": {
-    "mtime": 1794080826.0745358,
-    "seen": 1794084947.1347687,
-    "ast_hash": "182351d9a535695cbd1cda1e1c681d2d",
+    "mtime": 1794107916.5961626,
+    "seen": 1794108131.6955497,
+    "ast_hash": "44505bb900a4d83e42e48a1b4b5a2dbd",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestGameRules.java": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientModEvents.java": {
-    "mtime": 1794000509.7489803,
-    "seen": 1794000593.1847248,
-    "ast_hash": "7af011b6b36045373f81497ce49150cf",
+    "mtime": 1794107836.5563102,
+    "seen": 1794108131.695629,
+    "ast_hash": "ce5ffaacebab046923e4462ce3c15a04",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientPeerage.java": {
@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientScreens.java": {
-    "mtime": 1794000451.8647263,
-    "seen": 1794000593.1847286,
-    "ast_hash": "544bfb397fef56ccafe2ced2e91a1526",
+    "mtime": 1794107836.5123837,
+    "seen": 1794108131.6956334,
+    "ast_hash": "ecb187e1607e0703c2716e202efe8ba2",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ConquestWorldScreen.java": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1794066917.4720192,
-    "seen": 1794067385.2039819,
-    "ast_hash": "1d984f92c360ac957474ddc85b5262a1",
+    "mtime": 1794107858.8301928,
+    "seen": 1794108131.6956997,
+    "ast_hash": "be6992f3d63b1d980a9d044abe7d540d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
@@ -480,9 +480,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/ConquestContent.java": {
-    "mtime": 1794071987.6540015,
-    "seen": 1794072023.631101,
-    "ast_hash": "67dab52d8927f4965631b946e2172ba2",
+    "mtime": 1794107729.0333536,
+    "seen": 1794108131.6957023,
+    "ast_hash": "371b21a36a27ec9226c3ef1c50a711a9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/QuestBoardBlock.java": {
@@ -576,9 +576,9 @@
     "semantic_hash": "b859581559ef5c9ab17ab4a9d0e48bc2"
   },
   "src/main/java/rafasconquest/core/Roads.java": {
-    "mtime": 1794068423.8311133,
-    "seen": 1794069112.681782,
-    "ast_hash": "2910b288bd56a28571099d5b614532b0",
+    "mtime": 1794104962.4349022,
+    "seen": 1794108131.6957376,
+    "ast_hash": "cf2dce58de695f00633024d75a13a92a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeatCities.java": {
@@ -750,9 +750,9 @@
     "semantic_hash": "a45b3d18ba3c3d8f337bd8690bc2ded7"
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1794019763.4263914,
-    "seen": 1794019804.7721033,
-    "ast_hash": "96b842c75227490ec85c70f91c0d1950",
+    "mtime": 1794107741.8301654,
+    "seen": 1794108131.6957974,
+    "ast_hash": "d8135ffa0cd0174260e13e66747646b8",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1170,9 +1170,9 @@
     "semantic_hash": "a476595b6b8516b18f036da7998917b3"
   },
   "src/main/java/rafasconquest/worldgen/CountryPiece.java": {
-    "mtime": 1793890075.698214,
-    "seen": 1793890446.4241555,
-    "ast_hash": "590b6c612573790ed7f53b3f9d0b663a",
+    "mtime": 1794107849.7819228,
+    "seen": 1794108131.6959188,
+    "ast_hash": "85192b95c1b5caa999f7a2c4d382daea",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CountryPlacement.java": {
@@ -1284,9 +1284,9 @@
     "semantic_hash": "fa1778aa5fe8f45bd2a794cf894fd7fd"
   },
   "src/main/resources/assets/rafasconquest/lang/en_us.json": {
-    "mtime": 1794071977.5303695,
-    "seen": 1794072023.6313572,
-    "ast_hash": "332583828173e08738c92f5a339fc91a",
+    "mtime": 1794107568.679487,
+    "seen": 1794108131.6959598,
+    "ast_hash": "34922bfbae11d3601c5ae65adf84962c",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/models/block/character_marker.json": {
@@ -1770,9 +1770,9 @@
     "semantic_hash": "5973ee4b3f7b8248290a8205d821a9b6"
   },
   "src/test/java/rafasconquest/core/RoadsTest.java": {
-    "mtime": 1793917476.982238,
-    "seen": 1793917518.173441,
-    "ast_hash": "c584224b3ee12fb01df65d8b2307184e",
+    "mtime": 1794104962.5830193,
+    "seen": 1794108131.696147,
+    "ast_hash": "e2bdf0b1dc24737cf87e15c76139997e",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SeatCitiesTest.java": {
@@ -2172,9 +2172,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/axe.json": {
-    "mtime": 1793874285.0834966,
-    "seen": 1793890446.4242141,
-    "ast_hash": "7aa939bc00b67167bd4a090dbef5f410",
+    "mtime": 1794107572.2926044,
+    "seen": 1794108131.6960008,
+    "ast_hash": "337c07ece3333fd804087a86b8e4d97c",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/shovel.json": {
@@ -2280,9 +2280,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableLink.java": {
-    "mtime": 1793942884.0668056,
-    "seen": 1793942912.5678954,
-    "ast_hash": "cf9e448c9a688bc17aa7df3fa6d9aa94",
+    "mtime": 1794107792.7995381,
+    "seen": 1794108131.6955926,
+    "ast_hash": "5c764b504170ae88c9c9c710eaa85d9f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableShips.java": {
@@ -2712,9 +2712,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/HarbourCut.java": {
-    "mtime": 1794104025.981487,
-    "seen": 1794104086.541024,
-    "ast_hash": "1429f9432d59ead6aae04054cf9ebd1e",
+    "mtime": 1794104962.5087047,
+    "seen": 1794108131.695727,
+    "ast_hash": "ba74cc93d806e3d9d3e6c213438638a3",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/HarbourCutPiece.java": {
@@ -2739,6 +2739,102 @@
     "mtime": 1794103999.9289486,
     "seen": 1794104086.541359,
     "ast_hash": "13c241550f5370191a20dfb8159e4dc6",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/bridge/GateDoors.java": {
+    "mtime": 1794107811.8805132,
+    "seen": 1794108131.695586,
+    "ast_hash": "0c0addf6995aa52aeadf32fbaf2f12b5",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/GateRenderer.java": {
+    "mtime": 1794107835.8901803,
+    "seen": 1794108131.6956542,
+    "ast_hash": "671acf03dd8f68756f693c61faec46ca",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/GateScreen.java": {
+    "mtime": 1794107835.8240633,
+    "seen": 1794108131.6956553,
+    "ast_hash": "fb170c11460641a054eff2bb2af04fbf",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/content/GateBlock.java": {
+    "mtime": 1794107721.9373512,
+    "seen": 1794108131.6957037,
+    "ast_hash": "f033f331408d2f27e9858c50e4b01e84",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/content/GateBlockEntity.java": {
+    "mtime": 1794107702.959794,
+    "seen": 1794108131.6957054,
+    "ast_hash": "89d6e2a2c7c9cd7bd4982ed1ab18a522",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/content/GateGeometry.java": {
+    "mtime": 1794107680.6137364,
+    "seen": 1794108131.6957066,
+    "ast_hash": "255d5ef74d60ed20ec544bbbede3ce79",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/worldgen/CityGates.java": {
+    "mtime": 1794107916.5038795,
+    "seen": 1794108131.6959019,
+    "ast_hash": "0d65e460bd5c21943fa5fb6f4117052f",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/blockstates/gate_block.json": {
+    "mtime": 1794107563.8195264,
+    "seen": 1794108131.695951,
+    "ast_hash": "f78bda3d89b99c9971998870a5b8bceb",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/block/gate_block.json": {
+    "mtime": 1794107563.8575468,
+    "seen": 1794108131.6959693,
+    "ast_hash": "e4cfef9e0aa8aa0a0311bd3f7ca6684c",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/item/gate_block.json": {
+    "mtime": 1794107563.8585434,
+    "seen": 1794108131.6959865,
+    "ast_hash": "5ff28580bda11d94b4e1ba9353fe8457",
+    "semantic_hash": ""
+  },
+  "src/main/resources/data/rafasconquest/loot_table/blocks/gate_block.json": {
+    "mtime": 1794107568.638985,
+    "seen": 1794108131.6960156,
+    "ast_hash": "8b6bd7ea229a97b0851912f9db4cb32b",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/content/GateGeometryTest.java": {
+    "mtime": 1794107935.4676683,
+    "seen": 1794108131.6961224,
+    "ast_hash": "8173761b58b6e19365b97029914bc17f",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/textures/block/gate_block_base.png": {
+    "mtime": 1794107556.8473938,
+    "seen": 1794108131.6961982,
+    "ast_hash": "7aee0f97c71050e2fe1a943279aa8708",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/textures/block/gate_block_front.png": {
+    "mtime": 1794107556.839416,
+    "seen": 1794108131.6961994,
+    "ast_hash": "0e90205a3960d49ebbc64f05958de570",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/textures/block/gate_block_sides.png": {
+    "mtime": 1794107556.856402,
+    "seen": 1794108131.6962006,
+    "ast_hash": "aefdf92d659874a120b9edecd9defee8",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/textures/block/gate_block_top.png": {
+    "mtime": 1794107556.830411,
+    "seen": 1794108131.696202,
+    "ast_hash": "6e536e913a31e27ec0a0a3d933094ebd",
     "semantic_hash": ""
   }
 }

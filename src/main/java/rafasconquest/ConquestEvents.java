@@ -123,6 +123,7 @@ public final class ConquestEvents {
             }
             rafasconquest.core.Swell.weather(level.getRainLevel(1), level.getThunderLevel(1));
             rafasconquest.bridge.SableLink.tick(level);
+            rafasconquest.worldgen.CityGates.tick(level);
         }
     }
 
@@ -237,5 +238,46 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         PveCommands.register(event.getDispatcher());
+    }
+
+    // ---- Gate doors: never mined; blows, arrows and blasts wear down their hit points instead ----
+
+    /** Each block of a gate door in a blast takes this much from its door. */
+    private static final double BLAST_PER_BLOCK = 40;
+
+    @SubscribeEvent
+    public static void onBreakBlock(net.neoforged.neoforge.event.level.BlockEvent.BreakEvent event) {
+        if (event.getLevel() instanceof ServerLevel level && rafasconquest.bridge.SableLink.isDoor(level, event.getPos())) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLeftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getAction() != PlayerInteractEvent.LeftClickBlock.Action.START
+                || !(event.getLevel() instanceof ServerLevel level) || !rafasconquest.bridge.SableLink.isDoor(level, event.getPos())) {
+            return;
+        }
+        event.setCanceled(true);
+        var player = event.getEntity();
+        double blow = player.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE) * player.getAttackStrengthScale(0.5f);
+        player.resetAttackStrengthTicker();
+        rafasconquest.bridge.SableLink.hitDoor(level, event.getPos(), blow);
+    }
+
+    @SubscribeEvent
+    public static void onProjectileImpact(net.neoforged.neoforge.event.entity.ProjectileImpactEvent event) {
+        if (event.getRayTraceResult() instanceof net.minecraft.world.phys.BlockHitResult hit && event.getEntity().level() instanceof ServerLevel level) {
+            double blow = event.getProjectile() instanceof net.minecraft.world.entity.projectile.AbstractArrow arrow
+                    ? arrow.getBaseDamage() * arrow.getDeltaMovement().length() : 2;
+            rafasconquest.bridge.SableLink.hitDoor(level, hit.getBlockPos(), blow);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onExplosion(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            event.getAffectedBlocks().removeIf(pos -> rafasconquest.bridge.SableLink.hitDoor(level, pos, BLAST_PER_BLOCK));
+        }
     }
 }
