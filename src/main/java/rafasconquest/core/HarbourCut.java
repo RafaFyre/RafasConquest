@@ -73,6 +73,22 @@ public final class HarbourCut {
         };
     }
 
+    /**
+     * The world box {minX, minZ, maxX, maxZ} roads keep out of on the harbour side ({@code side} ordinal) of a city
+     * centred at (x, z), {@code half} a side: from the square out past the wharf to the cut's reach, the side's length
+     * and the wharf's corners. The land the map shows there is carved away.
+     */
+    public static int[] reserve(int x, int z, int half, int side) {
+        int out = half + start(CityLayout.WALL_OUTSET) + REACH;
+        int across = half + start(CityLayout.WALL_OUTSET);
+        return switch (CityLayout.Side.values()[side]) {
+            case NORTH -> new int[]{x - across, z - out, x + across, z - half};
+            case SOUTH -> new int[]{x - across, z + half, x + across, z + out};
+            case WEST -> new int[]{x - out, z - across, x - half, z + across};
+            case EAST -> new int[]{x + half, z - across, x + out, z + across};
+        };
+    }
+
     public static boolean inBox(int[] box, int lx, int lz) {
         return box != null && lx >= box[0] && lx <= box[2] && lz >= box[1] && lz <= box[3];
     }

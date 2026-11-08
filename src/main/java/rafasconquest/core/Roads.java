@@ -320,9 +320,13 @@ public final class Roads {
                 c += Math.max(0, land.ground()[i] - land.seaLevel() - 40) * HIGH_GROUND_COST;
                 cost[i] = c;
             }
-            // The cities' squares, and their outside noble districts: roads go round, not through.
+            // The cities' squares, their harbours out to the cut's reach, and their outside noble districts: roads go round, not through.
             for (Place city : cities) {
                 avoid(city.x() - city.half(), city.z() - city.half(), city.x() + city.half(), city.z() + city.half());
+                if (city.harbour() >= 0) {
+                    int[] h = HarbourCut.reserve(city.x(), city.z(), city.half(), city.harbour());
+                    avoid(h[0], h[1], h[2], h[3]);
+                }
                 if (city.noble() >= 0) {
                     int[] a = NobleAnnex.reserve(city.x(), city.z(), city.half(), city.districts(), city.noble());
                     avoid(a[0], a[1], a[2], a[3]);

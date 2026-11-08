@@ -63,6 +63,23 @@ class RoadsTest {
     }
 
     @Test
+    void aRoadPassesAPortOnItsLandwardSide() {
+        int n = SIZE * SIZE;
+        int[] ground = new int[n];
+        java.util.Arrays.fill(ground, 70);
+        Roads.Land flat = new Roads.Land(0, 0, BPP, SIZE, SIZE, ground, new boolean[n], new boolean[n], new byte[n], 63);
+        Roads.Place port = new Roads.Place("Portsea", 1280, 1280, 160, 2, CityLayout.Side.WEST.ordinal());
+        Roads.Place north = new Roads.Place("Northby", 1100, 300, 160, 2);
+        Roads.Place south = new Roads.Place("Southby", 1100, 2260, 160, 2);
+        Roads.Plan plan = Roads.plan(flat, List.of(new Roads.Link(Roads.Grade.HIGH, north, south)), List.of(), List.of(port, north, south));
+        int[] h = HarbourCut.reserve(port.x(), port.z(), port.half(), port.harbour());
+        Roads.Road road = plan.roads().get(0);
+        for (int i = 0; i < road.points(); i++) {
+            assertFalse(HarbourCut.inBox(h, road.xs()[i], road.zs()[i]), "a road over the harbour at " + road.xs()[i] + ", " + road.zs()[i]);
+        }
+    }
+
+    @Test
     void roadsGoRoundMountainsAndCrossTheRiverOnce() {
         Roads.Plan plan = Roads.plan(land(), List.of(new Roads.Link(Roads.Grade.HIGH, WEST, EAST)), List.of(), List.of(WEST, EAST));
         Roads.Road road = plan.roads().get(0);
