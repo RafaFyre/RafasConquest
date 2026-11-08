@@ -1,5 +1,5 @@
 {
   "replace": false,
   "values": [ "rafasconquest:command_table", "rafasconquest:grand_strategy", "rafasconquest:strategy_board",
-    "rafasconquest:gate_block" ]
+    "rafasconquest:gate_block", { "id": "rafasconquest:gate_planks", "required": false } ]
 }

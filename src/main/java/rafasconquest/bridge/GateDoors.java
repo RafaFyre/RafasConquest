@@ -86,7 +86,16 @@ final class GateDoors {
             return;
         }
         List<BlockPos> blocks = new ArrayList<>();
-        BlockPos.betweenClosedStream(box).filter(p -> !level.getBlockState(p).isAir()).forEach(p -> blocks.add(p.immutable()));
+        BlockState planks = GateBlockEntity.planks().defaultBlockState();
+        for (BlockPos p : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())) {
+            BlockState state = level.getBlockState(p);
+            if (state.is(net.minecraft.world.level.block.Blocks.OAK_PLANKS)) {
+                level.setBlock(p, planks, Block.UPDATE_CLIENTS); // oak planks built by hand become Gate Planks, to swing free
+            }
+            if (!state.isAir()) {
+                blocks.add(p.immutable());
+            }
+        }
         if (blocks.isEmpty()) {
             return;
         }

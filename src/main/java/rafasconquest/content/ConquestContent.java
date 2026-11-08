@@ -60,6 +60,12 @@ public final class ConquestContent {
     /** The Gate Block: a black lectern that works a gate's two doors, Sable ships on hinges. */
     public static final DeferredHolder<Block, Block> GATE_BLOCK = BLOCKS.register("gate_block",
             () -> new GateBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.LECTERN).mapColor(net.minecraft.world.level.material.MapColor.COLOR_BLACK)));
+    /** Gate doors' planks: with Sable, a door made of them swings through the wall and the other door (null without Sable). */
+    public static final DeferredHolder<Block, Block> GATE_PLANKS = net.neoforged.fml.ModList.get() != null && net.neoforged.fml.ModList.get().isLoaded("sable")
+            ? BLOCKS.register("gate_planks", () -> new rafasconquest.bridge.GatePlanksBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)))
+            : null;
+    public static final DeferredHolder<Item, Item> GATE_PLANKS_ITEM = GATE_PLANKS == null ? null
+            : ITEMS.register("gate_planks", () -> new BlockItem(GATE_PLANKS.get(), new Item.Properties()));
     public static final DeferredHolder<Item, Item> GATE_BLOCK_ITEM = ITEMS.register("gate_block",
             () -> new BlockItem(GATE_BLOCK.get(), new Item.Properties()));
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<GateBlockEntity>> GATE_ENTITY =
@@ -94,6 +100,9 @@ public final class ConquestContent {
                 output.accept(DOCK_BLOCK_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
+                if (GATE_PLANKS_ITEM != null) {
+                    output.accept(GATE_PLANKS_ITEM.get());
+                }
             })
             .build());
 

@@ -131,9 +131,9 @@ public class GateBlockEntity extends BlockEntity {
      * placed (a chunk, in world generation).
      */
     public static void install(LevelAccessor level, BoundingBox within, BlockPos at, Direction facing, BoundingBox leftDoor, BoundingBox rightDoor) {
+        BlockState planks = planks().defaultBlockState();
         for (BoundingBox door : new BoundingBox[]{leftDoor, rightDoor}) {
-            BlockPos.betweenClosedStream(door).filter(within::isInside)
-                    .forEach(p -> level.setBlock(p, Blocks.OAK_PLANKS.defaultBlockState(), 2));
+            BlockPos.betweenClosedStream(door).filter(within::isInside).forEach(p -> level.setBlock(p, planks, 2));
         }
         if (!within.isInside(at)) {
             return;
@@ -144,6 +144,11 @@ public class GateBlockEntity extends BlockEntity {
             gate.right.box = relative(at, rightDoor);
             gate.setChanged();
         }
+    }
+
+    /** What doors are made of: Gate Planks (which swing through walls) with Sable, else oak planks. */
+    public static net.minecraft.world.level.block.Block planks() {
+        return ConquestContent.GATE_PLANKS != null ? ConquestContent.GATE_PLANKS.get() : Blocks.OAK_PLANKS;
     }
 
     private static int[] relative(BlockPos at, BoundingBox box) {

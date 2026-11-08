@@ -480,9 +480,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/ConquestContent.java": {
-    "mtime": 1794107729.0333536,
-    "seen": 1794108131.6957023,
-    "ast_hash": "371b21a36a27ec9226c3ef1c50a711a9",
+    "mtime": 1794135947.7009354,
+    "seen": 1794136119.4324985,
+    "ast_hash": "6929f330617a1c8a160eda2eac793297",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/QuestBoardBlock.java": {
@@ -1284,9 +1284,9 @@
     "semantic_hash": "fa1778aa5fe8f45bd2a794cf894fd7fd"
   },
   "src/main/resources/assets/rafasconquest/lang/en_us.json": {
-    "mtime": 1794107568.679487,
-    "seen": 1794108131.6959598,
-    "ast_hash": "34922bfbae11d3601c5ae65adf84962c",
+    "mtime": 1794135956.3537753,
+    "seen": 1794136119.4327583,
+    "ast_hash": "227da844214d18059417fa600b2869dc",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/models/block/character_marker.json": {
@@ -2172,9 +2172,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/axe.json": {
-    "mtime": 1794107572.2926044,
-    "seen": 1794108131.6960008,
-    "ast_hash": "337c07ece3333fd804087a86b8e4d97c",
+    "mtime": 1794135956.3787103,
+    "seen": 1794136119.432803,
+    "ast_hash": "ca9683f402e376250d641775ab7cf7d2",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/shovel.json": {
@@ -2742,9 +2742,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/GateDoors.java": {
-    "mtime": 1794107811.8805132,
-    "seen": 1794108131.695586,
-    "ast_hash": "0c0addf6995aa52aeadf32fbaf2f12b5",
+    "mtime": 1794135948.1787868,
+    "seen": 1794136119.4323847,
+    "ast_hash": "061ddcf4c23ee49d19b195904d31758b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/GateRenderer.java": {
@@ -2766,9 +2766,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GateBlockEntity.java": {
-    "mtime": 1794107702.959794,
-    "seen": 1794108131.6957054,
-    "ast_hash": "89d6e2a2c7c9cd7bd4982ed1ab18a522",
+    "mtime": 1794135948.1229353,
+    "seen": 1794136119.4325018,
+    "ast_hash": "e5c288533e82565be6564a65f005ce39",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GateGeometry.java": {
@@ -2835,6 +2835,36 @@
     "mtime": 1794107556.830411,
     "seen": 1794108131.696202,
     "ast_hash": "6e536e913a31e27ec0a0a3d933094ebd",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/bridge/GatePlanksBlock.java": {
+    "mtime": 1794135935.2498286,
+    "seen": 1794136119.432387,
+    "ast_hash": "bd20178f2287dcdf8e2ec3c7a5080f7f",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/blockstates/gate_planks.json": {
+    "mtime": 1794135956.2935164,
+    "seen": 1794136119.4327495,
+    "ast_hash": "694731983c9e9351548f77a88e52f432",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/block/gate_planks.json": {
+    "mtime": 1794135956.2935164,
+    "seen": 1794136119.4327698,
+    "ast_hash": "1ee7e723be15127e52565cb1e010de99",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/models/item/gate_planks.json": {
+    "mtime": 1794135956.294514,
+    "seen": 1794136119.4327884,
+    "ast_hash": "51d37b945b5abd5a4326091517dc5307",
+    "semantic_hash": ""
+  },
+  "src/main/resources/data/rafasconquest/loot_table/blocks/gate_planks.json": {
+    "mtime": 1794135956.3154876,
+    "seen": 1794136119.432819,
+    "ast_hash": "be627c0846b4960de2d137ce8cfa8e5d",
     "semantic_hash": ""
   }
 }
