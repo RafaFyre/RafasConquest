@@ -314,6 +314,18 @@ public final class Wars {
             at = new BattlePlan.Point(fort.x() - axis[0] * (wall + BattlePlan.DEPLOY_DISTANCE),
                     fort.z() - axis[1] * (wall + BattlePlan.DEPLOY_DISTANCE));
         }
+        // A siege surveys the walls first: the attacker comes at their flattest side with every strategem it has.
+        rafasconquest.bridge.SiegeSurvey.Result survey = null;
+        if (war.type() == BattleType.SIEGE && fort != null && server.getPlayerList().getPlayers().stream().anyMatch(p ->
+                p.level() == server.overworld() && Math.hypot(p.getX() - fort.x(), p.getZ() - fort.z()) <= REAL_RANGE)) {
+            BattlePlan.Point hall = fort.half() > rafasconquest.worldgen.CountryPiece.CASTLE_WALL
+                    ? rafasconquest.bridge.SiegeSurvey.cityHall(server.overworld(), fort.x(), fort.z()) : null;
+            survey = rafasconquest.bridge.SiegeSurvey.survey(server.overworld(), fort.x(), fort.z(), fort.half(), hall,
+                    fort.port() ? net.minecraft.core.Direction.fromDelta(fort.outX(), 0, fort.outZ()) : null, java.util.EnumSet.allOf(rafasconquest.battle.Siege.Engine.class));
+            at = survey.plan().battleCentre();
+            axis = survey.plan().axis();
+        }
+        rafasconquest.bridge.SiegeSurvey.Result siegeSurvey = survey;
         bringToBattle(server, war, at, axis);
         boolean near = false;
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
@@ -344,7 +356,7 @@ public final class Wars {
             RecruitsBattle.start(server.overworld(), a, Mth.clamp(attackers, 20, BattlePlan.MAX_SOLDIERS), d,
                     Mth.clamp(defenders, 20, BattlePlan.MAX_SOLDIERS),
                     at, axis[0], axis[1], general(map, war, true), general(map, war, false), war.type(),
-                    war.type() == BattleType.AMPHIBIOUS ? fort.harbourShips() : 0,
+                    war.type() == BattleType.AMPHIBIOUS ? fort.harbourShips() : 0, null, siegeSurvey,
                     line -> server.getPlayerList().broadcastSystemMessage(Component.literal(say("war.battle", "a", a.name(), "d", d.name(),
                             "how", say("war.meet." + war.type().name().toLowerCase(java.util.Locale.ROOT), "fort", fort == null ? "" : fort.name(),
                                     "a", a.name(), "d", d.name()), "county", county, "line", line)).withStyle(ChatFormatting.RED), false),

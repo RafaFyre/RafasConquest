@@ -122,7 +122,68 @@ public class GateBlockEntity extends BlockEntity {
         }
         if (level instanceof ServerLevel server) {
             rafasconquest.bridge.SableLink.gate(server, gate);
+            if ((server.getGameTime() + pos.asLong()) % 200 == 0 && button(server, pos) == null) {
+                placeButton(server, pos, state.getValue(GateBlock.FACING)); // gates built before buttons were, or a button broken
+            }
         }
+    }
+
+    /** The button beside a Gate Block (on the floor next to it), or null with none. */
+    @Nullable
+    public static BlockPos button(LevelAccessor level, BlockPos gate) {
+        for (Direction d : Direction.Plane.HORIZONTAL) {
+            if (level.getBlockState(gate.relative(d)).getBlock() instanceof net.minecraft.world.level.block.ButtonBlock) {
+                return gate.relative(d);
+            }
+        }
+        return null;
+    }
+
+    /** Puts a stone button on the floor beside a Gate Block, on the first free side (its sides first, then behind it). */
+    private static void placeButton(LevelAccessor level, BlockPos gate, Direction facing) {
+        for (Direction d : new Direction[]{facing.getCounterClockWise(), facing.getClockWise(), facing, facing.getOpposite()}) {
+            BlockPos at = gate.relative(d);
+            if (level.getBlockState(at).canBeReplaced() && level.getFluidState(at).isEmpty()
+                    && level.getBlockState(at.below()).isFaceSturdy(level, at.below(), Direction.UP)) {
+                level.setBlock(at, Blocks.STONE_BUTTON.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.ButtonBlock.FACE, net.minecraft.world.level.block.state.properties.AttachFace.FLOOR)
+                        .setValue(net.minecraft.world.level.block.ButtonBlock.FACING, d), 3);
+                return;
+            }
+        }
+    }
+
+    /** Whether the gate is shut fast: closed (not swinging), with a door still standing. */
+    public boolean shut() {
+        return swing == Swing.CLOSED && !broken();
+    }
+
+    /** Whether both doors are smashed (or it has none left): it can't be shut again until rebuilt. */
+    public boolean broken() {
+        return (left.box == null || left.hp <= 0) && (right.box == null || right.hp <= 0);
+    }
+
+    /**
+     * A blow from a battering ram: the first door still standing takes {@code amount}; at 0 it is smashed, its blocks or
+     * ship gone. Says whether a door took it.
+     */
+    public boolean batter(int amount) {
+        Door door = left.box != null && left.hp > 0 ? left : right.box != null && right.hp > 0 ? right : null;
+        if (door == null || !(level instanceof ServerLevel server)) {
+            return false;
+        }
+        door.hp = Math.max(0, door.hp - amount);
+        setChanged();
+        BlockPos middle = world(door.box).getCenter();
+        server.playSound(null, middle, door.hp > 0 ? net.minecraft.sounds.SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR
+                : net.minecraft.sounds.SoundEvents.ZOMBIE_BREAK_WOODEN_DOOR, net.minecraft.sounds.SoundSource.BLOCKS, 1.5f, 0.7f);
+        if (door.hp == 0) {
+            rafasconquest.bridge.SableLink.smashDoor(server, door);
+            // Without Sable (or before its ship was made) the door is still blocks: knock them out.
+            BlockPos.betweenClosedStream(world(door.box)).filter(p -> server.getBlockState(p).is(planks()) || server.getBlockState(p).is(Blocks.OAK_PLANKS))
+                    .forEach(p -> server.destroyBlock(p, false));
+        }
+        return true;
     }
 
     /**
@@ -143,6 +204,9 @@ public class GateBlockEntity extends BlockEntity {
             gate.left.box = relative(at, leftDoor);
             gate.right.box = relative(at, rightDoor);
             gate.setChanged();
+        }
+        if (Direction.Plane.HORIZONTAL.stream().allMatch(d -> within.isInside(at.relative(d)))) {
+            placeButton(level, at, facing);
         }
     }
 

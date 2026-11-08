@@ -83,6 +83,24 @@ public final class FieldBattle {
         return type;
     }
 
+    /** A siege's own rules ({@link Siege}), or null in any other battle. */
+    @Nullable
+    private Siege siege;
+
+    /** Makes it a siege of the fortress {@code plan} surveys, both armies laid out for it; a siege, before it begins only. */
+    public void besiege(Siege.Plan plan) {
+        if (begun() || type != BattleType.SIEGE) {
+            throw new IllegalStateException("a siege is laid out before it begins");
+        }
+        siege = new Siege(plan);
+        siege.deploy(armies[0], armies[1]);
+    }
+
+    @Nullable
+    public Siege siege() {
+        return siege;
+    }
+
     /** Ships sail this many blocks a second, whatever their soldiers' arm. */
     public static final double SHIP_SPEED = 2.5;
     /** In an amphibious assault, a ship this close to the walls has reached the wharf: its soldiers land. */
@@ -943,10 +961,16 @@ public final class FieldBattle {
             captains(); // at sea the ships' captains decide everything: none of the land's generalship applies
         } else {
             for (int side = 0; side < 2; side++) {
-                command(armies[side], armies[1 - side]);
+                if (siege != null && side == 1) {
+                    siege.defend(armies[1], armies[0], seconds);
+                } else {
+                    command(armies[side], armies[1 - side]);
+                }
             }
         }
-        if (type.walled()) {
+        if (siege != null) {
+            siege.attack(armies[0], armies[1], seconds);
+        } else if (type.walled()) {
             holdWalls();
         }
         if (type == BattleType.AMPHIBIOUS) {
@@ -962,10 +986,14 @@ public final class FieldBattle {
         index();
         fight();
         momentum();
+        if (siege != null) {
+            siege.afterFighting(armies[0], armies[1], seconds);
+            events.addAll(siege.takeEvents());
+        }
         for (FieldArmy army : armies) {
             morale(army, armies[1 - army.side]);
         }
-        if (!finalMelee && type != BattleType.OCEAN && BattlePlan.stalled(seconds, lastFall)) {
+        if (!finalMelee && siege == null && type != BattleType.OCEAN && BattlePlan.stalled(seconds, lastFall)) {
             finalMelee = true;
             calls.add(new Order(0, Call.FINAL_CHARGE));
             calls.add(new Order(1, Call.FINAL_CHARGE));
@@ -2286,6 +2314,9 @@ public final class FieldBattle {
      * captain rally.
      */
     private void morale(FieldArmy army, FieldArmy enemy) {
+        if (siege != null && army.side == 1) {
+            return; // the defenders of a siege never break: there is nowhere to go
+        }
         int slot = seconds % FieldRules.ROUT_WINDOW;
         for (FieldBlock block : army.blocks) {
             if (!block.arm.infantry() || block.started() == 1) {
@@ -2667,6 +2698,9 @@ public final class FieldBattle {
             double dz = target.z() - block.pos.z();
             double distance = Math.hypot(dx, dz);
             double step = block.afloat ? shipSpeed(block) : rates.speed(block.arm);
+            if (siege != null) {
+                step *= siege.pace(block);
+            }
             if (pursuing && block.duty == Duty.FLEEING) {
                 step *= FieldRules.FLEE_SPEED; // running for their lives, gear thrown down
             }
@@ -2699,6 +2733,9 @@ public final class FieldBattle {
                 FieldBlock foe = block.afloat && type == BattleType.OCEAN
                         ? block.lashed.stream().filter(o -> o.alive > 0).findFirst().orElse(null) // at sea, hand to hand only once grappled
                         : hunted(block.prey) && block.distanceTo(block.prey) <= reach ? block.prey : nearestWithin(block, enemy, reach);
+                if (foe != null && siege != null && !siege.reaches(block, foe)) {
+                    foe = null; // a wall between them: archers shoot instead
+                }
                 if (foe != null) {
                     block.contactSeconds++;
                     if (block.duty == Duty.FRONT) {
@@ -2723,6 +2760,9 @@ public final class FieldBattle {
                     if (foe.braced && block.arm == Arm.CAVALRY && sideOf(foe, block) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_TAKES;
                     }
+                    if (siege != null) {
+                        damage *= siege.meleeFactor(block, foe);
+                    }
                     if (block.braced && foe.arm == Arm.CAVALRY && sideOf(block, foe) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_DEALS;
                     }
@@ -2740,7 +2780,7 @@ public final class FieldBattle {
         for (int i = 0; i < targets.size(); i++) {
             FieldBlock target = targets.get(i);
             double damage = damages.get(i) * (resolute(target) ? FieldRules.RESOLVE_TAKES : 1);
-            if (type.walled() && target.side == 1 && pastWalls(target.pos) <= WALL_BAND) {
+            if (siege == null && type.walled() && target.side == 1 && pastWalls(target.pos) <= WALL_BAND) {
                 damage *= WALL_TAKES;
             }
             if (damage > 0) {
@@ -2828,7 +2868,8 @@ public final class FieldBattle {
             volleys.add(new Volley(archers, foe, shots));
         }
         targets.add(foe);
-        damages.add(shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm));
+        damages.add(shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm)
+                * (siege == null ? 1 : siege.arrowFactor(foe)));
     }
 
     /** Where an attack from {@code attacker} falls on {@code defender}. */
@@ -2841,6 +2882,10 @@ public final class FieldBattle {
 
     /** An army whose general falls retreats at once; one worn down to {@link BattlePlan#ROUT_SHARE} routs. */
     private void checkEnd() {
+        if (siege != null) {
+            siegeEnd();
+            return;
+        }
         boolean fellA = armies[0].commander != null && armies[0].commander.alive == 0;
         boolean fellB = armies[1].commander != null && armies[1].commander.alive == 0;
         if (fellA || fellB) {
@@ -2869,11 +2914,39 @@ public final class FieldBattle {
     }
 
     /**
+     * A siege ends when the fortress is taken (a gate breached a minute, or every defender down), when the attackers'
+     * general falls or their army routs, or when time runs out with the walls held. The defenders never withdraw: their
+     * general's fall doesn't end it.
+     */
+    private void siegeEnd() {
+        String taken = siege.taken();
+        if (taken == null && armies[1].alive() == 0) {
+            taken = "every defender fell";
+        }
+        if (taken != null) {
+            outcome = new Outcome(0, "side 0 wins; " + taken, seconds);
+            return;
+        }
+        if (armies[0].commander != null && armies[0].commander.alive == 0) {
+            outcome = new Outcome(1, "side 0's general fell; side 0 retreats", seconds);
+            flee(armies[0]);
+        } else if (BattlePlan.routs(armies[0].alive(), armies[0].started)) {
+            outcome = new Outcome(1, "side 1 wins; side 0 routs", seconds);
+            flee(armies[0]);
+        } else if (seconds >= BattlePlan.TIME_LIMIT_SECONDS) {
+            outcome = new Outcome(1, "the walls held (time limit)", seconds);
+        }
+    }
+
+    /**
      * Evening: the fighting stops and every block marches back to its army's camp, {@code back[side]} behind where it
      * deployed, in its place, facing the enemy again. From now on the blocks only march.
      */
     public void pullBack(double[] back) {
         pulledBack = true;
+        if (siege != null) {
+            siege.nightfall();
+        }
         for (FieldArmy army : armies) {
             for (FieldBlock b : army.blocks) {
                 stand(b);
@@ -2891,6 +2964,9 @@ public final class FieldBattle {
     public void formUp(double back) {
         forming = true;
         for (FieldArmy army : armies) {
+            if (siege != null && army.side == 1) {
+                continue; // the defenders spent the night on and behind their walls
+            }
             for (FieldBlock b : army.blocks) {
                 b.pos = b.line.plus(-army.facingX * back, -army.facingZ * back);
             }

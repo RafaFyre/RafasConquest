@@ -288,36 +288,57 @@ public class CountryPiece extends StructurePiece {
         set(level, chunk, 0, top + 1, 0, Blocks.LANTERN.defaultBlockState());
     }
 
+    /** A castle's curtain wall: its outer face this far from the middle, this thick, and its walkway's floor this high. */
+    public static final int CASTLE_WALL = 20;
+    public static final int CASTLE_WALL_THICKNESS = 5;
+    private static final int CASTLE_WALL_TOP = 5;
+
     /**
-     * A castle: a curtain wall 41 blocks square (6 high, crenellated, a 5 × 3 gate with oak doors on the +x side), a 7 × 7 tower at
-     * each corner, and an 11 × 11 keep in the middle with a door, a floor halfway up and a ladder.
+     * A castle: a curtain wall 41 blocks square (5 thick, 6 high, a walkway along its top behind merlons, stairs up to it
+     * inside each side, a 5 × 3 gate through it with oak doors on the +x side), a 7 × 7 tower at each corner, and an
+     * 11 × 11 keep in the middle with a door, a floor halfway up and a ladder.
      */
     private void castle(WorldGenLevel level, BoundingBox chunk) {
-        int r = 20;
+        int r = CASTLE_WALL;
+        int inner = r - CASTLE_WALL_THICKNESS + 1;
         BlockState stone = Blocks.STONE_BRICKS.defaultBlockState();
         BlockState mossy = Blocks.MOSSY_STONE_BRICKS.defaultBlockState();
         // The courtyard: a gravel path from the gate to the keep, the rest grass.
         for (int x = -r; x <= r; x++) {
             for (int z = -r; z <= r; z++) {
-                boolean wall = Math.abs(x) == r || Math.abs(z) == r;
-                if (Math.abs(z) <= 1 && x > 5 && x < r) {
+                int ring = Math.max(Math.abs(x), Math.abs(z));
+                if (Math.abs(z) <= 1 && x > 5 && x < inner) {
                     set(level, chunk, x, -1, z, Blocks.GRAVEL.defaultBlockState());
                 }
-                if (!wall) {
+                if (ring < inner) {
                     continue;
                 }
+                boolean gateway = x >= inner && Math.abs(z) <= 2;
                 set(level, chunk, x, -1, z, stone);
-                for (int y = 0; y < 6; y++) {
-                    set(level, chunk, x, y, z, (x * 7 + z * 3 + y) % 9 == 0 ? mossy : stone);
+                for (int y = 0; y <= CASTLE_WALL_TOP; y++) {
+                    if (!(gateway && y < 3)) {
+                        set(level, chunk, x, y, z, (x * 7 + z * 3 + y) % 9 == 0 ? mossy : stone);
+                    }
                 }
-                if ((x + z) % 2 == 0) {
-                    set(level, chunk, x, 6, z, stone);
+                if (ring == r && (x + z) % 2 == 0) {
+                    set(level, chunk, x, CASTLE_WALL_TOP + 1, z, stone); // the merlons, on the outer edge
                 }
             }
         }
-        // The gate: 5 wide and 3 high, shut by two oak doors (3 wide on the left, looking out, and 2 on the right), worked
-        // by a Gate Block just inside, out of the right door's swing.
-        rafasconquest.content.GateBlockEntity.install(level, chunk, at(r - 1, 0, 3), rotate(Direction.WEST),
+        // Stairs up to the walkway inside each side, against the wall, clear of the gate.
+        for (int side = 0; side < 4; side++) {
+            for (int t = 0; t <= CASTLE_WALL_TOP; t++) {
+                int[] p = quarter(side, inner - 1, -12 + t);
+                for (int y = 0; y < t; y++) {
+                    set(level, chunk, p[0], y, p[1], stone);
+                }
+                set(level, chunk, p[0], t, p[1], Blocks.STONE_BRICK_STAIRS.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.StairBlock.FACING, rotate(turn(Direction.SOUTH, side))));
+            }
+        }
+        // The gate: 5 wide and 3 high through the wall, shut by two oak doors at its outer face (3 wide on the left,
+        // looking out, and 2 on the right), worked by a Gate Block just inside the wall beside the gateway.
+        rafasconquest.content.GateBlockEntity.install(level, chunk, at(inner - 1, 0, 3), rotate(Direction.WEST),
                 BoundingBox.fromCorners(at(r, 0, -2), at(r, 2, 0)), BoundingBox.fromCorners(at(r, 0, 1), at(r, 2, 2)));
         // The corner towers.
         for (int cx : new int[]{-r, r}) {
@@ -373,6 +394,23 @@ public class CountryPiece extends StructurePiece {
         set(level, chunk, -k + 1, 6, 0, Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, rotate(Direction.EAST)));
         set(level, chunk, 0, 7, 0, Blocks.LANTERN.defaultBlockState());
         set(level, chunk, 0, 0, 2, Blocks.LANTERN.defaultBlockState());
+    }
+
+    /** A local place (x, z) turned {@code turns} quarter turns about the middle, as {@link #at} turns. */
+    private static int[] quarter(int turns, int x, int z) {
+        for (int i = 0; i < turns; i++) {
+            int t = x;
+            x = -z;
+            z = t;
+        }
+        return new int[]{x, z};
+    }
+
+    private static Direction turn(Direction d, int turns) {
+        for (int i = 0; i < turns; i++) {
+            d = d.getClockWise();
+        }
+        return d;
     }
 
     /** A local direction turned the way the piece is. */

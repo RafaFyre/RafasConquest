@@ -56,6 +56,25 @@ public final class CityGates {
         }
     }
 
+    /** Fits every gate of {@code city} not yet fitted, loading its chunks first: for a siege begun from afar. */
+    public static void fitAll(ServerLevel level, SeatCities.City city) {
+        Done done = Done.get(level);
+        for (Direction out : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
+            BlockPos gate = gate(city, out);
+            if (done.has(gate.asLong())) {
+                continue;
+            }
+            int r = OUT + IN + 8;
+            for (int cx = (gate.getX() - r) >> 4; cx <= (gate.getX() + r) >> 4; cx++) {
+                for (int cz = (gate.getZ() - r) >> 4; cz <= (gate.getZ() + r) >> 4; cz++) {
+                    level.getChunk(cx, cz);
+                }
+            }
+            fit(level, city, out);
+            done.add(gate.asLong());
+        }
+    }
+
     /** Where the gate avenue meets the city's edge on side {@code out} (y 0). */
     static BlockPos gate(SeatCities.City city, Direction out) {
         int half = city.size() / 2;

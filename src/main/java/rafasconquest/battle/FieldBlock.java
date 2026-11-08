@@ -55,7 +55,10 @@ public final class FieldBlock {
 
     final int id;
     final int side;
-    final Arm arm;
+    /** What it fights as (cavalry dismounted in a siege fights on foot). */
+    Arm arm;
+    /** Dismounted cavalry in a siege: super heavy infantry, hard to hurt. */
+    boolean superHeavy;
     final float[] health;
     /** The captain's place among its soldiers, or -1 (a lone general or standard-bearer). */
     final int captain;
@@ -212,6 +215,10 @@ public final class FieldBlock {
 
     public Task task() {
         return task;
+    }
+
+    public boolean superHeavy() {
+        return superHeavy;
     }
 
     public boolean live() {

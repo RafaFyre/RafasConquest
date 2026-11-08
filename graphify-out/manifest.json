@@ -84,15 +84,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1793998270.8388188,
-    "seen": 1793998889.9351194,
-    "ast_hash": "8f98e756da84af089f4bfa4b64e023f6",
+    "mtime": 1794139350.8539023,
+    "seen": 1794140067.316086,
+    "ast_hash": "61ce18b9d14dbc38f18f7be27037fb2d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
-    "mtime": 1793949066.7439399,
-    "seen": 1793949526.4734485,
-    "ast_hash": "30d0139e1234984aeee7071b5b5eb8b8",
+    "mtime": 1794139350.9646056,
+    "seen": 1794140067.3160894,
+    "ast_hash": "0f38a1d6b8f8cc8388bd95ca1d48c055",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794001149.0179472,
-    "seen": 1794001216.5509198,
-    "ast_hash": "3c9728957faa3f70d9b21a492de4bc78",
+    "mtime": 1794139858.4850972,
+    "seen": 1794140067.3161197,
+    "ast_hash": "d053eff971ebf33958a9e93fe9732eea",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1794107858.8301928,
-    "seen": 1794108131.6956997,
-    "ast_hash": "be6992f3d63b1d980a9d044abe7d540d",
+    "mtime": 1794145514.6207576,
+    "seen": 1794146253.1558974,
+    "ast_hash": "4e218a975ee13ab7613705ac32d3ad98",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
@@ -978,9 +978,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/MapLands.java": {
-    "mtime": 1793938378.5752125,
-    "seen": 1793938671.7814598,
-    "ast_hash": "a2a3e72449f3a32911301c4e7efad597",
+    "mtime": 1794143913.7051647,
+    "seen": 1794144017.9644346,
+    "ast_hash": "1d03cc714e243f373bf9b64ace73ba73",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/MusterBars.java": {
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/Wars.java": {
-    "mtime": 1793998407.747918,
-    "seen": 1793998889.9353812,
-    "ast_hash": "6c5866ad68a97fb0db89f0e1e73835f2",
+    "mtime": 1794141473.1680982,
+    "seen": 1794141656.749607,
+    "ast_hash": "c7ea44dc178c48537b7fd0b7f92ee6c5",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/sim/CityBanners.java": {
@@ -1170,9 +1170,9 @@
     "semantic_hash": "a476595b6b8516b18f036da7998917b3"
   },
   "src/main/java/rafasconquest/worldgen/CountryPiece.java": {
-    "mtime": 1794107849.7819228,
-    "seen": 1794108131.6959188,
-    "ast_hash": "85192b95c1b5caa999f7a2c4d382daea",
+    "mtime": 1794138996.9656687,
+    "seen": 1794140067.3164465,
+    "ast_hash": "7c5677e1bb56cadf15644e8d2589d835",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CountryPlacement.java": {
@@ -2280,9 +2280,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableLink.java": {
-    "mtime": 1794107792.7995381,
-    "seen": 1794108131.6955926,
-    "ast_hash": "5c764b504170ae88c9c9c710eaa85d9f",
+    "mtime": 1794141516.4033387,
+    "seen": 1794141656.7493286,
+    "ast_hash": "d8ff92d5643f40852ca81d2e6e51ef66",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableShips.java": {
@@ -2742,9 +2742,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/GateDoors.java": {
-    "mtime": 1794135948.1787868,
-    "seen": 1794136119.4323847,
-    "ast_hash": "061ddcf4c23ee49d19b195904d31758b",
+    "mtime": 1794139026.2816398,
+    "seen": 1794140067.3161159,
+    "ast_hash": "d16942be5101d0164aeb1ca6306b466c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/GateRenderer.java": {
@@ -2766,9 +2766,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GateBlockEntity.java": {
-    "mtime": 1794135948.1229353,
-    "seen": 1794136119.4325018,
-    "ast_hash": "e5c288533e82565be6564a65f005ce39",
+    "mtime": 1794139018.5372972,
+    "seen": 1794140067.3162374,
+    "ast_hash": "6de1b217037da71ad1c5d13242ec5f2a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GateGeometry.java": {
@@ -2778,9 +2778,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityGates.java": {
-    "mtime": 1794107916.5038795,
-    "seen": 1794108131.6959019,
-    "ast_hash": "0d65e460bd5c21943fa5fb6f4117052f",
+    "mtime": 1794143964.537464,
+    "seen": 1794144017.96447,
+    "ast_hash": "048b199efd66111a6da504d2169e328b",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/blockstates/gate_block.json": {
@@ -2865,6 +2865,42 @@
     "mtime": 1794135956.3154876,
     "seen": 1794136119.432819,
     "ast_hash": "be627c0846b4960de2d137ce8cfa8e5d",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/battle/Siege.java": {
+    "mtime": 1794146161.0581293,
+    "seen": 1794146253.155774,
+    "ast_hash": "ee0e49545d602e2e970555be384d6b0e",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/bridge/SiegeSurvey.java": {
+    "mtime": 1794146729.4498293,
+    "seen": 1794146788.3953812,
+    "ast_hash": "4cc1963eae15562c08f0d510e3dbd00f",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/bridge/SiegeWorks.java": {
+    "mtime": 1794146202.5076835,
+    "seen": 1794146253.1557984,
+    "ast_hash": "4c582f134ebe6f08a88bf921130cc0fe",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/battle/SiegeTest.java": {
+    "mtime": 1794146213.3067067,
+    "seen": 1794146253.1563103,
+    "ast_hash": "fcdbb08bd100f5265a27a63e21cc553b",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/bridge/SiegeFrames.java": {
+    "mtime": 1794146173.639793,
+    "seen": 1794146253.1557958,
+    "ast_hash": "c2d32f0c4e9f801c270eb70d9a397085",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/bridge/SiegeSurveyTest.java": {
+    "mtime": 1794146729.2607806,
+    "seen": 1794146788.3959088,
+    "ast_hash": "cd49ba5b2baf2cbffa2b99be358fb09d",
     "semantic_hash": ""
   }
 }

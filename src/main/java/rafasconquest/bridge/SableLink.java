@@ -31,6 +31,13 @@ public final class SableLink {
     public record Ram(int rammer, int struck, double knockX, double knockZ) {
     }
 
+    /**
+     * A siege ladder or tower being carried or rolled ({@link SiegeFrames}): {@code key} names it; its middle (a tower's at
+     * its foot) wanted at (x, y, z), heading {@code yaw} (radians about up); a tower {@code height} blocks high.
+     */
+    public record Frame(String key, boolean tower, int height, double x, double y, double z, double yaw) {
+    }
+
     private SableLink() {
     }
 
@@ -48,6 +55,7 @@ public final class SableLink {
             SableShips.tick(level);
             if (!RecruitsBattle.running() && level.getGameTime() % 100 == 0) {
                 BattleShips.tick(level, List.of()); // a battle's ships left from a stopped battle, or a crash, are taken away
+                SiegeFrames.tick(level, List.of()); // and a siege's ladders and towers
             }
         } catch (LinkageError e) {
             enabled = false;
@@ -69,6 +77,19 @@ public final class SableLink {
             enabled = false;
             RafasConquest.LOGGER.warn("Sable found, but its API doesn't match; no real ships will sail", e);
             return List.of();
+        }
+    }
+
+    /** Each tick of a siege: a real frame for each of these; every other siege frame is taken away. */
+    public static void siegeFrames(ServerLevel level, List<Frame> frames) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            SiegeFrames.tick(level, frames);
+        } catch (LinkageError e) {
+            enabled = false;
+            RafasConquest.LOGGER.warn("Sable found, but its API doesn't match; siege ladders and towers stay displays", e);
         }
     }
 
@@ -111,6 +132,18 @@ public final class SableLink {
             return GateDoors.hit(level, pos, amount);
         } catch (LinkageError e) {
             return false;
+        }
+    }
+
+    /** A door battered to nothing: its ship, if it has one, is gone. */
+    public static void smashDoor(ServerLevel level, rafasconquest.content.GateBlockEntity.Door door) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            GateDoors.smash(level, door);
+        } catch (LinkageError e) {
+            // no Sable API: the door is plain blocks, knocked out by the gate itself
         }
     }
 

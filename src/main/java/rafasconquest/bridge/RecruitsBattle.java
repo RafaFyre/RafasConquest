@@ -281,6 +281,14 @@ public final class RecruitsBattle {
     /** The land the battle is fought on, as read for deploying. */
     @Nullable
     private Terrain terrain;
+    /** A siege's survey of its fortress, and its strategems and gates in the world; null in any other battle. */
+    @Nullable
+    private SiegeSurvey.Result survey;
+    @Nullable
+    private SiegeWorks works;
+    /** Where the defenders' war council stands in a siege (in the barracks or keep, for they pitch no camp). */
+    @Nullable
+    private Vec3 hall;
     /** Each camp's guards, by side; the war council in the tents, with their side. */
     private final Map<Integer, List<UUID>> campFolk = new HashMap<>();
     private final Map<UUID, Integer> councillors = new HashMap<>();
@@ -565,6 +573,35 @@ public final class RecruitsBattle {
                              Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
                              BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, Consumer<String> ready,
                              Consumer<String> failed) {
+        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, firstGeneral, secondGeneral, type,
+                harbourShips, secondTeam, null, ready, failed);
+    }
+
+    /**
+     * As above; a siege with a {@code survey} of its fortress ({@link SiegeSurvey}) is fought at its walls by the siege's
+     * rules ({@link rafasconquest.battle.Siege}), wherever {@code centre} and the axis say: the attacker comes at the
+     * wall the survey chose.
+     */
+    public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                             Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
+                             BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, @Nullable SiegeSurvey.Result survey,
+                             Consumer<String> ready, Consumer<String> failed) {
+        if (survey != null && type == BattleType.SIEGE) {
+            double[] axis = survey.plan().axis();
+            centre = survey.plan().battleCentre();
+            axisX = axis[0];
+            axisZ = axis[1];
+        } else {
+            survey = null;
+        }
+        startAt(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, firstGeneral, secondGeneral, type,
+                harbourShips, secondTeam, survey, ready, failed);
+    }
+
+    private static void startAt(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                                Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
+                                BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, @Nullable SiegeSurvey.Result survey,
+                                Consumer<String> ready, Consumer<String> failed) {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
         }
@@ -596,6 +633,9 @@ public final class RecruitsBattle {
         FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
                 : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
         field.setType(type);
+        if (survey != null) {
+            field.besiege(survey.plan());
+        }
         if (type == BattleType.AMPHIBIOUS && harbourShips > 0) {
             field.addHarbourFleet(harbourShips);
         }
@@ -615,7 +655,7 @@ public final class RecruitsBattle {
                 return;
             }
             try {
-                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ));
+                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ, survey));
             } catch (RuntimeException e) {
                 RafasConquest.LOGGER.error("[battle] couldn't begin the battle", e);
                 if (current == null) {
@@ -629,11 +669,16 @@ public final class RecruitsBattle {
     /** The rest of {@link #start}, once the ground is surveyed: deploys the armies, pitches the camps, and begins. */
     private static String begin(ServerLevel level, FieldBattle field, Side[] sides, Terrain terrain, PlayerTeam teamA,
                                 PlayerTeam teamB, RecruitsDiplomacyManager diplomacy, int blocksA, int blocksB, Point centre,
-                                double axisX, double axisZ) {
-        int hidden = GroundPlan.deploy(field, terrain);
+                                double axisX, double axisZ, @Nullable SiegeSurvey.Result survey) {
+        // A siege's places are its walls': nothing is moved for the lie of the land.
+        int hidden = survey == null ? GroundPlan.deploy(field, terrain) : 0;
         String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.terrain = terrain;
+        if (survey != null && field.siege() != null) {
+            battle.survey = survey;
+            battle.works = new SiegeWorks(level, field.siege(), survey.gates(), survey.walkY(), survey.plan().outX(), survey.plan().outZ());
+        }
         RafasConquest.LOGGER.info("[battle] deployed to the ground; {} blocks hide in ambush, {} of {} stand wet by the survey",
                 hidden, GroundPlan.wetBlocks(field, terrain), blocksA + blocksB);
         battle.centre = centre;
@@ -887,6 +932,9 @@ public final class RecruitsBattle {
             }
         }
         battle.fading.clear();
+        if (battle.works != null) {
+            battle.works.clear();
+        }
         battle.releaseChunks();
         battle.restoreRelations();
         return "Cleared the battle (" + removed + " soldiers removed)";
@@ -963,8 +1011,9 @@ public final class RecruitsBattle {
         EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get()
                 : block.afloat() && block.arm() == Arm.CAVALRY ? type(Arm.SWORDSMEN) // no horses on deck: the guard sails on foot
                 : type(block.arm());
+        // Dismounted cavalry (super heavy infantry) keeps its riders' heavy armour, as the general's guard wears it.
         Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
-                : block.duty() == Duty.GUARD ? Role.GUARD : i == block.captain() ? Role.LEADER : Role.SOLDIER;
+                : block.duty() == Duty.GUARD || block.superHeavy() ? Role.GUARD : i == block.captain() ? Role.LEADER : Role.SOLDIER;
         AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
         if (soldier == null) {
             return;
@@ -1747,6 +1796,9 @@ public final class RecruitsBattle {
             battle.second();
         }
         battle.sail();
+        if (battle.works != null) {
+            battle.works.tick();
+        }
         battle.council.tick(battle.level.getServer(), battle.level.getGameTime());
         battle.turnToListeners();
         if (battle.ticks % 2 == 0) {
@@ -1958,6 +2010,9 @@ public final class RecruitsBattle {
      */
     private void second() {
         clock++;
+        if (works != null) {
+            siegeWorks();
+        }
         switch (phase) {
             case DEPLOYMENT -> {
                 deployment();
@@ -2036,6 +2091,18 @@ public final class RecruitsBattle {
                 beginPullback();
             }
         }
+    }
+
+    /** A siege's strategems and gates in the world, for this second ({@link SiegeWorks}). */
+    private void siegeWorks() {
+        List<List<AbstractRecruitEntity>> bySide = List.of(new ArrayList<>(), new ArrayList<>());
+        for (Live l : live.values()) {
+            bySide.get(l.block.side()).addAll(l.living());
+        }
+        works.second(b -> {
+            Live l = live.get(b);
+            return l == null ? List.of() : l.living();
+        }, bySide.get(0), bySide.get(1));
     }
 
     /**
@@ -4161,6 +4228,9 @@ public final class RecruitsBattle {
             if (field.afloat(side)) {
                 continue; // a fleet has no camp: it sleeps aboard
             }
+            if (side == 1 && works != null) {
+                continue; // a besieged garrison sleeps in its own walls
+            }
             FieldArmy army = field.army(side);
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
@@ -4198,6 +4268,9 @@ public final class RecruitsBattle {
             if (current.sides[side].faction.id().equals(faction) && current.camps[side] != null) {
                 return current.camps[side].entrance();
             }
+            if (side == 1 && current.hall != null && current.sides[side].faction.id().equals(faction)) {
+                return current.hall;
+            }
         }
         return null;
     }
@@ -4212,7 +4285,35 @@ public final class RecruitsBattle {
                 return true;
             }
         }
-        return false;
+        return current.hall != null && player.position().distanceTo(current.hall) <= HALL_REACH;
+    }
+
+    /** In a siege, a player this close to where the defenders' council stands is at it. */
+    private static final double HALL_REACH = 6;
+
+    /**
+     * Where the defenders' council stands in a siege: on the ground floor of the hall the survey names (the barracks,
+     * or the castle's keep): going down from its roof, the lowest open place before solid ground; null in other battles.
+     */
+    @Nullable
+    private Vec3 hallFloor() {
+        if (survey == null) {
+            return null;
+        }
+        Point at = survey.plan().hall();
+        loadGround(at);
+        BlockPos top = ground(at);
+        BlockPos lowest = top;
+        int solid = 0;
+        for (BlockPos p = top; p.getY() > level.getMinBuildHeight() + 1 && solid < 4; p = p.below()) {
+            boolean open = level.getBlockState(p).getCollisionShape(level, p).isEmpty();
+            solid = open ? 0 : solid + 1;
+            if (open && level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()
+                    && level.getBlockState(p.below()).isFaceSturdy(level, p.below(), net.minecraft.core.Direction.UP)) {
+                lowest = p;
+            }
+        }
+        return Vec3.atBottomCenterOf(lowest);
     }
 
     /** The camp a player of a wing sleeps in: their wing's, else the general's. */
@@ -4286,6 +4387,23 @@ public final class RecruitsBattle {
                 }
             }
             vassalOfficers(side, camp);
+        }
+        // A besieged garrison pitches no camp: its council meets in its hall, the general in the middle.
+        hall = hallFloor();
+        if (hall != null) {
+            Side s = sides[1];
+            String[] roles = {"general", "left", "right"};
+            Vec3[] spots = {hall, hall.add(2, 0, 0), hall.add(-2, 0, 0)};
+            String[] names = {say("camp_general", "name", s.general.name()), say("camp_marshal", "name", s.marshals[0]),
+                    say("camp_marshal", "name", s.marshals[2])};
+            for (int i = 0; i < 3; i++) {
+                AbstractRecruitEntity figure = campFigure(ModEntityTypes.RECRUIT.get(), 1, i == 0 ? Role.GENERAL : Role.GUARD, spots[i],
+                        i == 0 ? 0 : i == 1 ? 90 : -90, names[i]);
+                if (figure != null) {
+                    councillors.put(figure.getUUID(), 1);
+                    councilRoles.put(figure.getUUID(), roles[i]);
+                }
+            }
         }
     }
 
@@ -4835,7 +4953,8 @@ public final class RecruitsBattle {
         setPhase(Phase.PULLBACK);
         // Each block marches back by the same distance, so the army re-forms just short of its camp.
         double back = CAMP_GAP - PULLBACK_SHORT_OF_CAMP;
-        field.pullBack(new double[]{back, back});
+        // A besieged garrison stays on and behind its walls; the attackers take their strategems back to camp.
+        field.pullBack(new double[]{back, works != null ? 0 : back});
         for (Live l : live.values()) {
             l.living().forEach(s -> s.setTarget(null));
         }
@@ -4894,7 +5013,10 @@ public final class RecruitsBattle {
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
                 level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
         field.setType(type); // a sea battle stays at sea the next day
-        if (terrain != null) {
+        if (works != null && survey != null) {
+            field.besiege(survey.plan()); // the strategems are brought out again, the walls manned afresh
+            works.rebind(field.siege());
+        } else if (terrain != null) {
             GroundPlan.deploy(field, terrain);
         }
         started = false;
@@ -5250,6 +5372,9 @@ public final class RecruitsBattle {
                     }
                 }
             }
+        }
+        if (works != null) {
+            works.gates().forEach(g -> wanted.add(ChunkPos.asLong(g))); // the real gates stay there to fight for
         }
         for (long chunk : wanted) {
             hold(chunk);

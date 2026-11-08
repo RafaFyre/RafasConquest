@@ -239,14 +239,7 @@ public final class MapLands implements Lands {
     public Fort fort(int county) {
         for (rafasconquest.core.SeatCities.City c : map.cities()) {
             if (county(c.province()) == county) {
-                int[] out = c.port() ? switch (rafasconquest.core.CityLayout.Side.values()[c.harbour()]) {
-                    case NORTH -> new int[]{0, -1};
-                    case SOUTH -> new int[]{0, 1};
-                    case WEST -> new int[]{-1, 0};
-                    case EAST -> new int[]{1, 0};
-                } : new int[]{0, 0};
-                return new Fort(map.names().get(c.province()), c.x(), c.z(), c.size() / 2 + rafasconquest.core.CityLayout.WALL_OUTSET,
-                        c.port(), out[0], out[1]);
+                return fort(c);
             }
         }
         for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
@@ -256,6 +249,18 @@ public final class MapLands implements Lands {
             }
         }
         return null;
+    }
+
+    /** A seat city's walls. */
+    public Fort fort(rafasconquest.core.SeatCities.City c) {
+        int[] out = c.port() ? switch (rafasconquest.core.CityLayout.Side.values()[c.harbour()]) {
+            case NORTH -> new int[]{0, -1};
+            case SOUTH -> new int[]{0, 1};
+            case WEST -> new int[]{-1, 0};
+            case EAST -> new int[]{1, 0};
+        } : new int[]{0, 0};
+        return new Fort(map.names().get(c.province()), c.x(), c.z(), c.size() / 2 + rafasconquest.core.CityLayout.WALL_OUTSET,
+                c.port(), out[0], out[1]);
     }
 
     @Override

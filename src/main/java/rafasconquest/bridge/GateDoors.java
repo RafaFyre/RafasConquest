@@ -186,6 +186,15 @@ final class GateDoors {
         return true;
     }
 
+    /** Takes a smashed door's ship away. */
+    static void smash(ServerLevel level, GateBlockEntity.Door door) {
+        ServerSubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container != null && door.ship != null && container.getSubLevel(door.ship) instanceof ServerSubLevel sub && !sub.isRemoved()) {
+            remove(level, sub);
+        }
+        door.ship = null;
+    }
+
     /**
      * New door boxes from the gate's screen: a closed gate's door ships are put back as blocks where they stand, then the
      * doors are made again from the new boxes. Says what was done.

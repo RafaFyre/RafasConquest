@@ -19,6 +19,7 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.level.ServerPlayer;
 import rafasconquest.dev.BattleMap;
 import rafasconquest.battle.BattlePlan;
+import rafasconquest.politics.Lands.Fort;
 import rafasconquest.battle.BattleType;
 import rafasconquest.battle.FieldArmy;
 import rafasconquest.battle.FieldBattle;
@@ -187,18 +188,44 @@ public final class PveCommands {
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
+                                // A siege of a castle (the nearest unless named), surveyed first, with the attackers'
+                                // strategems: all, or any of ladders, towers, rams joined by + (ladders+rams).
+                                .then(Commands.literal("siege")
+                                        .executes(ctx -> siege(ctx, null, "all"))
+                                        .then(Commands.argument("castle", StringArgumentType.string())
+                                                .suggests((ctx, b) -> placeSuggestions(ctx.getSource().getPosition(), b))
+                                                .executes(ctx -> siege(ctx, StringArgumentType.getString(ctx, "castle"), "all"))
+                                                .then(Commands.argument("strategems", StringArgumentType.word())
+                                                        .suggests((ctx, b) -> SharedSuggestionProvider.suggest(List.of("all", "ladders", "towers",
+                                                                "rams", "ladders+towers", "ladders+rams", "towers+rams"), b))
+                                                        .executes(ctx -> siege(ctx, StringArgumentType.getString(ctx, "castle"),
+                                                                StringArgumentType.getString(ctx, "strategems")))
+                                                        // Army sizes, the defenders' first.
+                                                        .then(Commands.argument("defenders", IntegerArgumentType.integer(1, BattlePlan.MAX_SOLDIERS))
+                                                                .then(Commands.argument("attackers", IntegerArgumentType.integer(1, BattlePlan.MAX_SOLDIERS))
+                                                                        .executes(ctx -> siege(ctx, StringArgumentType.getString(ctx, "castle"),
+                                                                                StringArgumentType.getString(ctx, "strategems"),
+                                                                                IntegerArgumentType.getInteger(ctx, "defenders"),
+                                                                                IntegerArgumentType.getInteger(ctx, "attackers"), null, null)))))))
                                 // A test battle of one kind: ocean, land, siege or amphibious (the second side defends).
                                 .then(Commands.literal("type")
                                         .then(Commands.argument("type", StringArgumentType.word())
                                                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(java.util.Arrays.stream(BattleType.values())
                                                         .map(t -> t.name().toLowerCase(java.util.Locale.ROOT)).toList(), b))
                                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY, battleType(ctx)))
-                                                .then(Commands.argument("first", StringArgumentType.string())
-                                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
-                                                        .then(Commands.argument("second", StringArgumentType.string())
-                                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
-                                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "first"), DEFAULT_ARMY,
-                                                                        StringArgumentType.getString(ctx, "second"), DEFAULT_ARMY, battleType(ctx)))))))
+                                                // Army sizes, the defenders' first; then, if wanted, the factions, the defender first.
+                                                .then(Commands.argument("defenders", IntegerArgumentType.integer(1, BattlePlan.MAX_SOLDIERS))
+                                                        .then(Commands.argument("attackers", IntegerArgumentType.integer(1, BattlePlan.MAX_SOLDIERS))
+                                                                .executes(ctx -> battle(ctx, null, IntegerArgumentType.getInteger(ctx, "attackers"), null,
+                                                                        IntegerArgumentType.getInteger(ctx, "defenders"), battleType(ctx)))
+                                                                .then(Commands.argument("defender", StringArgumentType.string())
+                                                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                                        .then(Commands.argument("attacker", StringArgumentType.string())
+                                                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                                                                .executes(ctx -> battle(ctx, StringArgumentType.getString(ctx, "attacker"),
+                                                                                        IntegerArgumentType.getInteger(ctx, "attackers"),
+                                                                                        StringArgumentType.getString(ctx, "defender"),
+                                                                                        IntegerArgumentType.getInteger(ctx, "defenders"), battleType(ctx)))))))))
                                 .then(Commands.literal("start").executes(ctx -> {
                                     String line = RecruitsBattle.startFighting();
                                     ctx.getSource().sendSuccess(() -> Component.literal(line), true);
@@ -297,8 +324,122 @@ public final class PveCommands {
         var piece = new rafasconquest.worldgen.CountryPiece(rafasconquest.worldgen.CountryPiece.Build.CASTLE, x, y, z, turns);
         piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.random, piece.getBoundingBox(),
                 new net.minecraft.world.level.ChunkPos(x >> 4, z >> 4), new net.minecraft.core.BlockPos(x, y, z));
+        BUILT_CASTLES.add(new Fort("castle at " + x + " " + z, x, z, rafasconquest.worldgen.CountryPiece.CASTLE_WALL, false, 0, 0));
         ctx.getSource().sendSuccess(() -> Component.literal("A castle stands at " + x + " " + y + " " + z
                 + "; power its Gate Block to swing the doors"), true);
+        return 1;
+    }
+
+    /** Castles built with {@code /pve debug castle} this session, besiegeable as the map's are. */
+    private static final List<Fort> BUILT_CASTLES = new java.util.ArrayList<>();
+
+    /** Every walled place: the map's castles and seat cities and the castles built here, the nearest to {@code here} first. */
+    private static List<Fort> castles(Vec3 here) {
+        List<Fort> all = new java.util.ArrayList<>(BUILT_CASTLES);
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map != null) {
+            for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
+                if (s.kind() == rafasconquest.core.Countryside.Kind.CASTLE) {
+                    all.add(new Fort("castle of " + map.names().get(s.province()), s.x(), s.z(),
+                            rafasconquest.worldgen.CountryPiece.CASTLE_WALL, false, 0, 0));
+                }
+            }
+            rafasconquest.politics.MapLands lands = rafasconquest.politics.MapLands.of(map);
+            for (rafasconquest.core.SeatCities.City c : map.cities()) {
+                Fort f = lands.fort(c);
+                all.add(new Fort("city of " + f.name(), f.x(), f.z(), f.half(), f.port(), f.outX(), f.outZ()));
+            }
+        }
+        all.sort(Comparator.comparingDouble(c -> Math.hypot(c.x() - here.x, c.z() - here.z)));
+        return all;
+    }
+
+    /**
+     * The walled places, quoted, the nearest city first and the rest nearest first. Built by hand, for
+     * SharedSuggestionProvider.suggest sorts them by name.
+     */
+    private static CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> placeSuggestions(Vec3 here,
+                                                                                                    com.mojang.brigadier.suggestion.SuggestionsBuilder b) {
+        List<Fort> all = new java.util.ArrayList<>(castles(here));
+        all.stream().filter(f -> f.half() > rafasconquest.worldgen.CountryPiece.CASTLE_WALL).findFirst().ifPresent(city -> {
+            all.remove(city);
+            all.add(0, city);
+        });
+        String typed = b.getRemaining().toLowerCase(Locale.ROOT);
+        List<com.mojang.brigadier.suggestion.Suggestion> list = all.stream().map(f -> "\"" + f.name() + "\"")
+                .filter(s -> SharedSuggestionProvider.matchesSubStr(typed, s.toLowerCase(Locale.ROOT)))
+                .map(s -> new com.mojang.brigadier.suggestion.Suggestion(
+                        com.mojang.brigadier.context.StringRange.between(b.getStart(), b.getInput().length()), s))
+                .toList();
+        return CompletableFuture.completedFuture(new com.mojang.brigadier.suggestion.Suggestions(
+                com.mojang.brigadier.context.StringRange.between(b.getStart(), b.getInput().length()), list));
+    }
+
+    /**
+     * Surveys a castle (the nearest, or the one named) and lays siege to it: the two factions nearest it fight, the
+     * nearer attacking, three times the defenders' number, with the {@code strategems} given.
+     */
+    private static int siege(CommandContext<CommandSourceStack> ctx, @Nullable String name, String strategems) throws CommandSyntaxException {
+        return siege(ctx, name, strategems, DEFAULT_ARMY, DEFAULT_ARMY * 3, null, null);
+    }
+
+    /** As above, with the armies' sizes and (if named) factions given. */
+    private static int siege(CommandContext<CommandSourceStack> ctx, @Nullable String name, String strategems, int defenders,
+                             int attackers, @Nullable String defender, @Nullable String attacker) throws CommandSyntaxException {
+        ConquestServer server = server();
+        CommandSourceStack source = ctx.getSource();
+        List<Fort> all = castles(source.getPosition());
+        Fort castle = name == null ? (all.isEmpty() ? null : all.get(0))
+                : all.stream().filter(c -> c.name().equalsIgnoreCase(name)).findFirst().orElse(null);
+        if (castle == null) {
+            throw new SimpleCommandExceptionType(Component.literal(name == null ? "No castle or city to besiege: build a castle with /pve debug castle"
+                    : "No castle or city named " + name)).create();
+        }
+        java.util.Set<rafasconquest.battle.Siege.Engine> engines = java.util.EnumSet.noneOf(rafasconquest.battle.Siege.Engine.class);
+        for (String word : strategems.toLowerCase(java.util.Locale.ROOT).split("[+,]")) {
+            switch (word) {
+                case "all" -> engines.addAll(java.util.EnumSet.allOf(rafasconquest.battle.Siege.Engine.class));
+                case "ladders", "ladder" -> engines.add(rafasconquest.battle.Siege.Engine.LADDERS);
+                case "towers", "tower" -> engines.add(rafasconquest.battle.Siege.Engine.TOWERS);
+                case "rams", "ram" -> engines.add(rafasconquest.battle.Siege.Engine.RAMS);
+                default -> throw new SimpleCommandExceptionType(Component.literal("No strategem " + word + ": all, ladders, towers or rams")).create();
+            }
+        }
+        List<Faction> nearest = server.data().factions().stream()
+                .sorted(Comparator.comparingDouble(f -> f.origin().getCenter().distanceToSqr(castle.x(), f.origin().getY() + 0.5, castle.z())))
+                .toList();
+        Faction a = attacker == null ? (nearest.isEmpty() ? null : nearest.get(0)) : byName(server, attacker);
+        Faction d = defender == null ? (nearest.size() < 2 ? null : nearest.get(1)) : byName(server, defender);
+        if (a == null || d == null || a == d) {
+            throw NO_FACTION.create();
+        }
+        // A city's defenders hold council at its barracks, and its harbour side is never attacked (as in a war's siege).
+        boolean city = castle.half() > rafasconquest.worldgen.CountryPiece.CASTLE_WALL;
+        if (city) {
+            for (rafasconquest.core.SeatCities.City c : rafasconquest.worldgen.ConquestRuntime.cities().inBox(castle.x(), castle.z(), castle.x(), castle.z())) {
+                if (c.x() == castle.x() && c.z() == castle.z()) {
+                    rafasconquest.worldgen.CityGates.fitAll(server.overworld(), c); // gates are otherwise fitted only with a player near
+                }
+            }
+        }
+        var survey = rafasconquest.bridge.SiegeSurvey.survey(server.overworld(), castle.x(), castle.z(), castle.half(),
+                city ? rafasconquest.bridge.SiegeSurvey.cityHall(server.overworld(), castle.x(), castle.z()) : null,
+                castle.port() ? net.minecraft.core.Direction.fromDelta(castle.outX(), 0, castle.outZ()) : null, engines);
+        for (String line : survey.report(castle.name())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        try {
+            RecruitsBattle.start(server.overworld(), a, attackers, d, defenders,
+                    new BattlePlan.Point(castle.x(), castle.z()), 1, 0, null, null, BattleType.SIEGE, 0, null, survey, line -> {
+                        String url = BattleMap.open(server.overworld().getServer());
+                        source.sendSuccess(() -> Component.literal(line + ". The armies are deploying: ")
+                                .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA)
+                                        .withUnderlined(true).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
+                                .append(Component.literal(" or /pve debug battle start")), true);
+                    }, why -> source.sendFailure(Component.literal(why)));
+        } catch (IllegalStateException e) {
+            throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
+        }
         return 1;
     }
 
@@ -314,6 +455,10 @@ public final class PveCommands {
     /** As above, of a kind: in a walled battle the second side defends, and an amphibious port sends out a district's ships. */
     private static int battle(CommandContext<CommandSourceStack> ctx, @Nullable String first, int firstSoldiers, @Nullable String second,
                               int secondSoldiers, BattleType type) throws CommandSyntaxException {
+        if (type == BattleType.SIEGE) {
+            // A siege is fought at a castle's walls, never in the open with camps.
+            return siege(ctx, null, "all", secondSoldiers, firstSoldiers, second, first);
+        }
         ConquestServer server = server();
         Vec3 here = ctx.getSource().getPosition();
         List<Faction> nearest = server.data().factions().stream()
