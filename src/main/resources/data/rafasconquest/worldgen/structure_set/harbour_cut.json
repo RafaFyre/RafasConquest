@@ -1,0 +1,12 @@
+{
+  "structures": [
+    {
+      "structure": "rafasconquest:harbour_cut",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "rafasconquest:city_slope_sites",
+    "salt": 1146308470
+  }
+}

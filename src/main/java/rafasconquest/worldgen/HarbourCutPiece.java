@@ -21,6 +21,8 @@ import rafasconquest.core.HarbourCut;
  * above it, out to where each column's lane met the sea ({@code ends}, blocks out past the wharf).
  */
 public class HarbourCutPiece extends StructurePiece {
+    /** How far under the floor a cave or magma is filled with stone. */
+    private static final int FILL_DEPTH = 32;
     private final int side;
     /** World (x, z) of the column 1 out past the wharf at the stretch's first lane. */
     private final int lineX;
@@ -62,6 +64,8 @@ public class HarbourCutPiece extends StructurePiece {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         BlockState water = Blocks.WATER.defaultBlockState();
         BlockState air = Blocks.AIR.defaultBlockState();
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        BlockState sand = Blocks.SAND.defaultBlockState();
         int sea = generator.getSeaLevel();
         for (int x = Math.max(boundingBox.minX(), chunkBox.minX()); x <= Math.min(boundingBox.maxX(), chunkBox.maxX()); x++) {
             for (int z = Math.max(boundingBox.minZ(), chunkBox.minZ()); z <= Math.min(boundingBox.maxZ(), chunkBox.maxZ()); z++) {
@@ -70,9 +74,25 @@ public class HarbourCutPiece extends StructurePiece {
                     continue;
                 }
                 int floor = HarbourCut.floor(plate, ad[1]);
-                int top = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 1;
+                // Not the _WG map: it is frozen before features, so grass and trees already laid here would be left floating.
+                int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
                 for (int y = top; y > floor; y--) {
                     level.setBlock(pos.set(x, y, z), y < sea ? water : air, 2);
+                }
+                // A cave opened under the floor is filled, and magma there would raise a bubble column.
+                for (int y = floor - 1; y > floor - FILL_DEPTH; y--) {
+                    BlockState below = level.getBlockState(pos.set(x, y, z));
+                    if (below.isAir() || below.is(Blocks.MAGMA_BLOCK)) {
+                        level.setBlock(pos, stone, 2);
+                    } else {
+                        break;
+                    }
+                }
+                BlockState ground = level.getBlockState(pos.set(x, floor, z));
+                if (top > floor && floor < sea) {
+                    level.setBlock(pos, sand, 2); // carved sea floor
+                } else if (ground.isAir() || ground.is(Blocks.MAGMA_BLOCK)) {
+                    level.setBlock(pos, stone, 2);
                 }
             }
         }

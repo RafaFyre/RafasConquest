@@ -1,0 +1,8 @@
+{
+  "type": "rafasconquest:city_slope",
+  "harbour": true,
+  "biomes": "#minecraft:is_overworld",
+  "step": "underground_structures",
+  "spawn_overrides": {},
+  "terrain_adaptation": "none"
+}

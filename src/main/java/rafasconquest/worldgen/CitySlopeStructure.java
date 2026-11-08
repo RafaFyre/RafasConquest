@@ -19,10 +19,20 @@ import java.util.Optional;
  * reach, laid by the city's own {@link CityTerrain.Plan}, so the slope runs further than one structure start can.
  */
 public class CitySlopeStructure extends Structure {
-    public static final com.mojang.serialization.MapCodec<CitySlopeStructure> CODEC = simpleCodec(CitySlopeStructure::new);
+    public static final com.mojang.serialization.MapCodec<CitySlopeStructure> CODEC =
+            com.mojang.serialization.codecs.RecordCodecBuilder.mapCodec(i -> i.group(settingsCodec(i),
+                    com.mojang.serialization.Codec.BOOL.optionalFieldOf("harbour", false).forGetter(s -> s.harbour)
+            ).apply(i, CitySlopeStructure::new));
 
-    public CitySlopeStructure(StructureSettings settings) {
+    /**
+     * Whether this lays only the harbour tiles (the {@link rafasconquest.core.HarbourCut}) instead of only the others:
+     * the cut is its own structure in an earlier step, so the wharf and piers are built after it and never carved.
+     */
+    private final boolean harbour;
+
+    public CitySlopeStructure(StructureSettings settings, boolean harbour) {
         super(settings);
+        this.harbour = harbour;
     }
 
     @Override
@@ -31,7 +41,8 @@ public class CitySlopeStructure extends Structure {
         if (settings == null) {
             return Optional.empty();
         }
-        List<CityLayout.SlopeTile> tiles = CityLayout.slopeTilesInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z);
+        List<CityLayout.SlopeTile> tiles = CityLayout.slopeTilesInChunk(ctx.seed(), settings, ctx.chunkPos().x, ctx.chunkPos().z)
+                .stream().filter(t -> t.harbour() == harbour).toList();
         if (tiles.isEmpty()) {
             return Optional.empty();
         }
@@ -41,7 +52,7 @@ public class CitySlopeStructure extends Structure {
         return Optional.of(new GenerationStub(pos, pieces -> {
             for (CityLayout.SlopeTile t : tiles) {
                 CityTerrain.Plan plan = CityGridBuilder.terrainPlan(ctx, t.city());
-                if (t.harbour()) {
+                if (harbour) {
                     Harbour.cut(ctx, t, plan.plateY(), pieces);
                     continue;
                 }

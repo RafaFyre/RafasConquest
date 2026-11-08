@@ -33,6 +33,32 @@ public final class HarbourCut {
         return Math.max(plate - STEP_RISE * STEPS - CityTerrain.rise(d - STEPS), plate - DEEPEST);
     }
 
+    /** Looks in a row this many apart, all wet, that count as the open sea rather than a river or an inlet. */
+    static final int OPEN = 3;
+
+    /**
+     * How far out past the wharf a lane must be cut to open into the sea: a look past the first of {@link #OPEN} wet
+     * looks in a row, {@code step} apart from 1, or the whole {@link #REACH} if it never meets them. A river or inlet
+     * by the wall no longer stops the cut short of the land beyond it. Past the open sea, an island whose far side is
+     * sea again within reach is cut too, out to a look past it; a far shore that runs on to the reach is left alone.
+     */
+    public static int coast(java.util.function.IntPredicate wetAt, int step) {
+        int run = 0;
+        int end = -1;
+        boolean wasDry = false;
+        for (int d = 1; d <= REACH; d += step) {
+            boolean wet = wetAt.test(d);
+            run = wet ? run + 1 : 0;
+            if (end < 0 && run == OPEN) {
+                end = d - (OPEN - 1) * step + step;
+            } else if (end >= 0 && wet && wasDry) {
+                end = d + step;
+            }
+            wasDry = !wet;
+        }
+        return end < 0 ? REACH : Math.min(REACH, end);
+    }
+
     /** The cut's city-local box {minX, minZ, maxX, maxZ} on {@code side} of a square {@code size} a side. */
     public static int[] box(CityLayout.Side side, int size, int outset) {
         int in = start(outset);

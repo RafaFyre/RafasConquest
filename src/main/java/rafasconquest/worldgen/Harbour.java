@@ -64,20 +64,18 @@ public final class Harbour {
 
     /** How far out past the wharf the lane at {@code along} must be cut to open into the sea. */
     private static int coast(Structure.GenerationContext ctx, Frame f, int along, int start) {
-        for (int d = 1; d <= HarbourCut.REACH; d += LANE) {
+        return HarbourCut.coast(d -> {
             int[] at = f.world(along, start + d - 1);
-            if (wet(ctx, at[0], at[1])) {
-                return Math.min(HarbourCut.REACH, d + LANE);
-            }
-        }
-        return HarbourCut.REACH;
+            return wet(ctx, at[0], at[1]);
+        }, LANE);
     }
 
-    /** Whether the noise terrain at (x, z) has water on top. */
+    /** Whether the noise terrain at (x, z) has water on top at sea level (not a lake up in the hills). */
     private static boolean wet(Structure.GenerationContext ctx, int x, int z) {
         var gen = ctx.chunkGenerator();
-        return gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, ctx.heightAccessor(), ctx.randomState())
-                < gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, ctx.heightAccessor(), ctx.randomState());
+        int surface = gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, ctx.heightAccessor(), ctx.randomState());
+        return surface <= gen.getSeaLevel()
+                && gen.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, ctx.heightAccessor(), ctx.randomState()) < surface;
     }
 
     /** The side a built city's harbour faces, or null for an inland city. */
