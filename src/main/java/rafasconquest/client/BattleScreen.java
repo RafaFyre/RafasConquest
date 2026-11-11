@@ -18,6 +18,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.bridge.RecruitsBattle.UnitOrder;
 import rafasconquest.net.ConquestNetwork;
 import rafasconquest.net.ConquestNetwork.UnitInfo;
@@ -275,6 +276,25 @@ public final class BattleScreen extends Screen {
 
     private Vec3 onGround(double x, double z) {
         return new Vec3(x, minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z)) + 1, z);
+    }
+
+    /**
+     * Where a unit's soldiers are drawn, at their middles: the real ones where they stand, the rest as figures in its
+     * ranks ({@link DistantArmyRenderer}); its centre if the client has no formation for it yet. Picking goes by these,
+     * so it takes the soldiers the player sees, not one point in the middle of them.
+     */
+    private List<Vec3> marks(UnitInfo u) {
+        List<Vec3> marks = new ArrayList<>();
+        FormationSnapshot formation = DistantArmies.at(u.block());
+        if (formation != null) {
+            for (FormationSnapshot.Sprite s : formation.place(DistantArmies.positions(1))) {
+                marks.add(new Vec3(s.x(), s.y() + 1, s.z()));
+            }
+        }
+        if (marks.isEmpty()) {
+            marks.add(onGround(u.x(), u.z()));
+        }
+        return marks;
     }
 
     // ---- cards and wings ----
@@ -679,14 +699,16 @@ public final class BattleScreen extends Screen {
             pinned = card;
             return;
         }
-        // On the field: the unit whose mark is nearest the click, or the player's body; else nothing.
+        // On the field: the unit of the soldier nearest the click, or the player's body; else nothing.
         UnitInfo best = null;
         double bestD = PICK;
         for (UnitInfo u : units) {
-            double[] at = project(onGround(u.x(), u.z()));
-            if (at != null && Math.hypot(at[0] - mx, at[1] - my) < bestD) {
-                bestD = Math.hypot(at[0] - mx, at[1] - my);
-                best = u;
+            for (Vec3 mark : marks(u)) {
+                double[] at = project(mark);
+                if (at != null && Math.hypot(at[0] - mx, at[1] - my) < bestD) {
+                    bestD = Math.hypot(at[0] - mx, at[1] - my);
+                    best = u;
+                }
             }
         }
         double[] me = project(minecraft.player.position().add(0, 1, 0));
@@ -714,9 +736,12 @@ public final class BattleScreen extends Screen {
         double ly = Math.min(y0, y1);
         double hy = Math.max(y0, y1);
         for (UnitInfo u : units) {
-            double[] at = project(onGround(u.x(), u.z()));
-            if (at != null && at[0] >= lx && at[0] <= hx && at[1] >= ly && at[1] <= hy) {
-                selected.add(u.number());
+            for (Vec3 mark : marks(u)) { // a unit is taken if any of its soldiers is in the box
+                double[] at = project(mark);
+                if (at != null && at[0] >= lx && at[0] <= hx && at[1] >= ly && at[1] <= hy) {
+                    selected.add(u.number());
+                    break;
+                }
             }
         }
         double[] me = project(minecraft.player.position().add(0, 1, 0));
