@@ -1,6 +1,5 @@
 package rafasconquest.battle;
 
-import rafasconquest.battle.BattlePlan.Arm;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.FieldBlock.Duty;
 
@@ -11,12 +10,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Deploying to the lie of the land, before the battle begins: each block moves from its place in the template (up to
- * {@link #REACH} away) to the best ground near it. Armies hate water and keep out of it; they love high ground,
- * archers most of all; and they keep together, each block near its place and clear of the others, no further toward
- * the enemy than a little. The front blocks choose first, and the blocks behind each follow their file's front, then
- * choose about it. Where a wood lies near a wing's end, a few of that wing's reserve blocks hide in it as an ambush
- * ({@link FieldBlock.Task#AMBUSH}), to strike an enemy block in the flank or rear once it is fighting near them.
+ * Deploying to the lie of the land, before the battle begins: each block keeps its place in the template, so an army
+ * stands together in its rectangle, unless that place is in water; then it moves (up to {@link #REACH} away) to the
+ * nearest dry ground clear of the others, no further toward the enemy than a little. The front blocks go first, and the
+ * blocks behind each follow their file's front, so a file stays a file. Where a wood lies near a wing's end, a few of
+ * that wing's reserve blocks hide in it as an ambush ({@link FieldBlock.Task#AMBUSH}), to strike an enemy block in the
+ * flank or rear once it is fighting near them.
  */
 public final class GroundPlan {
     /** What the land is like at a point. */
@@ -48,12 +47,7 @@ public final class GroundPlan {
     private static final double REACH_BEHIND = 20;
     /** A block may stand this much further toward the enemy than its place, no more. */
     private static final double MAX_FORWARD = 8;
-    /** What a block of height is worth, by arm, against what a block of distance from its place costs. */
-    private static final double ARCHER_HEIGHT = 1.5;
-    private static final double INFANTRY_HEIGHT = 0.6;
-    private static final double CAVALRY_HEIGHT = 0.2;
-    private static final double COHESION = 0.08;
-    /** Blocks keep at least this far apart, or pay for it. */
+    /** A block moved out of water keeps at least this far from the others, or pays for it. */
     private static final double CLEARANCE = 8;
     private static final double CROWDING = 40;
     /** A wood within this reach of a wing's end hides an ambush of at most this many blocks. */
@@ -106,23 +100,16 @@ public final class GroundPlan {
     }
 
     private static void place(FieldBattle field, FieldArmy army, Ground ground) {
-        double ref = 0;
-        int n = 0;
-        for (FieldBlock b : army.blocks) {
-            ref += ground.height(b.line.x(), b.line.z());
-            n++;
-        }
-        ref = n == 0 ? 0 : ref / n;
         List<Point> taken = new ArrayList<>();
         Map<Integer, Point> fileShift = new HashMap<>();
-        // The front first, then the archers (to the high ground before the reserves take it), then the rest.
+        // The front first, then the rest from front to back.
         List<FieldBlock> order = new ArrayList<>();
         for (FieldBlock b : army.blocks) {
             if (b.duty != Duty.GENERAL && b.duty != Duty.GUARD && b.duty != Duty.BEARER && !b.afloat) { // ships keep to the water
                 order.add(b);
             }
         }
-        order.sort(Comparator.comparingInt((FieldBlock b) -> b.duty == Duty.FRONT ? 0 : b.arm == Arm.ARCHERS ? 1 : 2)
+        order.sort(Comparator.comparingInt((FieldBlock b) -> b.duty == Duty.FRONT ? 0 : 1)
                 .thenComparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.line).z()));
         for (FieldBlock b : order) {
             Point template = b.line;
@@ -133,9 +120,9 @@ public final class GroundPlan {
                     shift = nearestShift(army, fileShift, template);
                 }
                 template = template.plus(shift.x(), shift.z());
-                reach = b.arm == Arm.ARCHERS ? REACH : REACH_BEHIND; // archers go further for high ground
+                reach = REACH_BEHIND;
             }
-            Point best = best(army, b, template, reach, ref, taken, ground);
+            Point best = best(army, b, template, reach, taken, ground);
             if (b.duty == Duty.FRONT) {
                 fileShift.put(b.file, new Point(best.x() - b.line.x(), best.z() - b.line.z()));
             }
@@ -161,13 +148,16 @@ public final class GroundPlan {
     }
 
     /**
-     * The best ground for a block within {@code reach} of {@code template}; if all of that is water (a stretched world's
-     * lakes and rivers are wide), within twice as far, and so on up to {@link #MAX_REACH}; the template itself if even
-     * that is all water.
+     * Where a block stands: {@code template} if it is dry; else the nearest dry ground within {@code reach} of it; if all
+     * of that is water (a stretched world's lakes and rivers are wide), within twice as far, and so on up to
+     * {@link #MAX_REACH}; the template itself if even that is all water.
      */
-    private static Point best(FieldArmy army, FieldBlock b, Point template, double reach, double ref, List<Point> taken, Ground ground) {
+    private static Point best(FieldArmy army, FieldBlock b, Point template, double reach, List<Point> taken, Ground ground) {
+        if (!wet(ground, army, b, template)) {
+            return template;
+        }
         for (double r = reach; r <= MAX_REACH; r *= 2) {
-            Point best = bestWithin(army, b, template, r, r > reach ? Math.max(STEP, r / 16) : STEP, ref, taken, ground);
+            Point best = bestWithin(army, b, template, r, r > reach ? Math.max(STEP, r / 16) : STEP, taken, ground);
             if (best != null) {
                 return best;
             }
@@ -175,10 +165,9 @@ public final class GroundPlan {
         return template;
     }
 
-    /** The best dry ground for a block within {@code reach} of {@code template}, looked at every {@code step}; null if none. */
-    private static Point bestWithin(FieldArmy army, FieldBlock b, Point template, double reach, double step, double ref,
+    /** The nearest dry ground to {@code template} within {@code reach}, clear of the others, looked at every {@code step}; null if none. */
+    private static Point bestWithin(FieldArmy army, FieldBlock b, Point template, double reach, double step,
                                     List<Point> taken, Ground ground) {
-        double weight = b.arm == Arm.ARCHERS ? ARCHER_HEIGHT : b.arm == Arm.CAVALRY ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
         Point best = null;
         double bestScore = -Double.MAX_VALUE;
         for (double dx = -reach; dx <= reach; dx += step) {
@@ -195,7 +184,7 @@ public final class GroundPlan {
                 if (wet(ground, army, b, p)) {
                     continue;
                 }
-                double score = weight * (ground.height(p.x(), p.z()) - ref) - COHESION * p.distanceTo(b.line);
+                double score = -d;
                 for (Point t : taken) {
                     if (t.distanceTo(p) < CLEARANCE) {
                         score -= CROWDING;

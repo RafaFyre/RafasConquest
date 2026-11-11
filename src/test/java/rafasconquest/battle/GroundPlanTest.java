@@ -50,20 +50,22 @@ class GroundPlanTest {
     }
 
     @Test
-    void archersClimbAHill() {
+    void blocksKeepTheirPlacesByAHill() {
         FieldBattle battle = battle();
         FieldBlock archers = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.ARCHERS).findFirst().orElseThrow();
-        Point near = archers.line();
-        Point top = near.plus(-battle.army(0).facingZ() * 25, battle.army(0).facingX() * 25); // off to one side
+        Point top = archers.line().plus(-battle.army(0).facingZ() * 25, battle.army(0).facingX() * 25); // off to one side
         GroundPlan.Ground land = new Land() {
             @Override
             public double height(double x, double z) {
                 return 64 + Math.max(0, 20 - Math.hypot(x - top.x(), z - top.z()) / 2);
             }
         };
-        double before = land.height(near.x(), near.z());
+        java.util.Map<FieldBlock, Point> before = new java.util.HashMap<>();
+        battle.army(0).blocks().forEach(b -> before.put(b, b.line()));
         GroundPlan.deploy(battle, land);
-        assertTrue(land.height(archers.line().x(), archers.line().z()) > before + 5, "the archers stay low");
+        for (FieldBlock b : battle.army(0).blocks()) {
+            assertEquals(0, b.line().distanceTo(before.get(b)), 1e-6, "a block left its place for the hill: " + b.id());
+        }
     }
 
     @Test
