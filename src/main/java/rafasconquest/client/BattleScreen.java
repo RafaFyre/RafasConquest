@@ -309,7 +309,7 @@ public final class BattleScreen extends Screen {
         double nx = (mouseX / width * 2 - 1) * b[9] * b[10];
         double ny = (1 - mouseY / height * 2) * b[9];
         Vec3 dir = new Vec3(b[0] + b[3] * nx + b[6] * ny, b[1] + b[4] * nx + b[7] * ny, b[2] + b[5] * nx + b[8] * ny).normalize();
-        BlockHitResult hit = minecraft.level.clip(new ClipContext(eye, eye.add(dir.scale(256)), ClipContext.Block.COLLIDER,
+        BlockHitResult hit = minecraft.level.clip(new ClipContext(eye, eye.add(dir.scale(2560)), ClipContext.Block.COLLIDER,
                 ClipContext.Fluid.ANY, minecraft.player));
         return hit.getType() == HitResult.Type.MISS ? null : hit.getLocation();
     }
