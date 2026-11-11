@@ -4,19 +4,22 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import rafasconquest.core.Age;
 import rafasconquest.worldgen.HorizontalStretch;
 import rafasconquest.worldgen.HorizontalStretch.Choice;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * RafasConquest's options for a world being created, opened from the world creation screen: the horizontal stretch,
- * on or off, and how far (1 to 4 times wider each way; off by default if a mod it doesn't suit is installed), and the
- * province size (1: provinces 768 blocks apart, the map out to 16,000 blocks; 2: twice both). The choices are kept for
- * the world when it is made.
+ * on or off, and how far (1 to 4 times wider each way; off by default if a mod it doesn't suit is installed), the
+ * province size (1: provinces 768 blocks apart, the map out to 16,000 blocks; 2: twice both), and the ages, ticked on or
+ * off but always adjacent. The choices are kept for the world when it is made.
  */
 public final class ConquestWorldScreen extends Screen {
     private final Screen parent;
@@ -25,6 +28,8 @@ public final class ConquestWorldScreen extends Screen {
     private int provinceSize;
     private boolean martialTitles;
     private boolean mantraSchools;
+    private Age.Range ages;
+    private final List<Checkbox> ageBoxes = new ArrayList<>();
     private AbstractSliderButton slider;
 
     public ConquestWorldScreen(Screen parent) {
@@ -36,12 +41,13 @@ public final class ConquestWorldScreen extends Screen {
         this.provinceSize = choice.provinceSize();
         this.martialTitles = choice.martialTitles();
         this.mantraSchools = choice.mantraSchools();
+        this.ages = choice.ages();
     }
 
     @Override
     protected void init() {
         int x = width / 2 - 100;
-        int y = height / 2 - 30;
+        int y = height / 2 - 36;
         addRenderableWidget(Button.builder(toggleLabel(), b -> {
             on = !on;
             b.setMessage(toggleLabel());
@@ -49,7 +55,7 @@ public final class ConquestWorldScreen extends Screen {
             keep();
         }).bounds(x, y, 200, 20).build());
         int span = HorizontalStretch.MAX - HorizontalStretch.MIN;
-        slider = new AbstractSliderButton(x, y + 26, 200, 20, Component.empty(), (double) (factor - HorizontalStretch.MIN) / span) {
+        slider = new AbstractSliderButton(x, y + 24, 200, 20, Component.empty(), (double) (factor - HorizontalStretch.MIN) / span) {
             {
                 updateMessage();
             }
@@ -69,7 +75,7 @@ public final class ConquestWorldScreen extends Screen {
         slider.active = on;
         addRenderableWidget(slider);
         int sizes = HorizontalStretch.MAX_PROVINCE_SIZE - HorizontalStretch.MIN_PROVINCE_SIZE;
-        addRenderableWidget(new AbstractSliderButton(x, y + 52, 200, 20, Component.empty(),
+        addRenderableWidget(new AbstractSliderButton(x, y + 48, 200, 20, Component.empty(),
                 (double) (provinceSize - HorizontalStretch.MIN_PROVINCE_SIZE) / sizes) {
             {
                 updateMessage();
@@ -91,15 +97,49 @@ public final class ConquestWorldScreen extends Screen {
             martialTitles = !martialTitles;
             b.setMessage(yesNo("Enable Martial Titles", martialTitles));
             keep();
-        }).bounds(x, y + 78, 200, 20).tooltip(Tooltip.create(Component.literal("Sword Gods, Sword Kings, Sword Saints, and the sword sanctums")))
+        }).bounds(x, y + 72, 200, 20).tooltip(Tooltip.create(Component.literal("Sword Gods, Sword Kings, Sword Saints, and the sword sanctums")))
                 .build());
         addRenderableWidget(Button.builder(yesNo("Enable Mantra Schools", mantraSchools), b -> {
             mantraSchools = !mantraSchools;
             b.setMessage(yesNo("Enable Mantra Schools", mantraSchools));
             keep();
-        }).bounds(x, y + 104, 200, 20).tooltip(Tooltip.create(Component.literal("Offensive magic system; 10 schools, each with a dojo")))
+        }).bounds(x, y + 96, 200, 20).tooltip(Tooltip.create(Component.literal("Offensive magic system; 10 schools, each with a dojo")))
                 .build());
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 138, 200, 20).build());
+        // The ages, one tick box each, in a centred row.
+        ageBoxes.clear();
+        int gap = 8;
+        int rowWidth = -gap;
+        for (Age age : Age.values()) {
+            Checkbox box = Checkbox.builder(Component.literal(age.shortName), font).selected(ages.has(age))
+                    .onValueChange((b, ticked) -> {
+                        ages = ages.toggle(age);
+                        keep();
+                        refreshAges();
+                    }).build();
+            ageBoxes.add(box);
+            rowWidth += box.getWidth() + gap;
+        }
+        int boxX = width / 2 - rowWidth / 2;
+        for (Checkbox box : ageBoxes) {
+            box.setPosition(boxX, y + 122);
+            boxX += box.getWidth() + gap;
+            addRenderableWidget(box);
+        }
+        refreshAges();
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds(x, y + 146, 200, 20).build());
+    }
+
+    /** Only the ages that can change are clickable (so a box's tick always matches the range); the rest are greyed. */
+    private void refreshAges() {
+        Age[] all = Age.values();
+        for (int i = 0; i < all.length; i++) {
+            Checkbox box = ageBoxes.get(i);
+            boolean can = ages.canToggle(all[i]);
+            box.active = can;
+            box.setAlpha(can ? 1f : 0.5f);
+            box.setTooltip(Tooltip.create(Component.literal(can ? all[i].title
+                    : all[i].title + "\nAges must be adjacent: only the first or last can be turned off, only a neighbour turned on")));
+        }
     }
 
     private Component toggleLabel() {
@@ -111,7 +151,7 @@ public final class ConquestWorldScreen extends Screen {
     }
 
     private void keep() {
-        HorizontalStretch.setPending(new Choice(on, factor, provinceSize, martialTitles, mantraSchools));
+        HorizontalStretch.setPending(new Choice(on, factor, provinceSize, martialTitles, mantraSchools, ages));
     }
 
     @Override
