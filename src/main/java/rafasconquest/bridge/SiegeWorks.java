@@ -427,13 +427,43 @@ final class SiegeWorks {
     /** Shows a tower where it has rolled to, facing the wall, hovering over the ground. */
     private void showTower(Siege.Work w) {
         Point at = w.at();
-        double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) Math.floor(at.x()), (int) Math.floor(at.z())) + HOVER;
+        int ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) Math.floor(at.x()), (int) Math.floor(at.z()));
+        if (w.state() == Siege.State.CARRIED) {
+            clearAhead(at, ground);
+        }
+        double y = ground + HOVER;
         if (SableLink.available()) {
             String key = frameKeys.computeIfAbsent(w, k -> "siege" + (++frameSerial));
             frames.put(w, new SableLink.Frame(key, true, TOWER_TALL, at.x(), y, at.z(), Math.atan2(-ox, -oz)));
             return;
         }
         moveDisplays(w, new Vec3(at.x(), y, at.z()), (float) Math.toDegrees(Math.atan2(ox, -oz)));
+    }
+
+    /**
+     * Breaks everything standing in the next couple of blocks before a rolling tower's front, its full width and height
+     * from {@code ground} up, but never the walls or anything within them.
+     */
+    private void clearAhead(Point at, int ground) {
+        Set<BlockPos> ahead = new HashSet<>();
+        for (double d = 0; d <= 2.5; d += 0.5) {
+            for (double a = -TOWER_HALF_WIDTH - 0.5; a <= TOWER_HALF_WIDTH + 0.5; a += 0.5) {
+                double x = at.x() - ox * (Siege.TOWER_OUT + d) - oz * a;
+                double z = at.z() - oz * (Siege.TOWER_OUT + d) + ox * a;
+                if (siege.region(new Point(x, z)) == Siege.Region.OUT && level.isLoaded(BlockPos.containing(x, ground, z))) {
+                    for (int y = ground; y < ground + TOWER_TALL + 1; y++) {
+                        ahead.add(BlockPos.containing(x, y, z));
+                    }
+                }
+            }
+        }
+        placed.values().forEach(m -> ahead.removeAll(m.keySet())); // the siege's own ladders stay
+        for (BlockPos p : ahead) {
+            BlockState state = level.getBlockState(p);
+            if (!state.isAir() && !state.liquid() && state.getDestroySpeed(level, p) >= 0) {
+                level.destroyBlock(p, false);
+            }
+        }
     }
 
     private void moveDisplays(Siege.Work w, Vec3 at, float yaw) {
