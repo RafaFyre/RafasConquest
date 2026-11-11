@@ -77,6 +77,8 @@ public final class BattleScreen extends Screen {
 
     private static List<UnitInfo> units = List.of();
     private static boolean heard;
+    /** The player's groups (shift+tab): unit number → group number. Selecting one of a group selects all of it. */
+    private static final Map<Integer, Integer> groups = new java.util.HashMap<>();
     /** Where the player's own body is walking to, sent like any other unit; null when it stands. */
     @Nullable
     static Vec3 walkTo;
@@ -109,6 +111,8 @@ public final class BattleScreen extends Screen {
     @Nullable
     private Vec3 lineTo;
     private boolean leading;
+    /** Opened for an officer's deployment: the whole army is selected once its units arrive. */
+    private boolean selectAll;
     @Nullable
     private Menu menu;
 
@@ -130,6 +134,17 @@ public final class BattleScreen extends Screen {
         heard = false;
         ConquestNetwork.requestUnits();
         Minecraft.getInstance().setScreen(new BattleScreen());
+    }
+
+    /** An officer's deployment begins: the strategy view opens (if it isn't open) with their whole army selected. */
+    public static void openForDeployment() {
+        groups.clear(); // a new day's units are numbered afresh
+        if (!(Minecraft.getInstance().screen instanceof BattleScreen)) {
+            open();
+        }
+        if (Minecraft.getInstance().screen instanceof BattleScreen screen) {
+            screen.selectAll = true;
+        }
     }
 
     /** The server's answer: the player's units now (none: no battle for them). */
@@ -168,8 +183,15 @@ public final class BattleScreen extends Screen {
         }
         glow();
         if (!inBattle()) {
+            if (heard) {
+                groups.clear();
+            }
             letGo();
             return;
+        }
+        if (selectAll) {
+            selectAll = false;
+            units.forEach(u -> selected.add(u.number()));
         }
         if (camera == null || camera.level() != minecraft.level) {
             hidGui = minecraft.options.hideGui;
@@ -386,20 +408,30 @@ public final class BattleScreen extends Screen {
         return xs;
     }
 
-    /** The card under the mouse: the pinned and hovered cards lie on top, then later cards over earlier ones. */
-    private int cardAt(double mx, double my, List<Integer> ids, int[] xs) {
+    /** The cards bottom to top: later over earlier, the selected over the rest, then the pinned and the hovered. */
+    private List<Integer> layers(Map<Integer, List<UnitInfo>> cards) {
+        List<Integer> order = new ArrayList<>(cards.keySet());
+        order.sort(java.util.Comparator.comparing((Integer id) -> cards.get(id).stream().anyMatch(u -> selected.contains(u.number())))); // stable
+        for (int top : new int[]{pinned, hovered}) {
+            if (order.remove((Integer) top)) {
+                order.add(top);
+            }
+        }
+        return order;
+    }
+
+    /** The card under the mouse: the topmost there. */
+    private int cardAt(double mx, double my, Map<Integer, List<UnitInfo>> cards) {
         if (my < cardTop() || my > cardTop() + cardH()) {
             return -1;
         }
-        for (int top : new int[]{hovered, pinned}) {
-            int i = ids.indexOf(top);
-            if (i >= 0 && mx >= xs[i] && mx <= xs[i] + cardW()) {
-                return top;
-            }
-        }
-        for (int i = ids.size() - 1; i >= 0; i--) {
+        List<Integer> ids = new ArrayList<>(cards.keySet());
+        int[] xs = cardXs(ids.size());
+        List<Integer> order = layers(cards);
+        for (int k = order.size() - 1; k >= 0; k--) {
+            int i = ids.indexOf(order.get(k));
             if (mx >= xs[i] && mx <= xs[i] + cardW()) {
-                return ids.get(i);
+                return order.get(k);
             }
         }
         return -1;
@@ -451,7 +483,7 @@ public final class BattleScreen extends Screen {
             g.fill(x0, y0, x1, y1, 0x30FFD700);
             g.renderOutline(x0, y0, x1 - x0, y1 - y0, GOLD);
         }
-        g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select platoons (ctrl: blocks, shift: add) · right-click to order",
+        g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select platoons (ctrl: blocks, shift: add) · shift+tab group · right-click to order",
                 6, 6, 0xFFF4EEDC);
         if (leading) {
             g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
@@ -479,14 +511,8 @@ public final class BattleScreen extends Screen {
         Map<Integer, List<UnitInfo>> cards = cards(shownWing());
         List<Integer> ids = new ArrayList<>(cards.keySet());
         int[] xs = cardXs(ids.size());
-        hovered = menu == null ? cardAt(mouseX, mouseY, ids, xs) : hovered;
-        List<Integer> order = new ArrayList<>(ids);
-        for (int top : new int[]{pinned, hovered}) { // drawn last: on top
-            if (order.remove((Integer) top)) {
-                order.add(top);
-            }
-        }
-        for (int id : order) {
+        hovered = menu == null ? cardAt(mouseX, mouseY, cards) : hovered;
+        for (int id : layers(cards)) {
             drawCard(g, xs[ids.indexOf(id)], cards.get(id));
         }
     }
@@ -519,6 +545,10 @@ public final class BattleScreen extends Screen {
         String status = (fighting ? "FIGHTING" : MODES[Mth.clamp(first.mode(), 0, MODES.length - 1)]) + (tired ? ", TIRED" : "");
         g.fill(x, y + 9, x + w, y + 10, 0xFFE0D090);
         small(g, ARMS[arm] + (first.split() ? "*" : ""), x + w / 2, y + 3, 0.6F);
+        Integer group = groups.get(first.number());
+        if (group != null) {
+            small(g, "GROUP " + group, x + w / 2, y + h / 2 - 3, 0.5F);
+        }
         g.fill(x, y + h - 17, x + w, y + h - 16, 0xFFE0D090);
         small(g, status, x + w / 2, y + h - 15, 0.45F);
         small(g, alive + "/" + started, x + w / 2, y + h - 8, 0.6F);
@@ -706,14 +736,14 @@ public final class BattleScreen extends Screen {
             return;
         }
         Map<Integer, List<UnitInfo>> cards = cards(shownWing());
-        List<Integer> ids = new ArrayList<>(cards.keySet());
-        int card = cardAt(mx, my, ids, cardXs(ids.size()));
+        int card = cardAt(mx, my, cards);
         if (card >= 0) {
             if (!add) {
                 selected.clear();
                 playerSelected = false;
             }
             cards.get(card).forEach(u -> selected.add(u.number()));
+            takeGroups();
             pinned = card;
             soundSelected();
             return;
@@ -741,8 +771,58 @@ public final class BattleScreen extends Screen {
             playerSelected = true;
         } else if (best != null) {
             take(best);
+            takeGroups();
             soundSelected();
         }
+    }
+
+    /** The rest of every group a selected unit is in is selected too. */
+    private void takeGroups() {
+        Set<Integer> chosen = new HashSet<>();
+        for (int n : selected) {
+            if (groups.containsKey(n)) {
+                chosen.add(groups.get(n));
+            }
+        }
+        groups.forEach((n, group) -> {
+            if (chosen.contains(group)) {
+                selected.add(n);
+            }
+        });
+    }
+
+    /**
+     * Shift+tab: the selected units become a group (out of any they were in), selected and ordered together from then
+     * on; if they are already all of one group, it is broken up.
+     */
+    private void toggleGroup() {
+        if (selected.size() < 2) {
+            return;
+        }
+        Set<Integer> in = new HashSet<>();
+        selected.forEach(n -> in.add(groups.get(n)));
+        Integer only = in.size() == 1 ? in.iterator().next() : null;
+        if (only != null && groups.entrySet().stream().filter(x -> x.getValue().equals(only)).allMatch(x -> selected.contains(x.getKey()))) {
+            groups.values().removeIf(only::equals);
+            return;
+        }
+        int group = 1;
+        while (groups.containsValue(group)) {
+            group++;
+        }
+        selected.forEach(groups::remove);
+        for (int n : selected) {
+            groups.put(n, group);
+        }
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (inBattle() && key == org.lwjgl.glfw.GLFW.GLFW_KEY_TAB && hasShiftDown()) {
+            toggleGroup();
+            return true;
+        }
+        return super.keyPressed(key, scanCode, modifiers);
     }
 
     /** A unit picked on the field selects its whole platoon (its card), or with ctrl held only itself (its block). */
@@ -818,6 +898,7 @@ public final class BattleScreen extends Screen {
             }
         }
         if (any) {
+            takeGroups();
             soundSelected();
         }
         double[] me = project(minecraft.player.position().add(0, 1, 0));
@@ -832,8 +913,7 @@ public final class BattleScreen extends Screen {
             return;
         }
         Map<Integer, List<UnitInfo>> cards = cards(shownWing());
-        List<Integer> ids = new ArrayList<>(cards.keySet());
-        int card = cardAt(mx, my, ids, cardXs(ids.size()));
+        int card = cardAt(mx, my, cards);
         if (card >= 0) {
             menu = cardMenu(mx, my, cards.get(card));
             return;

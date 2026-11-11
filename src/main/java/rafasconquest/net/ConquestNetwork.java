@@ -222,6 +222,12 @@ public final class ConquestNetwork {
                 .decoder(b -> new CameraAt(b.readBoolean(), b.readDouble(), b.readDouble()))
                 .consumerMainThread(ConquestNetwork::handleCameraAt)
                 .add();
+        CHANNEL.messageBuilder(OpenBattleScreen.class, 35, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                })
+                .decoder(b -> new OpenBattleScreen())
+                .consumerMainThread((m, c) -> rafasconquest.client.BattleScreen.openForDeployment())
+                .add();
         CHANNEL.messageBuilder(ChargeHits.class, 34, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> {
                     b.writeVarIntArray(m.cavalry());
@@ -731,6 +737,14 @@ public final class ConquestNetwork {
      */
     public record UnitInfo(int number, int soldiers, int started, double x, double z, int mode, int shape, boolean shields, int rgb,
                            int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids, int block) {
+    }
+
+    /** Server → client: an officer's deployment begins; open the strategy view with their whole army selected. */
+    public record OpenBattleScreen() {
+    }
+
+    public static void openBattleScreen(ServerPlayer player) {
+        CHANNEL.send(player, new OpenBattleScreen());
     }
 
     /** Client → server: the war horn's screen wants the player's units. */

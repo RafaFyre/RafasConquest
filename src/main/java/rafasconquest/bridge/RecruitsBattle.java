@@ -2348,6 +2348,9 @@ public final class RecruitsBattle {
                 e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
                 enlisted.put(player.getUUID(), e);
+                if (rank.officer() && phase == Phase.DEPLOYMENT) {
+                    rafasconquest.net.ConquestNetwork.openBattleScreen(player); // officers deploy from the strategy view
+                }
                 for (FieldBlock b : blocks) {
                     unitFor(e, b, player); // every formation on the dash from the start, before its soldiers are real
                 }
@@ -3043,6 +3046,8 @@ public final class RecruitsBattle {
         float yaw;
         @Nullable
         FieldBlock target;
+        /** Ordered during deployment: put straight in its place when next placed, not marched there. */
+        boolean snap;
 
         Card(int id, int parent) {
             this.id = id;
@@ -3248,7 +3253,11 @@ public final class RecruitsBattle {
                 j += n;
                 Point at = new Point(c.at.x - fz * right * sp - fx * back * sp, c.at.z + fx * right * sp - fz * back * sp);
                 field.steer(u.block, at, fx, fz, false, null);
+                if (c.snap && phase == Phase.DEPLOYMENT) {
+                    field.snap(u.block, at, fx, fz);
+                }
             }
+            c.snap = false; // its real soldiers were put in place by unitOrders, just before
         }
         if (!following.isEmpty()) {
             double yaw = Math.toRadians(e.formYaw);
@@ -3387,6 +3396,14 @@ public final class RecruitsBattle {
                             s.setFollowState(3);
                             s.holdFormation = false;
                             o.placed.put(s.getId(), place);
+                            if (c.snap && phase == Phase.DEPLOYMENT) {
+                                Entity mover = s.getRootVehicle();
+                                mover.teleportTo(x, y, z); // takes its rider along
+                                mover.setYRot(c.yaw);
+                                s.setYHeadRot(c.yaw);
+                                s.setYBodyRot(c.yaw);
+                                s.getNavigation().stop();
+                            }
                         }
                     }
                 }
@@ -3516,6 +3533,7 @@ public final class RecruitsBattle {
                 Shape shape = Shape.valueOf(order.name());
                 for (Card c : cards) {
                     c.shape = shape;
+                    c.snap |= phase == Phase.DEPLOYMENT;
                 }
                 us.forEach(u -> u.replace = true);
             }
@@ -3601,9 +3619,10 @@ public final class RecruitsBattle {
         c.at = at;
         c.yaw = yaw;
         c.target = null;
+        c.snap = phase == Phase.DEPLOYMENT;
         for (Unit u : e.units) {
             if (u.card == c) {
-                u.mode = UnitMode.MOVE;
+                u.mode = c.snap ? UnitMode.HOLD : UnitMode.MOVE;
                 u.replace = true;
                 u.placed.clear();
                 soldiersOf(u).forEach(s -> s.setAggroState(0));

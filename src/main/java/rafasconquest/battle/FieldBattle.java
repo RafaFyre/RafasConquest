@@ -849,6 +849,17 @@ public final class FieldBattle {
         }
     }
 
+    /** During deployment, a block a player leads is put straight where they told it, facing as told: no march there. */
+    public void snap(FieldBlock block, Point at, double fx, double fz) {
+        if (!begun()) {
+            place(block, at);
+        } else if (!block.live) {
+            block.pos = at; // a live block's place is read back from its soldiers, put there themselves
+        }
+        block.facingX = fx;
+        block.facingZ = fz;
+    }
+
     public FieldArmy army(int side) {
         return armies[side];
     }
