@@ -95,6 +95,11 @@ public final class PveCommands {
                                 .then(Commands.argument("noble", com.mojang.brigadier.arguments.BoolArgumentType.bool())
                                         .executes(ctx -> nobleSet(ctx, EntityArgument.getPlayer(ctx, "player"),
                                                 com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "noble"))))))
+                .then(Commands.literal("title").requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.literal("none").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.NONE)))
+                                .then(Commands.literal("knight").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.KNIGHT)))
+                                .then(Commands.literal("count").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.COUNT)))))
                 .then(Commands.literal("muster")
                         .executes(ctx -> say(ctx, rafasconquest.politics.Wars.muster(ctx.getSource().getPlayerOrException()))))
                 .then(Commands.literal("politics")
@@ -609,6 +614,43 @@ public final class PveCommands {
         }
         ctx.getSource().sendSuccess(() -> Component.literal(player.getName().getString() + (noble ? " now holds" : " no longer holds")
                 + " a noble title"), true);
+        return 1;
+    }
+
+    /**
+     * Gives a player a noble title outright. Count grants the county the player stands in, held freely, its character
+     * holder dismissed; a county another player holds is refused. Knight or none gives up any county they hold.
+     */
+    private static int titleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, rafasconquest.peerage.NobleTitle title)
+            throws CommandSyntaxException {
+        rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(ctx.getSource().getServer());
+        String name = player.getName().getString();
+        String said;
+        if (title == rafasconquest.peerage.NobleTitle.COUNT) {
+            rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+            if (map == null) {
+                throw NOT_RUNNING.create();
+            }
+            int province = map.provinceIndexAt(player.getBlockX(), player.getBlockZ());
+            if (province < 0) {
+                throw new SimpleCommandExceptionType(Component.literal(name + " is not standing in a county")).create();
+            }
+            int seat = map.titles().countySeat()[map.titles().titleOf(province, rafasconquest.core.TitleMap.Tier.COUNTY)];
+            java.util.UUID holder = peerage.heldBy(seat);
+            if (holder != null && !holder.equals(player.getUUID())) {
+                throw new SimpleCommandExceptionType(Component.literal("Another player holds that county")).create();
+            }
+            peerage.release(player.getUUID());
+            peerage.grant(player.getUUID(), seat, -1, map.realm().holderOf(seat) >= 0 && !peerage.replaced(seat) ? "dismissed" : null);
+            said = name + " is now Count of " + map.names().get(seat);
+        } else {
+            peerage.release(player.getUUID());
+            peerage.of(player.getUUID()).title = title;
+            peerage.changed();
+            said = name + (title.noble() ? " is now a " + title.title() : " no longer holds a noble title");
+        }
+        rafasconquest.peerage.PeerageSync.toAll(ctx.getSource().getServer());
+        ctx.getSource().sendSuccess(() -> Component.literal(said), true);
         return 1;
     }
 

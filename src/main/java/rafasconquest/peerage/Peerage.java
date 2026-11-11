@@ -125,6 +125,17 @@ public final class Peerage extends SavedData {
         setDirty();
     }
 
+    /** A player gives up their county (if any) and their liege; the county stays without its old character. */
+    public void release(UUID player) {
+        Peer peer = of(player);
+        if (peer.hold >= 0) {
+            heldBy.remove(peer.hold, player);
+        }
+        peer.hold = -1;
+        peer.liege = -1;
+        setDirty();
+    }
+
     /** Whether a hold's character has been replaced by a player, or is gone. */
     public boolean replaced(int province) {
         return heldBy.containsKey(province) || fates.containsKey(province);
