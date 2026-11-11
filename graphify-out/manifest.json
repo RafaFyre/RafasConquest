@@ -84,15 +84,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1794139350.8539023,
-    "seen": 1794140067.316086,
-    "ast_hash": "61ce18b9d14dbc38f18f7be27037fb2d",
+    "mtime": 1794376397.3656912,
+    "seen": 1794376651.233512,
+    "ast_hash": "41fef664df66dfd38b7594f0dcffd880",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
-    "mtime": 1794139350.9646056,
-    "seen": 1794140067.3160894,
-    "ast_hash": "0f38a1d6b8f8cc8388bd95ca1d48c055",
+    "mtime": 1794376381.8368921,
+    "seen": 1794376651.2335138,
+    "ast_hash": "22514c45c04b7bacd8c5c38ee97db2ad",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794374973.8902922,
-    "seen": 1794375046.6585708,
-    "ast_hash": "b7031510ea8e16d32d4060dd2e90e9fe",
+    "mtime": 1794376425.8948631,
+    "seen": 1794376651.2335348,
+    "ast_hash": "28f9e48e33591c1f954c819db82443d2",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -300,9 +300,9 @@
     "semantic_hash": "e3747e3110bb2ed49cf64f0f8eb7aa3a"
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1793994301.0390909,
-    "seen": 1793994402.5307233,
-    "ast_hash": "65f1b3f1879d035bf6356e8fb3271cbd",
+    "mtime": 1794376248.9185421,
+    "seen": 1794376651.2335904,
+    "ast_hash": "fc44423171375c6c031ad0e11161561c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -750,9 +750,9 @@
     "semantic_hash": "a45b3d18ba3c3d8f337bd8690bc2ded7"
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1794374983.5641904,
-    "seen": 1794375046.6587822,
-    "ast_hash": "f002f6d3fda3f33d950c5dde2bd5aa33",
+    "mtime": 1794376211.848208,
+    "seen": 1794376651.2337434,
+    "ast_hash": "6cba0ce5e1ff56c149d5c261968d8ca9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1674,9 +1674,9 @@
     "semantic_hash": "5efc91bb4d69d341a6e6f9ea8d8c8df1"
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1793949431.7866354,
-    "seen": 1793949526.473911,
-    "ast_hash": "8acc4398e2e8650057f00efc0bcfa196",
+    "mtime": 1794376462.889262,
+    "seen": 1794376651.2340522,
+    "ast_hash": "18e51fac494781ad7ff45813cc184fef",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleScreen.java": {
-    "mtime": 1794375008.5521872,
-    "seen": 1794375046.6586015,
-    "ast_hash": "837141977ff5e8e7540dc8b3eac7b728",
+    "mtime": 1794376248.5325744,
+    "seen": 1794376651.233566,
+    "ast_hash": "7dae3297ce09a8ba80522d731520f7c9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/StrategyBoardBlock.java": {
@@ -2925,6 +2925,42 @@
     "mtime": 1794374336.3812065,
     "seen": 1794374397.3452523,
     "ast_hash": "7500a956896e2098f2c73256a777317a",
+    "semantic_hash": ""
+  },
+  "reports/RafasConquest performance gameplan.md": {
+    "mtime": 1794376127.817958,
+    "seen": 1794376651.234125,
+    "ast_hash": "c413e5554ba4307b1d23e3e9f21c033c",
+    "semantic_hash": ""
+  },
+  "research_notes/RafasConquest performance gameplan/client_techniques.md": {
+    "mtime": 1794375319.775298,
+    "seen": 1794376651.2341263,
+    "ast_hash": "311e54e049299e50aaff5c3804404a1d",
+    "semantic_hash": ""
+  },
+  "research_notes/RafasConquest performance gameplan/code_audit_client.md": {
+    "mtime": 1794375665.9559557,
+    "seen": 1794376651.2341275,
+    "ast_hash": "495db987baf7a61889cf5b100474074b",
+    "semantic_hash": ""
+  },
+  "research_notes/RafasConquest performance gameplan/code_audit_server.md": {
+    "mtime": 1794375821.8568983,
+    "seen": 1794376651.234129,
+    "ast_hash": "2ea2b36ada13799986e78fb3d1799ec6",
+    "semantic_hash": ""
+  },
+  "research_notes/RafasConquest performance gameplan/profiling_tooling.md": {
+    "mtime": 1794375284.676497,
+    "seen": 1794376651.2341301,
+    "ast_hash": "cbfcdd092279f25542206fe63a5f78b2",
+    "semantic_hash": ""
+  },
+  "research_notes/RafasConquest performance gameplan/server_techniques.md": {
+    "mtime": 1794375599.2236874,
+    "seen": 1794376651.234131,
+    "ast_hash": "0d6753a1a820035fefdb132f003afedb",
     "semantic_hash": ""
   }
 }

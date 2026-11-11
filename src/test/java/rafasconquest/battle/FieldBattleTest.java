@@ -255,6 +255,28 @@ class FieldBattleTest {
     }
 
     @Test
+    void theGeneralLeavesAPlayersBlockToItsPlayer() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock led = battle.army(0).front[0];
+        FieldBlock other = battle.army(0).front[1];
+        Point start = led.pos;
+        Point otherStart = other.pos;
+        battle.lead(led);
+        for (int i = 0; i < 40; i++) {
+            battle.second();
+        }
+        assertTrue(other.pos.distanceTo(otherStart) > 5, "the army advances");
+        assertTrue(led.pos.distanceTo(start) < 1, "the led block holds where its player left it, moved " + led.pos.distanceTo(start));
+        Point sent = start.plus(-30, 10);
+        battle.steer(led, sent, 0, 1, false, null);
+        for (int i = 0; i < 40; i++) {
+            battle.second();
+        }
+        assertTrue(led.pos.distanceTo(sent) < 2, "goes where its player sends it, " + led.pos.distanceTo(sent) + " off");
+        assertFalse(led.charged);
+    }
+
+    @Test
     void aPlayersBaitIsItsWingsBait() {
         FieldBattle battle = battle(100, 100, 5);
         FieldBlock front = battle.army(0).front[0];

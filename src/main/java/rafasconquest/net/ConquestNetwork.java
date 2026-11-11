@@ -715,7 +715,7 @@ public final class ConquestNetwork {
      * another, its wing, its arm ({@code BattlePlan.Arm}), and whether it is fighting, or tired; its soldiers (entity ids).
      */
     public record UnitInfo(int number, int soldiers, int started, double x, double z, int mode, int shape, boolean shields, int rgb,
-                           int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids) {
+                           int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids, int block) {
     }
 
     /** Client → server: the war horn's screen wants the player's units. */
@@ -760,6 +760,7 @@ public final class ConquestNetwork {
                 buf.writeBoolean(u.fighting());
                 buf.writeBoolean(u.tired());
                 buf.writeVarIntArray(u.ids());
+                buf.writeVarInt(u.block());
             }
         }
 
@@ -769,7 +770,7 @@ public final class ConquestNetwork {
             for (int i = 0; i < n; i++) {
                 units.add(new UnitInfo(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readDouble(), buf.readDouble(),
                         buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readInt(), buf.readVarInt(), buf.readBoolean(),
-                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256)));
+                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256), buf.readVarInt()));
             }
             return new UnitsState(units);
         }

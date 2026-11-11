@@ -181,6 +181,18 @@ public final class FieldBlock {
     /** An ambush that has been sprung. */
     boolean sprung;
     int strikeSide;
+    /**
+     * Led by a player: the general gives it no orders. It stands where the player last sent it ({@code ledLine}, facing
+     * {@code ledFacingX/Z}), or charges ({@code ledCharge}), at {@code ledTarget} if one is given.
+     */
+    boolean led;
+    @Nullable
+    Point ledLine;
+    double ledFacingX;
+    double ledFacingZ;
+    boolean ledCharge;
+    @Nullable
+    FieldBlock ledTarget;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
                Point line, double facingX, double facingZ, Duty duty) {

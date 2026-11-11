@@ -1041,6 +1041,10 @@ public final class FieldBattle {
             if (block.alive == 0) {
                 continue;
             }
+            if (block.led) {
+                obey(army, block); // last, over anything the plans above made of it
+                continue;
+            }
             if (block.strikeAt != null) {
                 strike(army, block);
                 continue;
@@ -1236,14 +1240,15 @@ public final class FieldBattle {
                 continue;
             }
             held.relief = null;
-            if (held.strikeAt != null) {
-                continue;
+            if (held.strikeAt != null || held.led) {
+                continue; // a player's block is relieved when its player says
             }
             boolean worn = BattlePlan.needsRelief(held.alive, held.started());
             if (!worn) {
                 // The conveyor: after ROTATE_SECONDS of fighting, the block behind takes its place, and it goes to the
                 // back of its file's stack to rest.
-                List<FieldBlock> stack = army.queue(file);
+                List<FieldBlock> stack = new ArrayList<>(army.queue(file));
+                stack.removeIf(f -> f.led);
                 if (army.stackDepth > 1 && held.fightSeconds >= FieldRules.ROTATE_SECONDS && !stack.isEmpty() && held.alive > 0) {
                     FieldBlock next = stack.get(0);
                     next.duty = Duty.RELIEVING;
@@ -1273,12 +1278,12 @@ public final class FieldBattle {
     @Nullable
     private static FieldBlock pickRelief(FieldArmy army, int file, Point spot) {
         for (FieldBlock f : army.queue(file)) {
-            if (BattlePlan.fitToRelieve(f.alive, f.started())) {
+            if (!f.led && BattlePlan.fitToRelieve(f.alive, f.started())) {
                 return f;
             }
         }
         return army.blocks.stream()
-                .filter(f -> f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && f.task == FieldBlock.Task.NONE && BattlePlan.fitToRelieve(f.alive, f.started()))
+                .filter(f -> !f.led && f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && f.task == FieldBlock.Task.NONE && BattlePlan.fitToRelieve(f.alive, f.started()))
                 .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
 
@@ -1289,7 +1294,7 @@ public final class FieldBattle {
     @Nullable
     private static FieldBlock lastStand(FieldArmy army, Point spot) {
         return army.blocks.stream()
-                .filter(f -> f.alive > 0 && f.strikeAt == null && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
+                .filter(f -> !f.led && f.alive > 0 && f.strikeAt == null && (f.duty == Duty.LINE || f.duty == Duty.RESTING))
                 .min(Comparator.comparingInt((FieldBlock f) -> f.duty == Duty.LINE ? 0 : 1)
                         .thenComparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
@@ -2256,6 +2261,56 @@ public final class FieldBattle {
     /** A cavalry block's charge is broken against a braced shield: all its momentum is spent. */
     public void breakCharge(FieldBlock block) {
         block.momentum = 0;
+    }
+
+    /** A player takes a block to lead: from now on the general leaves it be, and it holds where it stands until ordered. */
+    public void lead(FieldBlock block) {
+        block.led = true;
+        block.ledLine = block.line;
+        block.ledFacingX = block.facingX;
+        block.ledFacingZ = block.facingZ;
+        block.ledCharge = false;
+        block.ledTarget = null;
+    }
+
+    /** A led block's player orders it: to stand at {@code line} facing ({@code fx}, {@code fz}), or to charge (at a target). */
+    public void steer(FieldBlock block, Point line, double fx, double fz, boolean charge, @Nullable FieldBlock target) {
+        block.ledLine = line;
+        block.ledFacingX = fx;
+        block.ledFacingZ = fz;
+        block.ledCharge = charge;
+        block.ledTarget = target;
+    }
+
+    /**
+     * A led block does as its player said, whatever the general's plans this second made of it. Breaking and running is
+     * the soldiers' own doing, not an order, so a routed or fleeing block runs on.
+     */
+    private void obey(FieldArmy army, FieldBlock b) {
+        if (b.duty == Duty.ROUTED || b.duty == Duty.FLEEING) {
+            return;
+        }
+        b.approaching = false;
+        if (b.ledCharge) {
+            if (b.ledTarget != null && b.ledTarget.alive > 0) {
+                if (b.strikeAt != b.ledTarget) {
+                    send(b, b.ledTarget, sideNearer(b.ledTarget, b.pos));
+                }
+                b.charged = false;
+                strike(army, b);
+            } else {
+                b.strikeAt = null;
+                b.charged = true;
+            }
+            return;
+        }
+        b.strikeAt = null;
+        b.charged = false;
+        if (b.ledLine != null) {
+            b.line = b.ledLine;
+            b.facingX = b.ledFacingX;
+            b.facingZ = b.ledFacingZ;
+        }
     }
 
     private static void send(FieldBlock block, FieldBlock target, int side) {

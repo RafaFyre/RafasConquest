@@ -2230,9 +2230,9 @@ public final class RecruitsBattle {
                 e.job = job;
                 e.role = role;
                 for (FieldBlock b : blocks) {
-                    // An officer's other formations keep their place in the general's plan; only their own takes the role.
                     boolean roleTask = b == home || !rank.officer() && role != BattleRole.BAIT;
                     field.assign(b, roleTask ? task(role) : FieldBlock.Task.NONE);
+                    field.lead(b); // the player's from now on: the general gives it no orders (steerNumbers)
                 }
                 e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
@@ -2675,6 +2675,7 @@ public final class RecruitsBattle {
             }
             campLife(e, player);
             unitOrders(e);
+            steerNumbers(e, player);
             strikeFigures(e, player);
             if (e.job == Job.CAVALRY) {
                 cavalryMomentum(e, player);
@@ -3094,6 +3095,73 @@ public final class RecruitsBattle {
                     drive(u, s.get(j), new Vec3(x, y, z), now);
                 }
                 left += width + UNIT_GAP;
+            }
+        }
+    }
+
+    /**
+     * Each second, the player's orders for the numbers battle, which leads none of their blocks itself: a held or sent
+     * card's units stand in its shape where it was told (each unit at the middle of its share of the card's places), a
+     * charging unit charges (at its card's target), a following one stands behind the player, side by side with the
+     * others. Units taken over in Recruits' screen, and cards never placed, keep their last orders.
+     */
+    private void steerNumbers(Enlisted e, ServerPlayer player) {
+        Map<Card, List<Unit>> cards = new LinkedHashMap<>();
+        List<Unit> following = new ArrayList<>();
+        for (Unit u : e.units) {
+            switch (u.mode) {
+                case HOLD, MOVE -> {
+                    if (u.card.at != null) {
+                        cards.computeIfAbsent(u.card, c -> new ArrayList<>()).add(u);
+                    }
+                }
+                case CHARGE -> field.steer(u.block, u.block.pos(), u.block.facingX(), u.block.facingZ(), true,
+                        u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null);
+                case FOLLOW -> following.add(u);
+                default -> {
+                }
+            }
+        }
+        double sp = spacing(e);
+        for (Map.Entry<Card, List<Unit>> entry : cards.entrySet()) {
+            Card c = entry.getKey();
+            double yaw = Math.toRadians(c.yaw);
+            double fx = -Math.sin(yaw);
+            double fz = Math.cos(yaw);
+            int total = 0;
+            for (Unit u : entry.getValue()) {
+                total += Math.max(1, u.block.alive());
+            }
+            int j = 0;
+            for (Unit u : entry.getValue()) {
+                int n = Math.max(1, u.block.alive());
+                double right = 0;
+                double back = 0;
+                for (int k = 0; k < n; k++) {
+                    double[] slot = slot(c.shape, j + k, total);
+                    right += slot[0] / n;
+                    back += slot[1] / n;
+                }
+                j += n;
+                Point at = new Point(c.at.x - fz * right * sp - fx * back * sp, c.at.z + fx * right * sp - fz * back * sp);
+                field.steer(u.block, at, fx, fz, false, null);
+            }
+        }
+        if (!following.isEmpty()) {
+            double yaw = Math.toRadians(e.formYaw);
+            double fx = -Math.sin(yaw);
+            double fz = Math.cos(yaw);
+            double total = 0;
+            for (Unit u : following) {
+                total += 2 * u.block.halfWidth();
+            }
+            total += (following.size() - 1) * UNIT_GAP;
+            double left = -total / 2;
+            for (Unit u : following) {
+                double right = left + u.block.halfWidth();
+                Point at = new Point(player.getX() - fz * right - fx * FOLLOW_BEHIND, player.getZ() + fx * right - fz * FOLLOW_BEHIND);
+                field.steer(u.block, at, fx, fz, false, null);
+                left += 2 * u.block.halfWidth() + UNIT_GAP;
             }
         }
     }
@@ -3654,7 +3722,7 @@ public final class RecruitsBattle {
             boolean tired = u.block.fightSeconds() >= FieldRules.ROTATE_SECONDS / 2;
             info.add(new ConquestNetwork.UnitInfo(u.number, real ? soldiers.size() : u.block.alive(), real ? u.ids.size() : u.block.started(), c.x, c.z, u.mode.ordinal(),
                     u.card.shape.ordinal(), u.shields, battle.mainColorOf(e.side), u.card.id, u.card.parent >= 0, u.block.wing(),
-                    u.block.arm().ordinal(), fighting, tired, soldiers.stream().mapToInt(AbstractRecruitEntity::getId).toArray()));
+                    u.block.arm().ordinal(), fighting, tired, soldiers.stream().mapToInt(AbstractRecruitEntity::getId).toArray(), u.block.id()));
         }
         return info;
     }

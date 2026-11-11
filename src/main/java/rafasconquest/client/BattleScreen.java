@@ -119,6 +119,20 @@ public final class BattleScreen extends Screen {
         heard = true;
     }
 
+    /** The formations (block ids) selected in the open battle screen, to glow where they are only figures; else none. */
+    static Set<Integer> selectedFormations() {
+        if (!(Minecraft.getInstance().screen instanceof BattleScreen screen) || screen.selected.isEmpty()) {
+            return Set.of();
+        }
+        Set<Integer> blocks = new HashSet<>();
+        for (UnitInfo u : units) {
+            if (screen.selected.contains(u.number())) {
+                blocks.add(u.block());
+            }
+        }
+        return blocks;
+    }
+
     private boolean inBattle() {
         return !units.isEmpty();
     }

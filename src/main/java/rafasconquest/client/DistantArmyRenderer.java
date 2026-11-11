@@ -103,23 +103,50 @@ public final class DistantArmyRenderer {
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
 
+        FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
+        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, positions, null);
+        Set<Integer> selected = BattleScreen.selectedFormations();
+        if (!selected.isEmpty()) {
+            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, positions, selected);
+        }
+    }
+
+    /** How much bigger a selected figure's glow is than the figure, and how far behind it (in blocks, at full size). */
+    private static final float HALO_GROWTH = 1.18F;
+    private static final double HALO_BEHIND = 0.35;
+
+    /**
+     * Draws the figures, or ({@code halo} not null) the glow of those in the formations named there: each figure again,
+     * a little bigger and a little further from the camera, in full-bright white, so it shows as an outline about the
+     * figure as the game's glowing outline does about a real soldier.
+     */
+    private static void pass(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks,
+                             List<FormationSnapshot> formations, FormationSnapshot.Positions positions, @javax.annotation.Nullable Set<Integer> halo) {
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
-        FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
+        figure.tint = halo == null ? -1 : 0xFFFFFF;
         int drawn = 0;
         for (FormationSnapshot formation : formations) {
+            if (halo != null && !halo.contains(formation.id())) {
+                continue;
+            }
             for (Sprite sprite : formation.place(positions)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
                 double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 if (sprite.real() && distance <= handover) {
-                    continue; // the client has this soldier, close enough to draw it itself
+                    continue; // the client has this soldier, close enough to draw it itself (and glow it)
                 }
                 boolean flatSprite = Math.hypot(dx, dz) > SoldierFigure.SPRITE_PAST;
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
-                figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale,
-                        lightAt(mc, sprite));
+                if (halo == null) {
+                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, lightAt(mc, sprite));
+                } else {
+                    double back = 1 + HALO_BEHIND / Math.max(distance, 1);
+                    figure.at((float) (dx * scale * back), (float) ((dy - 0.1) * scale * back), (float) (dz * scale * back),
+                            (float) scale * HALO_GROWTH, LightTexture.FULL_BRIGHT);
+                }
                 if (flatSprite) {
                     draw(figure, formation, sprite.leader());
                 } else {
@@ -379,6 +406,8 @@ public final class DistantArmyRenderer {
         private float z;
         private float scale;
         private int light;
+        /** One colour for everything drawn, unshaded (a glow), or -1 for the figure's own colours. */
+        int tint = -1;
 
         Figure(BufferBuilder buffer, Matrix4f matrix, float rightX, float rightZ) {
             this.buffer = buffer;
@@ -398,9 +427,11 @@ public final class DistantArmyRenderer {
 
         /** A rectangle centred {@code right} blocks to the figure's right, from {@code bottom} up {@code height}. */
         void rect(float right, float bottom, float width, float height, int rgb) {
-            float r = (rgb >> 16 & 255) / 255F * SIDE_SHADE;
-            float g = (rgb >> 8 & 255) / 255F * SIDE_SHADE;
-            float b = (rgb & 255) / 255F * SIDE_SHADE;
+            float shade = tint < 0 ? SIDE_SHADE : 1F;
+            rgb = tint < 0 ? rgb : tint;
+            float r = (rgb >> 16 & 255) / 255F * shade;
+            float g = (rgb >> 8 & 255) / 255F * shade;
+            float b = (rgb & 255) / 255F * shade;
             float l = (right - width / 2) * scale;
             float h = (right + width / 2) * scale;
             float lo = y + bottom * scale;
@@ -428,6 +459,10 @@ public final class DistantArmyRenderer {
         }
 
         private void quad(int rgb, float shade, float... v) {
+            if (tint >= 0) {
+                rgb = tint;
+                shade = 1F;
+            }
             float r = (rgb >> 16 & 255) / 255F * shade;
             float g = (rgb >> 8 & 255) / 255F * shade;
             float b = (rgb & 255) / 255F * shade;
