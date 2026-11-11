@@ -128,6 +128,11 @@ public final class ConquestEvents {
         }
     }
 
+    @SubscribeEvent
+    public static void onChunkSent(net.neoforged.neoforge.event.level.ChunkWatchEvent.Sent event) {
+        rafasconquest.bridge.CameraView.chunkSent(event.getPlayer());
+    }
+
     /** Drives the debug battle and times whole server ticks while it runs. */
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Pre event) {
@@ -137,6 +142,7 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onServerTickEnd(ServerTickEvent.Post event) {
         RecruitsBattle.onServerTickEnd();
+        rafasconquest.bridge.CameraView.tick(event.getServer());
         BattleMap.tick();
         rafasconquest.npc.Townsfolk.tick(event.getServer());
         rafasconquest.npc.Barks.tick(event.getServer());

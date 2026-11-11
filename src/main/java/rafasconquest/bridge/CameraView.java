@@ -13,7 +13,9 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -27,6 +29,12 @@ public final class CameraView {
     /** Outlives the client's resend (every 2 s) a few times over, then lets the chunks go if the client stopped. */
     private static final TicketType<ChunkPos> TICKET = TicketType.create("rafasconquest_camera", Comparator.comparingLong(ChunkPos::toLong), 200);
     private static final Map<UUID, Camera> CAMERAS = new HashMap<>();
+    /** Players whose view moved (or came back to the body) lately, by the server tick to stop watching them at. */
+    private static final Map<UUID, Integer> SETTLING = new HashMap<>();
+    /** Long enough for every chunk about the new view to reach the player. */
+    private static final int SETTLE_TICKS = 600;
+    /** Settling players sent chunks this tick, to be sent the entities in them at the tick's end. */
+    private static final Set<ServerPlayer> ARRIVED = new HashSet<>();
 
     private record Camera(Vec3 at, ResourceKey<Level> dimension) {
     }
@@ -61,9 +69,33 @@ public final class CameraView {
         ChunkMap map = level.getChunkSource().chunkMap;
         ((rafasconquest.mixin.ChunkMapAccess) map).rafasconquest$updateChunkTracking(player);
         map.move(player); // pairs the player again with every entity, from the new viewpoint
+        SETTLING.put(player.getUUID(), level.getServer().getTickCount() + SETTLE_TICKS);
+    }
+
+    /** A chunk reached the player (NeoForge's ChunkWatchEvent.Sent). */
+    public static void chunkSent(ServerPlayer player) {
+        if (SETTLING.containsKey(player.getUUID())) {
+            ARRIVED.add(player);
+        }
+    }
+
+    /**
+     * At each tick's end, a settling player is paired with the entities in the chunks that reached them. The game skips
+     * an entity whose chunk the player hasn't been sent yet, and tries again only when one of them moves: without this,
+     * soldiers about a view that moved, or about the body once the strategy view closes, stay figures until then.
+     */
+    public static void tick(net.minecraft.server.MinecraftServer server) {
+        for (ServerPlayer player : ARRIVED) {
+            player.serverLevel().getChunkSource().move(player);
+        }
+        ARRIVED.clear();
+        int now = server.getTickCount();
+        SETTLING.values().removeIf(until -> until < now);
     }
 
     public static void forget(ServerPlayer player) {
         CAMERAS.remove(player.getUUID());
+        SETTLING.remove(player.getUUID());
+        ARRIVED.remove(player);
     }
 }
