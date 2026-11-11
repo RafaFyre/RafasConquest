@@ -1,0 +1,64 @@
+# The Age of Gunpowder's techs: placeholders until the real list is written. See steel.toml for what each field means.
+
+[[tech]]
+id = "gunpowder_1"
+name = "Gunpowder 1"
+x = 9
+y = 57
+needs = ["steel_10"]
+
+[[tech]]
+id = "gunpowder_2"
+name = "Gunpowder 2"
+x = 27
+y = 63
+needs = ["gunpowder_1"]
+
+[[tech]]
+id = "gunpowder_3"
+name = "Gunpowder 3"
+x = 8
+y = 76
+needs = ["steel_11"]
+
+[[tech]]
+id = "gunpowder_4"
+name = "Gunpowder 4"
+x = 9
+y = 8
+
+[[tech]]
+id = "gunpowder_5"
+name = "Gunpowder 5"
+x = 43
+y = 5
+
+[[tech]]
+id = "gunpowder_6"
+name = "Gunpowder 6"
+x = 58
+y = 10
+
+[[tech]]
+id = "gunpowder_7"
+name = "Gunpowder 7"
+x = 41
+y = 29
+
+[[tech]]
+id = "gunpowder_8"
+name = "Gunpowder 8"
+x = 65
+y = 37
+
+[[tech]]
+id = "gunpowder_9"
+name = "Gunpowder 9"
+x = 50
+y = 46
+
+[[tech]]
+id = "gunpowder_10"
+name = "Gunpowder 10"
+x = 47
+y = 79

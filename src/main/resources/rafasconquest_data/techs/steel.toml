@@ -1,0 +1,106 @@
+# The Age of Steel's techs: placeholders, laid out like the first sketch, until the real list is written.
+# One [[tech]] per square:
+#   id     unique across every age
+#   name   shown when hovered
+#   x, y   where in the age's column: 0 to 100 across, 0 to 100 down
+#   needs  ids of techs that must be known first, from this age or an earlier one; each draws an arrow
+# This file is named after its age (bronze, steel, gunpowder, steam); a file of your own replaces the mod's.
+
+[[tech]]
+id = "steel_1"
+name = "Steel 1"
+x = 18
+y = 25
+
+[[tech]]
+id = "steel_2"
+name = "Steel 2"
+x = 21
+y = 38
+
+[[tech]]
+id = "steel_3"
+name = "Steel 3"
+x = 14
+y = 59
+
+[[tech]]
+id = "steel_4"
+name = "Steel 4"
+x = 46
+y = 17
+needs = ["steel_1"]
+
+[[tech]]
+id = "steel_5"
+name = "Steel 5"
+x = 47
+y = 25
+needs = ["steel_1"]
+
+[[tech]]
+id = "steel_6"
+name = "Steel 6"
+x = 44
+y = 32
+needs = ["steel_1", "steel_2"]
+
+[[tech]]
+id = "steel_7"
+name = "Steel 7"
+x = 40
+y = 54
+needs = ["steel_2", "steel_3"]
+
+[[tech]]
+id = "steel_8"
+name = "Steel 8"
+x = 67
+y = 50
+needs = ["steel_2"]
+
+[[tech]]
+id = "steel_9"
+name = "Steel 9"
+x = 40
+y = 66
+needs = ["steel_3"]
+
+[[tech]]
+id = "steel_10"
+name = "Steel 10"
+x = 67
+y = 61
+needs = ["steel_9"]
+
+[[tech]]
+id = "steel_11"
+name = "Steel 11"
+x = 65
+y = 74
+needs = ["steel_9"]
+
+[[tech]]
+id = "steel_12"
+name = "Steel 12"
+x = 64
+y = 85
+needs = ["steel_11"]
+
+[[tech]]
+id = "steel_13"
+name = "Steel 13"
+x = 65
+y = 8
+
+[[tech]]
+id = "steel_14"
+name = "Steel 14"
+x = 66
+y = 16
+
+[[tech]]
+id = "steel_15"
+name = "Steel 15"
+x = 67
+y = 28

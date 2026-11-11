@@ -2,11 +2,13 @@ package rafasconquest.client.map;
 
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.client.CityManagerScreen;
+import rafasconquest.client.TechTreeScreen;
 import rafasconquest.core.ProvinceMap;
 import rafasconquest.core.SeatCities;
 import rafasconquest.map.BaseMap;
@@ -46,6 +48,14 @@ public class GrandStrategyScreen extends FactionMapScreen {
     public GrandStrategyScreen(GrandStrategy.View fief) {
         super(null, Component.translatable("gui.rafasconquest.grand_strategy"));
         this.fief = fief;
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        // In the title bar, beside the close button.
+        addRenderableWidget(Button.builder(Component.literal("Technology"), b -> minecraft.setScreen(new TechTreeScreen(this)))
+                .bounds(width - 108, 4, 80, 14).build());
     }
 
     @Override

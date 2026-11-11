@@ -1,0 +1,73 @@
+# The Age of Steam's techs: placeholders until the real list is written. See steel.toml for what each field means.
+
+[[tech]]
+id = "steam_1"
+name = "Steam 1"
+x = 8
+y = 13
+
+[[tech]]
+id = "steam_2"
+name = "Steam 2"
+x = 33
+y = 9
+
+[[tech]]
+id = "steam_3"
+name = "Steam 3"
+x = 71
+y = 12
+
+[[tech]]
+id = "steam_4"
+name = "Steam 4"
+x = 53
+y = 18
+
+[[tech]]
+id = "steam_5"
+name = "Steam 5"
+x = 12
+y = 38
+
+[[tech]]
+id = "steam_6"
+name = "Steam 6"
+x = 28
+y = 49
+
+[[tech]]
+id = "steam_7"
+name = "Steam 7"
+x = 50
+y = 46
+
+[[tech]]
+id = "steam_8"
+name = "Steam 8"
+x = 5
+y = 59
+
+[[tech]]
+id = "steam_9"
+name = "Steam 9"
+x = 54
+y = 55
+
+[[tech]]
+id = "steam_10"
+name = "Steam 10"
+x = 31
+y = 76
+
+[[tech]]
+id = "steam_11"
+name = "Steam 11"
+x = 50
+y = 72
+
+[[tech]]
+id = "steam_12"
+name = "Steam 12"
+x = 6
+y = 83
