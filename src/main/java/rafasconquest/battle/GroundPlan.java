@@ -219,7 +219,7 @@ public final class GroundPlan {
                         dry = false;
                         break;
                     }
-                    double weight = b.arm == Arm.ARCHERS ? ARCHER_HEIGHT : b.arm == Arm.CAVALRY ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
+                    double weight = b.arm == Arm.ARCHERS ? ARCHER_HEIGHT : b.arm.mounted() ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
                     score += weight * (ground.height(p.x(), p.z()) - ref) - COHESION * p.distanceTo(b.line);
                     for (Point t : taken) {
                         if (t.distanceTo(p) < CLEARANCE) {

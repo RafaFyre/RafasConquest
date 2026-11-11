@@ -4,8 +4,8 @@ import rafasconquest.battle.FormationSnapshot;
 
 /**
  * A soldier's 3D level of detail: little upright boxes, in the soldier's own frame ({@code right} along its rank,
- * {@code back} away from the enemy, {@code up} from the feet), drawn by {@link DistantArmyRenderer}, each box turned the
- * way its formation faces.
+ * {@code back} away from the way it faces, {@code up} from the feet), drawn by {@link DistantArmyRenderer}, each box turned the
+ * way the soldier itself faces ({@link FigureMotion}).
  */
 final class SoldierFigure {
     /** Past this many blocks (flat) a soldier is a sprite, not a 3D figure. Ships switch further out ({@link DistantShips#SPRITE_PAST}). */
@@ -28,16 +28,20 @@ final class SoldierFigure {
 
     private final FormationSnapshot f;
     private final boolean leader;
+    private final double facingX;
+    private final double facingZ;
     private final Boxes out;
 
-    private SoldierFigure(FormationSnapshot f, boolean leader, Boxes out) {
+    private SoldierFigure(FormationSnapshot f, boolean leader, double facingX, double facingZ, Boxes out) {
         this.f = f;
         this.leader = leader;
+        this.facingX = facingX;
+        this.facingZ = facingZ;
         this.out = out;
     }
 
-    static void build(FormationSnapshot f, boolean leader, Boxes out) {
-        new SoldierFigure(f, leader, out).build();
+    static void build(FormationSnapshot f, boolean leader, double facingX, double facingZ, Boxes out) {
+        new SoldierFigure(f, leader, facingX, facingZ, out).build();
     }
 
     private void build() {
@@ -45,7 +49,7 @@ final class SoldierFigure {
         int shade = darker(uniform);
         int mark = f.mark();
         switch (f.kind()) {
-            case CAVALRY -> {
+            case CAVALRY, HEAVY_CAVALRY -> {
                 box(0, 0, 0.2, 0.25, 0, 0.7, HOOVES, Stuff.CLOTH);
                 box(0, 0, 0.3, 0.6, 0.7, 1.3, uniform, Stuff.CLOTH); // the horse, in leather armour
                 box(0, -0.75, 0.15, 0.2, 1.1, 1.7, uniform, Stuff.CLOTH); // its head, forward
@@ -95,10 +99,10 @@ final class SoldierFigure {
      */
     private void box(double right, double back, double halfWidth, double halfDepth, double bottom, double top,
                      int rgb, Stuff stuff) {
-        double rightX = -f.facingZ();
-        double rightZ = f.facingX();
-        out.box(rightX * right - f.facingX() * back, rightZ * right - f.facingZ() * back, rightX * halfWidth, rightZ * halfWidth,
-                f.facingX() * halfDepth, f.facingZ() * halfDepth, bottom, top, rgb, stuff);
+        double rightX = -facingZ;
+        double rightZ = facingX;
+        out.box(rightX * right - facingX * back, rightZ * right - facingZ * back, rightX * halfWidth, rightZ * halfWidth,
+                facingX * halfDepth, facingZ * halfDepth, bottom, top, rgb, stuff);
     }
 
     static int darker(int rgb) {

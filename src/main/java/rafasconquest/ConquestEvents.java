@@ -173,6 +173,17 @@ public final class ConquestEvents {
         event.setAmount(RecruitsBattle.adjustDamage(event.getEntity(), event.getSource().getEntity(), event.getAmount()));
     }
 
+    /** A foot soldier struck by a galloping charge flies, rather than being knocked back along the ground. */
+    @SubscribeEvent
+    public static void onKnockBack(net.neoforged.neoforge.event.entity.living.LivingKnockBackEvent event) {
+        net.minecraft.world.phys.Vec3 flight = RecruitsBattle.thrown(event.getEntity());
+        if (flight != null) {
+            event.setCanceled(true);
+            event.getEntity().setDeltaMovement(flight);
+            event.getEntity().hurtMarked = true; // so the client sees it fly
+        }
+    }
+
     /**
      * A battle's soldiers (and their horses) can't be hired, or otherwise used, by right-clicking them: Recruits would
      * open its hire menu for any recruit nearby.

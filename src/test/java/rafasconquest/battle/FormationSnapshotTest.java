@@ -23,7 +23,7 @@ class FormationSnapshotTest {
             ys[i] = 63;
             zs[i] = (i % 10 - 4.5) * BattlePlan.SPACING;
         }
-        return FormationSnapshot.of(3, Kind.SWORDSMEN, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true, IDS, IDS[BattlePlan.LEADER_INDEX], null);
+        return FormationSnapshot.of(3, Kind.SKIRMISHERS, 0xB02E26, 0xF9FFFE, xs, ys, zs, 1, 0, fighting, true, IDS, IDS[BattlePlan.LEADER_INDEX], null);
     }
 
     @Test
@@ -88,7 +88,7 @@ class FormationSnapshotTest {
     @Test
     void glidesBetweenSnapshots() {
         FormationSnapshot a = twoRanksFacingEast(false);
-        FormationSnapshot b = new FormationSnapshot(3, Kind.SWORDSMEN, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false, new int[18], -1, null);
+        FormationSnapshot b = new FormationSnapshot(3, Kind.SKIRMISHERS, 0, 0, 18, a.x() + 10, a.y(), a.z(), 0, 1, 4, 4, true, false, new int[18], -1, null);
         FormationSnapshot half = b.from(a, 0.5);
         assertEquals(a.x() + 5, half.x(), 1e-9);
         assertEquals(1, Math.hypot(half.facingX(), half.facingZ()), 1e-9, "still a direction");

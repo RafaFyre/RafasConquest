@@ -123,12 +123,10 @@ public final class FieldBattle {
                 if (!b.afloat || b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER) {
                     continue;
                 }
-                b.ship = switch (b.arm) {
-                    case ARCHERS -> FieldBlock.ShipKind.ARCHERS;
-                    case CAVALRY -> FieldBlock.ShipKind.CAMP; // no horses on a fighting deck: they sail with the stores
-                    case SWORDSMEN -> swordsmen++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
-                    case SHIELDWALL -> FieldBlock.ShipKind.SWORDSMEN;
-                };
+                b.ship = b.arm == Arm.ARCHERS ? FieldBlock.ShipKind.ARCHERS
+                        : b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses on a fighting deck: they sail with the stores
+                        : b.arm.shielded() ? FieldBlock.ShipKind.SWORDSMEN
+                        : swordsmen++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
             }
             spreadShips(army);
         }
@@ -491,7 +489,7 @@ public final class FieldBattle {
         for (int i = 0; i < ships; i++) {
             double right = (i - (ships - 1) / 2.0) * BattlePlan.BLOCK_PITCH;
             Point at = d.origin.plus(d.facingX * HARBOUR_OUT + rx * right, d.facingZ * HARBOUR_OUT + rz * right);
-            FieldBlock b = new FieldBlock(id++, 1, i % 3 == 2 ? Arm.ARCHERS : Arm.SWORDSMEN, BattlePlan.SOLDIERS_PER_FORMATION,
+            FieldBlock b = new FieldBlock(id++, 1, i % 3 == 2 ? Arm.ARCHERS : Arm.SKIRMISHERS, BattlePlan.SOLDIERS_PER_FORMATION,
                     FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false, at, d.facingX, d.facingZ, Duty.RESTING);
             b.afloat = true;
             b.ship = b.arm == Arm.ARCHERS ? FieldBlock.ShipKind.ARCHERS : FieldBlock.ShipKind.SWORDSMEN;
@@ -622,8 +620,23 @@ public final class FieldBattle {
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         armies = new FieldArmy[]{
-                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first),
-                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second)};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random)),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random))};
+    }
+
+    /**
+     * Whether a general puts the levies up front, to be crushed and draw the enemy on, rather than behind the heavy
+     * infantry, supporting it: Bait and Pincer generals do; Spear and Shield generals don't; a Charge and Decapitate
+     * general rolls for it. Their wing commanders deploy the same way.
+     */
+    static boolean levyFront(WarPlan plan, Random random) {
+        if (plan.has(Strategy.BAIT)) {
+            return true;
+        }
+        if (plan.doctrines().contains(Doctrine.SPEAR_AND_SHIELD)) {
+            return false;
+        }
+        return plan.doctrines().contains(Doctrine.CHARGE_AND_DECAPITATE) && random.nextBoolean();
     }
 
     /** Block ids run from this times their army's side ({@link #deploy}, {@link #addHarbourFleet}). */
@@ -634,7 +647,7 @@ public final class FieldBattle {
         return blockId / SIDE_IDS;
     }
 
-    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan) {
+    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan, boolean levyFront) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
         army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
@@ -642,7 +655,7 @@ public final class FieldBattle {
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares());
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
         army.winged = slots.stream().anyMatch(s -> s.wing() != FieldArmy.CENTRE);
@@ -681,7 +694,7 @@ public final class FieldBattle {
                     wingSum[block.wing] += slot.right();
                     wingFiles[block.wing]++;
                 }
-            } else if (slot.arm() == Arm.CAVALRY) {
+            } else if (slot.arm().mounted()) {
                 cavalry.add(block);
                 reserves = Math.min(reserves, slot.back());
             }
@@ -698,7 +711,7 @@ public final class FieldBattle {
         army.guard = new FieldBlock(id++, side, Arm.CAVALRY, BattlePlan.SOLDIERS_PER_FORMATION, FieldRules.SOLDIER_HEALTH,
                 BattlePlan.LEADER_INDEX, false, BattlePlan.place(generalSpot, facingX, facingZ, 0, BattlePlan.GUARD_BACK),
                 facingX, facingZ, Duty.GUARD);
-        army.bearer = new FieldBlock(id, side, Arm.SWORDSMEN, 1, FieldRules.SOLDIER_HEALTH, -1, false,
+        army.bearer = new FieldBlock(id, side, Arm.SKIRMISHERS, 1, FieldRules.SOLDIER_HEALTH, -1, false,
                 BattlePlan.place(front, facingX, facingZ, BattlePlan.BEARER_RIGHT, BattlePlan.GENERAL_BACK), facingX, facingZ, Duty.BEARER);
         army.blocks.add(army.commander);
         army.blocks.add(army.guard);
@@ -831,7 +844,7 @@ public final class FieldBattle {
             default -> {
             }
         }
-        if (block.arm == Arm.CAVALRY && block.duty == Duty.SUPPORT) {
+        if (block.arm.mounted() && block.duty == Duty.SUPPORT) {
             block.homeRight = BattlePlan.offset(army.frontCentre(), army.facingX, army.facingZ, at).x();
         }
     }
@@ -1080,7 +1093,7 @@ public final class FieldBattle {
                 continue;
             }
             if (block.charged) {
-                if (block.arm == Arm.CAVALRY && block.momentum < FieldRules.SPENT_MOMENTUM
+                if (block.arm.mounted() && block.momentum < FieldRules.SPENT_MOMENTUM
                         && block.contactSeconds >= FieldRules.SPENT_SECONDS
                         && (block.duty == Duty.SUPPORT || block.duty == Duty.GUARD || block.duty == Duty.GENERAL)) {
                     recall(army, block);
@@ -1360,7 +1373,7 @@ public final class FieldBattle {
             }
             return;
         }
-        boolean cavalry = block.arm == Arm.CAVALRY;
+        boolean cavalry = block.arm.mounted();
         if (cavalry && block.rode) {
             patrol(army, block);
         }
@@ -1401,8 +1414,8 @@ public final class FieldBattle {
     private void charge(FieldArmy army, FieldBlock block, @Nullable FieldBlock prey) {
         FieldBlock enemyPick = prey != null ? prey : choosePrey(army, armies[1 - army.side], block);
         block.prey = enemyPick;
-        block.rode = block.arm == Arm.CAVALRY;
-        if (enemyPick != null && block.arm == Arm.CAVALRY && enemyPick.arm.infantry() && army.plan.has(Strategy.CAVALRY_FLANK)) {
+        block.rode = block.arm.mounted();
+        if (enemyPick != null && block.arm.mounted() && enemyPick.arm.infantry() && army.plan.has(Strategy.CAVALRY_FLANK)) {
             block.approaching = true;
             block.waypoint = flankPoint(enemyPick, block.pos);
             block.dutySince = seconds;
@@ -1501,7 +1514,7 @@ public final class FieldBattle {
     private void brace(FieldArmy army, FieldArmy enemy) {
         boolean called = false;
         for (FieldBlock cavalry : enemy.blocks) {
-            if (cavalry.arm != Arm.CAVALRY || !(cavalry.charged || cavalry.approaching) || cavalry.alive == 0) {
+            if (!cavalry.arm.mounted() || !(cavalry.charged || cavalry.approaching) || cavalry.alive == 0) {
                 continue;
             }
             List<FieldBlock> near = new ArrayList<>();
@@ -1966,7 +1979,7 @@ public final class FieldBattle {
         }
         boolean cavalry = false;
         for (FieldBlock c : army.blocks) {
-            if (c.alive > 0 && c.arm == Arm.CAVALRY && c.duty == Duty.SUPPORT && !c.inWedge && !c.charged && !c.approaching
+            if (c.alive > 0 && c.arm.mounted() && c.duty == Duty.SUPPORT && !c.inWedge && !c.charged && !c.approaching
                     && seconds >= c.reformUntil && (c.wing == wing || !army.winged) && c.pos.distanceTo(lured.pos) <= FieldRules.WING_REACH) {
                 charge(army, c, lured);
                 cavalry = true;
@@ -2112,7 +2125,7 @@ public final class FieldBattle {
             }
         }
         for (FieldBlock c : enemy.blocks) {
-            if (c.alive == 0 || c.arm != Arm.CAVALRY || c.duty == Duty.FLEEING || c.lastPos == null || c.moved >= FieldRules.STOPPED) {
+            if (c.alive == 0 || !c.arm.mounted() || c.duty == Duty.FLEEING || c.lastPos == null || c.moved >= FieldRules.STOPPED) {
                 continue;
             }
             int sent = hunters.getOrDefault(c, 0);
@@ -2343,7 +2356,7 @@ public final class FieldBattle {
         FieldBlock t = block.strikeAt;
         boolean gone = t == null || t.alive == 0 || t.duty == Duty.FLEEING;
         // A kill squad keeps after its officer, mounted or not.
-        boolean escaped = !gone && block.task != FieldBlock.Task.KILL && t.arm == Arm.CAVALRY && (t.moved >= FieldRules.STOPPED * 3
+        boolean escaped = !gone && block.task != FieldBlock.Task.KILL && t.arm.mounted() && (t.moved >= FieldRules.STOPPED * 3
                 || block.pos.distanceTo(t.pos) > FieldRules.HUNT_REACH * 2);
         if (gone || escaped) {
             release(army, block);
@@ -2408,7 +2421,7 @@ public final class FieldBattle {
             if (seconds < block.shakenUntil) {
                 lost += FieldRules.CAPTAIN_SHOCK;
             }
-            if (lost >= FieldRules.ROUT_LOSS && !block.rallied(seconds)) {
+            if (lost >= FieldRules.ROUT_LOSS * block.arm.nerve() && !block.rallied(seconds)) {
                 rout(army, block);
                 rallyAgainst(enemy, block);
             }
@@ -2430,7 +2443,7 @@ public final class FieldBattle {
         if (seconds < block.shakenUntil) {
             lost += FieldRules.CAPTAIN_SHOCK;
         }
-        return Math.max(0, Math.min(1, lost / FieldRules.ROUT_LOSS));
+        return Math.max(0, Math.min(1, lost / (FieldRules.ROUT_LOSS * block.arm.nerve())));
     }
 
     /** The enemy blocks fighting a block that just broke, or lost its captain, rally. */
@@ -2562,7 +2575,7 @@ public final class FieldBattle {
      */
     @Nullable
     private FieldBlock choosePrey(FieldArmy army, FieldArmy enemy, FieldBlock block) {
-        if (block.arm == Arm.CAVALRY && army.plan.has(Strategy.DECAPITATE) && enemy.commander != null && enemy.commander.alive > 0
+        if (block.arm.mounted() && army.plan.has(Strategy.DECAPITATE) && enemy.commander != null && enemy.commander.alive > 0
                 && enemy.commander.pos.distanceTo(block.pos) <= 60) {
             return enemy.commander;
         }
@@ -2740,7 +2753,7 @@ public final class FieldBattle {
             Point target = block.line;
             if (block.charged && block.duty != Duty.FLEEING && block != army.commander) {
                 FieldBlock prey = hunted(block.prey) ? block.prey
-                        : nearestBlock(block, enemy, block.arm == Arm.CAVALRY ? Arm.ARCHERS : null);
+                        : nearestBlock(block, enemy, block.arm.mounted() ? Arm.ARCHERS : null);
                 if (prey == null) {
                     continue;
                 }
@@ -2820,16 +2833,16 @@ public final class FieldBattle {
                     }
                     double damage = fighters * rates.meleeDps(block.arm)
                             * rates.meleeFactor(sideOf(foe, block), foe.arm);
-                    if (block.arm == Arm.CAVALRY && block.charged && !block.afloat) { // no charging horses from a deck
+                    if (block.arm.mounted() && block.charged && !block.afloat) { // no charging horses from a deck
                         damage *= 1 + rates.chargeBonus() * block.momentum;
                     }
-                    if (foe.braced && block.arm == Arm.CAVALRY && sideOf(foe, block) == FieldRules.Side.FRONT) {
+                    if (foe.braced && block.arm.mounted() && sideOf(foe, block) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_TAKES;
                     }
                     if (siege != null) {
                         damage *= siege.meleeFactor(block, foe);
                     }
-                    if (block.braced && foe.arm == Arm.CAVALRY && sideOf(block, foe) == FieldRules.Side.FRONT) {
+                    if (block.braced && foe.arm.mounted() && sideOf(block, foe) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_DEALS;
                     }
                     targets.add(foe);
@@ -2868,7 +2881,7 @@ public final class FieldBattle {
     private void momentum() {
         for (FieldArmy army : armies) {
             for (FieldBlock block : army.blocks) {
-                if (block.arm != Arm.CAVALRY || block.alive == 0) {
+                if (!block.arm.mounted() || block.alive == 0) {
                     continue;
                 }
                 double moved = block.lastPos == null ? 0 : block.pos.distanceTo(block.lastPos);
@@ -2886,7 +2899,7 @@ public final class FieldBattle {
                     if (foe.braced && sideOf(foe, block) == FieldRules.Side.FRONT) {
                         block.momentum -= block.momentum * rate;
                     } else {
-                        double loss = foe.arm == Arm.CAVALRY ? FieldRules.MOMENTUM_LOSS_CAVALRY : FieldRules.MOMENTUM_LOSS_INFANTRY;
+                        double loss = foe.arm.mounted() ? FieldRules.MOMENTUM_LOSS_CAVALRY : FieldRules.MOMENTUM_LOSS_INFANTRY;
                         block.momentum = Math.max(0, block.momentum - loss * rate);
                     }
                 } else if (block.duty != Duty.RALLYING) {

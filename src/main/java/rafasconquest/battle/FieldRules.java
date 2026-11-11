@@ -171,7 +171,7 @@ public final class FieldRules {
      */
     public static final double FLANK_BONUS = 1;
     public static final double REAR_BONUS = 1;
-    /** A shieldwall takes less from the front: in melee, and from arrows. */
+    /** Shield bearers ({@link Arm#shielded}) take less from the front: in melee, and from arrows. */
     public static final double SHIELD_MELEE = 0.6;
     public static final double SHIELD_ARROWS = 0.4;
 
@@ -186,21 +186,17 @@ public final class FieldRules {
     public record Rates(double infantryDps, double cavalryDps, double archerMeleeDps, double arrowDamage, double chargeBonus,
                         double footSpeed, double horseSpeed, double warriorFightsAs, double flankBonus, double rearBonus) {
         public double meleeDps(Arm arm) {
-            return switch (arm) {
-                case SWORDSMEN, SHIELDWALL -> infantryDps;
-                case CAVALRY -> cavalryDps;
-                case ARCHERS -> archerMeleeDps;
-            };
+            return arm.hits() * (arm.infantry() ? infantryDps : arm.mounted() ? cavalryDps : archerMeleeDps);
         }
 
         public double speed(Arm arm) {
-            return arm == Arm.CAVALRY ? horseSpeed : footSpeed;
+            return arm.pace() * (arm.mounted() ? horseSpeed : footSpeed);
         }
 
         /** How much more (or less) a melee attack does, for where it falls and on whom. */
         public double meleeFactor(Side side, Arm defender) {
-            return switch (side) {
-                case FRONT -> defender == Arm.SHIELDWALL ? SHIELD_MELEE : 1;
+            return defender.takes() * switch (side) {
+                case FRONT -> defender.shielded() ? SHIELD_MELEE : 1;
                 case FLANK -> flankBonus;
                 case REAR -> rearBonus;
             };
@@ -236,7 +232,7 @@ public final class FieldRules {
 
     /** How much of a volley of arrows tells, for where it falls and on whom. */
     public static double arrowFactor(Side side, Arm defender) {
-        return side == Side.FRONT && defender == Arm.SHIELDWALL ? SHIELD_ARROWS : 1;
+        return defender.takes() * (side == Side.FRONT && defender.shielded() ? SHIELD_ARROWS : 1);
     }
 
     /**

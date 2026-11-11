@@ -22,7 +22,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
-import rafasconquest.battle.FormationSnapshot.Sprite;
 import rafasconquest.style.ShipHulls;
 import net.minecraft.world.level.EmptyBlockGetter;
 
@@ -103,11 +102,11 @@ public final class DistantArmyRenderer {
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
 
-        FormationSnapshot.Positions positions = DistantArmies.positions(partialTick);
-        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, positions, null);
+        List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
+        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
-            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, positions, selected);
+            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, selected);
         }
     }
 
@@ -121,19 +120,17 @@ public final class DistantArmyRenderer {
      * figure as the game's glowing outline does about a real soldier.
      */
     private static void pass(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks,
-                             List<FormationSnapshot> formations, FormationSnapshot.Positions positions, @javax.annotation.Nullable Set<Integer> halo) {
+                             List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, @javax.annotation.Nullable Set<Integer> halo) {
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         figure.tint = halo == null ? -1 : 0xFFFFFF;
         int drawn = 0;
-        long now = net.minecraft.Util.getMillis();
-        for (FormationSnapshot formation : formations) {
+        for (int f = 0; f < formations.size(); f++) {
+            FormationSnapshot formation = formations.get(f);
             if (halo != null && !halo.contains(formation.id())) {
                 continue;
             }
-            List<Sprite> sprites = formation.place(positions);
-            for (int i = 0; i < sprites.size(); i++) {
-                Sprite sprite = sprites.get(i);
+            for (FigureMotion.Placed sprite : figures.get(f)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
@@ -141,17 +138,10 @@ public final class DistantArmyRenderer {
                 if (sprite.real() && distance <= handover) {
                     continue; // the client has this soldier, close enough to draw it itself (and glow it)
                 }
-                double[] thrown = ThrownFigures.offset(formation.id(), i, now);
-                if (thrown != null) {
-                    dx += thrown[0];
-                    dy += thrown[1];
-                    dz += thrown[2];
-                    distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                }
                 boolean flatSprite = Math.hypot(dx, dz) > SoldierFigure.SPRITE_PAST;
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
                 if (halo == null) {
-                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, lightAt(mc, sprite));
+                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, lightAt(mc, sprite.x(), sprite.y(), sprite.z()));
                 } else {
                     double back = 1 + HALO_BEHIND / Math.max(distance, 1);
                     figure.at((float) (dx * scale * back), (float) ((dy - 0.1) * scale * back), (float) (dz * scale * back),
@@ -160,7 +150,7 @@ public final class DistantArmyRenderer {
                 if (flatSprite) {
                     draw(figure, formation, sprite.leader());
                 } else {
-                    SoldierFigure.build(formation, sprite.leader(), figure);
+                    SoldierFigure.build(formation, sprite.leader(), sprite.fx(), sprite.fz(), figure);
                 }
                 drawn++;
             }
@@ -324,8 +314,8 @@ public final class DistantArmyRenderer {
      * The light a figure stands in, as the game lights a mob there: the sky and block light at its head height. Out
      * past the chunks the client has, it is open sky.
      */
-    private static int lightAt(Minecraft mc, Sprite sprite) {
-        BlockPos head = BlockPos.containing(sprite.x(), sprite.y() + 1, sprite.z());
+    private static int lightAt(Minecraft mc, double x, double y, double z) {
+        BlockPos head = BlockPos.containing(x, y + 1, z);
         if (mc.level == null || !mc.level.hasChunkAt(head)) {
             return LightTexture.FULL_SKY;
         }
@@ -355,7 +345,7 @@ public final class DistantArmyRenderer {
         int shade = darker(uniform);
         int mark = formation.mark();
         switch (formation.kind()) {
-            case CAVALRY -> {
+            case CAVALRY, HEAVY_CAVALRY -> {
                 f.rect(0, 0, 1.2F, 0.7F, HOOVES);
                 f.rect(0, 0.7F, 1.5F, 0.6F, uniform); // the horse, in dyed leather armour
                 f.rect(0, 1.3F, 0.5F, 0.4F, shade);

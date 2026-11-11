@@ -39,15 +39,20 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
     }
 
     public enum Kind {
-        SWORDSMEN, SHIELDWALL, ARCHERS, CAVALRY, GENERAL, BEARER;
+        LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, GENERAL, BEARER;
 
+        /** The kind drawn for a block of {@code arm}: the same name. */
         public static Kind of(BattlePlan.Arm arm) {
-            return switch (arm) {
-                case SWORDSMEN -> SWORDSMEN;
-                case SHIELDWALL -> SHIELDWALL;
-                case ARCHERS -> ARCHERS;
-                case CAVALRY -> CAVALRY;
-            };
+            return valueOf(arm.name());
+        }
+
+        public boolean mounted() {
+            return this == CAVALRY || this == HEAVY_CAVALRY;
+        }
+
+        /** Foot that fights hand to hand in the ranks. */
+        public boolean infantry() {
+            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS;
         }
     }
 

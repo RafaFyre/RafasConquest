@@ -103,7 +103,7 @@ public final class BattleSounds {
     /** Whether any infantry is fighting within {@code reach} of a point. */
     private static boolean fightingNear(double x, double z, double reach) {
         for (FormationSnapshot f : DistantArmies.now()) {
-            if (f.fighting() && (f.kind() == Kind.SWORDSMEN || f.kind() == Kind.SHIELDWALL) && Math.hypot(f.x() - x, f.z() - z) <= reach) {
+            if (f.fighting() && f.kind().infantry() && Math.hypot(f.x() - x, f.z() - z) <= reach) {
                 return true;
             }
         }
@@ -202,7 +202,7 @@ public final class BattleSounds {
         List<Source> sources = new ArrayList<>();
         for (FormationSnapshot f : formations) {
             double speed = DistantArmies.speed(f);
-            if (f.kind() != Kind.CAVALRY || speed < GALLOP) {
+            if (!f.kind().mounted() || speed < GALLOP) {
                 continue;
             }
             float volume = (float) (2 + (MAX_VOLUME - 2) * Math.min(1, f.alive() / 20.0) * Math.min(1, speed / 7));
@@ -215,7 +215,7 @@ public final class BattleSounds {
     private static List<Source> din(List<FormationSnapshot> formations, Vec3 ear) {
         List<FormationSnapshot> fighting = new ArrayList<>();
         for (FormationSnapshot f : formations) {
-            if (f.fighting() && (f.kind() == Kind.SWORDSMEN || f.kind() == Kind.SHIELDWALL)) {
+            if (f.fighting() && f.kind().infantry()) {
                 fighting.add(f);
             }
         }

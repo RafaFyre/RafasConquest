@@ -43,7 +43,7 @@ class SiegeTest {
             onWall += siege.region(b.pos()) == Siege.Region.WALL ? 1 : 0;
             inside += siege.region(b.pos()) == Siege.Region.IN ? 1 : 0;
             superHeavy += b.superHeavy() ? 1 : 0;
-            riders += b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT ? 1 : 0;
+            riders += b.arm().mounted() && b.duty() == Duty.SUPPORT ? 1 : 0;
         }
         assertEquals(2, onWall, "one block of archers and one of foot on a castle's wall");
         assertTrue(inside > onWall, "most wait inside");

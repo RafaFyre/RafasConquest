@@ -51,7 +51,7 @@ public final class BattleScreen extends Screen {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, x - scale, feet - 2 * scale, x + scale, feet, scale, 0.0625F, mouseX, mouseY, entity);
     }
 
-    private static final String[] ARMS = {"INFANTRY", "HVY INF", "ARCHERS", "CAVALRY"};
+    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV"};
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
     private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};
@@ -66,7 +66,8 @@ public final class BattleScreen extends Screen {
      * they are there.
      */
     private static final SoundEvent[] SELECT = {sound("battle.select.swordsmen"), sound("battle.select.shieldwall"),
-            sound("battle.select.archers"), sound("battle.select.cavalry")};
+            sound("battle.select.swordsmen"), sound("battle.select.swordsmen"), sound("battle.select.archers"),
+            sound("battle.select.cavalry"), sound("battle.select.cavalry")}; // by Arm, in order
     private static final SoundEvent ORDER_MOVE = sound("battle.order.move");
     private static final SoundEvent ORDER_ATTACK = sound("battle.order.attack");
 

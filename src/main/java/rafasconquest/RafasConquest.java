@@ -28,5 +28,6 @@ public class RafasConquest {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(ConquestGameRules::register);
+        rafasconquest.battle.BattlePlan.zweihandlers = rafasconquest.gear.Armoury.available(); // they need Epic Knights' swords
     }
 }

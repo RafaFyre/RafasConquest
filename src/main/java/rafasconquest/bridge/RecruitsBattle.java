@@ -93,6 +93,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /**
  * A battle between two factions' armies, for the prototype: fought as numbers ({@link FieldBattle}) everywhere, and
@@ -649,27 +652,40 @@ public final class RecruitsBattle {
         preparing = true;
         DistantGeneration.pause(); // from the survey on, until the battle is over
         terrain.surveyInBackground(GroundPlan.area(field)).whenCompleteAsync((surveyed, error) -> {
-            preparing = false;
             if (error != null) {
+                preparing = false;
                 RafasConquest.LOGGER.error("[battle] couldn't survey the ground", error);
                 DistantGeneration.resume();
                 failed.accept("Couldn't survey the ground: " + error.getMessage());
                 return;
             }
+            CompletableFuture<String> begun;
             try {
-                ready.accept(begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ, survey));
+                begun = begin(level, field, sides, terrain, teamA, teamB, diplomacy, blocksA, blocksB, site, axisX, axisZ, survey);
             } catch (RuntimeException e) {
-                RafasConquest.LOGGER.error("[battle] couldn't begin the battle", e);
+                begun = CompletableFuture.failedFuture(e);
+            }
+            begun.whenComplete((line, e) -> {
+                preparing = false;
+                if (e == null) {
+                    ready.accept(line);
+                    return;
+                }
+                Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+                RafasConquest.LOGGER.error("[battle] couldn't begin the battle", cause);
                 if (current == null) {
                     DistantGeneration.resume();
                 }
-                failed.accept("Couldn't begin the battle: " + e.getMessage());
-            }
+                failed.accept("Couldn't begin the battle: " + cause.getMessage());
+            });
         }, level.getServer());
     }
 
-    /** The rest of {@link #start}, once the ground is surveyed: deploys the armies, pitches the camps, and begins. */
-    private static String begin(ServerLevel level, FieldBattle field, Side[] sides, Terrain terrain, PlayerTeam teamA,
+    /**
+     * The rest of {@link #start}, once the ground is surveyed: deploys the armies, loads the camps' ground in the
+     * background, then pitches the camps and begins.
+     */
+    private static CompletableFuture<String> begin(ServerLevel level, FieldBattle field, Side[] sides, Terrain terrain, PlayerTeam teamA,
                                 PlayerTeam teamB, RecruitsDiplomacyManager diplomacy, int blocksA, int blocksB, Point centre,
                                 double axisX, double axisZ, @Nullable SiegeSurvey.Result survey) {
         // A siege's places are its walls': nothing is moved for the lie of the land.
@@ -686,6 +702,21 @@ public final class RecruitsBattle {
         battle.centre = centre;
         battle.axisX = axisX;
         battle.axisZ = axisZ;
+        long loadStarted = System.nanoTime();
+        // Fresh ground generates on the worker threads; loading it on the server thread froze it for seconds.
+        return battle.loadGroundAsync(battle.campGround()).thenApplyAsync(loaded -> {
+            RafasConquest.LOGGER.info("[battle] camp ground loaded in {} ms", (System.nanoTime() - loadStarted) / 1_000_000);
+            return pitch(level, battle, field, sides, centre, diplomacy, teamA, teamB);
+        }, level.getServer()).whenComplete((line, e) -> {
+            if (e != null && current != battle) {
+                battle.releaseChunks();
+            }
+        });
+    }
+
+    /** The end of {@link #begin}, once the camps' ground is loaded: pitches the camps, and announces the battle. */
+    private static String pitch(ServerLevel level, RecruitsBattle battle, FieldBattle field, Side[] sides, Point centre,
+                                RecruitsDiplomacyManager diplomacy, PlayerTeam teamA, PlayerTeam teamB) {
         long campsStarted = System.nanoTime();
         battle.buildCamps();
         battle.spawnCouncil();
@@ -1021,7 +1052,7 @@ public final class RecruitsBattle {
         Side side = sides[block.side()];
         float yaw = yawOf(field.enemyDirection(block));
         EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get()
-                : block.afloat() && block.arm() == Arm.CAVALRY ? type(Arm.SWORDSMEN) // no horses on deck: the guard sails on foot
+                : block.afloat() && block.arm().mounted() ? type(Arm.SKIRMISHERS) // no horses on deck: the guard sails on foot
                 : type(block.arm());
         // Dismounted cavalry (super heavy infantry) keeps its riders' heavy armour, as the general's guard wears it.
         Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
@@ -1029,6 +1060,9 @@ public final class RecruitsBattle {
         AbstractRecruitEntity soldier = spawn(type, side, role, p, yaw);
         if (soldier == null) {
             return;
+        }
+        if (role == Role.SOLDIER || role == Role.LEADER) {
+            kitFor(soldier, side, block.afloat() && block.arm().mounted() ? Arm.SKIRMISHERS : block.arm(), role);
         }
         if (block.afloat()) {
             Point spot = deckSpot(block, i);
@@ -1123,7 +1157,7 @@ public final class RecruitsBattle {
                 Live l = live.get(block);
                 float[] health = block.health();
                 Point front = front(block, health);
-                int cost = block.arm() == Arm.CAVALRY && block.started() > 1 ? 2 : 1;
+                int cost = block.arm().mounted() && block.started() > 1 ? 2 : 1;
                 for (int i = 0; i < health.length; i++) {
                     AbstractRecruitEntity s = l == null ? null : l.soldiers[i];
                     boolean real = s != null && s.isAlive() && !s.isRemoved();
@@ -1183,6 +1217,9 @@ public final class RecruitsBattle {
             if (c.real() || !keep.getOrDefault(c.block(), Set.of()).contains(c.index())) {
                 continue;
             }
+            if (!live.containsKey(c.block()) && !groundReady(c.block().pos())) {
+                continue; // its ground is loading in the background; it comes on a later switch
+            }
             Live l = liveOf(c.block());
             if (l.soldiers[c.index()] != null) {
                 continue;
@@ -1212,10 +1249,10 @@ public final class RecruitsBattle {
 
     private static EntityType<? extends AbstractRecruitEntity> type(Arm arm) {
         return switch (arm) {
-            case SWORDSMEN -> ModEntityTypes.RECRUIT.get();
-            case SHIELDWALL -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
+            case LEVY, SKIRMISHERS, ZWEIHANDLERS -> ModEntityTypes.RECRUIT.get();
+            case HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
             case ARCHERS -> ModEntityTypes.BOWMAN.get();
-            case CAVALRY -> ModEntityTypes.HORSEMAN.get();
+            case CAVALRY, HEAVY_CAVALRY -> ModEntityTypes.HORSEMAN.get();
         };
     }
 
@@ -1280,6 +1317,67 @@ public final class RecruitsBattle {
             wear(soldier, side, rafasconquest.gear.Armoury.Kit.CAVALRY);
         } else if (role == Role.LEADER) {
             wear(soldier, side, rafasconquest.gear.Armoury.Kit.CAPTAIN);
+        }
+    }
+
+    /**
+     * A block's soldier armed and armoured for its kind, over its dyed leather ({@link #dress}): vanilla gear, then
+     * Epic Knights' kit where it is installed. A captain keeps the banner on its head. Vanilla has no spear (1.21.1),
+     * so vanilla levies carry stone swords and the vanilla spearmen iron ones.
+     */
+    private static void kitFor(AbstractRecruitEntity soldier, Side side, Arm arm, Role role) {
+        ItemStack head = soldier.getItemBySlot(EquipmentSlot.HEAD).copy();
+        switch (arm) {
+            case LEVY -> hand(soldier, Items.STONE_SWORD, null);
+            case HEAVY_INFANTRY -> {
+                armour(soldier, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
+                hand(soldier, Items.IRON_SWORD, bannerShield(side));
+            }
+            case SKIRMISHERS, ZWEIHANDLERS -> {
+                armour(soldier, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
+                hand(soldier, Items.IRON_SWORD, ItemStack.EMPTY);
+            }
+            case CAVALRY -> {
+                armour(soldier, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
+                hand(soldier, Items.IRON_SWORD, bannerShield(side));
+            }
+            case HEAVY_CAVALRY -> {
+                armour(soldier, Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS);
+                hand(soldier, Items.DIAMOND_SWORD, bannerShield(side));
+            }
+            case ARCHERS -> {
+            }
+        }
+        wear(soldier, side, switch (arm) {
+            case LEVY -> rafasconquest.gear.Armoury.Kit.LEVY;
+            case HEAVY_INFANTRY -> rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY;
+            case SKIRMISHERS -> rafasconquest.gear.Armoury.Kit.SKIRMISHER;
+            case ZWEIHANDLERS -> rafasconquest.gear.Armoury.Kit.ZWEIHANDLER;
+            case ARCHERS -> rafasconquest.gear.Armoury.Kit.ARCHER;
+            case CAVALRY -> rafasconquest.gear.Armoury.Kit.CAVALRY;
+            case HEAVY_CAVALRY -> rafasconquest.gear.Armoury.Kit.HEAVY_CAVALRY;
+        });
+        ItemStack halberd = arm == Arm.HEAVY_CAVALRY && soldier.getRandom().nextBoolean() ? rafasconquest.gear.Armoury.halberd() : null;
+        if (halberd != null) {
+            equip(soldier, EquipmentSlot.MAINHAND, halberd);
+        }
+        if (role == Role.LEADER) {
+            equip(soldier, EquipmentSlot.HEAD, head); // the captain keeps the banner
+        }
+    }
+
+    private static void armour(AbstractRecruitEntity soldier, Item head, Item chest, Item legs, Item feet) {
+        equip(soldier, EquipmentSlot.HEAD, new ItemStack(head));
+        equip(soldier, EquipmentSlot.CHEST, new ItemStack(chest));
+        equip(soldier, EquipmentSlot.LEGS, new ItemStack(legs));
+        equip(soldier, EquipmentSlot.FEET, new ItemStack(feet));
+    }
+
+    /** A weapon, and in the other hand {@code offhand} (null leaves what it has). */
+    private static void hand(AbstractRecruitEntity soldier, Item weapon, @Nullable ItemStack offhand) {
+        equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(weapon));
+        if (offhand != null) {
+            equip(soldier, EquipmentSlot.OFFHAND, offhand);
         }
     }
 
@@ -1439,7 +1537,7 @@ public final class RecruitsBattle {
         if (block.charged() && block.duty() != Duty.FLEEING) {
             if (!l.appliedCharge) {
                 l.appliedCharge = true;
-                List<AbstractRecruitEntity> prey = preyOf(block, enemiesOf(block.side(), block.arm() == Arm.CAVALRY));
+                List<AbstractRecruitEntity> prey = preyOf(block, enemiesOf(block.side(), block.arm().mounted()));
                 living.forEach(s -> release(s, prey));
             }
             List<AbstractRecruitEntity> foes = preyOf(block, enemiesOf(block.side(), false));
@@ -1534,7 +1632,7 @@ public final class RecruitsBattle {
         List<AbstractRecruitEntity> foes = new ArrayList<>();
         FieldBlock toward = foe != null && live.containsKey(foe) ? foe : null;
         double nearestBlock = Double.MAX_VALUE;
-        if (block.arm() != Arm.CAVALRY && !block.charged() && !passive(block.duty()) && mayFight(block.side())) {
+        if (!block.arm().mounted() && !block.charged() && !passive(block.duty()) && mayFight(block.side())) {
             for (Live e : live.values()) {
                 if (e.block.side() == block.side()) {
                     continue;
@@ -1784,7 +1882,7 @@ public final class RecruitsBattle {
     private void armourHorses(Live l) {
         for (AbstractRecruitEntity rider : l.living()) {
             if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
-                boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL;
+                boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL || l.block.arm() == Arm.HEAVY_CAVALRY;
                 horse.getSlot(401).set(horseArmour(sides[l.block.side()], iron)); // 401: the horse's armour slot
             }
         }
@@ -2056,7 +2154,7 @@ public final class RecruitsBattle {
             measure();
         }
         for (Live l : live.values()) {
-            if (l.block.arm() == Arm.CAVALRY) {
+            if (l.block.arm().mounted()) {
                 reportCavalryContact(l);
             }
         }
@@ -2083,7 +2181,7 @@ public final class RecruitsBattle {
             passOnOrders(l);
             frontRowFights(l);
             raiseShields(l);
-            if (l.block.arm() == Arm.CAVALRY) {
+            if (l.block.arm().mounted()) {
                 armourHorses(l);
                 slowSpentHorses(l);
             }
@@ -2391,7 +2489,7 @@ public final class RecruitsBattle {
                 }
                 equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
                 equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
-                wear(soldier, side, rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY);
+                wear(soldier, side, rafasconquest.gear.Armoury.Kit.ZWEIHANDLER);
                 if (leader) {
                     equip(soldier, EquipmentSlot.HEAD, side.banner.copy()); // the captain keeps the banner
                 }
@@ -2458,7 +2556,7 @@ public final class RecruitsBattle {
             }
             case SHIELDMAN -> kit.add(bannerShield(side));
             case HEAVY_INFANTRY -> {
-                rafasconquest.gear.Armoury.Outfit knight = rafasconquest.gear.Armoury.outfit(rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY,
+                rafasconquest.gear.Armoury.Outfit knight = rafasconquest.gear.Armoury.outfit(rafasconquest.gear.Armoury.Kit.ZWEIHANDLER,
                         rafasconquest.gear.Armoury.style(ConquestRuntime.map(), side.faction.id()), side.uniform, side.banner);
                 if (!knight.isEmpty()) {
                     // With Epic Knights: a sallet, knightly harness and an iron zweihänder.
@@ -2632,7 +2730,7 @@ public final class RecruitsBattle {
             }
         }
         if (rider != null) {
-            boolean cavalry = victimRides || of != null && of.block.arm() == Arm.CAVALRY;
+            boolean cavalry = victimRides || of != null && of.block.arm().mounted();
             if (galloping(attacker)) {
                 amount *= (float) (1 + FieldRules.CHARGE_BONUS * (player ? rider.momentum : rider.unitMomentum));
             }
@@ -2658,7 +2756,7 @@ public final class RecruitsBattle {
                 && inFront(victim, attacker)) {
             amount *= (float) FieldRules.BRACED_TAKES;
             Live by = byEntity.get(attacker.getId());
-            if (by != null && by.block.arm() == Arm.CAVALRY) {
+            if (by != null && by.block.arm().mounted()) {
                 field.breakCharge(by.block);
             }
             if (rider != null) {
@@ -4132,8 +4230,8 @@ public final class RecruitsBattle {
         for (int side = 0; side < 2; side++) {
             for (FieldBlock b : field.army(side).blocks()) {
                 FieldBlock foe = b.contactFoe();
-                if (b.arm() == Arm.CAVALRY && b.charged() && !b.afloat() && b.momentum() > 0 && foe != null
-                        && foe.arm() != Arm.CAVALRY && foe.alive() > 0) {
+                if (b.arm().mounted() && b.charged() && !b.afloat() && b.momentum() > 0 && foe != null
+                        && !foe.arm().mounted() && foe.alive() > 0) {
                     cavalry.add(b.id());
                     struck.add(foe.id());
                 }
@@ -4188,15 +4286,20 @@ public final class RecruitsBattle {
         if (by == null || of == null || by.block.side() == of.block.side()) {
             return amount;
         }
-        boolean byCavalry = by.block.arm() == Arm.CAVALRY;
+        boolean byCavalry = by.block.arm().mounted();
         if (byCavalry && by.block.charged() && galloping(attacker)) {
             amount *= 1 + FieldRules.CHARGE_BONUS * by.block.momentum();
+            boolean wallHolds = of.block.braced() && FieldRules.side(of.block.facingX(), of.block.facingZ(),
+                    attacker.getX() - victim.getX(), attacker.getZ() - victim.getZ()) == FieldRules.Side.FRONT;
+            if (!of.block.arm().mounted() && victim == rider && !wallHolds && by.block.momentum() > 0) {
+                battle.throwBy(victim, attacker.getVehicle());
+            }
         }
         if (byCavalry && of.block.braced() && FieldRules.side(of.block.facingX(), of.block.facingZ(),
                 attacker.getX() - victim.getX(), attacker.getZ() - victim.getZ()) == FieldRules.Side.FRONT) {
             amount *= FieldRules.BRACED_TAKES;
         }
-        if (by.block.braced() && of.block.arm() == Arm.CAVALRY && FieldRules.side(by.block.facingX(), by.block.facingZ(),
+        if (by.block.braced() && of.block.arm().mounted() && FieldRules.side(by.block.facingX(), by.block.facingZ(),
                 victim.getX() - attacker.getX(), victim.getZ() - attacker.getZ()) == FieldRules.Side.FRONT) {
             amount *= FieldRules.BRACED_DEALS;
         }
@@ -4204,6 +4307,38 @@ public final class RecruitsBattle {
             amount *= FieldRules.RESOLVE_TAKES;
         }
         return amount;
+    }
+
+    /** Foot soldiers struck this tick by a galloping charge, by entity id: how they fly ({@link #thrown}). */
+    private final Map<Integer, Vec3> throwing = new HashMap<>();
+    private long throwingTick;
+
+    /** A galloping horse struck a foot soldier: it flies up and on, the way the horse was going. */
+    private void throwBy(LivingEntity victim, Entity horse) {
+        if (throwingTick != level.getGameTime()) {
+            throwing.clear();
+            throwingTick = level.getGameTime();
+        }
+        double dx = horse.getX() - horse.xo;
+        double dz = horse.getZ() - horse.zo;
+        double length = Math.hypot(dx, dz);
+        net.minecraft.util.RandomSource random = level.getRandom();
+        double on = 0.9 + random.nextDouble() * 0.6; // about 4 to 10 blocks on
+        double up = 0.7 + random.nextDouble() * 0.4; // about 3 to 7 blocks up
+        throwing.put(victim.getId(), new Vec3(dx / length * on, up, dz / length * on));
+    }
+
+    /**
+     * How a soldier struck this tick by a galloping charge flies, in place of the game's knockback (which would keep
+     * it on the ground); null if it wasn't.
+     */
+    @Nullable
+    public static Vec3 thrown(LivingEntity victim) {
+        RecruitsBattle battle = current;
+        if (battle == null || battle.throwingTick != battle.level.getGameTime()) {
+            return null;
+        }
+        return battle.throwing.remove(victim.getId());
     }
 
     /** Tells everyone when a general charges, or the lines stall. */
@@ -4802,7 +4937,7 @@ public final class RecruitsBattle {
         for (FieldBlock b : enemy.blocks()) {
             if (fights(b)) {
                 all += b.alive();
-                cavalry += b.arm() == Arm.CAVALRY ? b.alive() : 0;
+                cavalry += b.arm().mounted() ? b.alive() : 0;
                 archers += b.arm() == Arm.ARCHERS ? b.alive() : 0;
             }
         }
@@ -4831,7 +4966,7 @@ public final class RecruitsBattle {
     private static String thinWing(FieldArmy enemy) {
         int[] wing = new int[3];
         for (FieldBlock b : enemy.blocks()) {
-            if (fights(b) && b.arm() != Arm.CAVALRY && b.arm() != Arm.ARCHERS) {
+            if (fights(b) && !b.arm().mounted() && b.arm() != Arm.ARCHERS) {
                 wing[b.wing()] += b.alive();
             }
         }
@@ -5459,7 +5594,7 @@ public final class RecruitsBattle {
             Point centre = centre(soldiers);
             Point was = lastCentre.put(l.block, centre);
             if (was != null && !l.block.charged() && centre.distanceTo(l.block.line()) >= 8) {
-                calibration.addSpeed(l.block.arm() == Arm.CAVALRY, centre.distanceTo(was));
+                calibration.addSpeed(l.block.arm().mounted(), centre.distanceTo(was));
             }
         }
     }
@@ -5476,8 +5611,8 @@ public final class RecruitsBattle {
 
     private static Calibration.Striker melee(Arm arm) {
         return switch (arm) {
-            case SWORDSMEN, SHIELDWALL -> Calibration.Striker.INFANTRY;
-            case CAVALRY -> Calibration.Striker.CAVALRY;
+            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> Calibration.Striker.INFANTRY;
+            case CAVALRY, HEAVY_CAVALRY -> Calibration.Striker.CAVALRY;
             case ARCHERS -> Calibration.Striker.ARCHER_MELEE;
         };
     }
@@ -5604,6 +5739,55 @@ public final class RecruitsBattle {
         }
     }
 
+    /** Whether the ground a block would stand on is loaded; if not, holds it so it loads in the background. */
+    private boolean groundReady(Point at) {
+        int cx = Mth.floor(at.x()) >> 4;
+        int cz = Mth.floor(at.z()) >> 4;
+        boolean ready = true;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                hold(ChunkPos.asLong(cx + dx, cz + dz));
+                ready &= level.getChunkSource().getChunkNow(cx + dx, cz + dz) != null;
+            }
+        }
+        return ready;
+    }
+
+    /** Holds the ground under each point, as {@link #loadGround} does, without waiting on the server thread. */
+    private CompletableFuture<Void> loadGroundAsync(List<Point> points) {
+        List<CompletableFuture<?>> loading = new ArrayList<>();
+        for (Point at : points) {
+            int cx = Mth.floor(at.x()) >> 4;
+            int cz = Mth.floor(at.z()) >> 4;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    hold(ChunkPos.asLong(cx + dx, cz + dz));
+                    loading.add(level.getChunkSource().getChunkFuture(cx + dx, cz + dz, ChunkStatus.FULL, true));
+                }
+            }
+        }
+        return CompletableFuture.allOf(loading.toArray(CompletableFuture[]::new));
+    }
+
+    /** Where {@link #buildCamps} and {@link #hallFloor} will load ground: every wing's camp, and a besieged hall. */
+    private List<Point> campGround() {
+        List<Point> ground = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            FieldArmy army = field.army(side);
+            int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
+            for (int wing : wings) {
+                Point at = campAt(army, wing);
+                if (at != null) {
+                    ground.add(at);
+                }
+            }
+        }
+        if (survey != null) {
+            ground.add(survey.plan().hall());
+        }
+        return ground;
+    }
+
     private void releaseChunks() {
         for (long chunk : heldChunks) {
             ChunkPos pos = new ChunkPos(chunk);
@@ -5706,7 +5890,7 @@ public final class RecruitsBattle {
         if (block.afloat()) {
             return new double[]{block.facingX(), block.facingZ()};
         }
-        if (block.arm() == Arm.CAVALRY && was != null && was.distanceTo(from) > RIDING) {
+        if (block.arm().mounted() && was != null && was.distanceTo(from) > RIDING) {
             to = from;
             from = was;
         } else if (block.contactFoe() != null) {

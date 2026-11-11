@@ -79,6 +79,7 @@ public final class ClientEvents {
         DistantHorizonsLink.leftWorld();
         ArrowVolleys.clear();
         ThrownFigures.clear();
+        FigureMotion.clear();
     }
 
     /**

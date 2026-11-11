@@ -113,12 +113,109 @@ public final class BattlePlan {
      */
     public static final int STALL_SECONDS = 30;
 
+    /**
+     * A block's kind of soldier, with how it fights against the plain rates: how hard it {@code hits}, how much of the
+     * harm done it it {@code takes}, how fast it goes ({@code pace}), and how much loss it stands before it routs
+     * ({@code nerve}, times {@link FieldRules#ROUT_LOSS}).
+     */
     public enum Arm {
-        SWORDSMEN, SHIELDWALL, ARCHERS, CAVALRY;
+        /** Spearmen in leather or gambeson: many, cheap, soft, quick to break. */
+        LEVY(0.7, 1.4, 1, 0.7),
+        /** Chainmail, shields (and spears): the shield wall, bracing against horse and holding the line. */
+        HEAVY_INFANTRY(1.3, 0.7, 0.9, 1.3),
+        /** Chainmail and swords, no shields: quick, for the flanks. */
+        SKIRMISHERS(1.1, 1, 1.15, 1),
+        /** Knights with two-handed swords (Epic Knights only; else skirmishers, {@link #zweihandlers}). */
+        ZWEIHANDLERS(1.5, 0.85, 0.85, 1.2),
+        ARCHERS(1, 1, 1, 1),
+        CAVALRY(1, 1, 1, 1),
+        /** Diamond or frogmouth plate, lances: hits harder and takes less, a little slower. */
+        HEAVY_CAVALRY(1.3, 0.7, 0.9, 1.3);
 
-        public boolean infantry() {
-            return this == SWORDSMEN || this == SHIELDWALL;
+        private final double hits;
+        private final double takes;
+        private final double pace;
+        private final double nerve;
+
+        Arm(double hits, double takes, double pace, double nerve) {
+            this.hits = hits;
+            this.takes = takes;
+            this.pace = pace;
+            this.nerve = nerve;
         }
+
+        public double hits() {
+            return hits;
+        }
+
+        public double takes() {
+            return takes;
+        }
+
+        public double pace() {
+            return pace;
+        }
+
+        public double nerve() {
+            return nerve;
+        }
+
+        /** Foot that fights hand to hand, in files. */
+        public boolean infantry() {
+            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS;
+        }
+
+        public boolean mounted() {
+            return this == CAVALRY || this == HEAVY_CAVALRY;
+        }
+
+        /** Bears shields: takes less from the front ({@link FieldRules#SHIELD_MELEE}, {@link FieldRules#SHIELD_ARROWS}). */
+        public boolean shielded() {
+            return this == HEAVY_INFANTRY;
+        }
+    }
+
+    /** Whether Epic Knights is there to arm zweihandlers; without it their share is skirmishers. Set at startup. */
+    public static boolean zweihandlers = true; // shortcut: one global for the game, since every battle shares the mods
+
+    /** Of every army, by headcount: levy, heavy infantry, skirmishers, zweihandlers (the infantry), archers, cavalry, heavy cavalry. */
+    static final double LEVY_SHARE = 0.30;
+    static final double HEAVY_SHARE = 0.20;
+    static final double SKIRMISHER_SHARE = 0.10;
+    static final double ZWEIHANDLER_SHARE = 0.05;
+    static final double ARCHER_SHARE = 0.20;
+    static final double CAVALRY_SHARE = 0.10;
+    static final double HEAVY_CAVALRY_SHARE = 0.05;
+    private static final double[] FOOT_SHARES = {LEVY_SHARE, HEAVY_SHARE, SKIRMISHER_SHARE, ZWEIHANDLER_SHARE};
+    private static final double[] HORSE_SHARES = {CAVALRY_SHARE, HEAVY_CAVALRY_SHARE};
+
+    /**
+     * Deals {@code totals[k]} blocks of each kind out to the wings, each wing taking {@code capacity[w]} in all: each
+     * block to the wing furthest short of its fair part of that kind. Returns [wing][kind].
+     */
+    static int[][] deal(int[] totals, int[] capacity) {
+        int all = 0;
+        for (int c : capacity) {
+            all += c;
+        }
+        int[][] out = new int[capacity.length][totals.length];
+        int[] left = capacity.clone();
+        for (int k = 0; k < totals.length; k++) {
+            for (int i = 0; i < totals[k]; i++) {
+                int best = -1;
+                double shortest = -Double.MAX_VALUE;
+                for (int w = 0; w < capacity.length; w++) {
+                    double shortBy = (double) totals[k] * capacity[w] / Math.max(1, all) - out[w][k];
+                    if (left[w] > 0 && shortBy > shortest) {
+                        best = w;
+                        shortest = shortBy;
+                    }
+                }
+                out[best][k]++;
+                left[best]--;
+            }
+        }
+        return out;
     }
 
     /**
@@ -138,8 +235,9 @@ public final class BattlePlan {
     public static final int BAND_CAVALRY = 3;
 
     /**
-     * Gathers an army's blocks into platoons: in each wing, its front, archers, reserves and cavalry apart, whole files
-     * (blocks standing one behind another) side by side from its left, each platoon at most {@link #PLATOON_BLOCKS}
+     * Gathers an army's blocks into platoons, each of one arm only: in each wing, its front, archers, reserves and
+     * cavalry apart, and within those each arm apart, whole files
+     * (blocks of the arm standing one behind another) side by side from its left, each platoon at most {@link #PLATOON_BLOCKS}
      * blocks and {@link #PLATOON_SOLDIERS} soldiers. Returns each slot's platoon, numbered from 0.
      */
     public static int[] platoons(List<Slot> slots) {
@@ -149,6 +247,7 @@ public final class BattlePlan {
             order.add(i);
         }
         order.sort(java.util.Comparator.comparingInt((Integer i) -> slots.get(i).wing()).thenComparingInt(i -> slots.get(i).band())
+                .thenComparingInt(i -> slots.get(i).arm().ordinal())
                 .thenComparingDouble(i -> slots.get(i).right()).thenComparingDouble(i -> slots.get(i).back()));
         int[] platoon = new int[slots.size()];
         int next = -1;
@@ -160,7 +259,7 @@ public final class BattlePlan {
             while (end < order.size() && sameFile(s, slots.get(order.get(end)))) {
                 end++;
             }
-            if (last == null || last.wing() != s.wing() || last.band() != s.band() || size + (end - k) > most) {
+            if (last == null || last.wing() != s.wing() || last.band() != s.band() || last.arm() != s.arm() || size + (end - k) > most) {
                 next++;
                 size = 0;
             }
@@ -178,7 +277,7 @@ public final class BattlePlan {
     }
 
     private static boolean sameFile(Slot a, Slot b) {
-        return a.wing() == b.wing() && a.band() == b.band() && Math.abs(a.right() - b.right()) < 0.5;
+        return a.wing() == b.wing() && a.band() == b.band() && a.arm() == b.arm() && Math.abs(a.right() - b.right()) < 0.5;
     }
 
     /** The wings, as {@link Slot#wing()} numbers them. */
@@ -283,8 +382,16 @@ public final class BattlePlan {
      * every infantry block bears shields and stands {@link #SHIELD_FILES} wide and five deep.
      */
     public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares) {
-        int archers = Math.round(blocks / 5f);
-        int cavalry = Math.round(blocks / 5f);
+        return deployment(blocks, greatShield, wingShares, false);
+    }
+
+    /**
+     * The same, the levies up front ({@code levyFront}: the general wants the front to fail, crushing them and drawing the
+     * enemy on) or behind the heavy infantry, supporting it. A Great Shield's front is all heavy infantry.
+     */
+    public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront) {
+        int archers = Math.round(blocks * (float) ARCHER_SHARE);
+        int cavalry = Math.round(blocks * (float) (CAVALRY_SHARE + HEAVY_CAVALRY_SHARE));
         int infantry = blocks - archers - cavalry;
         while (infantry < 1) {
             if (cavalry > 0) {
@@ -300,6 +407,9 @@ public final class BattlePlan {
         int[] wingInfantry = share(infantry, shares, winged ? 1 : 0);
         int[] wingArchers = share(archers, shares, 0);
         int[] wingCavalry = share(cavalry, shares, 0);
+        // Each kind shared out army-wide first, so the army holds its exact shares, then dealt out to the wings.
+        int[][] wingFoot = deal(share(infantry, FOOT_SHARES, 0), wingInfantry);
+        int[][] wingHorse = deal(share(cavalry, HORSE_SHARES, 0), wingCavalry);
         int stackFiles = stackFiles(blocks, greatShield);
         int depth = stackDepth(blocks, greatShield);
         int files = greatShield ? SHIELD_FILES : FILE_WIDTH;
@@ -314,8 +424,8 @@ public final class BattlePlan {
             List<Slot> slots = new ArrayList<>();
             if (wingInfantry[wing] + wingArchers[wing] + wingCavalry[wing] > 0) {
                 int cap = Math.max(1, (int) Math.round(frontCap * (winged ? shares[wing] : 1)));
-                widths[wing] = layoutWing(slots, wing, firstFile, wingInfantry[wing], wingArchers[wing], wingCavalry[wing],
-                        greatShield, stackFiles, depth, files, pitch, cap);
+                widths[wing] = layoutWing(slots, wing, firstFile, foot(wingFoot[wing], levyFront), wingArchers[wing],
+                        wingCavalry[wing], wingHorse[wing][1], greatShield, stackFiles, depth, files, pitch, cap);
                 firstFile += (int) slots.stream().filter(s -> s.line() == 0).count();
             }
             wings.add(slots);
@@ -344,8 +454,10 @@ public final class BattlePlan {
      * Lays out one wing (or a small army) around its own middle: front, archers, reserves, cavalry. Its front files
      * are numbered from {@code firstFile}. Returns how wide it stands.
      */
-    private static double layoutWing(List<Slot> slots, int wing, int firstFile, int infantry, int archers, int cavalry,
+    private static double layoutWing(List<Slot> slots, int wing, int firstFile, List<Arm> foot, int archers, int cavalry, int heavyCavalry,
                                      boolean greatShield, int stackFiles, int depth, int files, double pitch, int frontCap) {
+        int infantry = foot.size();
+        int next = 0; // the next of foot to take its place, front rank first
         int archersPerRow = Math.max(1, (archers + ARCHER_ROWS - 1) / ARCHER_ROWS);
         int cover = archers == 0 ? 1 : (int) Math.ceil(archersPerRow * BLOCK_PITCH / pitch);
         int width;
@@ -369,7 +481,8 @@ public final class BattlePlan {
         }
         for (int row = 0; row < frontRows; row++) {
             for (int file = 0; file < width; file++) {
-                slots.add(new Slot(infantryArm(firstFile + file, greatShield), fileRight[file], fileBack(row, stackFiles), row,
+                Arm arm = foot.get(next++);
+                slots.add(new Slot(greatShield ? Arm.HEAVY_INFANTRY : arm, fileRight[file], fileBack(row, stackFiles), row,
                         firstFile + file, files, wing, BAND_FRONT));
             }
         }
@@ -403,7 +516,7 @@ public final class BattlePlan {
             int inLine = Math.min(perLine, reserves - line * perLine);
             double right = across(i % perLine, inLine, pitch);
             int file = firstFile + nearestFile(right, fileRight);
-            slots.add(new Slot(infantryArm(file, greatShield), right, reservesBack + line * (blockDepth + RESERVE_ROW_GAP),
+            slots.add(new Slot(foot.get(next++), right, reservesBack + line * (blockDepth + RESERVE_ROW_GAP),
                     frontRows + line, file, files, wing, BAND_RESERVES));
         }
         double reservesRear = reserveLines == 0 ? Math.max(frontRear, archersRear)
@@ -417,7 +530,7 @@ public final class BattlePlan {
         for (int i = 0; i < cavalry; i++) {
             int row = i / cavalryPerRow;
             int inRow = Math.min(cavalryPerRow, cavalry - row * cavalryPerRow);
-            slots.add(new Slot(Arm.CAVALRY, across(i % cavalryPerRow, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i,
+            slots.add(new Slot(i < cavalry - heavyCavalry ? Arm.CAVALRY : Arm.HEAVY_CAVALRY, across(i % cavalryPerRow, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i,
                     FILE_WIDTH, wing, BAND_CAVALRY));
         }
         widest = Math.max(widest, Math.min(cavalry, cavalryPerRow) * BLOCK_PITCH);
@@ -425,22 +538,27 @@ public final class BattlePlan {
     }
 
     /**
-     * Shares {@code count} between the wings by {@code shares}, in whole blocks (largest remainders first), each
-     * wing with a share getting at least {@code least}.
+     * Shares {@code count} by {@code shares} (between the wings, or the kinds of soldier), in whole blocks (largest
+     * remainders first), each part with a share getting at least {@code least}.
      */
     private static int[] share(int count, double[] shares, int least) {
-        int[] out = new int[3];
-        double[] rest = new double[3];
+        int n = shares.length;
+        double total = 0;
+        for (double s : shares) {
+            total += s;
+        }
+        int[] out = new int[n];
+        double[] rest = new double[n];
         int given = 0;
-        for (int w = 0; w < 3; w++) {
-            double exact = count * shares[w];
+        for (int w = 0; w < n; w++) {
+            double exact = total <= 0 ? 0 : count * shares[w] / total;
             out[w] = (int) Math.floor(exact);
             rest[w] = exact - out[w];
             given += out[w];
         }
         while (given < count) {
             int best = 0;
-            for (int w = 1; w < 3; w++) {
+            for (int w = 1; w < n; w++) {
                 if (rest[w] > rest[best]) {
                     best = w;
                 }
@@ -449,9 +567,12 @@ public final class BattlePlan {
             rest[best] = -1;
             given++;
         }
-        for (int w = 0; w < 3; w++) {
+        for (int w = 0; w < n; w++) {
             while (shares[w] > 0 && out[w] < least) {
-                int from = out[0] >= out[1] && out[0] >= out[2] ? 0 : out[1] >= out[2] ? 1 : 2;
+                int from = 0;
+                for (int v = 1; v < n; v++) {
+                    from = out[v] > out[from] ? v : from;
+                }
                 out[from]--;
                 out[w]++;
             }
@@ -476,8 +597,25 @@ public final class BattlePlan {
         return MAX_WIDE_FRONT * Math.sqrt(Math.max(1, soldiers / 10_000.0));
     }
 
-    private static Arm infantryArm(int file, boolean greatShield) {
-        return greatShield || file % 3 == 1 ? Arm.SHIELDWALL : Arm.SWORDSMEN;
+    /**
+     * A wing's infantry, {@code n} blocks of each kind in {@link #FOOT_SHARES}' order, in the order they take their
+     * places from the front rank back: the levies first if they go up front, else the heavy infantry, the levies
+     * behind it; then the skirmishers and the zweihandlers (skirmishers too without Epic Knights).
+     */
+    static List<Arm> foot(int[] n, boolean levyFront) {
+        int infantry = n[0] + n[1] + n[2] + n[3];
+        Arm[] order = levyFront
+                ? new Arm[]{Arm.LEVY, Arm.HEAVY_INFANTRY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS}
+                : new Arm[]{Arm.HEAVY_INFANTRY, Arm.LEVY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS};
+        int[] count = levyFront ? new int[]{n[0], n[1], n[2], n[3]} : new int[]{n[1], n[0], n[2], n[3]};
+        List<Arm> foot = new ArrayList<>(infantry);
+        for (int k = 0; k < order.length; k++) {
+            Arm arm = order[k] == Arm.ZWEIHANDLERS && !zweihandlers ? Arm.SKIRMISHERS : order[k];
+            for (int i = 0; i < count[k]; i++) {
+                foot.add(arm);
+            }
+        }
+        return foot;
     }
 
     /** The front file standing nearest a point {@code right} of the wing's middle. */
@@ -596,9 +734,9 @@ public final class BattlePlan {
             return Order.HOLD;
         }
         return switch (arm) {
-            case SWORDSMEN, SHIELDWALL -> nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
+            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
             case ARCHERS -> nearestEnemy <= ARCHER_RANGE ? Order.HOLD : Order.MARCH;
-            case CAVALRY -> {
+            case CAVALRY, HEAVY_CAVALRY -> {
                 if (nearestEnemy <= CAVALRY_THREAT) {
                     yield Order.CHARGE;
                 }

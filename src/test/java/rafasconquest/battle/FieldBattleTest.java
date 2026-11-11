@@ -406,15 +406,15 @@ class FieldBattleTest {
         assertEquals(Side.FRONT, FieldRules.side(1, 0, 10, 1));
         assertEquals(Side.FLANK, FieldRules.side(1, 0, 0, 10));
         assertEquals(Side.REAR, FieldRules.side(1, 0, -10, 0));
-        assertEquals(1, FieldRules.meleeFactor(Side.REAR, Arm.SWORDSMEN), "as in Recruits, a blow does the same from any side");
-        assertTrue(FieldRules.meleeFactor(Side.FLANK, Arm.SHIELDWALL) > FieldRules.meleeFactor(Side.FRONT, Arm.SHIELDWALL));
-        assertTrue(FieldRules.meleeFactor(Side.FRONT, Arm.SHIELDWALL) < FieldRules.meleeFactor(Side.FRONT, Arm.SWORDSMEN));
-        assertTrue(FieldRules.arrowFactor(Side.FRONT, Arm.SHIELDWALL) < FieldRules.arrowFactor(Side.FLANK, Arm.SHIELDWALL));
+        assertEquals(1, FieldRules.meleeFactor(Side.REAR, Arm.SKIRMISHERS), "as in Recruits, a blow does the same from any side");
+        assertTrue(FieldRules.meleeFactor(Side.FLANK, Arm.HEAVY_INFANTRY) > FieldRules.meleeFactor(Side.FRONT, Arm.HEAVY_INFANTRY));
+        assertTrue(FieldRules.meleeFactor(Side.FRONT, Arm.HEAVY_INFANTRY) < FieldRules.meleeFactor(Side.FRONT, Arm.LEVY));
+        assertTrue(FieldRules.arrowFactor(Side.FRONT, Arm.HEAVY_INFANTRY) < FieldRules.arrowFactor(Side.FLANK, Arm.HEAVY_INFANTRY));
     }
 
     @Test
     void damageFallsInWholeHitsOnLivingSoldiers() {
-        FieldBlock block = new FieldBlock(1, 0, Arm.SWORDSMEN, 20, FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false,
+        FieldBlock block = new FieldBlock(1, 0, Arm.LEVY, 20, FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false,
                 new Point(0, 0), 1, 0, Duty.FRONT);
         Random random = new Random(1);
         assertEquals(0, block.takeDamage(FieldRules.HIT / 2, random), "less than a hit is carried over");
@@ -677,7 +677,7 @@ class FieldBattleTest {
         assertEquals(3, fleet.size(), "the port's own three ships");
         assertEquals(army + 3, d.blocks().size(), "on top of the army, none taken from it");
         assertEquals(started + 3 * BattlePlan.SOLDIERS_PER_FORMATION, d.started());
-        assertTrue(fleet.stream().noneMatch(b -> b.arm() == Arm.CAVALRY), "no horsemen at sea");
+        assertTrue(fleet.stream().noneMatch(b -> b.arm().mounted()), "no horsemen at sea");
         for (FieldBlock b : fleet) {
             double past = (b.pos().x() - d.origin().x()) * d.facingX() + (b.pos().z() - d.origin().z()) * d.facingZ();
             assertTrue(past > 0, "a harbour ship waiting behind the walls");

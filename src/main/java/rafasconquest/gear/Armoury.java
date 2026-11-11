@@ -29,7 +29,9 @@ public final class Armoury {
 
     /** Who a kit is for. */
     public enum Kit {
-        HEAVY_INFANTRY, CAVALRY, CAPTAIN, GENERAL, GUARD, ARCHER_GUARD,
+        /** Battle blocks by kind: {@link rafasconquest.battle.BattlePlan.Arm}. */
+        LEVY, HEAVY_INFANTRY, SKIRMISHER, ZWEIHANDLER, ARCHER, CAVALRY, HEAVY_CAVALRY,
+        CAPTAIN, GENERAL, GUARD, ARCHER_GUARD,
         RULER, GREAT_NOBLE, NOBLE, SWORD_SAINT, SWORD_KING, SWORD_GOD
     }
 
@@ -308,7 +310,7 @@ public final class Armoury {
             slots = switch (Math.max(1, Math.min(4, tier))) {
                 case 1 -> rankKit(1, land, colour(nation), banner).slots();
                 case 2 -> rankKit(3, land, colour(nation), banner).slots();
-                case 3 -> outfit(Kit.HEAVY_INFANTRY, land, colour(nation), banner).slots();
+                case 3 -> outfit(Kit.ZWEIHANDLER, land, colour(nation), banner).slots();
                 default -> rankKit(7, land, colour(nation), banner).slots();
             };
         }
@@ -404,6 +406,12 @@ public final class Armoury {
         }
     }
 
+    /** Epic Knights' steel halberd, which half the heavy cavalry carries in place of a lance; null without it. */
+    @Nullable
+    public static ItemStack halberd() {
+        return available() ? stack("steel_concavehalberd", -1) : null;
+    }
+
     /** Whether Epic Knights is installed. */
     public static boolean available() {
         return ModList.get() != null && ModList.get().isLoaded(MOD);
@@ -419,7 +427,35 @@ public final class Armoury {
         }
         Map<EquipmentSlot, ItemStack> slots = new EnumMap<>(EquipmentSlot.class);
         switch (kit) {
+            case LEVY -> {
+                // A gambeson and a pike; the head keeps its cap in the side's colour.
+                wear(slots, null, body("gambeson_chestplate", null, "gambeson_boots"), colour, banner);
+                hold(slots, "iron_pike", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
             case HEAVY_INFANTRY -> {
+                // Chainmail under a kettle hat, a pike and the land's shield.
+                wear(slots, "kettlehat", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"), colour, banner);
+                hold(slots, "iron_pike", s.shield(), banner);
+            }
+            case SKIRMISHER -> {
+                // The heavy infantry's harness, a sword and no shield.
+                wear(slots, "kettlehat", body("chainmail_chestplate", "chainmail_leggings", "chainmail_boots"), colour, banner);
+                hold(slots, "iron_shortsword", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
+            case ARCHER -> {
+                wear(slots, null, body("gambeson_chestplate", null, "gambeson_boots"), colour, banner);
+                slots.remove(EquipmentSlot.MAINHAND); // keeps its bow
+            }
+            case HEAVY_CAVALRY -> {
+                // The frog-mouthed jousting harness and a lance (the battle gives half of them steel halberds).
+                wear(slots, "stechhelm", body("jousting_chestplate", "jousting_leggings", "jousting_boots"), colour, banner);
+                decorate(slots, EquipmentSlot.HEAD, s.lineCrest(), colour);
+                hold(slots, "iron_chivalrylance", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
+            case ZWEIHANDLER -> {
                 // Knights on foot, in every land: a sallet and knightly harness, an iron zweihänder in both hands.
                 wear(slots, "sallet", body("knight_chestplate", "knight_leggings", "knight_boots"), colour, banner);
                 decorate(slots, EquipmentSlot.HEAD, s.lineCrest(), colour);
@@ -435,9 +471,11 @@ public final class Armoury {
                 slots.remove(EquipmentSlot.MAINHAND); // keeps its bow
             }
             case CAVALRY -> {
-                wear(slots, s.cavalryHelmet(), s.cavalryBody(), colour, banner);
+                // Full plate under the land's helmet, and a lance.
+                wear(slots, s.cavalryHelmet(), body("platemail_chestplate", "platemail_leggings", "platemail_boots"), colour, banner);
                 decorate(slots, EquipmentSlot.HEAD, s.lineCrest(), colour);
-                hold(slots, s.cavalryWeapon(), s.shield(), banner);
+                hold(slots, "iron_chivalrylance", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
             }
             case CAPTAIN -> {
                 // Their body armour; their head keeps the banner they lead by.

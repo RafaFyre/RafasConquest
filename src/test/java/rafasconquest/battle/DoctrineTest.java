@@ -85,7 +85,7 @@ class DoctrineTest {
     void aGreatShieldStandsFifteenRanksDeepBehindShields() {
         List<BattlePlan.Slot> slots = BattlePlan.deployment(100, true);
         List<BattlePlan.Slot> infantry = slots.stream().filter(s -> s.arm().infantry()).toList();
-        assertTrue(infantry.stream().allMatch(s -> s.arm() == Arm.SHIELDWALL && s.files() == BattlePlan.SHIELD_FILES));
+        assertTrue(infantry.stream().allMatch(s -> s.files() == BattlePlan.SHIELD_FILES && (s.line() > 0 || s.arm() == Arm.HEAVY_INFANTRY)), "shields across the front");
         int files = (int) infantry.stream().filter(s -> s.line() == 0).count();
         for (int file = 0; file < files; file++) {
             int f = file;
@@ -105,7 +105,7 @@ class DoctrineTest {
         FieldBattle battle = battle(50, SPEAR_BAIT, List.of(), 2);
         FieldArmy army = battle.army(0);
         List<FieldBlock> cavalry = army.blocks().stream()
-                .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
+                .filter(b -> b.arm().mounted() && b.duty() == Duty.SUPPORT).toList();
         assertFalse(cavalry.isEmpty());
         for (FieldBlock c : cavalry) {
             assertTrue(c.pos().x() <= -30 - BattlePlan.SPEAR_BACK + 1, "far behind the front");
@@ -150,7 +150,7 @@ class DoctrineTest {
             FieldBattle battle = battle(25, CHARGE_BAIT, List.of(), seed);
             FieldArmy army = battle.army(0);
             assertTrue(FieldBattle.leadsTheCharge(army.commander()) && FieldBattle.leadsTheCharge(army.guard()));
-            List<FieldBlock> cavalry = army.blocks().stream().filter(b -> b.arm() == Arm.CAVALRY).toList();
+            List<FieldBlock> cavalry = army.blocks().stream().filter(b -> b.arm().mounted()).toList();
             while (!battle.over() && battle.seconds() < BattlePlan.TIME_LIMIT_SECONDS) {
                 double[] before = cavalry.stream().mapToDouble(FieldBlock::momentum).toArray();
                 battle.second();
@@ -235,7 +235,7 @@ class DoctrineTest {
         FieldBattle battle = battle(100, CHARGE_BAIT, List.of(), 1);
         FieldArmy army = battle.army(0);
         List<FieldBlock> cavalry = army.blocks().stream()
-                .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
+                .filter(b -> b.arm().mounted() && b.duty() == Duty.SUPPORT).toList();
         List<FieldBlock> onWings = cavalry.stream().filter(b -> !b.inWedge()).toList();
         long left = onWings.stream().filter(b -> b.wing() == FieldArmy.LEFT).count();
         long right = onWings.stream().filter(b -> b.wing() == FieldArmy.RIGHT).count();
@@ -248,7 +248,7 @@ class DoctrineTest {
     void cavalryThatHasChargedKeepsRidingAlongItsBackline() {
         FieldBattle battle = new FieldBattle(100, 100, new Point(0, 0), 1, 0, 2);
         List<FieldBlock> cavalry = battle.army(0).blocks().stream()
-                .filter(b -> b.arm() == Arm.CAVALRY && b.duty() == Duty.SUPPORT).toList();
+                .filter(b -> b.arm().mounted() && b.duty() == Duty.SUPPORT).toList();
         int riding = 0;
         int waiting = 0;
         while (!battle.over() && battle.seconds() < 400) {

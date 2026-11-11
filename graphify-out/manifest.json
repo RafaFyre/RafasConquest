@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestEvents.java": {
-    "mtime": 1794408330.396041,
-    "seen": 1794408490.302725,
-    "ast_hash": "0b77afce99f499d40aa252c1e14b7011",
+    "mtime": 1794420292.6876082,
+    "seen": 1794420371.0195749,
+    "ast_hash": "816cbda724d2286f16b75bdf2ed08603",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestGameRules.java": {
@@ -36,15 +36,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/RafasConquest.java": {
-    "mtime": 1793877914.5314853,
-    "seen": 1793890446.4238832,
-    "ast_hash": "670ca147290d8f02bf11416029ee461f",
+    "mtime": 1794421767.1186721,
+    "seen": 1794422269.2504768,
+    "ast_hash": "3ce32e28c95aaba1656c6c069965adcd",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattlePlan.java": {
-    "mtime": 1794409845.6255555,
-    "seen": 1794409930.709342,
-    "ast_hash": "0c9348780d8723f910f5250efb079c77",
+    "mtime": 1794422059.1238143,
+    "seen": 1794422269.2504785,
+    "ast_hash": "8de8f77b9a3dae6aa0e203be17016d8a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattleSite.java": {
@@ -84,9 +84,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1794409506.1207392,
-    "seen": 1794409930.7093544,
-    "ast_hash": "a20f91bb09b114e3e5a9a3279cc0cc2f",
+    "mtime": 1794421758.691115,
+    "seen": 1794422269.2504907,
+    "ast_hash": "59a50126cfed59dd696aa3f516dcb2a6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
@@ -96,21 +96,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
-    "mtime": 1793316696.6220877,
-    "seen": 1793865705.798572,
-    "ast_hash": "95270c090924d28895d1abcd358031ec",
-    "semantic_hash": "95270c090924d28895d1abcd358031ec"
+    "mtime": 1794421610.8408048,
+    "seen": 1794422269.2504935,
+    "ast_hash": "6b0c2be12d2fbbe8792c9c7675b66094",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FormationSnapshot.java": {
-    "mtime": 1794409845.8046052,
-    "seen": 1794409930.7093587,
-    "ast_hash": "2c390c9aab5d27636fe75c0faea0b686",
+    "mtime": 1794421684.521976,
+    "seen": 1794422269.250495,
+    "ast_hash": "f3d08e8ce9c8e4393c3f0e0c99642059",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/GroundPlan.java": {
-    "mtime": 1794409408.8380318,
-    "seen": 1794409930.7093601,
-    "ast_hash": "7746685c4e3fb4910448510074656247",
+    "mtime": 1794421623.471027,
+    "seen": 1794422269.2504966,
+    "ast_hash": "25cf4aa43fcb2fa24a4fb41dd5bc857d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/WarPlan.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794409845.6829126,
-    "seen": 1794409930.7093763,
-    "ast_hash": "af1bdb5606e9bebdb3bf48631203f107",
+    "mtime": 1794421897.4076633,
+    "seen": 1794422269.2505126,
+    "ast_hash": "0e7ec420b1253f9466899692a3854f10",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -222,9 +222,9 @@
     "semantic_hash": "b4b367d198f74f77cefe518e92cfa224"
   },
   "src/main/java/rafasconquest/client/BattleSounds.java": {
-    "mtime": 1793877824.975526,
-    "seen": 1793890446.4239302,
-    "ast_hash": "78d43edb57a15e6138faae5344add7e8",
+    "mtime": 1794421684.566999,
+    "seen": 1794422269.2505453,
+    "ast_hash": "ca5984cebdb6615f7255e4a5ce95b1cc",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleSpotRing.java": {
@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientEvents.java": {
-    "mtime": 1794409831.2717557,
-    "seen": 1794409930.7094176,
-    "ast_hash": "a23a4f7da3ebf36c13f5ce81343cf455",
+    "mtime": 1794420232.1253107,
+    "seen": 1794420371.0196574,
+    "ast_hash": "62278517d072b8058a6259c55484d9f4",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientModEvents.java": {
@@ -300,9 +300,9 @@
     "semantic_hash": "e3747e3110bb2ed49cf64f0f8eb7aa3a"
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794409831.1525476,
-    "seen": 1794409930.709432,
-    "ast_hash": "00dc6983e601231efb002efda0f39fbc",
+    "mtime": 1794421689.080385,
+    "seen": 1794422269.2505682,
+    "ast_hash": "d50649cde33ed1fb5d3aa91a8e9133ce",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -690,9 +690,9 @@
     "semantic_hash": "3d30902a7883bd168e6259ed3ecaa94e"
   },
   "src/main/java/rafasconquest/gear/Armoury.java": {
-    "mtime": 1793890148.3820155,
-    "seen": 1793890446.4240415,
-    "ast_hash": "510e1ed4009d8c86ac0ab92f1f294c80",
+    "mtime": 1794421896.4335713,
+    "seen": 1794422269.2507036,
+    "ast_hash": "a5a9fdf0e952e3cc450f00a406ae4277",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/gear/RankKits.java": {
@@ -1650,9 +1650,9 @@
     "semantic_hash": "92f3b5d9ec696e036cd4585d9125c1ca"
   },
   "src/test/java/rafasconquest/battle/BattlePlanTest.java": {
-    "mtime": 1794409424.031722,
-    "seen": 1794409930.7098968,
-    "ast_hash": "b55af1729790fc31dbe311f2054569d4",
+    "mtime": 1794422063.8608987,
+    "seen": 1794422269.251047,
+    "ast_hash": "c10d1b086fcbd035003101d0f3797697",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/BattleSiteTest.java": {
@@ -1668,21 +1668,21 @@
     "semantic_hash": "524f9a19567805ee97ad8164f32ecf6e"
   },
   "src/test/java/rafasconquest/battle/DoctrineTest.java": {
-    "mtime": 1793294751.9734914,
-    "seen": 1793865705.7988498,
-    "ast_hash": "5efc91bb4d69d341a6e6f9ea8d8c8df1",
-    "semantic_hash": "5efc91bb4d69d341a6e6f9ea8d8c8df1"
+    "mtime": 1794421949.5020127,
+    "seen": 1794422269.251051,
+    "ast_hash": "74b7429f1bd2cbc8aa048ac0fd751110",
+    "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1794376462.889262,
-    "seen": 1794376651.2340522,
-    "ast_hash": "18e51fac494781ad7ff45813cc184fef",
+    "mtime": 1794421949.5444043,
+    "seen": 1794422269.2510524,
+    "ast_hash": "a13562bebd39661f05af4698613c218b",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
-    "mtime": 1794409868.7644503,
-    "seen": 1794409930.709904,
-    "ast_hash": "43f3f8f163574fed20b5b60747b74904",
+    "mtime": 1794421684.6806529,
+    "seen": 1794422269.2510536,
+    "ast_hash": "3cf685eb77502959ba7bed4cf389e742",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/GroundPlanTest.java": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleScreen.java": {
-    "mtime": 1794409555.1547394,
-    "seen": 1794409930.7094076,
-    "ast_hash": "4ea6c22537a087e9c9af1a1a87a94b6f",
+    "mtime": 1794421657.781183,
+    "seen": 1794422269.2505438,
+    "ast_hash": "952c9f03f7d2cca446215bc9b2f45224",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/StrategyBoardBlock.java": {
@@ -2442,9 +2442,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SoldierFigure.java": {
-    "mtime": 1794409700.1137402,
-    "seen": 1794409930.7094607,
-    "ast_hash": "279ede7fc7b02ba108a7cfc54aee0fe2",
+    "mtime": 1794421689.0893617,
+    "seen": 1794422269.2505991,
+    "ast_hash": "7d9b74e26ce3f51091d36ab490dc048d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantOcclusion.java": {
@@ -2868,9 +2868,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/Siege.java": {
-    "mtime": 1794146161.0581293,
-    "seen": 1794146253.155774,
-    "ast_hash": "ee0e49545d602e2e970555be384d6b0e",
+    "mtime": 1794421657.84073,
+    "seen": 1794422269.2505002,
+    "ast_hash": "2e26833a9124c005ea318d45c5d7de60",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SiegeSurvey.java": {
@@ -2886,9 +2886,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/SiegeTest.java": {
-    "mtime": 1794146213.3067067,
-    "seen": 1794146253.1563103,
-    "ast_hash": "fcdbb08bd100f5265a27a63e21cc553b",
+    "mtime": 1794421933.9515002,
+    "seen": 1794422269.2510574,
+    "ast_hash": "2f50b36a3e7d267df8df98e3e84d5536",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SiegeFrames.java": {
@@ -2970,9 +2970,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ThrownFigures.java": {
-    "mtime": 1794409822.3342085,
-    "seen": 1794409930.7094638,
-    "ast_hash": "d84c2b12152b773b817e35f5e367fbb0",
+    "mtime": 1794420240.827559,
+    "seen": 1794420371.0197086,
+    "ast_hash": "35bebfdf907ca91e1d1c96594a566d1a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Age.java": {
@@ -3009,6 +3009,18 @@
     "mtime": 1794417761.44418,
     "seen": 1794419181.8820133,
     "ast_hash": "3d5b10c721dafd286b328c2db7373eec",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/FigureMotion.java": {
+    "mtime": 1794421684.6134913,
+    "seen": 1794422269.250579,
+    "ast_hash": "fd48ddec3ca71f43a7d3195797f98c4b",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/client/FigureMotionTest.java": {
+    "mtime": 1794421684.6886005,
+    "seen": 1794422269.2510636,
+    "ast_hash": "2d1f77235670d41e7dbef1e274d46076",
     "semantic_hash": ""
   }
 }

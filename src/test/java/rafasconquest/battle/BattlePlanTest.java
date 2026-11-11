@@ -7,6 +7,7 @@ import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.BattlePlan.Slot;
 
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,9 +31,10 @@ class BattlePlanTest {
     }
 
     @Test
-    void platoonsAreTenBlocksAtMostOfOneWingAndBandWithWholeFiles() {
-        for (int blocks : new int[]{5, 50, 100, 250, 500}) {
-            List<Slot> slots = BattlePlan.deployment(blocks);
+    void platoonsAreTenBlocksAtMostOfOneWingBandAndArmWithWholeFiles() {
+        for (int n = 0; n < 10; n++) {
+            int blocks = new int[]{5, 50, 100, 250, 500}[n % 5];
+            List<Slot> slots = BattlePlan.deployment(blocks, n >= 5); // great shields put shield walls in the files
             int[] platoon = BattlePlan.platoons(slots);
             java.util.Map<Integer, List<Slot>> by = new java.util.HashMap<>();
             for (int i = 0; i < slots.size(); i++) {
@@ -42,13 +44,14 @@ class BattlePlanTest {
                 assertTrue(p.size() <= BattlePlan.PLATOON_BLOCKS, blocks + " blocks: a platoon of " + p.size());
                 assertTrue(p.size() * BattlePlan.SOLDIERS_PER_FORMATION <= BattlePlan.PLATOON_SOLDIERS);
                 assertEquals(1, p.stream().map(s -> s.wing() * 10 + s.band()).distinct().count(), blocks + " blocks: a platoon spans wings or bands");
+                assertEquals(1, p.stream().map(Slot::arm).distinct().count(), blocks + " blocks: a platoon of mixed arms");
             }
-            // Each front file (one behind another) is in one platoon.
+            // Each front file's blocks of one arm (one behind another) are in one platoon.
             for (int i = 0; i < slots.size(); i++) {
                 for (int j = 0; j < slots.size(); j++) {
                     Slot a = slots.get(i);
                     Slot b = slots.get(j);
-                    if (a.band() == BattlePlan.BAND_FRONT && b.band() == BattlePlan.BAND_FRONT && a.file() == b.file()) {
+                    if (a.band() == BattlePlan.BAND_FRONT && b.band() == BattlePlan.BAND_FRONT && a.file() == b.file() && a.arm() == b.arm()) {
                         assertEquals(platoon[i], platoon[j], blocks + " blocks: front file " + a.file() + " split between platoons");
                     }
                 }
@@ -57,12 +60,44 @@ class BattlePlanTest {
     }
 
     @Test
-    void anArmyIsAFifthArchersAndAFifthCavalry() {
-        for (int blocks : new int[]{5, 50, 100}) {
-            List<Slot> slots = BattlePlan.deployment(blocks);
-            assertEquals(blocks, slots.size());
-            assertEquals(blocks / 5, slots.stream().filter(s -> s.arm() == Arm.ARCHERS).count());
-            assertEquals(blocks / 5, slots.stream().filter(s -> s.arm() == Arm.CAVALRY).count());
+    void leviesStandUpFrontOnlyWhenTheGeneralWantsTheFrontToFail() {
+        double[] even = {1.0 / 3, 1.0 / 3, 1.0 / 3};
+        for (boolean levyFront : new boolean[]{true, false}) {
+            List<Slot> front = BattlePlan.deployment(100, false, even, levyFront).stream().filter(s -> s.band() == BattlePlan.BAND_FRONT && s.line() == 0).toList();
+            Arm first = levyFront ? Arm.LEVY : Arm.HEAVY_INFANTRY;
+            assertTrue(front.stream().allMatch(s -> s.arm() == first), "front rank all " + first);
+        }
+        assertTrue(FieldBattle.levyFront(WarPlan.of(List.of(Doctrine.BAIT_AND_PINCER)), new Random(1)));
+        assertFalse(FieldBattle.levyFront(WarPlan.of(List.of(Doctrine.SPEAR_AND_SHIELD)), new Random(1)));
+        assertFalse(FieldBattle.levyFront(WarPlan.NONE, new Random(1)));
+        java.util.Set<Boolean> rolled = new java.util.HashSet<>();
+        for (int seed = 0; seed < 20; seed++) {
+            rolled.add(FieldBattle.levyFront(WarPlan.of(List.of(Doctrine.CHARGE_AND_DECAPITATE)), new Random(seed * 0x9E3779B97F4A7C15L)));
+        }
+        assertEquals(2, rolled.size(), "a Charge and Decapitate general rolls for it");
+    }
+
+    @Test
+    void withoutEpicKnightsZweihandlersAreSkirmishers() {
+        BattlePlan.zweihandlers = false;
+        try {
+            assertTrue(BattlePlan.deployment(100).stream().noneMatch(s -> s.arm() == Arm.ZWEIHANDLERS));
+            assertEquals(15, BattlePlan.deployment(100).stream().filter(s -> s.arm() == Arm.SKIRMISHERS).count());
+        } finally {
+            BattlePlan.zweihandlers = true;
+        }
+    }
+
+    @Test
+    void anArmyIsMadeOfEachKindByItsFixedShare() {
+        // levy 30, heavy infantry 20, skirmishers 10, zweihandlers 5, archers 20, cavalry 10, heavy cavalry 5 (%)
+        List<Slot> slots = BattlePlan.deployment(100);
+        assertEquals(100, slots.size());
+        java.util.Map<Arm, Long> by = slots.stream().collect(java.util.stream.Collectors.groupingBy(Slot::arm, java.util.stream.Collectors.counting()));
+        assertEquals(java.util.Map.of(Arm.LEVY, 30L, Arm.HEAVY_INFANTRY, 20L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L,
+                Arm.ARCHERS, 20L, Arm.CAVALRY, 10L, Arm.HEAVY_CAVALRY, 5L), by);
+        for (int blocks : new int[]{5, 50, 250}) {
+            assertEquals(blocks, BattlePlan.deployment(blocks).size());
         }
         List<Slot> lone = BattlePlan.deployment(1);
         assertEquals(1, lone.size());
@@ -86,7 +121,7 @@ class BattlePlanTest {
         }
         int lines = infantry.stream().mapToInt(Slot::line).max().orElseThrow() + 1;
         assertTrue(lines >= 2, "relief lines behind the front: " + lines);
-        assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.SHIELDWALL));
+        assertTrue(infantry.stream().anyMatch(s -> s.arm() == Arm.HEAVY_INFANTRY));
     }
 
     @Test
@@ -101,7 +136,7 @@ class BattlePlanTest {
                     double archers = mine.stream().filter(s -> s.arm() == Arm.ARCHERS).mapToDouble(Slot::back).min().orElse(Double.MAX_VALUE);
                     double lastInfantry = slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElseThrow();
                     double lastArchers = slots.stream().filter(s -> s.arm() == Arm.ARCHERS).mapToDouble(Slot::back).max().orElse(0);
-                    double cavalry = mine.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).min().orElse(Double.MAX_VALUE);
+                    double cavalry = mine.stream().filter(s -> s.arm().mounted()).mapToDouble(Slot::back).min().orElse(Double.MAX_VALUE);
                     String what = blocks + " blocks, shield " + shield + ", wing " + wing;
                     assertTrue(archers > front, what + ": archers behind the front");
                     assertTrue(cavalry > Math.max(lastInfantry, lastArchers), what + ": cavalry in the rear");
@@ -109,7 +144,7 @@ class BattlePlanTest {
                 if (blocks * BattlePlan.SOLDIERS_PER_FORMATION > BattlePlan.WINGS_OVER) {
                     for (int wing = 0; wing < 3; wing++) {
                         int w = wing;
-                        assertTrue(slots.stream().anyMatch(s -> s.wing() == w && s.arm() == Arm.CAVALRY), "cavalry in every wing's reserves");
+                        assertTrue(slots.stream().anyMatch(s -> s.wing() == w && s.arm().mounted()), "cavalry in every wing's reserves");
                     }
                 }
             }
@@ -175,8 +210,8 @@ class BattlePlanTest {
         for (Doctrine.Distribution d : Doctrine.Distribution.values()) {
             double[] shares = WarPlan.of(List.of(), d, 0.4).wingShares();
             List<Slot> slots = BattlePlan.deployment(500, false, shares);
-            for (Arm arm : List.of(Arm.SWORDSMEN, Arm.ARCHERS, Arm.CAVALRY)) {
-                java.util.function.Predicate<Slot> of = s -> arm == Arm.SWORDSMEN ? s.arm().infantry() : s.arm() == arm;
+            for (Arm arm : List.of(Arm.LEVY, Arm.ARCHERS, Arm.CAVALRY)) {
+                java.util.function.Predicate<Slot> of = s -> arm == Arm.LEVY ? s.arm().infantry() : s.arm() == arm;
                 long all = slots.stream().filter(of).count();
                 for (int wing = 0; wing < 3; wing++) {
                     int w = wing;
@@ -258,7 +293,7 @@ class BattlePlanTest {
         assertEquals(500, slots.size());
         long front = slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         assertTrue(front > BattlePlan.MAX_FRONT && front <= BattlePlan.MAX_WIDE_FRONT, "front " + front);
-        double deepestRider = slots.stream().filter(s -> s.arm() == Arm.CAVALRY).mapToDouble(Slot::back).max().orElseThrow();
+        double deepestRider = slots.stream().filter(s -> s.arm().mounted()).mapToDouble(Slot::back).max().orElseThrow();
         double lastLine = slots.stream().filter(s -> s.arm().infantry()).mapToDouble(Slot::back).max().orElseThrow();
         assertTrue(deepestRider <= lastLine + BattlePlan.LINE_GAP + 5 * BattlePlan.CAVALRY_ROW, "the reserves " + deepestRider + " deep");
     }
@@ -306,9 +341,9 @@ class BattlePlanTest {
 
     @Test
     void theInfantryHoldsWhileFormingThenAdvancesAndEngages() {
-        assertEquals(Order.HOLD, BattlePlan.order(Arm.SWORDSMEN, 0, 5, false));
-        assertEquals(Order.MARCH, BattlePlan.order(Arm.SWORDSMEN, FORMED, 50, false));
-        assertEquals(Order.ENGAGE, BattlePlan.order(Arm.SHIELDWALL, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
+        assertEquals(Order.HOLD, BattlePlan.order(Arm.LEVY, 0, 5, false));
+        assertEquals(Order.MARCH, BattlePlan.order(Arm.LEVY, FORMED, 50, false));
+        assertEquals(Order.ENGAGE, BattlePlan.order(Arm.HEAVY_INFANTRY, FORMED, BattlePlan.INFANTRY_ENGAGE, false));
         assertTrue(BattlePlan.FRONT_CONTACT < BattlePlan.INFANTRY_ENGAGE, "engaged lines close in until they meet");
     }
 

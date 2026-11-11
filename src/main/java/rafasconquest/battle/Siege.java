@@ -314,7 +314,7 @@ public final class Siege {
             if (b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER || b.afloat) {
                 continue;
             }
-            (b.arm == Arm.ARCHERS ? archers : b.arm == Arm.CAVALRY ? cavalry : foot).add(b);
+            (b.arm == Arm.ARCHERS ? archers : b.arm.mounted() ? cavalry : foot).add(b);
         }
         for (Post p : posts) {
             List<FieldBlock> from = p.archers && !archers.isEmpty() ? archers : !foot.isEmpty() ? foot : archers;
@@ -356,7 +356,7 @@ public final class Siege {
             double side = (k % 2 == 0 ? -1 : 1) * BattlePlan.BLOCK_PITCH / 2;
             Point at = within(gateIn.plus(inX * back - inZ * side, inZ * back + inX * side));
             if (!rides) {
-                b.arm = Arm.SWORDSMEN;
+                b.arm = Arm.SKIRMISHERS;
                 b.superHeavy = true;
                 superHeavy.add(b);
             } else {
@@ -389,7 +389,7 @@ public final class Siege {
             }
             if (b.arm.infantry()) {
                 foot.add(b);
-            } else if (b.arm == Arm.CAVALRY) {
+            } else if (b.arm.mounted()) {
                 cavalry.add(b);
             }
         }
