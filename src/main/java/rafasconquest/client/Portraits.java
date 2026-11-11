@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.UUID;
 
 /** What the nation and character pages draw alike: a character's model, a nation's banner, the back and close buttons. */
-final class Portraits {
+public final class Portraits {
     static final int BACKGROUND = 0xFF202226;
     static final int BOX = 0xFF0E0F10;
     static final int BOX_EDGE = 0xFF3C3E42;
@@ -99,7 +99,7 @@ final class Portraits {
     }
 
     /** A diamond centred on (x, y), {@code r} from its centre to a point: an edge colour round a fill. */
-    static void diamond(GuiGraphics g, int x, int y, int r, int fill, int edge) {
+    public static void diamond(GuiGraphics g, int x, int y, int r, int fill, int edge) {
         for (int d = 0; d <= r; d++) {
             g.fill(x - (r - d), y - d, x + (r - d) + 1, y - d + 1, edge);
             g.fill(x - (r - d), y + d, x + (r - d) + 1, y + d + 1, edge);
@@ -111,7 +111,7 @@ final class Portraits {
     }
 
     /** A filled circle centred on (x, y). */
-    static void circle(GuiGraphics g, int x, int y, int r, int color) {
+    public static void circle(GuiGraphics g, int x, int y, int r, int color) {
         for (int dy = -r; dy <= r; dy++) {
             int dx = (int) Math.sqrt(r * r - dy * dy);
             g.fill(x - dx, y + dy, x + dx + 1, y + dy + 1, color);

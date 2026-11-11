@@ -543,16 +543,13 @@ public final class ConquestNetwork {
     /** Server → client: the player's fief, for the grand strategy screen ({@link rafasconquest.peerage.GrandStrategy}). */
     public record GrandStrategyView(rafasconquest.peerage.GrandStrategy.View view) {
         void write(FriendlyByteBuf buf) {
-            buf.writeCollection(view.rows(), (b, row) -> {
-                b.writeUtf(row[0]);
-                b.writeUtf(row[1]);
-            });
             buf.writeInt(view.seat());
+            buf.writeInt(view.nation());
+            buf.writeLong(view.day());
         }
 
         static GrandStrategyView read(FriendlyByteBuf buf) {
-            return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(
-                    buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}), buf.readInt()));
+            return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong()));
         }
     }
 

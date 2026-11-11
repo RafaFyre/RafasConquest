@@ -44,7 +44,7 @@ public class FactionMapScreen extends Screen {
     @Nullable
     private List<FactionInfo> factions;
     @Nullable
-    private MapContext map;
+    MapContext map;
     private boolean centred;
     private long lastClick;
     private double lastClickX;
@@ -68,11 +68,20 @@ public class FactionMapScreen extends Screen {
         }
     }
 
+    /** True for a screen that lays its own HUD over a map filling the whole screen: no title, close button, legend or coordinates. */
+    protected boolean hud() {
+        return false;
+    }
+
     @Override
     protected void init() {
-        view.setViewport(MARGIN, TITLE_BAR, width - MARGIN, height - MARGIN);
-        addRenderableWidget(Button.builder(Component.literal("✕"), b -> onClose())
-                .bounds(width - MARGIN - 14, 4, 14, 14).build());
+        if (hud()) {
+            view.setViewport(0, 0, width, height);
+        } else {
+            view.setViewport(MARGIN, TITLE_BAR, width - MARGIN, height - MARGIN);
+            addRenderableWidget(Button.builder(Component.literal("✕"), b -> onClose())
+                    .bounds(width - MARGIN - 14, 4, 14, 14).build());
+        }
         if (factions == null) {
             ConquestNetwork.requestFactionInfo();
         }
@@ -130,6 +139,9 @@ public class FactionMapScreen extends Screen {
                 layer.render(g, view, map, mouseX, mouseY);
             }
             g.disableScissor();
+            if (hud()) {
+                return;
+            }
             renderLegend(g);
             if (view.contains(mouseX, mouseY)) {
                 String at = String.format("%,d, %,d", Math.round(view.worldX(mouseX)), Math.round(view.worldZ(mouseY)));
