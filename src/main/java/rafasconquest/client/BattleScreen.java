@@ -7,7 +7,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Marker;
@@ -35,10 +38,11 @@ import java.util.Set;
  * The battle screen, opened by the war horn or the strategy board. The player's body stays where it is; the view leaves
  * it for a free camera over the field (WASD to move, space and ctrl to rise and sink, shift to go fast, middle-drag to turn,
  * scroll to come nearer). Along the bottom: the player (gold ring) with their nation and abilities, buttons for their
- * other wings, and a track of cards, one per formation of the shown wing. Left-click or drag to select units (blocks),
- * right-click the ground to send them there in formation or an enemy to attack it, right-drag a line on the ground to
- * stand them along it facing square to it (as in Total War); right-click a card for its orders.
- * Orders go out at once. Client thread only.
+ * other wings, and a track of cards, one per platoon of the shown wing. Left-click or drag to select platoons (with ctrl
+ * held, single units, that is blocks; with shift held, added to the selection), right-click the ground to send them
+ * there in formation or an enemy to attack it, right-drag a line on the ground to stand them along it facing square to
+ * it (as in Total War); right-click a card for its orders. Orders go out at once, and the units stay selected.
+ * Client thread only.
  */
 public final class BattleScreen extends Screen {
     /** Draws an entity standing with its feet at (x, feet), {@code scale} pixels a block, looking toward the mouse. */
@@ -56,6 +60,19 @@ public final class BattleScreen extends Screen {
     private static final int PICK = 18;
     private static final int TEXT = 0xFF3A2A10;
     private static final int GOLD = 0xFFFFB000;
+    /**
+     * Played as units are selected, one for each arm (as {@link rafasconquest.battle.BattlePlan.Arm} orders them), and
+     * as they are ordered to move or to attack. Their files are listed in sounds.json, under sounds/battle; silent until
+     * they are there.
+     */
+    private static final SoundEvent[] SELECT = {sound("battle.select.swordsmen"), sound("battle.select.shieldwall"),
+            sound("battle.select.archers"), sound("battle.select.cavalry")};
+    private static final SoundEvent ORDER_MOVE = sound("battle.order.move");
+    private static final SoundEvent ORDER_ATTACK = sound("battle.order.attack");
+
+    private static SoundEvent sound(String name) {
+        return SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(rafasconquest.RafasConquest.MOD_ID, name));
+    }
 
     private static List<UnitInfo> units = List.of();
     private static boolean heard;
@@ -433,7 +450,7 @@ public final class BattleScreen extends Screen {
             g.fill(x0, y0, x1, y1, 0x30FFD700);
             g.renderOutline(x0, y0, x1 - x0, y1 - y0, GOLD);
         }
-        g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select · right-click to order",
+        g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select platoons (ctrl: blocks, shift: add) · right-click to order",
                 6, 6, 0xFFF4EEDC);
         if (leading) {
             g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
@@ -657,7 +674,7 @@ public final class BattleScreen extends Screen {
     }
 
     private void leftClick(double mx, double my) {
-        boolean add = hasControlDown();
+        boolean add = hasShiftDown();
         for (int i = 0; i < 2; i++) {
             int[] a = ability(i);
             if (Math.hypot(mx - a[0], my - a[1]) <= abilityR()) {
@@ -697,6 +714,7 @@ public final class BattleScreen extends Screen {
             }
             cards.get(card).forEach(u -> selected.add(u.number()));
             pinned = card;
+            soundSelected();
             return;
         }
         // On the field: the unit of the soldier nearest the click, or the player's body; else nothing.
@@ -721,12 +739,64 @@ public final class BattleScreen extends Screen {
         if (onMe) {
             playerSelected = true;
         } else if (best != null) {
-            selected.add(best.number());
+            take(best);
+            soundSelected();
         }
     }
 
+    /** A unit picked on the field selects its whole platoon (its card), or with ctrl held only itself (its block). */
+    private void take(UnitInfo u) {
+        if (hasControlDown()) {
+            selected.add(u.number());
+            return;
+        }
+        for (UnitInfo o : units) {
+            if (o.card() == u.card()) {
+                selected.add(o.number());
+            }
+        }
+    }
+
+    /** The selection sound of the arm with the most soldiers selected. */
+    private void soundSelected() {
+        int[] soldiers = new int[SELECT.length];
+        for (UnitInfo u : units) {
+            if (selected.contains(u.number())) {
+                soldiers[Mth.clamp(u.arm(), 0, SELECT.length - 1)] += Math.max(1, u.soldiers());
+            }
+        }
+        int arm = 0;
+        for (int i = 1; i < soldiers.length; i++) {
+            arm = soldiers[i] > soldiers[arm] ? i : arm;
+        }
+        play(SELECT[arm]);
+    }
+
+    private void play(SoundEvent sound) {
+        minecraft.getSoundManager().play(SimpleSoundInstance.forUI(sound, 1.0F, 1.0F));
+    }
+
+    /**
+     * Whether a right-click there falls on an enemy formation, so the units attack it rather than move there: the
+     * server's own test (RecruitsBattle.enemyBlockAt). shortcut: it measures from where each formation is drawn, the
+     * server from its block's place, a block or two apart; send the server's answer back if the two sounds ever disagree.
+     */
+    private boolean onEnemy(Vec3 at) {
+        if (units.isEmpty()) {
+            return false;
+        }
+        int side = rafasconquest.battle.FieldBattle.sideOf(units.get(0).block());
+        for (FormationSnapshot f : DistantArmies.now()) {
+            if (rafasconquest.battle.FieldBattle.sideOf(f.id()) != side && f.alive() > 0
+                    && Math.hypot(f.x() - at.x, f.z() - at.z) <= rafasconquest.bridge.RecruitsBattle.ATTACK_PICK) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void boxSelect(double x0, double y0, double x1, double y1) {
-        if (!hasControlDown()) {
+        if (!hasShiftDown()) {
             selected.clear();
             playerSelected = false;
             pinned = -1;
@@ -735,14 +805,19 @@ public final class BattleScreen extends Screen {
         double hx = Math.max(x0, x1);
         double ly = Math.min(y0, y1);
         double hy = Math.max(y0, y1);
+        boolean any = false;
         for (UnitInfo u : units) {
             for (Vec3 mark : marks(u)) { // a unit is taken if any of its soldiers is in the box
                 double[] at = project(mark);
                 if (at != null && at[0] >= lx && at[0] <= hx && at[1] >= ly && at[1] <= hy) {
-                    selected.add(u.number());
+                    take(u);
+                    any = true;
                     break;
                 }
             }
+        }
+        if (any) {
+            soundSelected();
         }
         double[] me = project(minecraft.player.position().add(0, 1, 0));
         if (me != null && me[0] >= lx && me[0] <= hx && me[1] >= ly && me[1] <= hy) {
@@ -771,19 +846,20 @@ public final class BattleScreen extends Screen {
         if (leading || !chosen.isEmpty() || me) {
             BattleSpotRing.flash(at);
         }
+        SoundEvent heard = onEnemy(at) ? ORDER_ATTACK : ORDER_MOVE;
         if (leading) {
             leading = false;
             send(chosen, UnitOrder.LEAD_CHARGE, at);
             walkTo = at; // the player goes in at their head
-            deselect();
+            play(heard);
             return;
         }
         if (!chosen.isEmpty()) {
             send(chosen, UnitOrder.GO, at);
+            play(heard);
         }
         if (me) {
             walkTo = at;
-            deselect();
         }
     }
 
@@ -799,7 +875,10 @@ public final class BattleScreen extends Screen {
                 new Entry("Square", () -> send(numbers, UnitOrder.SQUARE, null)),
                 new Entry("V", () -> send(numbers, UnitOrder.V, null))))));
         entries.add(new Entry("Hold", () -> send(numbers, UnitOrder.HOLD, null)));
-        entries.add(new Entry("Charge", () -> send(numbers, UnitOrder.CHARGE, null)));
+        entries.add(new Entry("Charge", () -> {
+            send(numbers, UnitOrder.CHARGE, null);
+            play(ORDER_ATTACK);
+        }));
         entries.add(new Entry("Brace", () -> send(numbers, UnitOrder.BRACE, null)));
         entries.add(new Entry("Follow me", () -> send(numbers, UnitOrder.FOLLOW, null)));
         return menuAt(mx, my, entries);
@@ -816,7 +895,7 @@ public final class BattleScreen extends Screen {
         ConquestNetwork.sendHornOrders(new ConquestNetwork.HornOrders(List.of(units, units),
                 new int[]{UnitOrder.LINE_UP.ordinal(), UnitOrder.LINE_UP.ordinal()}, new double[]{from.x, to.x}, new double[]{from.z, to.z}));
         BattleSpotRing.flash(from.add(to).scale(0.5));
-        deselect();
+        play(ORDER_MOVE);
         ConquestNetwork.requestUnits();
     }
 
@@ -825,13 +904,10 @@ public final class BattleScreen extends Screen {
         double z = at == null ? 0 : at.z;
         ConquestNetwork.sendHornOrders(new ConquestNetwork.HornOrders(List.of(numbers.stream().mapToInt(Integer::intValue).toArray()),
                 new int[]{order.ordinal()}, new double[]{x}, new double[]{z}));
-        if (!numbers.isEmpty()) {
-            deselect();
-        }
         ConquestNetwork.requestUnits();
     }
 
-    /** Ordered units (and the player) are let go: unselected, no longer glowing. */
+    /** Everything is let go (the screen closes): unselected, no longer glowing. */
     private void deselect() {
         selected.clear();
         playerSelected = false;

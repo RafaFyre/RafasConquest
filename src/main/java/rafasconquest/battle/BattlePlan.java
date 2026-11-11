@@ -14,6 +14,9 @@ import java.util.List;
  */
 public final class BattlePlan {
     public static final int SOLDIERS_PER_FORMATION = 20;
+    /** A platoon is at most this many blocks, and this many soldiers ({@link #platoons}). */
+    public static final int PLATOON_BLOCKS = 10;
+    public static final int PLATOON_SOLDIERS = 200;
     /** Armies are this many soldiers at least and at most (whole blocks). */
     public static final int MIN_SOLDIERS = SOLDIERS_PER_FORMATION;
     public static final int MAX_SOLDIERS = 100_000;
@@ -122,9 +125,60 @@ public final class BattlePlan {
      * Where a block stands when the army deploys, in the army's frame (the centre of its front rank). Infantry stands
      * in {@code line} 0 (the front), 1, 2... behind it, at {@code file} along the line. Archers and cavalry have line
      * -1. {@code files} is how many soldiers wide its ranks are; {@code wing} which wing it stands in (0 left, 1
-     * centre, 2 right; all centre in an army too small for wings).
+     * centre, 2 right; all centre in an army too small for wings); {@code band} which part of the wing (front,
+     * archers, reserves, cavalry).
      */
-    public record Slot(Arm arm, double right, double back, int line, int file, int files, int wing) {
+    public record Slot(Arm arm, double right, double back, int line, int file, int files, int wing, int band) {
+    }
+
+    /** The parts of a wing, front to back, as {@link Slot#band()} numbers them. */
+    public static final int BAND_FRONT = 0;
+    public static final int BAND_ARCHERS = 1;
+    public static final int BAND_RESERVES = 2;
+    public static final int BAND_CAVALRY = 3;
+
+    /**
+     * Gathers an army's blocks into platoons: in each wing, its front, archers, reserves and cavalry apart, whole files
+     * (blocks standing one behind another) side by side from its left, each platoon at most {@link #PLATOON_BLOCKS}
+     * blocks and {@link #PLATOON_SOLDIERS} soldiers. Returns each slot's platoon, numbered from 0.
+     */
+    public static int[] platoons(List<Slot> slots) {
+        int most = Math.min(PLATOON_BLOCKS, PLATOON_SOLDIERS / SOLDIERS_PER_FORMATION);
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < slots.size(); i++) {
+            order.add(i);
+        }
+        order.sort(java.util.Comparator.comparingInt((Integer i) -> slots.get(i).wing()).thenComparingInt(i -> slots.get(i).band())
+                .thenComparingDouble(i -> slots.get(i).right()).thenComparingDouble(i -> slots.get(i).back()));
+        int[] platoon = new int[slots.size()];
+        int next = -1;
+        int size = 0;
+        Slot last = null;
+        for (int k = 0; k < order.size(); ) {
+            Slot s = slots.get(order.get(k));
+            int end = k + 1; // the file starting here
+            while (end < order.size() && sameFile(s, slots.get(order.get(end)))) {
+                end++;
+            }
+            if (last == null || last.wing() != s.wing() || last.band() != s.band() || size + (end - k) > most) {
+                next++;
+                size = 0;
+            }
+            for (; k < end; k++) {
+                if (size == most) { // a file deeper than a platoon is cut
+                    next++;
+                    size = 0;
+                }
+                platoon[order.get(k)] = next;
+                size++;
+            }
+            last = s;
+        }
+        return platoon;
+    }
+
+    private static boolean sameFile(Slot a, Slot b) {
+        return a.wing() == b.wing() && a.band() == b.band() && Math.abs(a.right() - b.right()) < 0.5;
     }
 
     /** The wings, as {@link Slot#wing()} numbers them. */
@@ -278,7 +332,7 @@ public final class BattlePlan {
             for (int wing = 0; wing < 3; wing++) {
                 for (Slot s : wings.get(wing)) {
                     if ((s.line() == 0) == (pass == 0)) {
-                        all.add(new Slot(s.arm(), s.right() + middle[wing], s.back(), s.line(), s.file(), s.files(), s.wing()));
+                        all.add(new Slot(s.arm(), s.right() + middle[wing], s.back(), s.line(), s.file(), s.files(), s.wing(), s.band()));
                     }
                 }
             }
@@ -316,7 +370,7 @@ public final class BattlePlan {
         for (int row = 0; row < frontRows; row++) {
             for (int file = 0; file < width; file++) {
                 slots.add(new Slot(infantryArm(firstFile + file, greatShield), fileRight[file], fileBack(row, stackFiles), row,
-                        firstFile + file, files, wing));
+                        firstFile + file, files, wing, BAND_FRONT));
             }
         }
         double frontRear = frontRows == 0 ? 0 : fileBack(frontRows - 1, stackFiles) + blockDepth;
@@ -332,7 +386,7 @@ public final class BattlePlan {
             int row = i / archersPerRow;
             int inRow = Math.min(archersPerRow, archers - row * archersPerRow);
             slots.add(new Slot(Arm.ARCHERS, across(i % archersPerRow, inRow, BLOCK_PITCH), archersBack + row * ARCHER_ROW, -1, i,
-                    FILE_WIDTH, wing));
+                    FILE_WIDTH, wing, BAND_ARCHERS));
         }
         widest = Math.max(widest, Math.min(archers, archersPerRow) * BLOCK_PITCH);
         double archersRear = archerRows == 0 ? frontRear
@@ -350,7 +404,7 @@ public final class BattlePlan {
             double right = across(i % perLine, inLine, pitch);
             int file = firstFile + nearestFile(right, fileRight);
             slots.add(new Slot(infantryArm(file, greatShield), right, reservesBack + line * (blockDepth + RESERVE_ROW_GAP),
-                    frontRows + line, file, files, wing));
+                    frontRows + line, file, files, wing, BAND_RESERVES));
         }
         double reservesRear = reserveLines == 0 ? Math.max(frontRear, archersRear)
                 : reservesBack + (reserveLines - 1) * (blockDepth + RESERVE_ROW_GAP) + blockDepth;
@@ -364,7 +418,7 @@ public final class BattlePlan {
             int row = i / cavalryPerRow;
             int inRow = Math.min(cavalryPerRow, cavalry - row * cavalryPerRow);
             slots.add(new Slot(Arm.CAVALRY, across(i % cavalryPerRow, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i,
-                    FILE_WIDTH, wing));
+                    FILE_WIDTH, wing, BAND_CAVALRY));
         }
         widest = Math.max(widest, Math.min(cavalry, cavalryPerRow) * BLOCK_PITCH);
         return widest;

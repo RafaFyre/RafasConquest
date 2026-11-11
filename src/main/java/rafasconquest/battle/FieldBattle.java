@@ -485,7 +485,7 @@ public final class FieldBattle {
             throw new IllegalStateException("a harbour fleet is for an amphibious assault, before it begins");
         }
         FieldArmy d = armies[1];
-        int id = d.blocks.stream().mapToInt(FieldBlock::id).max().orElse(10_000) + 1;
+        int id = d.blocks.stream().mapToInt(FieldBlock::id).max().orElse(SIDE_IDS) + 1;
         double rx = -d.facingZ;
         double rz = d.facingX;
         for (int i = 0; i < ships; i++) {
@@ -626,6 +626,14 @@ public final class FieldBattle {
                 deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second)};
     }
 
+    /** Block ids run from this times their army's side ({@link #deploy}, {@link #addHarbourFleet}). */
+    private static final int SIDE_IDS = 10_000;
+
+    /** Which side a block belongs to, by its id. */
+    public static int sideOf(int blockId) {
+        return blockId / SIDE_IDS;
+    }
+
     private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
@@ -639,12 +647,14 @@ public final class FieldBattle {
         army.front = new FieldBlock[files];
         army.winged = slots.stream().anyMatch(s -> s.wing() != FieldArmy.CENTRE);
         double reserves = Double.MAX_VALUE;
-        int id = side * 10_000;
+        int id = side * SIDE_IDS;
         double lastLine = 0;
         double frontHalf = 0;
         double[] wingSum = new double[3];
         int[] wingFiles = new int[3];
         List<FieldBlock> cavalry = new ArrayList<>();
+        int[] platoons = BattlePlan.platoons(slots);
+        int k = 0;
         for (BattlePlan.Slot slot : slots) {
             Point line = BattlePlan.place(front, facingX, facingZ, slot.right(), slot.back());
             Duty duty = !slot.arm().infantry() ? Duty.SUPPORT : slot.line() == 0 ? Duty.FRONT : Duty.LINE;
@@ -654,6 +664,7 @@ public final class FieldBattle {
             block.files = slot.files();
             block.homeRight = slot.right();
             block.wing = slot.wing();
+            block.platoon = platoons[k++];
             army.blocks.add(block);
             if (duty == Duty.FRONT) {
                 army.front[slot.file()] = block;

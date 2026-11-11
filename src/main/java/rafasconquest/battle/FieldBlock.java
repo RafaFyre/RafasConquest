@@ -146,6 +146,8 @@ public final class FieldBlock {
     double wedgeBack;
     /** Which wing of its army it fights in ({@link FieldArmy#LEFT}, CENTRE, RIGHT). */
     int wing = FieldArmy.CENTRE;
+    /** Its platoon in its army ({@link BattlePlan#platoons}), or -1 (the general, guard and bearer, ships). */
+    int platoon = -1;
     /** Cavalry outside the wedge: how far to the army's right its wing's backline post is, whether it has charged yet, and
      * which way it is riding along the backline. */
     double homeRight;
@@ -313,6 +315,11 @@ public final class FieldBlock {
     /** Which wing of its army it fights in. */
     public int wing() {
         return wing;
+    }
+
+    /** Its platoon in its army, or -1 if it is in none. */
+    public int platoon() {
+        return platoon;
     }
 
     /** How many soldiers wide its ranks are. */

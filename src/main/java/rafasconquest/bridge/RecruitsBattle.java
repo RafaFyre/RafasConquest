@@ -2926,10 +2926,8 @@ public final class RecruitsBattle {
     /** Space between cards stood along a dragged line, at the least. */
     private static final double LINE_GAP = 2;
 
-    /** How many units (blocks) a card starts with at most: 200 soldiers. */
-    private static final int CARD_UNITS = 10;
     /** How near a right-click must fall to an enemy block's middle to attack it rather than move there. */
-    private static final double ATTACK_PICK = 10;
+    public static final double ATTACK_PICK = 10;
     private static final double RALLY_REACH = 24;
     private static final int RALLY_COOLDOWN = 60 * 20;
     private static final int LEAD_COOLDOWN = 45 * 20;
@@ -3014,17 +3012,11 @@ public final class RecruitsBattle {
         return soldiers;
     }
 
-    /** The card a new unit joins: an unsplit card of its wing and arm with room, else a new one. */
+    /** The card a new unit joins: one card for each platoon ({@link BattlePlan#platoons}), unsplit; a block of none stands alone. */
     private static Card cardFor(Enlisted e, FieldBlock block) {
-        Map<Card, Integer> counts = new LinkedHashMap<>();
         for (Unit o : e.units) {
-            if (o.card.parent < 0 && o.block.wing() == block.wing() && o.block.arm() == block.arm()) {
-                counts.merge(o.card, 1, Integer::sum);
-            }
-        }
-        for (Map.Entry<Card, Integer> c : counts.entrySet()) {
-            if (c.getValue() < CARD_UNITS) {
-                return c.getKey();
+            if (block.platoon() >= 0 && o.card.parent < 0 && o.block.platoon() == block.platoon()) {
+                return o.card;
             }
         }
         return new Card(e.nextCard++, -1);

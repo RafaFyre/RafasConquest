@@ -30,6 +30,33 @@ class BattlePlanTest {
     }
 
     @Test
+    void platoonsAreTenBlocksAtMostOfOneWingAndBandWithWholeFiles() {
+        for (int blocks : new int[]{5, 50, 100, 250, 500}) {
+            List<Slot> slots = BattlePlan.deployment(blocks);
+            int[] platoon = BattlePlan.platoons(slots);
+            java.util.Map<Integer, List<Slot>> by = new java.util.HashMap<>();
+            for (int i = 0; i < slots.size(); i++) {
+                by.computeIfAbsent(platoon[i], k -> new java.util.ArrayList<>()).add(slots.get(i));
+            }
+            for (List<Slot> p : by.values()) {
+                assertTrue(p.size() <= BattlePlan.PLATOON_BLOCKS, blocks + " blocks: a platoon of " + p.size());
+                assertTrue(p.size() * BattlePlan.SOLDIERS_PER_FORMATION <= BattlePlan.PLATOON_SOLDIERS);
+                assertEquals(1, p.stream().map(s -> s.wing() * 10 + s.band()).distinct().count(), blocks + " blocks: a platoon spans wings or bands");
+            }
+            // Each front file (one behind another) is in one platoon.
+            for (int i = 0; i < slots.size(); i++) {
+                for (int j = 0; j < slots.size(); j++) {
+                    Slot a = slots.get(i);
+                    Slot b = slots.get(j);
+                    if (a.band() == BattlePlan.BAND_FRONT && b.band() == BattlePlan.BAND_FRONT && a.file() == b.file()) {
+                        assertEquals(platoon[i], platoon[j], blocks + " blocks: front file " + a.file() + " split between platoons");
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     void anArmyIsAFifthArchersAndAFifthCavalry() {
         for (int blocks : new int[]{5, 50, 100}) {
             List<Slot> slots = BattlePlan.deployment(blocks);

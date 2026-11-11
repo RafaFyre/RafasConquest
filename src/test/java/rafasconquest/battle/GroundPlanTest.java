@@ -50,21 +50,36 @@ class GroundPlanTest {
     }
 
     @Test
-    void blocksKeepTheirPlacesByAHill() {
+    void archersClimbAHillWithTheirWholePlatoon() {
         FieldBattle battle = battle();
-        FieldBlock archers = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.ARCHERS).findFirst().orElseThrow();
-        Point top = archers.line().plus(-battle.army(0).facingZ() * 25, battle.army(0).facingX() * 25); // off to one side
+        FieldArmy army = battle.army(0);
+        int platoon = army.blocks().stream().filter(b -> b.arm() == Arm.ARCHERS).findFirst().orElseThrow().platoon();
+        java.util.List<FieldBlock> archers = army.blocks().stream().filter(b -> b.platoon() == platoon).toList();
+        double mx = archers.stream().mapToDouble(b -> b.line().x()).average().orElseThrow();
+        double mz = archers.stream().mapToDouble(b -> b.line().z()).average().orElseThrow();
+        // A knoll behind them, further back than the front may go to reach it.
+        Point top = new Point(mx - army.facingX() * 45, mz - army.facingZ() * 45);
         GroundPlan.Ground land = new Land() {
             @Override
             public double height(double x, double z) {
-                return 64 + Math.max(0, 20 - Math.hypot(x - top.x(), z - top.z()) / 2);
+                return 64 + Math.max(0, 20 - Math.hypot(x - top.x(), z - top.z()));
             }
         };
-        java.util.Map<FieldBlock, Point> before = new java.util.HashMap<>();
-        battle.army(0).blocks().forEach(b -> before.put(b, b.line()));
+        double before = archers.stream().mapToDouble(b -> land.height(b.line().x(), b.line().z())).average().orElseThrow();
+        java.util.Map<FieldBlock, Point> was = new java.util.HashMap<>();
+        army.blocks().forEach(b -> was.put(b, b.line()));
         GroundPlan.deploy(battle, land);
+        double after = archers.stream().mapToDouble(b -> land.height(b.line().x(), b.line().z())).average().orElseThrow();
+        assertTrue(after > before + 3, "the archers stay low: " + before + " -> " + after);
+        // Their whole platoon climbed with them, every block moved alike; so did every other platoon's.
         for (FieldBlock b : battle.army(0).blocks()) {
-            assertEquals(0, b.line().distanceTo(before.get(b)), 1e-6, "a block left its place for the hill: " + b.id());
+            if (b.platoon() < 0) {
+                continue;
+            }
+            FieldBlock first = battle.army(0).blocks().stream().filter(o -> o.platoon() == b.platoon()).findFirst().orElseThrow();
+            Point moved = new Point(b.line().x() - was.get(b).x(), b.line().z() - was.get(b).z());
+            Point firstMoved = new Point(first.line().x() - was.get(first).x(), first.line().z() - was.get(first).z());
+            assertEquals(0, moved.distanceTo(firstMoved), 1e-6, "platoon " + b.platoon() + " came apart");
         }
     }
 

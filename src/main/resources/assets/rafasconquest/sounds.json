@@ -24,6 +24,12 @@
       "rafasconquest:battle/din6"
     ]
   },
+  "battle.select.swordsmen": {"sounds": ["rafasconquest:battle/select_swordsmen"]},
+  "battle.select.shieldwall": {"sounds": ["rafasconquest:battle/select_shieldwall"]},
+  "battle.select.archers": {"sounds": ["rafasconquest:battle/select_archers"]},
+  "battle.select.cavalry": {"sounds": ["rafasconquest:battle/select_cavalry"]},
+  "battle.order.move": {"sounds": ["rafasconquest:battle/order_move"]},
+  "battle.order.attack": {"sounds": ["rafasconquest:battle/order_attack"]},
   "music.to_shores_distant": {
     "sounds": [{"name": "rafasconquest:music/to_shores_distant", "stream": true}]
   },

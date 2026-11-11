@@ -203,11 +203,20 @@ first. The old relation is restored when the battle ends.
   either side of the way in. Everything a camp replaces is recorded and put back when it is struck.
 - **Deploying to the land** (`battle/GroundPlan`, read by `bridge/Terrain` on a grid of 4 to 8 blocks without
   loading or generating anything: the world where a chunk is loaded, else the world generator; a wood is a canopy of
-  leaves, or a forest, taiga or jungle biome): before the battle and every morning, each block keeps its place in the
-  template, so an army stands together in its rectangle. Only a block in water moves (nothing of a block's front or
-  its middle may stand in it): to the nearest dry ground, up to 40 blocks away, 8 blocks clear of the others, no more
-  than 8 blocks further toward the enemy. The front goes first, then the rest, each following its file's front and
-  looking within 20 blocks of where that puts it.
+  leaves, or a forest, taiga or jungle biome): before the battle and every morning, each platoon moves whole from its
+  place in the template, up to 40 blocks, to the best ground near it, its blocks keeping their places in it. Armies
+  keep out of water entirely (nothing of a block's front or its middle may stand in it), love high ground (archers
+  most of all, then infantry; cavalry little; a platoon goes by its blocks' wishes added up), keep together (each
+  platoon near its place, its blocks 8 blocks clear of the others), and go no more than 8 blocks further toward the
+  enemy. The front's platoons choose first, then the archers' (searching as far as the front, for the high ground),
+  then the rest, each following its files' fronts and choosing within 20 blocks of where that puts it.
+- **Platoons** (`BattlePlan.platoons`): an army's blocks are gathered into platoons of at most 10 blocks and 200
+  soldiers: in each wing, its front, archers, reserves and cavalry apart, whole files side by side from the left. A
+  player's blocks of one platoon make one card in the strategy view. There, dragging (or clicking a soldier) selects
+  whole platoons; with ctrl held, single blocks; with shift held, it adds to the selection. Units stay selected after
+  an order. Sounds play as units are selected (one per arm) and ordered to move or to attack: their files go in
+  `assets/rafasconquest/sounds/battle/` as `select_swordsmen`, `select_shieldwall`, `select_archers`,
+  `select_cavalry`, `order_move` and `order_attack` (`.ogg`); until then they are silent.
 - **Ambushes:** where a wood lies within 60 blocks of a wing's outer end, up to three of that wing's reserve blocks
   hide in it. They stay where they hide, whatever their file does, until an enemy block is fighting within 50 blocks;
   then they strike it in the flank (or the rear, if others strike it already), and the general's chat says an ambush
