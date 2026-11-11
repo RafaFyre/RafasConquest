@@ -213,6 +213,22 @@ public final class ClientEvents {
     }
 
     /**
+     * The player's body (or what it rides) stands still while its chunk is not loaded here. The battle screen's camera has
+     * the server send the chunks about the camera instead (CameraView), so the ground under the body is gone on this side,
+     * and the body, moved by this client, would fall through the empty chunks out of the world.
+     */
+    @SubscribeEvent
+    public static void onEntityTick(net.neoforged.neoforge.event.tick.EntityTickEvent.Pre event) {
+        Minecraft mc = Minecraft.getInstance();
+        net.minecraft.world.entity.Entity e = event.getEntity();
+        if (mc.player != null && e.level().isClientSide && e == mc.player.getRootVehicle()
+                && !e.level().hasChunkAt(e.getBlockX(), e.getBlockZ())) {
+            e.setDeltaMovement(Vec3.ZERO);
+            event.setCanceled(true);
+        }
+    }
+
+    /**
      * The player's body, ordered in the battle screen like any unit, walks itself straight to where it was sent (jumping
      * what it bumps into); any movement key of their own takes it back.
      */

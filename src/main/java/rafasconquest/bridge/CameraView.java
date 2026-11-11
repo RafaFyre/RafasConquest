@@ -3,6 +3,7 @@ package rafasconquest.bridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ChunkMap;
+import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
@@ -20,7 +21,8 @@ import java.util.UUID;
 
 /**
  * The strategy view's camera, from the client: while it is set, the world is loaded and sent to the player about the
- * camera rather than their body (chunks and entities alike, see the ChunkMap mixins), so the field they look at is real.
+ * camera rather than their body (chunks and entities alike, see the ChunkMap mixins), so the field they look at is real;
+ * the few chunks about the body are sent too ({@link Chunks}), so it keeps its ground and can walk.
  * The body's own chunks stay loaded on the server by its usual player ticket. Server thread only.
  */
 public final class CameraView {
@@ -37,6 +39,33 @@ public final class CameraView {
     private static final Set<ServerPlayer> ARRIVED = new HashSet<>();
 
     private record Camera(Vec3 at, ResourceKey<Level> dimension) {
+    }
+
+    /** Chunks this far (in chunks) about the body are sent with the camera's, so it can walk on while the view is away. */
+    public static final int BODY_CHUNKS = 2;
+
+    /** What a player in the strategy view is sent: the camera's usual square, and the small one about their body. */
+    public record Chunks(ChunkTrackingView.Positioned camera, ChunkPos body) implements ChunkTrackingView {
+        private boolean nearBody(int x, int z) {
+            return Math.abs(x - body.x) <= BODY_CHUNKS && Math.abs(z - body.z) <= BODY_CHUNKS;
+        }
+
+        @Override
+        public boolean contains(int x, int z, boolean includeOuter) {
+            return camera.contains(x, z, includeOuter) || nearBody(x, z);
+        }
+
+        @Override
+        public void forEach(java.util.function.Consumer<ChunkPos> action) {
+            camera.forEach(action);
+            for (int x = body.x - BODY_CHUNKS; x <= body.x + BODY_CHUNKS; x++) {
+                for (int z = body.z - BODY_CHUNKS; z <= body.z + BODY_CHUNKS; z++) {
+                    if (!camera.contains(x, z)) {
+                        action.accept(new ChunkPos(x, z));
+                    }
+                }
+            }
+        }
     }
 
     private CameraView() {
@@ -91,6 +120,29 @@ public final class CameraView {
         ARRIVED.clear();
         int now = server.getTickCount();
         SETTLING.values().removeIf(until -> until < now);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.getY() < player.level().getMinBuildHeight() && (CAMERAS.containsKey(player.getUUID()) || SETTLING.containsKey(player.getUUID()))) {
+                rescue(player);
+            }
+        }
+    }
+
+    /**
+     * shortcut: the body of a player in the strategy view was seen to fall out of the world (2026-11-11) for a cause not
+     * yet found; it is put back on the ground, and the log says how it stood so the cause can be found and this removed.
+     */
+    private static void rescue(ServerPlayer player) {
+        ServerLevel level = player.serverLevel();
+        int x = player.getBlockX();
+        int z = player.getBlockZ();
+        boolean loaded = level.hasChunk(x >> 4, z >> 4);
+        rafasconquest.RafasConquest.LOGGER.warn("Strategy view: {} fell below the world at {} (camera {}, chunk loaded {}, mode {}, vehicle {}); put back on the ground",
+                player.getName().getString(), player.position(), of(player), loaded, player.gameMode.getGameModeForPlayer(), player.getVehicle());
+        player.stopRiding();
+        int y = level.getChunk(x >> 4, z >> 4).getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
+        player.fallDistance = 0;
+        player.setDeltaMovement(Vec3.ZERO);
+        player.teleportTo(level, player.getX(), y, player.getZ(), player.getYRot(), player.getXRot());
     }
 
     public static void forget(ServerPlayer player) {

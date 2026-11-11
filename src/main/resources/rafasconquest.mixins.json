@@ -11,6 +11,7 @@
     "RecruitsArrowCleanerMixin"
   ],
   "client": [
+    "ClientChunkWindowMixin",
     "SodiumShaderInterfaceMixin",
     "SodiumShaderLoaderMixin"
   ],

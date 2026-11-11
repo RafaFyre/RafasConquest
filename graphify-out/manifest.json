@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientEvents.java": {
-    "mtime": 1794420232.1253107,
-    "seen": 1794420371.0196574,
-    "ast_hash": "62278517d072b8058a6259c55484d9f4",
+    "mtime": 1794426020.5086222,
+    "seen": 1794426056.5461974,
+    "ast_hash": "581e0975393ce4c8769a121663c90a5a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientModEvents.java": {
@@ -2604,9 +2604,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest.mixins.json": {
-    "mtime": 1794374336.475952,
-    "seen": 1794374397.345551,
-    "ast_hash": "ff2b21e7f6bbb8ba983f2ecac3c6356e",
+    "mtime": 1794427816.9718175,
+    "seen": 1794427906.034576,
+    "ast_hash": "aee6c76cf219543a77fb3482aeadb8e8",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/RecruitsArrowCleanerMixin.java": {
@@ -2904,9 +2904,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/CameraView.java": {
-    "mtime": 1794408330.225608,
-    "seen": 1794408490.3027658,
-    "ast_hash": "f8ffd9c886ae50c7ffbae92803d2f8df",
+    "mtime": 1794427817.0162044,
+    "seen": 1794427906.0340376,
+    "ast_hash": "bbb01afd238b943572cc07cbf9f267b9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/ChunkMapAccess.java": {
@@ -2916,9 +2916,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/ChunkMapCameraMixin.java": {
-    "mtime": 1794374336.3143852,
-    "seen": 1794374397.3452446,
-    "ast_hash": "22901328781c25213ac44e785106af76",
+    "mtime": 1794427864.4416869,
+    "seen": 1794427906.0342581,
+    "ast_hash": "75a3d6934ea4aebca3843e221282cb6f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/TrackedEntityCameraMixin.java": {
@@ -3021,6 +3021,12 @@
     "mtime": 1794421684.6886005,
     "seen": 1794422269.2510636,
     "ast_hash": "2d1f77235670d41e7dbef1e274d46076",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/ClientChunkWindowMixin.java": {
+    "mtime": 1794427816.0330591,
+    "seen": 1794427906.0342617,
+    "ast_hash": "3300b4462340bce32164ba65b1ed1f96",
     "semantic_hash": ""
   }
 }
