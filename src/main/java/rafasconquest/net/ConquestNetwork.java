@@ -213,6 +213,30 @@ public final class ConquestNetwork {
                 .decoder(b -> { GateView v = GateView.read(b); return new GateSet(v.pos(), v.left(), v.right()); })
                 .consumerMainThread(ConquestNetwork::handleGateSet)
                 .add();
+        CHANNEL.messageBuilder(CameraAt.class, 33, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeBoolean(m.has());
+                    b.writeDouble(m.x());
+                    b.writeDouble(m.z());
+                })
+                .decoder(b -> new CameraAt(b.readBoolean(), b.readDouble(), b.readDouble()))
+                .consumerMainThread(ConquestNetwork::handleCameraAt)
+                .add();
+    }
+
+    /** Client → server: where the strategy view's camera is (has false: closed), to load the world about it. */
+    public record CameraAt(boolean has, double x, double z) {
+    }
+
+    public static void cameraAt(boolean has, double x, double z) {
+        CHANNEL.sendToServer(new CameraAt(has, x, z));
+    }
+
+    private static void handleCameraAt(CameraAt msg, IPayloadContext context) {
+        ServerPlayer player = SimpleChannel.sender(context);
+        if (player != null) {
+            rafasconquest.bridge.CameraView.set(player, msg.has() ? new net.minecraft.world.phys.Vec3(msg.x(), player.getY(), msg.z()) : null);
+        }
     }
 
     /** Server → client: whether the sea swells (the seaSwell game rule), for the water drawn. */
@@ -774,7 +798,7 @@ public final class ConquestNetwork {
             double[] xs = new double[n];
             double[] zs = new double[n];
             for (int i = 0; i < n; i++) {
-                units.add(buf.readVarIntArray(64));
+                units.add(buf.readVarIntArray(1024)); // a Grand Marshal's 10,000 are 500 units
                 orders[i] = buf.readVarInt();
                 xs[i] = buf.readDouble();
                 zs[i] = buf.readDouble();

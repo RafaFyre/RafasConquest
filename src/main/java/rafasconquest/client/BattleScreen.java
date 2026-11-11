@@ -32,10 +32,11 @@ import java.util.Set;
 
 /**
  * The battle screen, opened by the war horn or the strategy board. The player's body stays where it is; the view leaves
- * it for a free camera over the field (WASD to move, space and shift to rise and sink, right- or middle-drag to turn,
+ * it for a free camera over the field (WASD to move, space and ctrl to rise and sink, shift to go fast, middle-drag to turn,
  * scroll to come nearer). Along the bottom: the player (gold ring) with their nation and abilities, buttons for their
  * other wings, and a track of cards, one per formation of the shown wing. Left-click or drag to select units (blocks),
- * right-click the ground to send them there in formation or an enemy to attack it; right-click a card for its orders.
+ * right-click the ground to send them there in formation or an enemy to attack it, right-drag a line on the ground to
+ * stand them along it facing square to it (as in Total War); right-click a card for its orders.
  * Orders go out at once. Client thread only.
  */
 public final class BattleScreen extends Screen {
@@ -49,7 +50,7 @@ public final class BattleScreen extends Screen {
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
     private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};
-    private static final double REACH = 96;
+    private static final double REACH = 960;
     private static final double TURN = 0.35;
     private static final int PICK = 18;
     private static final int TEXT = 0xFF3A2A10;
@@ -62,6 +63,8 @@ public final class BattleScreen extends Screen {
     static Vec3 walkTo;
 
     private Marker camera;
+    /** The camera's chunk as last sent to the server. */
+    private long sentChunk = Long.MIN_VALUE;
     private boolean hidGui;
     private double camX;
     private double camY;
@@ -81,6 +84,11 @@ public final class BattleScreen extends Screen {
     private double pressY;
     private int pressButton = -1;
     private boolean dragged;
+    /** A right-drag over the ground with units selected: the line they will stand along, from and (so far) to. */
+    @Nullable
+    private Vec3 lineFrom;
+    @Nullable
+    private Vec3 lineTo;
     private boolean leading;
     @Nullable
     private Menu menu;
@@ -154,7 +162,7 @@ public final class BattleScreen extends Screen {
 
     /** Moves the camera by the player's own movement keys, within reach of their body and above the ground. */
     private void fly() {
-        double speed = down(minecraft.options.keySprint) ? 3 : 1.2;
+        double speed = down(minecraft.options.keyShift) ? 3 : 1.2;
         double r = Math.toRadians(yaw);
         double fx = -Math.sin(r);
         double fz = Math.cos(r);
@@ -162,16 +170,23 @@ public final class BattleScreen extends Screen {
         double s = (down(minecraft.options.keyLeft) ? 1 : 0) - (down(minecraft.options.keyRight) ? 1 : 0);
         camX += (fx * f + fz * s) * speed;
         camZ += (fz * f - fx * s) * speed;
-        camY += ((down(minecraft.options.keyJump) ? 1 : 0) - (down(minecraft.options.keyShift) ? 1 : 0)) * speed;
+        camY += ((down(minecraft.options.keyJump) ? 1 : 0) - (down(minecraft.options.keySprint) ? 1 : 0)) * speed; // sprint: ctrl by default
         double px = minecraft.player.getX();
         double pz = minecraft.player.getZ();
         double d = Math.hypot(camX - px, camZ - pz);
-        if (d > REACH) { // chunks are only loaded about the body
+        if (d > REACH) { // the server loads the world about the camera only this far from the body (CameraView)
             camX = px + (camX - px) * REACH / d;
             camZ = pz + (camZ - pz) * REACH / d;
         }
-        double ground = minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(camX), Mth.floor(camZ));
-        camY = Mth.clamp(camY, ground + 2, ground + 120);
+        long chunk = net.minecraft.world.level.ChunkPos.asLong(Mth.floor(camX) >> 4, Mth.floor(camZ) >> 4);
+        if (chunk != sentChunk || ticks % 40 == 0) { // the resend keeps the server's chunk ticket alive
+            sentChunk = chunk;
+            ConquestNetwork.cameraAt(true, camX, camZ);
+        }
+        if (minecraft.level.hasChunkAt(Mth.floor(camX), Mth.floor(camZ))) { // an unarrived chunk reads as the world's floor
+            double ground = minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(camX), Mth.floor(camZ));
+            camY = Mth.clamp(camY, ground + 2, ground + 120);
+        }
     }
 
     private boolean down(KeyMapping key) {
@@ -181,6 +196,8 @@ public final class BattleScreen extends Screen {
     /** Back to the player's own eyes. */
     private void letGo() {
         if (camera != null && minecraft != null) {
+            ConquestNetwork.cameraAt(false, 0, 0);
+            sentChunk = Long.MIN_VALUE;
             minecraft.setCameraEntity(minecraft.player);
             minecraft.options.hideGui = hidGui;
             camera = null;
@@ -382,7 +399,7 @@ public final class BattleScreen extends Screen {
             g.fill(x0, y0, x1, y1, 0x30FFD700);
             g.renderOutline(x0, y0, x1 - x0, y1 - y0, GOLD);
         }
-        g.drawString(font, "WASD move · space/shift rise/sink · right-drag turn · scroll zoom · drag to select · right-click to order",
+        g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select · right-click to order",
                 6, 6, 0xFFF4EEDC);
         if (leading) {
             g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
@@ -545,6 +562,8 @@ public final class BattleScreen extends Screen {
         pressY = mouseY;
         pressButton = button;
         dragged = false;
+        lineFrom = button == 1 && !selected.isEmpty() ? ground(mouseX, mouseY) : null;
+        lineTo = null;
         return true;
     }
 
@@ -553,7 +572,14 @@ public final class BattleScreen extends Screen {
         if (button == pressButton && Math.hypot(mouseX - pressX, mouseY - pressY) > 4) {
             dragged = true;
         }
-        if (dragged && (button == 1 || button == 2)) {
+        if (dragged && button == 1) {
+            if (lineFrom != null) {
+                Vec3 at = ground(mouseX, mouseY);
+                lineTo = at != null ? at : lineTo;
+            }
+            return true;
+        }
+        if (dragged && button == 2) {
             yaw += (float) (dx * TURN);
             pitch = Mth.clamp(pitch + (float) (dy * TURN), 5, 89);
             return true;
@@ -575,7 +601,11 @@ public final class BattleScreen extends Screen {
             }
         } else if (button == 1 && !dragged) {
             rightClick(mouseX, mouseY);
+        } else if (button == 1 && lineFrom != null && lineTo != null && !selected.isEmpty()) {
+            lineUp(new ArrayList<>(selected), lineFrom, lineTo);
         }
+        lineFrom = null;
+        lineTo = null;
         return true;
     }
 
@@ -593,7 +623,7 @@ public final class BattleScreen extends Screen {
     }
 
     private void leftClick(double mx, double my) {
-        boolean add = hasShiftDown();
+        boolean add = hasControlDown();
         for (int i = 0; i < 2; i++) {
             int[] a = ability(i);
             if (Math.hypot(mx - a[0], my - a[1]) <= abilityR()) {
@@ -660,7 +690,7 @@ public final class BattleScreen extends Screen {
     }
 
     private void boxSelect(double x0, double y0, double x1, double y1) {
-        if (!hasShiftDown()) {
+        if (!hasControlDown()) {
             selected.clear();
             playerSelected = false;
             pinned = -1;
@@ -741,6 +771,16 @@ public final class BattleScreen extends Screen {
         return new Menu((int) Math.min(mx, width - 97), (int) Math.max(0, Math.min(my, height - h) - h), entries);
     }
 
+    /** The units stand along the line from {@code from} to {@code to}, facing square to it (the server lays them out). */
+    private void lineUp(List<Integer> numbers, Vec3 from, Vec3 to) {
+        int[] units = numbers.stream().mapToInt(Integer::intValue).toArray();
+        ConquestNetwork.sendHornOrders(new ConquestNetwork.HornOrders(List.of(units, units),
+                new int[]{UnitOrder.LINE_UP.ordinal(), UnitOrder.LINE_UP.ordinal()}, new double[]{from.x, to.x}, new double[]{from.z, to.z}));
+        BattleSpotRing.flash(from.add(to).scale(0.5));
+        deselect();
+        ConquestNetwork.requestUnits();
+    }
+
     private void send(List<Integer> numbers, UnitOrder order, @Nullable Vec3 at) {
         double x = at == null ? 0 : at.x;
         double z = at == null ? 0 : at.z;
@@ -790,5 +830,34 @@ public final class BattleScreen extends Screen {
         }
         glowing.clear();
         glowing.addAll(now);
+    }
+
+    /** A gold ring on the ground under each selected soldier (under their horse when mounted), while the screen is open. */
+    static void renderSelection(com.mojang.blaze3d.vertex.PoseStack pose, net.minecraft.client.Camera cam, float partialTick) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!(mc.screen instanceof BattleScreen screen) || mc.level == null) {
+            return;
+        }
+        if (screen.lineFrom != null && screen.lineTo != null) {
+            // The line being dragged, and an arrow from its middle the way the units will face (the line's left).
+            Vec3 a = screen.lineFrom;
+            Vec3 b = screen.lineTo;
+            double len = Math.hypot(b.x - a.x, b.z - a.z);
+            if (len >= 1) {
+                Vec3 mid = a.add(b).scale(0.5);
+                Vec3 face = new Vec3((b.z - a.z) / len, 0, -(b.x - a.x) / len);
+                BattleSpotRing.strip(pose, cam.getPosition(), a, b, 0.3F, GOLD);
+                BattleSpotRing.strip(pose, cam.getPosition(), mid, mid.add(face.scale(Math.min(6, Math.max(2, len / 4)))), 0.2F, GOLD);
+            }
+        }
+        for (int id : screen.glowing) {
+            net.minecraft.world.entity.Entity e = mc.level.getEntity(id);
+            if (e != null) {
+                net.minecraft.world.entity.Entity base = e.getRootVehicle();
+                Vec3 at = base.getPosition(partialTick);
+                float outer = base.getBbWidth() * 0.5F + 0.2F;
+                BattleSpotRing.ring(pose, cam.getPosition(), at.x, at.y, at.z, outer, outer - 0.15F, GOLD);
+            }
+        }
     }
 }

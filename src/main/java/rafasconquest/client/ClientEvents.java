@@ -97,6 +97,7 @@ public final class ClientEvents {
             DistantOcclusion.end();
             ArrowVolleys.render(event.getPoseStack(), event.getCamera());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            BattleScreen.renderSelection(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
         }
     }
 

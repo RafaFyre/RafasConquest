@@ -96,6 +96,48 @@ public final class BattleSpotRing {
         if (!has || mc.player.position().distanceTo(new Vec3(x, mc.player.getY(), z)) <= HIDE_WITHIN) {
             return;
         }
+        ring(pose, cam, x, y, z, OUTER, INNER, 0xE6FFFFFF);
+    }
+
+    /** A flat band on the ground from {@code a} to {@code b}, {@code half} wide each side, {@code argb} coloured. */
+    static void strip(PoseStack pose, Vec3 cam, Vec3 a, Vec3 b, float half, int argb) {
+        double len = Math.hypot(b.x - a.x, b.z - a.z);
+        if (len < 1e-3) {
+            return;
+        }
+        float sx = (float) (-(b.z - a.z) / len * half); // square to the band
+        float sz = (float) ((b.x - a.x) / len * half);
+        float ax = (float) (a.x - cam.x);
+        float ay = (float) (a.y + 0.06 - cam.y);
+        float az = (float) (a.z - cam.z);
+        float bx = (float) (b.x - cam.x);
+        float by = (float) (b.y + 0.06 - cam.y);
+        float bz = (float) (b.z - cam.z);
+        int alpha = argb >>> 24;
+        int r = argb >> 16 & 0xFF;
+        int g = argb >> 8 & 0xFF;
+        int bl = argb & 0xFF;
+        Matrix4f matrix = pose.last().pose();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+        builder.addVertex(matrix, ax - sx, ay, az - sz).setColor(r, g, bl, alpha);
+        builder.addVertex(matrix, ax + sx, ay, az + sz).setColor(r, g, bl, alpha);
+        builder.addVertex(matrix, bx - sx, by, bz - sz).setColor(r, g, bl, alpha);
+        builder.addVertex(matrix, bx + sx, by, bz + sz).setColor(r, g, bl, alpha);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+    }
+
+    /** A flat ring on the ground at (x, y, z), {@code argb} coloured. */
+    static void ring(PoseStack pose, Vec3 cam, double x, double y, double z, float outer, float inner, int argb) {
+        int a = argb >>> 24;
+        int r = argb >> 16 & 0xFF;
+        int g = argb >> 8 & 0xFF;
+        int b = argb & 0xFF;
         pose.pushPose();
         pose.translate(x - cam.x, y + 0.05 - cam.y, z - cam.z);
         Matrix4f matrix = pose.last().pose();
@@ -105,11 +147,11 @@ public final class BattleSpotRing {
         RenderSystem.disableCull();
         BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
         for (int i = 0; i <= SEGMENTS; i++) {
-            double a = 2 * Math.PI * i / SEGMENTS;
-            float cos = (float) Math.cos(a);
-            float sin = (float) Math.sin(a);
-            builder.addVertex(matrix, cos * OUTER, 0, sin * OUTER).setColor(255, 255, 255, 230);
-            builder.addVertex(matrix, cos * INNER, 0, sin * INNER).setColor(255, 255, 255, 230);
+            double angle = 2 * Math.PI * i / SEGMENTS;
+            float cos = (float) Math.cos(angle);
+            float sin = (float) Math.sin(angle);
+            builder.addVertex(matrix, cos * outer, 0, sin * outer).setColor(r, g, b, a);
+            builder.addVertex(matrix, cos * inner, 0, sin * inner).setColor(r, g, b, a);
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.enableCull();

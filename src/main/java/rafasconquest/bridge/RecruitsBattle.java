@@ -370,7 +370,7 @@ public final class RecruitsBattle {
 
     /**
      * A player enlisted in the battle: their side and rank, their block (the first to charge) and the blocks beside it
-     * whose soldiers they command (as many as their rank leads, up to a Captain's), and the orders last given them.
+     * whose soldiers they command (as many as their rank leads), and the orders last given them.
      */
     private static final class Enlisted {
         final UUID player;
@@ -2187,8 +2187,8 @@ public final class RecruitsBattle {
     /**
      * At the start, each player on one of the battle's teams (by /team join) is enlisted with that side: they are put
      * in the front block nearest the middle of the line (the first to charge), teleported to its front, and given the
-     * soldiers of their block and the blocks beside it to command, as many as their rank leads (a Captain's 100 at
-     * most; officers' commands come later), following them.
+     * soldiers of their block and the blocks beside it to command, as many as their rank leads (officers command
+     * theirs from the strategy view), following them.
      */
     private void enlist() {
         Set<FieldBlock> taken = new HashSet<>();
@@ -2215,9 +2215,9 @@ public final class RecruitsBattle {
                 }
                 FieldBlock home = front.get(0);
                 Rank rank = ranks.of(player.getUUID());
-                int leads = Math.min(rank.leads(), Rank.CAPTAIN.leads());
+                int leads = rank.leads();
                 List<FieldBlock> blocks = new ArrayList<>(List.of(home));
-                List<FieldBlock> beside = new ArrayList<>(front.subList(1, front.size()));
+                List<FieldBlock> beside = rank.officer() ? allArms(army, taken, home) : new ArrayList<>(front.subList(1, front.size()));
                 beside.sort(Comparator.comparingDouble(b -> b.pos().distanceTo(home.pos())));
                 for (FieldBlock b : beside) {
                     if (blocks.size() * BattlePlan.SOLDIERS_PER_FORMATION >= leads) {
@@ -2230,7 +2230,9 @@ public final class RecruitsBattle {
                 e.job = job;
                 e.role = role;
                 for (FieldBlock b : blocks) {
-                    field.assign(b, b == home || role != BattleRole.BAIT ? task(role) : FieldBlock.Task.NONE);
+                    // An officer's other formations keep their place in the general's plan; only their own takes the role.
+                    boolean roleTask = b == home || !rank.officer() && role != BattleRole.BAIT;
+                    field.assign(b, roleTask ? task(role) : FieldBlock.Task.NONE);
                 }
                 e.formYaw = yawOf(new Point(army.facingX(), army.facingZ()));
                 CommandEvents.saveFormation(player, SQUARE_FORMATION);
@@ -2286,6 +2288,21 @@ public final class RecruitsBattle {
         return pool;
     }
 
+    /**
+     * An officer's command beyond their own formation: every arm (infantry of every line, archers, cavalry) not yet
+     * given to another player, nearest the officer's formation first. Never the general, the guard or the bearer.
+     */
+    private static List<FieldBlock> allArms(FieldArmy army, Set<FieldBlock> taken, FieldBlock home) {
+        List<FieldBlock> pool = new ArrayList<>();
+        for (FieldBlock b : army.blocks()) {
+            if (b != home && b.alive() > 0 && b.task() == FieldBlock.Task.NONE && !taken.contains(b)
+                    && b.duty() != Duty.GENERAL && b.duty() != Duty.GUARD && b.duty() != Duty.BEARER) {
+                pool.add(b);
+            }
+        }
+        return pool;
+    }
+
     /** Where a player's unit fights, as told them at the start. */
     private static String roleTitle(BattleRole role) {
         return switch (role) {
@@ -2329,6 +2346,9 @@ public final class RecruitsBattle {
      */
     @Nullable
     private AbstractRecruitEntity enlistSoldier(Live l, int i, AbstractRecruitEntity s, Enlisted e) {
+        if (e.rank.officer() && l.block != e.home) {
+            return s; // an officer's other formations stay the archers, cavalry or infantry they are
+        }
         Side side = sides[l.block.side()];
         EntityType<? extends AbstractRecruitEntity> type = jobType(e.job);
         AbstractRecruitEntity soldier = s;
@@ -2884,8 +2904,13 @@ public final class RecruitsBattle {
 
     /** An order given in the battle screen (the war horn's or the strategy board's). New ones go last: the client sends ordinals. */
     public enum UnitOrder {
-        FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN, WEDGE, V, BRACE, GO, REFORM, RALLY, LEAD_CHARGE
+        FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN, WEDGE, V, BRACE, GO, REFORM, RALLY, LEAD_CHARGE,
+        /** Sent twice in a row, at the start and the end of a line dragged on the ground: the cards stand along it. */
+        LINE_UP
     }
+
+    /** Space between cards stood along a dragged line, at the least. */
+    private static final double LINE_GAP = 2;
 
     /** How many units (blocks) a card starts with at most: 200 soldiers. */
     private static final int CARD_UNITS = 10;
@@ -3256,6 +3281,13 @@ public final class RecruitsBattle {
                     us.add(e.units.get(number - 1));
                 }
             }
+            if (orders.get(k) == UnitOrder.LINE_UP) {
+                if (k + 1 < orders.size() && orders.get(k + 1) == UnitOrder.LINE_UP && !us.isEmpty()) {
+                    battle.lineUp(e, battle.split(e, us), places.get(k), places.get(k + 1));
+                }
+                k++; // the line's end is the next entry
+                continue;
+            }
             battle.command(e, us, orders.get(k), places.get(k), player);
         }
         Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(battle.sides[e.side].horn);
@@ -3377,19 +3409,82 @@ public final class RecruitsBattle {
         }
         float yaw = (float) Math.toDegrees(Math.atan2(-(place.x - mx), place.z - mz));
         for (int k = 0; k < cards.size(); k++) {
-            Card c = cards.get(k);
-            c.at = new Vec3(place.x + centres.get(k).x - mx, place.y, place.z + centres.get(k).z - mz);
-            c.yaw = yaw;
-            c.target = null;
-            for (Unit u : e.units) {
-                if (u.card == c) {
-                    u.mode = UnitMode.MOVE;
-                    u.replace = true;
-                    u.placed.clear();
-                    soldiersOf(u).forEach(s -> s.setAggroState(0));
-                }
+            sendCard(e, cards.get(k), new Vec3(place.x + centres.get(k).x - mx, place.y, place.z + centres.get(k).z - mz), yaw);
+        }
+    }
+
+    /** A card marches to {@code at} and stands there facing {@code yaw}, in the shape it has. */
+    private void sendCard(Enlisted e, Card c, Vec3 at, float yaw) {
+        c.at = at;
+        c.yaw = yaw;
+        c.target = null;
+        for (Unit u : e.units) {
+            if (u.card == c) {
+                u.mode = UnitMode.MOVE;
+                u.replace = true;
+                u.placed.clear();
+                soldiersOf(u).forEach(s -> s.setAggroState(0));
             }
         }
+    }
+
+    /**
+     * Cards stood side by side along the line from {@code from} to {@code to}, facing square to it (forward is to the
+     * left of the line as drawn, as in Total War: dragged left to right, they face away from the one dragging). They keep
+     * their shapes and their order across the line; the line's ends are the outer cards' outer flanks, but cards never
+     * stand closer than {@link #LINE_GAP}. A line too short to point anywhere is a plain move.
+     */
+    private void lineUp(Enlisted e, List<Card> cards, Vec3 from, Vec3 to) {
+        double len = Math.hypot(to.x - from.x, to.z - from.z);
+        if (len < 1) {
+            move(e, cards, from);
+            return;
+        }
+        double ux = (to.x - from.x) / len;
+        double uz = (to.z - from.z) / len;
+        float yaw = (float) Math.toDegrees(Math.atan2(-uz, -ux)); // facing (uz, -ux): the line's left, Minecraft's yaw
+        List<Card> order = new ArrayList<>(cards);
+        Map<Card, Double> widths = new HashMap<>();
+        Map<Card, Double> across = new HashMap<>();
+        for (Card c : order) {
+            List<AbstractRecruitEntity> soldiers = cardSoldiers(e, c);
+            Vec3 centre = centreOf(soldiers, c.at != null ? c.at : from);
+            across.put(c, (centre.x - from.x) * ux + (centre.z - from.z) * uz);
+            widths.put(c, frontage(e, c, soldiers, centre));
+        }
+        order.sort(Comparator.comparingDouble(across::get));
+        double total = 0;
+        for (Card c : order) {
+            total += widths.get(c);
+        }
+        double gap = order.size() > 1 ? Math.max(LINE_GAP, (len - total) / (order.size() - 1)) : 0;
+        double along = len / 2 - (total + gap * (order.size() - 1)) / 2; // centred on the line's middle
+        for (Card c : order) {
+            double mid = along + widths.get(c) / 2;
+            sendCard(e, c, new Vec3(from.x + ux * mid, from.y, from.z + uz * mid), yaw);
+            along += widths.get(c) + gap;
+        }
+    }
+
+    /** How wide a card stands across its own front: its real soldiers' spread, else its blocks' widths laid side by side. */
+    private static double frontage(Enlisted e, Card c, List<AbstractRecruitEntity> soldiers, Vec3 centre) {
+        if (!soldiers.isEmpty()) {
+            double r = Math.toRadians(c.yaw);
+            double rx = -Math.cos(r); // the card's right, for Minecraft's yaw
+            double rz = -Math.sin(r);
+            double half = 0;
+            for (AbstractRecruitEntity s : soldiers) {
+                half = Math.max(half, Math.abs((s.getX() - centre.x) * rx + (s.getZ() - centre.z) * rz));
+            }
+            return 2 * half + 1;
+        }
+        double width = 0;
+        for (Unit u : e.units) {
+            if (u.card == c) {
+                width += 2 * u.block.halfWidth() + 1;
+            }
+        }
+        return Math.max(width, 1);
     }
 
     /** A card not yet given a place holds where the battle put its blocks: the middle of their lines, facing as they face. */

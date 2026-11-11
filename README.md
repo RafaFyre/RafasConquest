@@ -288,7 +288,7 @@ first. The old relation is restored when the battle ends.
   by a General, and an army fighting in wings names a Marshal for each wing.
 - **Enlisted players:** a player who has joined one side's team (`/team join`) when the battle starts is enlisted
   with it. They are teleported to the front of the front block nearest the middle of the line (the first to charge)
-  and given that block's soldiers, then the blocks beside it, as many as their rank leads (a Captain's 100 at most),
+  and given that block's soldiers, then the blocks beside it, as many as their rank leads,
   in a group of theirs in Recruits' command screen; the battle gives those soldiers no orders. Until the player orders
   them otherwise they stand in a square behind the player's ring, facing the enemy, moving with it as the block
   advances; the command screen's formation is set to square. A white ring on the ground marks their place in the
