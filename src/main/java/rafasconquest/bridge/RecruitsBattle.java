@@ -3393,15 +3393,23 @@ public final class RecruitsBattle {
                 case CHARGE -> {
                     List<AbstractRecruitEntity> foes = enemiesOf(u.block.side(), true);
                     FieldBlock target = u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null;
+                    // Archers loose at the target rather than charging it: they walk only until it is within bow range.
+                    boolean bow = u.block.arm() == Arm.ARCHERS;
+                    double bowReach = FieldRules.ARCHER_RANGE * FieldBattle.LOOSE_AT;
                     for (AbstractRecruitEntity s : soldiers) {
                         LivingEntity aimed = s.getTarget();
                         if (aimed != null && aimed.isAlive()) {
+                            if (bow && s.distanceTo(aimed) <= bowReach) {
+                                s.getNavigation().stop(); // in range: stand and shoot
+                            }
                             continue;
                         }
                         if (target == null) {
-                            nearestTo(s, foes).filter(f -> f.distanceTo(s) <= CHARGE_REACH).ifPresent(f -> {
+                            nearestTo(s, foes).filter(f -> f.distanceTo(s) <= (bow ? FieldRules.ARCHER_RANGE : CHARGE_REACH)).ifPresent(f -> {
                                 s.setTarget(f);
-                                s.getNavigation().moveTo(f, 1.2);
+                                if (!bow) {
+                                    s.getNavigation().moveTo(f, 1.2);
+                                }
                             });
                             continue;
                         }
@@ -3419,7 +3427,11 @@ public final class RecruitsBattle {
                         }
                         if (best != null) {
                             s.setTarget(best);
-                            s.getNavigation().moveTo(best, 1.2);
+                            if (!bow || s.distanceTo(best) > bowReach) {
+                                s.getNavigation().moveTo(best, bow ? 1.0 : 1.2);
+                            }
+                        } else if (bow && Math.hypot(s.getX() - tx, s.getZ() - tz) <= bowReach) {
+                            s.getNavigation().stop(); // its soldiers out of sight: wait in range for them
                         } else {
                             double ty = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(tx), Mth.floor(tz));
                             s.getNavigation().moveTo(tx, ty, tz, 1.2);

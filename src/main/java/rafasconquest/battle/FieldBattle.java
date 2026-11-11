@@ -2316,6 +2316,10 @@ public final class FieldBattle {
         }
         b.approaching = false;
         if (b.ledCharge) {
+            if (b.ledTarget != null && b.ledTarget.alive > 0 && b.arm == Arm.ARCHERS) {
+                loose(b, b.ledTarget);
+                return;
+            }
             if (b.ledTarget != null && b.ledTarget.alive > 0) {
                 if (b.strikeAt != b.ledTarget) {
                     send(b, b.ledTarget, sideNearer(b.ledTarget, b.pos));
@@ -2335,6 +2339,23 @@ public final class FieldBattle {
             b.facingX = b.ledFacingX;
             b.facingZ = b.ledFacingZ;
         }
+    }
+
+    /** Archers sent at a block stand this share of their range from it, so a step back by it keeps it in reach. */
+    public static final double LOOSE_AT = 0.8;
+
+    /**
+     * Archers sent at a block don't charge it: they close to {@link #LOOSE_AT} of their range, stand there facing it, and
+     * shoot it ({@link #shoot}).
+     */
+    private static void loose(FieldBlock b, FieldBlock target) {
+        b.strikeAt = null;
+        b.charged = false;
+        double stand = FieldRules.ARCHER_RANGE * LOOSE_AT;
+        double d = b.pos.distanceTo(target.pos);
+        b.line = d <= stand ? b.pos : new Point(target.pos.x() + (b.pos.x() - target.pos.x()) * stand / d,
+                target.pos.z() + (b.pos.z() - target.pos.z()) * stand / d);
+        face(b, target.pos);
     }
 
     private static void send(FieldBlock block, FieldBlock target, int side) {
@@ -2916,7 +2937,9 @@ public final class FieldBattle {
      * generalship applies, an archer ship shoots what its captain marks ({@link #mark}).
      */
     private void shoot(FieldArmy army, FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
-        FieldBlock foe = type == BattleType.OCEAN
+        FieldBlock led = archers.ledCharge ? archers.ledTarget : null; // a player's target comes first, once in range
+        FieldBlock foe = led != null && led.alive > 0 && archers.pos.distanceTo(led.pos) <= FieldRules.ARCHER_RANGE ? led
+                : type == BattleType.OCEAN
                 ? (archers.prey != null && archers.prey.alive > 0 && archers.pos.distanceTo(archers.prey.pos) <= FieldRules.ARCHER_RANGE ? archers.prey : null)
                 : army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, archers.pos, FieldRules.ARCHER_RANGE) : null;
         if (foe == null) {

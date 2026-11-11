@@ -11,6 +11,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldBattleTest {
@@ -274,6 +275,29 @@ class FieldBattleTest {
         }
         assertTrue(led.pos.distanceTo(sent) < 2, "goes where its player sends it, " + led.pos.distanceTo(sent) + " off");
         assertFalse(led.charged);
+    }
+
+    @Test
+    void sentAtAnEnemyArchersStandAndShootItWhileMeleeCharges() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock archers = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.ARCHERS).findFirst().orElseThrow();
+        FieldBlock foot = battle.army(0).front[0];
+        FieldBlock target = battle.army(1).blocks().stream().filter(b -> b.arm().infantry())
+                .min(java.util.Comparator.comparingDouble(b -> b.pos.distanceTo(archers.pos))).orElseThrow();
+        battle.army(1).blocks().forEach(battle::lead); // the enemy holds: nobody else comes at the archers
+        battle.lead(archers);
+        battle.lead(foot);
+        boolean shotIt = false;
+        for (int i = 0; i < 150 && target.alive() > 0 && !shotIt; i++) { // the armies start far apart
+            battle.steer(archers, archers.pos, archers.facingX, archers.facingZ, true, target);
+            battle.steer(foot, foot.pos, foot.facingX, foot.facingZ, true, target);
+            battle.second();
+            shotIt |= battle.volleys().stream().anyMatch(v -> v.archers() == archers && v.target() == target);
+            assertNull(archers.strikeAt(), "archers never charge");
+            assertTrue(archers.pos.distanceTo(target.pos) > FieldRules.CLOSE_REACH + 5, "archers keep their distance");
+        }
+        assertTrue(shotIt, "the archers shot their target");
+        assertEquals(target, foot.strikeAt(), "the foot charged it");
     }
 
     @Test
