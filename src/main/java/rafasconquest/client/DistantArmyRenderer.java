@@ -126,17 +126,27 @@ public final class DistantArmyRenderer {
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         figure.tint = halo == null ? -1 : 0xFFFFFF;
         int drawn = 0;
+        long now = net.minecraft.Util.getMillis();
         for (FormationSnapshot formation : formations) {
             if (halo != null && !halo.contains(formation.id())) {
                 continue;
             }
-            for (Sprite sprite : formation.place(positions)) {
+            List<Sprite> sprites = formation.place(positions);
+            for (int i = 0; i < sprites.size(); i++) {
+                Sprite sprite = sprites.get(i);
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
                 double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 if (sprite.real() && distance <= handover) {
                     continue; // the client has this soldier, close enough to draw it itself (and glow it)
+                }
+                double[] thrown = ThrownFigures.offset(formation.id(), i, now);
+                if (thrown != null) {
+                    dx += thrown[0];
+                    dy += thrown[1];
+                    dz += thrown[2];
+                    distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
                 }
                 boolean flatSprite = Math.hypot(dx, dz) > SoldierFigure.SPRITE_PAST;
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
@@ -442,20 +452,34 @@ public final class DistantArmyRenderer {
             buffer.addVertex(matrix, x + rightX * l, hi, z + rightZ * l).setColor(r, g, b, 1F).setLight(light);
         }
 
-        /** A box from the figure's feet, its faces shaded as the game shades a block's; no bottom, it's never seen. */
+        private final float[] xs = new float[4];
+        private final float[] zs = new float[4];
+
+        /**
+         * A box from the figure's feet, turned the way the figure faces, its sides shaded by which way they face as
+         * the game shades a block's; no bottom, it's never seen.
+         */
         @Override
-        public void box(double x0, double y0, double z0, double x1, double y1, double z1, int rgb, SoldierFigure.Stuff stuff) {
-            float ax = x + (float) x0 * scale;
-            float ay = y + (float) y0 * scale;
-            float az = z + (float) z0 * scale;
-            float bx = x + (float) x1 * scale;
-            float by = y + (float) y1 * scale;
-            float bz = z + (float) z1 * scale;
-            quad(rgb, 1.0F, ax, by, az, bx, by, az, bx, by, bz, ax, by, bz); // top
-            quad(rgb, 0.8F, ax, ay, az, bx, ay, az, bx, by, az, ax, by, az); // north
-            quad(rgb, 0.8F, ax, ay, bz, bx, ay, bz, bx, by, bz, ax, by, bz); // south
-            quad(rgb, 0.6F, ax, ay, az, ax, ay, bz, ax, by, bz, ax, by, az); // west
-            quad(rgb, 0.6F, bx, ay, az, bx, ay, bz, bx, by, bz, bx, by, az); // east
+        public void box(double cx, double cz, double rx, double rz, double fx, double fz, double bottom, double top, int rgb,
+                        SoldierFigure.Stuff stuff) {
+            float lo = y + (float) bottom * scale;
+            float hi = y + (float) top * scale;
+            for (int i = 0; i < 4; i++) { // round the footprint: front left, front right, back right, back left
+                int r = i == 1 || i == 2 ? 1 : -1;
+                int ahead = i < 2 ? 1 : -1;
+                xs[i] = x + (float) (cx + rx * r + fx * ahead) * scale;
+                zs[i] = z + (float) (cz + rz * r + fz * ahead) * scale;
+            }
+            quad(rgb, 1.0F, xs[0], hi, zs[0], xs[1], hi, zs[1], xs[2], hi, zs[2], xs[3], hi, zs[3]); // top
+            for (int i = 0; i < 4; i++) {
+                int j = (i + 1) % 4;
+                float dx = xs[j] - xs[i];
+                float dz = zs[j] - zs[i];
+                float length = dx * dx + dz * dz;
+                // A side running east-west faces north or south (0.8), one running north-south east or west (0.6).
+                float shade = length <= 0 ? 0.7F : 0.6F + 0.2F * dx * dx / length;
+                quad(rgb, shade, xs[i], lo, zs[i], xs[j], lo, zs[j], xs[j], hi, zs[j], xs[i], hi, zs[i]);
+            }
         }
 
         private void quad(int rgb, float shade, float... v) {

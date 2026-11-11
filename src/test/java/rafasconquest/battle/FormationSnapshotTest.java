@@ -49,13 +49,22 @@ class FormationSnapshotTest {
     }
 
     @Test
-    void theLeaderStandsInTheMiddleOfTheFrontRank() {
+    void theLeaderStandsInTheMiddleOfTheBackRank() {
         List<Sprite> sprites = twoRanksFacingEast(false).layout();
         List<Sprite> leaders = sprites.stream().filter(Sprite::leader).toList();
         assertEquals(1, leaders.size());
-        double front = sprites.stream().mapToDouble(Sprite::x).max().orElseThrow();
-        assertEquals(front, leaders.get(0).x(), 1e-9, "front rank faces east, so it has the largest x");
+        double back = sprites.stream().mapToDouble(Sprite::x).min().orElseThrow();
+        assertEquals(back, leaders.get(0).x(), 1e-9, "front rank faces east, so the back rank has the smallest x");
         assertTrue(Math.abs(leaders.get(0).z()) < 3);
+    }
+
+    @Test
+    void theCaptainsPlaceIsTheMiddleOfTheBackRank() {
+        assertEquals(14, BattlePlan.captainPlace(20, 10), "two full ranks of 10");
+        assertEquals(12, BattlePlan.captainPlace(15, 10), "a back rank of 5: its third");
+        assertEquals(17, BattlePlan.captainPlace(20, 4), "five ranks of 4");
+        assertEquals(9, BattlePlan.captainPlace(20, 20), "one rank");
+        assertEquals(0, BattlePlan.captainPlace(1, 10), "a lone soldier");
     }
 
     @Test

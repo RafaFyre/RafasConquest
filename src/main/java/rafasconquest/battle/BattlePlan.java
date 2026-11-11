@@ -19,8 +19,17 @@ public final class BattlePlan {
     public static final int MAX_SOLDIERS = 100_000;
     /** Ranks are this many soldiers wide, so a block of 20 stands 2 deep. */
     public static final int FILE_WIDTH = 10;
-    /** Which soldier of a formation is its leader (its captain): the middle of the front rank. */
+    /** Which soldier of a formation is its leader (its captain); it stands at {@link #captainPlace}. */
     public static final int LEADER_INDEX = FILE_WIDTH / 2 - 1;
+
+    /**
+     * The place in the ranks (counting along each rank from the front) where a block of {@code soldiers},
+     * {@code files} wide, stands its captain: the middle of its back rank.
+     */
+    public static int captainPlace(int soldiers, int files) {
+        int back = (soldiers - 1) / files * files;
+        return back + (soldiers - back - 1) / 2;
+    }
     /** Blocks between soldiers in a rank (Recruits' own formation spacing). */
     public static final double SPACING = 1.75;
     /** From one block's centre to the next in a line: a block's width and a gap. */

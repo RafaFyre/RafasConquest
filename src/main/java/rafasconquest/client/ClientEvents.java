@@ -78,6 +78,7 @@ public final class ClientEvents {
         BattleSpotRing.clear();
         DistantHorizonsLink.leftWorld();
         ArrowVolleys.clear();
+        ThrownFigures.clear();
     }
 
     /**

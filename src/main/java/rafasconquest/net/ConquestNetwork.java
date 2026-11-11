@@ -222,6 +222,24 @@ public final class ConquestNetwork {
                 .decoder(b -> new CameraAt(b.readBoolean(), b.readDouble(), b.readDouble()))
                 .consumerMainThread(ConquestNetwork::handleCameraAt)
                 .add();
+        CHANNEL.messageBuilder(ChargeHits.class, 34, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeVarIntArray(m.cavalry());
+                    b.writeVarIntArray(m.struck());
+                })
+                .decoder(b -> new ChargeHits(b.readVarIntArray(), b.readVarIntArray()))
+                .consumerMainThread((m, context) -> rafasconquest.client.ThrownFigures.receive(m.cavalry(), m.struck()))
+                .add();
+    }
+
+    /** Server → client: cavalry formation {@code cavalry[i]} tore into formation {@code struck[i]} this second. */
+    public record ChargeHits(int[] cavalry, int[] struck) {
+    }
+
+    public static void sendChargeHits(List<ServerPlayer> players, ChargeHits hits) {
+        for (ServerPlayer player : players) {
+            CHANNEL.send(player, hits);
+        }
     }
 
     /** Client → server: where the strategy view's camera is (has false: closed), to load the world about it. */

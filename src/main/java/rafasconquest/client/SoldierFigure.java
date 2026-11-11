@@ -4,8 +4,8 @@ import rafasconquest.battle.FormationSnapshot;
 
 /**
  * A soldier's 3D level of detail: little upright boxes, in the soldier's own frame ({@code right} along its rank,
- * {@code back} away from the enemy, {@code up} from the feet), drawn by {@link DistantArmyRenderer}. Boxes can't turn, so each
- * is the upright box that holds the turned one.
+ * {@code back} away from the enemy, {@code up} from the feet), drawn by {@link DistantArmyRenderer}, each box turned the
+ * way its formation faces.
  */
 final class SoldierFigure {
     /** Past this many blocks (flat) a soldier is a sprite, not a 3D figure. Ships switch further out ({@link DistantShips#SPRITE_PAST}). */
@@ -17,9 +17,13 @@ final class SoldierFigure {
 
     enum Stuff { CLOTH, METAL, WOOD }
 
-    /** Takes each box, from the soldier's feet: x and z in blocks east and south, y up. */
+    /**
+     * Takes each box, from the soldier's feet (x and z in blocks east and south, y up): centred at ({@code cx},
+     * {@code cz}), reaching ({@code rx}, {@code rz}) to its right and ({@code fx}, {@code fz}) to its front either way,
+     * from {@code bottom} to {@code top}.
+     */
     interface Boxes {
-        void box(double x0, double y0, double z0, double x1, double y1, double z1, int rgb, Stuff stuff);
+        void box(double cx, double cz, double rx, double rz, double fx, double fz, double bottom, double top, int rgb, Stuff stuff);
     }
 
     private final FormationSnapshot f;
@@ -93,11 +97,8 @@ final class SoldierFigure {
                      int rgb, Stuff stuff) {
         double rightX = -f.facingZ();
         double rightZ = f.facingX();
-        double cx = rightX * right - f.facingX() * back;
-        double cz = rightZ * right - f.facingZ() * back;
-        double hx = Math.abs(rightX) * halfWidth + Math.abs(f.facingX()) * halfDepth;
-        double hz = Math.abs(rightZ) * halfWidth + Math.abs(f.facingZ()) * halfDepth;
-        out.box(cx - hx, bottom, cz - hz, cx + hx, top, cz + hz, rgb, stuff);
+        out.box(rightX * right - f.facingX() * back, rightZ * right - f.facingZ() * back, rightX * halfWidth, rightZ * halfWidth,
+                f.facingX() * halfDepth, f.facingZ() * halfDepth, bottom, top, rgb, stuff);
     }
 
     static int darker(int rgb) {

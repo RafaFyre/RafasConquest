@@ -333,6 +333,8 @@ public final class RecruitsBattle {
     /** Each block's last height, and how many generator lookups this second has made. */
     private final Map<Integer, Integer> lastGround = new HashMap<>();
     private int groundLookups;
+    /** Where each block stood at the last snapshot, for which way its riders are going ({@link #faceOf}). */
+    private final Map<Integer, Point> snappedAt = new HashMap<>();
     private static final int GROUND_LOOKUPS_PER_SECOND = 40;
     private final Calibration calibration = new Calibration();
     private final Map<FieldBlock, Double> lastHealth = new HashMap<>();
@@ -955,15 +957,25 @@ public final class RecruitsBattle {
 
     /**
      * Soldier i's place in its block's ranks, from the front rank's centre: how far to the right and back. The
-     * captain stands in the middle of the front rank, as the figures draw it.
+     * captain stands in the middle of the back rank, as the figures draw it, and whoever's place that was takes theirs.
      */
     private static double slotRight(FieldBlock block, int i) {
         int files = Math.max(1, block.files());
-        return block.started() == 1 ? 0 : (i % files - (files - 1) / 2.0) * BattlePlan.SPACING;
+        return block.started() == 1 ? 0 : (place(block, i) % files - (files - 1) / 2.0) * BattlePlan.SPACING;
     }
 
     private static double slotBack(FieldBlock block, int i) {
-        return (i / Math.max(1, block.files())) * BattlePlan.SPACING * SLOT_DEPTH;
+        return (place(block, i) / Math.max(1, block.files())) * BattlePlan.SPACING * SLOT_DEPTH;
+    }
+
+    /** Where soldier i stands in its block's ranks, counting along each rank from the front. */
+    private static int place(FieldBlock block, int i) {
+        int captain = block.captain();
+        if (captain < 0) {
+            return i;
+        }
+        int back = BattlePlan.captainPlace(block.started(), Math.max(1, block.files()));
+        return i == captain ? back : i == back ? captain : i;
     }
 
     /** Where soldier i stands in the ranks of a block whose front rank's centre is at {@code front}. */
@@ -2052,6 +2064,7 @@ public final class RecruitsBattle {
         field.second();
         fieldNanos += System.nanoTime() - t;
         sendVolleys();
+        sendChargeHits();
         for (FieldBattle.Order order : field.takeCalls()) {
             soundHorn(order.side());
             if (order.call() == FieldBattle.Call.ADVANCE) {
@@ -4115,6 +4128,32 @@ public final class RecruitsBattle {
     }
 
     /**
+     * Charging cavalry that struck foot soldiers this second with momentum to spare (its charge not broken on a braced
+     * wall), for clients to throw some of the struck figures through the air.
+     */
+    private void sendChargeHits() {
+        if (level.players().isEmpty()) {
+            return;
+        }
+        List<Integer> cavalry = new ArrayList<>();
+        List<Integer> struck = new ArrayList<>();
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock b : field.army(side).blocks()) {
+                FieldBlock foe = b.contactFoe();
+                if (b.arm() == Arm.CAVALRY && b.charged() && !b.afloat() && b.momentum() > 0 && foe != null
+                        && foe.arm() != Arm.CAVALRY && foe.alive() > 0) {
+                    cavalry.add(b.id());
+                    struck.add(foe.id());
+                }
+            }
+        }
+        if (!cavalry.isEmpty()) {
+            ConquestNetwork.sendChargeHits(level.players(), new ConquestNetwork.ChargeHits(
+                    cavalry.stream().mapToInt(Integer::intValue).toArray(), struck.stream().mapToInt(Integer::intValue).toArray()));
+        }
+    }
+
+    /**
      * The general sounds the horn for a big decision (the advance, a cavalry charge or recall, a wall, the general
      * charging, the final charge): the faction's own goat horn, heard far across the field. At most one every
      * {@link #HORN_SECONDS}; a fallen general sounds none.
@@ -5632,10 +5671,11 @@ public final class RecruitsBattle {
                 }
                 FormationSnapshot.Kind kind = block.duty() == Duty.GENERAL ? FormationSnapshot.Kind.GENERAL
                         : block.duty() == Duty.BEARER ? FormationSnapshot.Kind.BEARER : FormationSnapshot.Kind.of(block.arm());
+                double[] face = faceOf(block);
                 Live l = live.get(block);
                 List<AbstractRecruitEntity> living = l == null ? List.of() : l.living();
                 if (!living.isEmpty()) {
-                    all.add(liveSnapshot(block, kind, s, army, l, living, shipOf(block)));
+                    all.add(liveSnapshot(block, kind, s, face, l, living, shipOf(block)));
                     continue;
                 }
                 boolean lone = block.started() == 1;
@@ -5652,12 +5692,38 @@ public final class RecruitsBattle {
                 }
                 Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
                 all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
-                        groundY(block, middle.x(), middle.z()), middle.z(), block.facingX(), block.facingZ(),
+                        groundY(block, middle.x(), middle.z()), middle.z(), face[0], face[1],
                         lone ? 0 : block.halfWidth(), lone ? 0 : BattlePlan.SPACING, block.fighting(),
                         block.captainAlive(), new int[0], -1, null));
             }
         }
         return all;
+    }
+
+    /** Less than this far since the last snapshot (a second) and cavalry is standing, not riding. */
+    private static final double RIDING = 0.5;
+
+    /**
+     * Which way a block's figures face, a unit vector: cavalry on the move the way it rides; a block in melee toward
+     * the block it fights; otherwise the way it stands, toward the enemy from deployment on. A ship, its heading.
+     */
+    private double[] faceOf(FieldBlock block) {
+        Point was = snappedAt.put(block.id(), block.pos());
+        Point from = block.pos();
+        Point to = null;
+        if (block.afloat()) {
+            return new double[]{block.facingX(), block.facingZ()};
+        }
+        if (block.arm() == Arm.CAVALRY && was != null && was.distanceTo(from) > RIDING) {
+            to = from;
+            from = was;
+        } else if (block.contactFoe() != null) {
+            to = block.contactFoe().pos();
+        }
+        double dx = to == null ? 0 : to.x() - from.x();
+        double dz = to == null ? 0 : to.z() - from.z();
+        double length = Math.hypot(dx, dz);
+        return length < 1e-6 ? new double[]{block.facingX(), block.facingZ()} : new double[]{dx / length, dz / length};
     }
 
     /** A formation's ship, as the client is told of it: built as its real one is (sail()); null ashore. */
@@ -5675,7 +5741,7 @@ public final class RecruitsBattle {
      * A real block, from where its real soldiers stand (with their entity ids) and, for a block only part real, where
      * the rest stand in its ranks (with no id, so the client draws them as figures there), in the order of the ranks.
      */
-    private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, FieldArmy army, Live l,
+    private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, double[] face, Live l,
                                                   List<AbstractRecruitEntity> soldiers, @Nullable FormationSnapshot.Ship ship) {
         float[] health = block.health();
         Point front = front(block, health);
@@ -5716,7 +5782,7 @@ public final class RecruitsBattle {
             AbstractRecruitEntity c = l.soldiers[captain];
             leaderId = c != null && c.isAlive() ? c.getId() : -1;
         }
-        return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, army.facingX(), army.facingZ(),
+        return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, face[0], face[1],
                 block.fighting(), leaderId >= 0, ids, leaderId, ship);
     }
 

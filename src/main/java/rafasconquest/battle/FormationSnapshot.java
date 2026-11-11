@@ -105,7 +105,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
 
     /**
      * Where to draw each of its soldiers: a grid of ranks filling the formation's width and depth, as many files wide
-     * as its shape suggests. The leader takes the middle of the front rank, as when the formation was raised. A
+     * as its shape suggests. The leader takes the middle of the back rank, as when the formation was raised. A
      * fighting formation's soldiers are scattered a little about their places, the same way every time.
      */
     public List<Sprite> layout() {
@@ -121,7 +121,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         double cellBack = depth / ranks;
         double rightX = -facingZ;
         double rightZ = facingX;
-        int leaderAt = leader ? Math.min(BattlePlan.LEADER_INDEX, files - 1) : -1;
+        int leaderAt = leader ? BattlePlan.captainPlace(alive, files) : -1;
         for (int i = 0; i < alive; i++) {
             int file = i % files;
             int rank = i / files;
