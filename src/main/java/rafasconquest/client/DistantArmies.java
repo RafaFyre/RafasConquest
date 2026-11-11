@@ -58,6 +58,12 @@ public final class DistantArmies {
         return formations;
     }
 
+    /** The latest snapshot of a formation, as the server last told of it (no gliding); null if there is none by that id. */
+    @Nullable
+    public static FormationSnapshot target(int id) {
+        return to.get(id);
+    }
+
     /** One formation, where it should be drawn right now; null if there is none by that id. */
     @Nullable
     public static FormationSnapshot at(int id) {

@@ -102,9 +102,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FormationSnapshot.java": {
-    "mtime": 1794421684.521976,
-    "seen": 1794422269.250495,
-    "ast_hash": "f3d08e8ce9c8e4393c3f0e0c99642059",
+    "mtime": 1794428391.2623222,
+    "seen": 1794428533.9752533,
+    "ast_hash": "505eab84185a9c529110fa2cdc304f6a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/GroundPlan.java": {
@@ -294,15 +294,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmies.java": {
-    "mtime": 1793160155.734621,
-    "seen": 1793865705.7986062,
-    "ast_hash": "e3747e3110bb2ed49cf64f0f8eb7aa3a",
-    "semantic_hash": "e3747e3110bb2ed49cf64f0f8eb7aa3a"
+    "mtime": 1794428391.3700342,
+    "seen": 1794428533.9753284,
+    "ast_hash": "a98ce9fb3bc4e5801cda5ca55aad83a0",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794421689.080385,
-    "seen": 1794422269.2505682,
-    "ast_hash": "d50649cde33ed1fb5d3aa91a8e9133ce",
+    "mtime": 1794428391.4323769,
+    "seen": 1794428533.97533,
+    "ast_hash": "2116907a7fe3bcf972f85a8043df66d6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -3012,15 +3012,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureMotion.java": {
-    "mtime": 1794421684.6134913,
-    "seen": 1794422269.250579,
-    "ast_hash": "fd48ddec3ca71f43a7d3195797f98c4b",
+    "mtime": 1794428436.854003,
+    "seen": 1794428533.9753416,
+    "ast_hash": "6bb35edf7c980643dde540dbe45f13da",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/FigureMotionTest.java": {
-    "mtime": 1794421684.6886005,
-    "seen": 1794422269.2510636,
-    "ast_hash": "2d1f77235670d41e7dbef1e274d46076",
+    "mtime": 1794428448.9000247,
+    "seen": 1794428533.9758282,
+    "ast_hash": "2d8b066764febc8ae6c80e50ed3f5359",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/ClientChunkWindowMixin.java": {

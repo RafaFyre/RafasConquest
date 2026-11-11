@@ -189,6 +189,11 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         return ((h >>> 11) / (double) (1L << 53) * 2 - 1) * MELEE_JITTER;
     }
 
+    /** This formation, its middle moved to ({@code x}, {@code y}, {@code z}). */
+    public FormationSnapshot movedTo(double x, double y, double z) {
+        return new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship);
+    }
+
     /** Partway from {@code from} to this snapshot of the same formation ({@code t} from 0 to 1). */
     public FormationSnapshot from(FormationSnapshot from, double t) {
         double fx = lerp(from.facingX, facingX, t);

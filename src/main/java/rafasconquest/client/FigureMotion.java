@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 /**
  * Each distant soldier moves on its own: it walks to its place in its block's ranks at a soldier's pace and turns
@@ -28,6 +29,11 @@ final class FigureMotion {
     static final double TURN = Math.toRadians(300);
     /** Slower than this (blocks a second), a figure is standing, and faces its foe or its block's front. */
     static final double MOVING = 1.2;
+    /** Nearer its place than this, a figure sidesteps facing the front rather than turning the way it walks. */
+    static final double SHUFFLE = 2.5;
+    /** The ranks are dealt out again when the block turns more than this, radians, or changes shape. */
+    private static final double REMATCH_TURN = Math.toRadians(3);
+    private static final double REMATCH_SHAPE = 0.5;
     /** How far past the gap between two blocks in melee their front ranks press into each other; riders further. */
     static final double MIX = 1.5;
     static final double HORSE_MIX = 3.5;
@@ -57,7 +63,18 @@ final class FigureMotion {
         }
     }
 
+    /** Which place in the ranks each figure of a block walks to, and the ranks' facing and shape it was dealt for. */
+    private static final class Match {
+        int[] slotOf;
+        double fx;
+        double fz;
+        double halfWidth;
+        double halfDepth;
+        long seen;
+    }
+
     private static final Map<Long, State> STATES = new HashMap<>();
+    private static final Map<Integer, Match> MATCHES = new HashMap<>();
     private static long last;
     private static long pruned;
 
@@ -66,21 +83,36 @@ final class FigureMotion {
 
     /** Moves every figure on to {@code now} and says where each is, a list per formation in the order given. */
     static List<List<Placed>> step(List<FormationSnapshot> formations, FormationSnapshot.Positions positions, long now) {
+        return step(formations, id -> null, positions, now);
+    }
+
+    /**
+     * As above; {@code targets} gives each formation's latest snapshot, whose facing and shape the ranks are laid out in
+     * (only its middle glides), so a turning block's places jump once to the turned ranks rather than swinging round.
+     */
+    static List<List<Placed>> step(List<FormationSnapshot> formations, IntFunction<FormationSnapshot> targets,
+                                   FormationSnapshot.Positions positions, long now) {
         double dt = last == 0 ? 0 : Math.min(0.1, Math.max(0, (now - last) / 1000.0));
         last = now;
         List<List<Placed>> all = new ArrayList<>(formations.size());
         for (FormationSnapshot f : formations) {
-            all.add(step(f, foe(f, formations), positions, now, dt));
+            FormationSnapshot target = targets.apply(f.id());
+            FormationSnapshot ranks = target == null ? f : target.movedTo(f.x(), f.y(), f.z());
+            all.add(step(f, ranks, foe(f, formations), positions, now, dt));
         }
         if (now - pruned > 1000) {
             pruned = now;
             STATES.values().removeIf(s -> now - s.seen > FORGET_MILLIS);
+            MATCHES.values().removeIf(m -> now - m.seen > FORGET_MILLIS);
         }
         return all;
     }
 
-    private static List<Placed> step(FormationSnapshot f, FormationSnapshot foe, FormationSnapshot.Positions positions, long now, double dt) {
+    private static List<Placed> step(FormationSnapshot f, FormationSnapshot ranks, FormationSnapshot foe, FormationSnapshot.Positions positions,
+                                     long now, double dt) {
         List<Sprite> sprites = f.place(positions);
+        List<Sprite> slots = ranks.layout();
+        int[] slotOf = match(f.id(), ranks, sprites, slots, now);
         List<Placed> placed = new ArrayList<>(sprites.size());
         boolean horse = f.kind().mounted();
         // Toward the foe, and how far the front rank presses on: half the gap between the fronts, and then some.
@@ -98,8 +130,9 @@ final class FigureMotion {
         double depth = Math.max(f.halfDepth(), 0.5);
         for (int i = 0; i < sprites.size(); i++) {
             Sprite s = sprites.get(i);
-            double tx = s.x();
-            double tz = s.z();
+            Sprite slot = s.real() || slotOf[i] >= slots.size() ? s : slots.get(slotOf[i]);
+            double tx = slot.x();
+            double tz = slot.z();
             if (f.fighting() && !s.real()) {
                 if (foe != null) {
                     // The front rank presses on furthest; the rear ranks follow less far.
@@ -113,8 +146,8 @@ final class FigureMotion {
                 tx += Math.sin(t * 1.3 + phase) * SWAY;
                 tz += Math.cos(t * 1.1 + phase * 1.7) * SWAY;
             }
-            double faceX = foe != null ? sx : f.facingX();
-            double faceZ = foe != null ? sz : f.facingZ();
+            double faceX = foe != null ? sx : ranks.facingX();
+            double faceZ = foe != null ? sz : ranks.facingZ();
             State state = STATES.get(key(f.id(), i));
             if (state == null) {
                 state = new State(tx, tz, faceX, faceZ);
@@ -129,7 +162,7 @@ final class FigureMotion {
                 move(state, tx, tz, faceX, faceZ, s.real(), horse ? HORSE_SPEED : FOOT_SPEED, dt);
             }
             state.seen = now;
-            placed.add(new Placed(state.x, s.y() + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, s.leader(), s.real()));
+            placed.add(new Placed(state.x, s.y() + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real()));
         }
         return placed;
     }
@@ -157,7 +190,7 @@ final class FigureMotion {
         }
         double wantX = faceX;
         double wantZ = faceZ;
-        if (dt > 0 && step / dt > MOVING) {
+        if (dt > 0 && step / dt > MOVING && distance > SHUFFLE) {
             wantX = dx / distance;
             wantZ = dz / distance;
         }
@@ -197,12 +230,79 @@ final class FigureMotion {
         return best;
     }
 
+    /**
+     * Which place each figure walks to. When the block turns or changes shape, the places are dealt out again, each
+     * figure to the nearest free one (closest pairs first), so a block that turns has its soldiers turn where they stand
+     * and shuffle a little, rather than each crossing to its old number in the turned ranks. The leader keeps its place;
+     * a real soldier stands where it is and takes none.
+     */
+    private static int[] match(int id, FormationSnapshot ranks, List<Sprite> sprites, List<Sprite> slots, long now) {
+        Match m = MATCHES.get(id);
+        int n = sprites.size();
+        if (m == null || m.slotOf.length != n
+                || m.fx * ranks.facingX() + m.fz * ranks.facingZ() < Math.cos(REMATCH_TURN)
+                || Math.abs(m.halfWidth - ranks.halfWidth()) > REMATCH_SHAPE || Math.abs(m.halfDepth - ranks.halfDepth()) > REMATCH_SHAPE) {
+            boolean first = m == null;
+            m = new Match();
+            m.slotOf = deal(id, sprites, slots, first);
+            m.fx = ranks.facingX();
+            m.fz = ranks.facingZ();
+            m.halfWidth = ranks.halfWidth();
+            m.halfDepth = ranks.halfDepth();
+            MATCHES.put(id, m);
+        }
+        m.seen = now;
+        return m.slotOf;
+    }
+
+    private static int[] deal(int id, List<Sprite> sprites, List<Sprite> slots, boolean first) {
+        int n = sprites.size();
+        int[] slotOf = new int[n];
+        List<Integer> walkers = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            slotOf[i] = i;
+            State s = STATES.get(key(id, i));
+            if (s == null && !sprites.get(i).real()) {
+                first = true; // a figure not yet seen: everyone takes their own number
+            }
+            if (!sprites.get(i).real() && i < slots.size() && !slots.get(i).leader()) {
+                walkers.add(i);
+            }
+        }
+        if (first) {
+            return slotOf;
+        }
+        // Every figure to every free place (the places of the walking figures), closest first.
+        List<long[]> pairs = new ArrayList<>(walkers.size() * walkers.size());
+        for (int a : walkers) {
+            State s = STATES.get(key(id, a));
+            for (int b : walkers) {
+                double d = Math.hypot(slots.get(b).x() - s.x, slots.get(b).z() - s.z);
+                pairs.add(new long[]{Double.doubleToLongBits(d), a, b}); // a non-negative double's bits sort as it does
+            }
+        }
+        pairs.sort((p, q) -> Long.compare(p[0], q[0]));
+        boolean[] dealtFigure = new boolean[n];
+        boolean[] dealtPlace = new boolean[n];
+        for (long[] p : pairs) {
+            int a = (int) p[1];
+            int b = (int) p[2];
+            if (!dealtFigure[a] && !dealtPlace[b]) {
+                dealtFigure[a] = true;
+                dealtPlace[b] = true;
+                slotOf[a] = b;
+            }
+        }
+        return slotOf;
+    }
+
     private static long key(int id, int index) {
         return (long) id << 32 | index;
     }
 
     static void clear() {
         STATES.clear();
+        MATCHES.clear();
         last = 0;
     }
 }

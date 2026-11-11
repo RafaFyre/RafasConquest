@@ -102,7 +102,7 @@ public final class DistantArmyRenderer {
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
 
-        List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
+        List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
         pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
