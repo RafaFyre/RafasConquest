@@ -25,6 +25,24 @@ final class DistantHorizonsArmies {
     /** Distant Horizons' projection as of its last frame, sixteen numbers in its own order; null before one. */
     private static volatile float[] projection;
 
+    /** The top of the first block of Distant Horizons' terrain along a ray, or null if it hits none or isn't ready. */
+    static net.minecraft.world.phys.Vec3 raycast(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 dir, int reach) {
+        try {
+            com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper level = DhApi.Delayed.worldProxy.getSinglePlayerLevel();
+            if (level == null || DhApi.Delayed.terrainRepo == null) {
+                return null;
+            }
+            DhApiResult<com.seibel.distanthorizons.api.objects.data.DhApiRaycastResult> hit = DhApi.Delayed.terrainRepo.raycast(
+                    level, from.x, from.y, from.z, (float) dir.x, (float) dir.y, (float) dir.z, reach, null);
+            if (!hit.success || hit.payload == null || hit.payload.pos == null) {
+                return null;
+            }
+            return new net.minecraft.world.phys.Vec3(hit.payload.pos.x + 0.5, hit.payload.pos.y + 1, hit.payload.pos.z + 0.5);
+        } catch (RuntimeException e) {
+            return null; // Distant Horizons has no world loaded yet
+        }
+    }
+
     /** Fails (with a linkage error) if the installed Distant Horizons has no render proxy in its API. */
     static void register() {
         DhApi.Delayed.class.getName();

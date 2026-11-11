@@ -52,6 +52,11 @@ public final class DistantHorizonsLink {
         }
     }
 
+    /** Where a ray first meets Distant Horizons' terrain, past the loaded world; null if it isn't drawing or meets none. */
+    public static net.minecraft.world.phys.Vec3 raycast(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 dir, int reach) {
+        return linked ? DistantHorizonsArmies.raycast(from, dir, reach) : null;
+    }
+
     /** The player left the world: Distant Horizons' quality goes back to their own setting. */
     public static void leftWorld() {
         if (linked) {
