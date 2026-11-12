@@ -132,6 +132,46 @@ public final class BattleSpotRing {
         RenderSystem.disableBlend();
     }
 
+    /**
+     * Many flat rings on the ground, {@code argb} coloured, in one draw: ring i centred at ({@code at[4i]},
+     * {@code at[4i+1]}, {@code at[4i+2]}), {@code at[4i+3]} across to its outer edge, {@code band} wide.
+     */
+    static void rings(PoseStack pose, Vec3 cam, double[] at, int count, float band, int argb) {
+        if (count == 0) {
+            return;
+        }
+        int a = argb >>> 24;
+        int r = argb >> 16 & 0xFF;
+        int g = argb >> 8 & 0xFF;
+        int b = argb & 0xFF;
+        Matrix4f matrix = pose.last().pose();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        for (int k = 0; k < count; k++) {
+            float x = (float) (at[4 * k] - cam.x);
+            float y = (float) (at[4 * k + 1] + 0.05 - cam.y);
+            float z = (float) (at[4 * k + 2] - cam.z);
+            float outer = (float) at[4 * k + 3];
+            float inner = outer - band;
+            for (int i = 0; i < SEGMENTS; i++) {
+                float cos0 = (float) Math.cos(2 * Math.PI * i / SEGMENTS);
+                float sin0 = (float) Math.sin(2 * Math.PI * i / SEGMENTS);
+                float cos1 = (float) Math.cos(2 * Math.PI * (i + 1) / SEGMENTS);
+                float sin1 = (float) Math.sin(2 * Math.PI * (i + 1) / SEGMENTS);
+                builder.addVertex(matrix, x + cos0 * outer, y, z + sin0 * outer).setColor(r, g, b, a);
+                builder.addVertex(matrix, x + cos0 * inner, y, z + sin0 * inner).setColor(r, g, b, a);
+                builder.addVertex(matrix, x + cos1 * inner, y, z + sin1 * inner).setColor(r, g, b, a);
+                builder.addVertex(matrix, x + cos1 * outer, y, z + sin1 * outer).setColor(r, g, b, a);
+            }
+        }
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+    }
+
     /** A flat ring on the ground at (x, y, z), {@code argb} coloured. */
     static void ring(PoseStack pose, Vec3 cam, double x, double y, double z, float outer, float inner, int argb) {
         int a = argb >>> 24;

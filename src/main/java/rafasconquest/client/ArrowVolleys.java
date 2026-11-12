@@ -20,7 +20,6 @@ import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 
@@ -51,16 +50,8 @@ public final class ArrowVolleys {
     private static final int FLETCHING = 0xE8E8E8;
     private static final int HEAD = 0x9A9A9A;
 
+    /** An arrow: from where, to where, how high its arc rises, when it is loosed and how long it flies. */
     private record Arrow(Vec3 from, Vec3 to, double rise, long start, double seconds) {
-        /** Where it is a share {@code u} of the way along its flight. */
-        Vec3 at(double u) {
-            return from.lerp(to, u).add(0, 4 * rise * u * (1 - u), 0);
-        }
-
-        /** Which way it flies there (not normalised). */
-        Vec3 heading(double u) {
-            return to.subtract(from).add(0, 4 * rise * (1 - 2 * u), 0);
-        }
     }
 
     private static final List<Arrow> ARROWS = new ArrayList<>();
@@ -97,46 +88,75 @@ public final class ArrowVolleys {
         ARROWS.clear();
     }
 
-    public static void render(PoseStack pose, Camera camera) {
+    /**
+     * Draws every arrow in flight that the camera can see. Worked in plain numbers, not vectors: thousands of arrows a
+     * frame would otherwise make tens of thousands of objects to throw away.
+     */
+    public static void render(PoseStack pose, Camera camera, net.minecraft.client.renderer.culling.Frustum frustum) {
+        long now = Util.getMillis();
+        ARROWS.removeIf(a -> (now - a.start()) / 1000.0 / a.seconds() > 1); // landed
         if (ARROWS.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
-        long now = Util.getMillis();
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Matrix4f matrix = pose.last().pose();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int drawn = 0;
-        for (Iterator<Arrow> it = ARROWS.iterator(); it.hasNext(); ) {
-            Arrow a = it.next();
+        for (Arrow a : ARROWS) {
             double u = (now - a.start()) / 1000.0 / a.seconds();
-            if (u > 1) {
-                it.remove();
-                continue;
-            }
             if (u < 0) {
                 continue; // not loosed yet
             }
-            Vec3 head = a.at(u).subtract(eye);
-            double distance = head.length();
+            Vec3 from = a.from();
+            Vec3 to = a.to();
+            // Where it is along its flight, from the camera, and which way it flies there.
+            double x = from.x + (to.x - from.x) * u;
+            double y = from.y + (to.y - from.y) * u + 4 * a.rise() * u * (1 - u);
+            double z = from.z + (to.z - from.z) * u;
+            double hx = x - eye.x;
+            double hy = y - eye.y;
+            double hz = z - eye.z;
+            double distance = Math.sqrt(hx * hx + hy * hy + hz * hz);
             if (distance < 1e-3) {
                 continue;
             }
-            double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
-            Vec3 along = a.heading(u).normalize();
-            Vec3 side = along.cross(head).normalize();
-            if (side.lengthSqr() < 1e-6) {
+            double ax = to.x - from.x;
+            double ay = to.y - from.y + 4 * a.rise() * (1 - 2 * u);
+            double az = to.z - from.z;
+            double alongLength = Math.sqrt(ax * ax + ay * ay + az * az);
+            if (alongLength < 1e-9) {
+                continue;
+            }
+            ax /= alongLength;
+            ay /= alongLength;
+            az /= alongLength;
+            double sx = ay * hz - az * hy; // square to its flight and to the line of sight
+            double sy = az * hx - ax * hz;
+            double sz = ax * hy - ay * hx;
+            double sideLength = Math.sqrt(sx * sx + sy * sy + sz * sz);
+            if (sideLength < 1e-3) {
                 continue; // flying straight at the camera
             }
-            double length = Math.max(LENGTH, distance * MIN_LENGTH_PER_BLOCK);
-            Vec3 h = head.scale(scale);
-            Vec3 step = along.scale(-length * scale);
-            Vec3 w = side.scale(length * WIDTH_SHARE * scale / 2);
-            int light = lightAt(mc, a.at(u));
-            streak(buffer, matrix, h, step, 0, 0.1, w, HEAD, light);
-            streak(buffer, matrix, h, step, 0.1, 0.75, w, SHAFT, light);
-            streak(buffer, matrix, h, step, 0.75, 1, w.scale(1.6), FLETCHING, light);
+            double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
+            double length = Math.max(LENGTH, distance * MIN_LENGTH_PER_BLOCK) * scale;
+            double px = hx * scale;
+            double py = hy * scale;
+            double pz = hz * scale;
+            if (!frustum.isVisible(new net.minecraft.world.phys.AABB(eye.x + px - length, eye.y + py - length, eye.z + pz - length,
+                    eye.x + px + length, eye.y + py + length, eye.z + pz + length))) {
+                continue;
+            }
+            double w = length * WIDTH_SHARE / 2 / sideLength;
+            int light = lightAt(mc, pos.set(x, y, z));
+            float[] head = {(float) px, (float) py, (float) pz};
+            float[] back = {(float) (-ax * length), (float) (-ay * length), (float) (-az * length)};
+            float[] side = {(float) (sx * w), (float) (sy * w), (float) (sz * w)};
+            streak(buffer, matrix, head, back, 0, 0.1F, side, 1, HEAD, light);
+            streak(buffer, matrix, head, back, 0.1F, 0.75F, side, 1, SHAFT, light);
+            streak(buffer, matrix, head, back, 0.75F, 1, side, 1.6F, FLETCHING, light);
             drawn++;
         }
         if (drawn == 0) {
@@ -153,27 +173,26 @@ public final class ArrowVolleys {
         RenderSystem.enableCull();
     }
 
-    /** The part of an arrow from {@code a} to {@code b} of the way back from its head, {@code w} to each side. */
-    private static void streak(BufferBuilder buffer, Matrix4f matrix, Vec3 head, Vec3 step, double a, double b, Vec3 w,
-                               int rgb, int light) {
+    /**
+     * The part of an arrow from {@code a} to {@code b} of the way along {@code back} from its head, {@code side}
+     * (times {@code widen}) to each side.
+     */
+    private static void streak(BufferBuilder buffer, Matrix4f matrix, float[] head, float[] back, float a, float b, float[] side,
+                               float widen, int rgb, int light) {
         float r = (rgb >> 16 & 255) / 255F;
         float g = (rgb >> 8 & 255) / 255F;
         float bl = (rgb & 255) / 255F;
-        Vec3 p = head.add(step.scale(a));
-        Vec3 q = head.add(step.scale(b));
-        vertex(buffer, matrix, p.add(w), r, g, bl, light);
-        vertex(buffer, matrix, q.add(w), r, g, bl, light);
-        vertex(buffer, matrix, q.subtract(w), r, g, bl, light);
-        vertex(buffer, matrix, p.subtract(w), r, g, bl, light);
-    }
-
-    private static void vertex(BufferBuilder buffer, Matrix4f matrix, Vec3 v, float r, float g, float b, int light) {
-        buffer.addVertex(matrix, (float) v.x, (float) v.y, (float) v.z).setColor(r, g, b, 1F).setLight(light);
+        float px = head[0] + back[0] * a, py = head[1] + back[1] * a, pz = head[2] + back[2] * a;
+        float qx = head[0] + back[0] * b, qy = head[1] + back[1] * b, qz = head[2] + back[2] * b;
+        float wx = side[0] * widen, wy = side[1] * widen, wz = side[2] * widen;
+        buffer.addVertex(matrix, px + wx, py + wy, pz + wz).setColor(r, g, bl, 1F).setLight(light);
+        buffer.addVertex(matrix, qx + wx, qy + wy, qz + wz).setColor(r, g, bl, 1F).setLight(light);
+        buffer.addVertex(matrix, qx - wx, qy - wy, qz - wz).setColor(r, g, bl, 1F).setLight(light);
+        buffer.addVertex(matrix, px - wx, py - wy, pz - wz).setColor(r, g, bl, 1F).setLight(light);
     }
 
     /** The light where the arrow flies, as for the figures; out past the chunks the client has, open sky. */
-    private static int lightAt(Minecraft mc, Vec3 at) {
-        BlockPos pos = BlockPos.containing(at);
+    private static int lightAt(Minecraft mc, BlockPos pos) {
         if (mc.level == null || !mc.level.hasChunkAt(pos)) {
             return LightTexture.FULL_SKY;
         }

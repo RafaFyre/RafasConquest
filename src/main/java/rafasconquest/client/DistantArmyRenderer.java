@@ -106,17 +106,38 @@ public final class DistantArmyRenderer {
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
         boolean[] seen = new boolean[formations.size()];
         int[] light = new int[formations.size()];
+        boolean[] flat = new boolean[formations.size()];
         for (int f = 0; f < seen.length; f++) {
             FormationSnapshot formation = formations.get(f);
             seen[f] = inView(frustum, eye, renderBlocks, figures.get(f));
             // The light where the block stands, for all its figures: each figure's own costs a lookup apiece.
             light[f] = seen[f] ? lightAt(mc, formation.x(), formation.y(), formation.z()) : 0;
+            flat[f] = flat(formation, eye);
         }
-        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, null);
+        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
-            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, selected);
+            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, selected);
         }
+    }
+
+    /** Blocks drawn as flat sprites, by formation id. Render thread only. */
+    private static final Set<Integer> FLAT = new HashSet<>();
+    /** How far either side of {@link SoldierFigure#SPRITE_PAST} a block keeps how it was drawn, so it doesn't flicker. */
+    private static final double FLAT_BAND = 15;
+
+    /**
+     * Whether a block is drawn as flat sprites rather than 3D figures: all of it at once, by where it stands, so no
+     * block is half one and half the other.
+     */
+    private static boolean flat(FormationSnapshot formation, Vec3 eye) {
+        double distance = Math.hypot(formation.x() - eye.x, formation.z() - eye.z);
+        if (distance > SoldierFigure.SPRITE_PAST + FLAT_BAND) {
+            FLAT.add(formation.id());
+        } else if (distance < SoldierFigure.SPRITE_PAST - FLAT_BAND) {
+            FLAT.remove(formation.id());
+        }
+        return FLAT.contains(formation.id());
     }
 
     /** Room about a block's figures' feet for their height, flags and glow, in blocks. */
@@ -213,7 +234,7 @@ public final class DistantArmyRenderer {
      */
     private static void pass(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks,
                              List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, boolean[] seen, int[] light,
-                             @javax.annotation.Nullable Set<Integer> halo) {
+                             boolean[] flat, @javax.annotation.Nullable Set<Integer> halo) {
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         figure.tint = halo == null ? -1 : 0xFFFFFF;
@@ -223,6 +244,7 @@ public final class DistantArmyRenderer {
             if (!seen[f] || halo != null && !halo.contains(formation.id())) {
                 continue;
             }
+            FigureGear gear = DistantArmies.gear(formation.id());
             for (FigureMotion.Placed sprite : figures.get(f)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
@@ -231,7 +253,7 @@ public final class DistantArmyRenderer {
                 if (sprite.real() && distance <= handover) {
                     continue; // the client has this soldier, close enough to draw it itself (and glow it)
                 }
-                boolean flatSprite = Math.hypot(dx, dz) > SoldierFigure.SPRITE_PAST;
+                boolean flatSprite = flat[f];
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
                 if (halo == null) {
                     figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, light[f]);
@@ -241,9 +263,9 @@ public final class DistantArmyRenderer {
                             (float) scale * HALO_GROWTH, LightTexture.FULL_BRIGHT);
                 }
                 if (flatSprite) {
-                    draw(figure, formation, sprite.leader());
+                    draw(figure, formation, gear, sprite.leader());
                 } else {
-                    SoldierFigure.build(formation, sprite.leader(), sprite.fx(), sprite.fz(), figure);
+                    SoldierFigure.build(formation, gear, sprite.leader(), sprite.fx(), sprite.fz(), figure);
                 }
                 drawn++;
             }
@@ -432,42 +454,71 @@ public final class DistantArmyRenderer {
         return (size.width() * 2 + size.height()) / 3 * 64 * Entity.getViewScale();
     }
 
-    /** One figure, built of rectangles side by side so none overlaps another. Sizes in blocks, from the feet up. */
-    private static void draw(Figure f, FormationSnapshot formation, boolean leader) {
+    /**
+     * One figure, built of rectangles side by side so none overlaps another (a shield and a weapon in front). Sizes in
+     * blocks, from the feet up. Coloured as its soldiers' gear ({@link FigureGear}), else the army's colour.
+     */
+    private static void draw(Figure f, FormationSnapshot formation, @javax.annotation.Nullable FigureGear gear, boolean leader) {
         int uniform = formation.rgb();
-        int shade = darker(uniform);
+        int chest = SoldierFigure.or(gear, FigureGear::chest, uniform);
+        int legs = SoldierFigure.or(gear, FigureGear::legs, SoldierFigure.or(gear, FigureGear::feet, darker(uniform)));
+        int cap = SoldierFigure.or(gear, FigureGear::head, uniform);
         int mark = formation.mark();
         switch (formation.kind()) {
             case CAVALRY, HEAVY_CAVALRY -> {
                 f.rect(0, 0, 1.2F, 0.7F, HOOVES);
-                f.rect(0, 0.7F, 1.5F, 0.6F, uniform); // the horse, in dyed leather armour
-                f.rect(0, 1.3F, 0.5F, 0.4F, shade);
-                f.rect(0, 1.7F, 0.6F, 0.6F, uniform);
-                head(f, 2.3F, uniform, mark, leader);
+                f.rect(0, 0.7F, 1.5F, 0.6F, SoldierFigure.or(gear, FigureGear::horse, uniform)); // the horse, in its barding
+                f.rect(0, 1.3F, 0.5F, 0.4F, legs);
+                f.rect(0, 1.7F, 0.6F, 0.6F, chest);
+                head(f, 2.3F, cap, mark, leader);
+                arms(f, gear, uniform, 0.9F);
             }
             case GENERAL -> {
-                body(f, uniform, shade);
+                body(f, chest, legs);
                 f.rect(0, 1.45F, 0.45F, 0.25F, SKIN);
-                f.rect(0, 1.7F, 0.55F, 0.3F, GOLD);
+                f.rect(0, 1.7F, 0.55F, 0.3F, SoldierFigure.or(gear, FigureGear::head, GOLD));
                 f.rect(-0.05F, 2.0F, 0.08F, 1.3F, POLE); // the banner on the back, its pole above the helmet
                 f.rect(0.33F, 2.4F, 0.5F, 0.85F, mark);
             }
             case BEARER -> {
-                body(f, uniform, shade);
-                head(f, 1.45F, uniform, mark, false);
+                body(f, chest, legs);
+                head(f, 1.45F, cap, mark, false);
                 f.rect(0.45F, 0.3F, 0.08F, 3.0F, POLE);
                 f.rect(0.78F, 2.3F, 0.55F, 0.95F, mark);
             }
             default -> {
-                body(f, uniform, shade);
-                head(f, 1.45F, uniform, mark, leader);
+                body(f, chest, legs);
+                head(f, 1.45F, cap, mark, leader);
+                arms(f, gear, uniform, 0);
             }
         }
     }
 
-    private static void body(Figure f, int uniform, int shade) {
-        f.rect(0, 0, 0.5F, 0.75F, shade);
-        f.rect(0, 0.75F, 0.6F, 0.7F, uniform);
+    /**
+     * A flat figure's shield, left, and weapon, right, {@code lift} up for a rider: beside the body, above the horse,
+     * not over them, as a figure's rectangles never overlap.
+     */
+    private static void arms(Figure f, @javax.annotation.Nullable FigureGear gear, int uniform, float lift) {
+        if (gear == null) {
+            return;
+        }
+        if (gear.shield()) {
+            f.rect(-0.55F, lift + 0.55F, 0.45F, 0.8F, SoldierFigure.or(gear, FigureGear::off, uniform));
+        }
+        int rgb = SoldierFigure.or(gear, FigureGear::main, POLE);
+        switch (gear.weapon()) {
+            case SWORD -> f.rect(0.42F, lift + 0.85F, 0.08F, 1.0F, rgb);
+            case GREAT -> f.rect(0.42F, lift + 0.7F, 0.1F, 1.9F, rgb);
+            case LONG -> f.rect(0.42F, lift + 0.45F, 0.06F, 2.8F, rgb);
+            case BOW -> f.rect(0.42F, lift + 0.55F, 0.08F, 1.3F, rgb);
+            case NONE -> {
+            }
+        }
+    }
+
+    private static void body(Figure f, int chest, int legs) {
+        f.rect(0, 0, 0.5F, 0.75F, legs);
+        f.rect(0, 0.75F, 0.6F, 0.7F, chest);
     }
 
     /** A face and a leather cap; a leader wears the faction banner instead, standing tall on the head. */

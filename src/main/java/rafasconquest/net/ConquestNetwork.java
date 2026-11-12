@@ -18,6 +18,7 @@ import rafasconquest.sim.ConquestServer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The mod's network channel. The Faction Info screen and the world map ask the server for faction data; the map also
@@ -966,17 +967,57 @@ public final class ConquestNetwork {
 
     /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */
     public static void sendBattleSnapshot(List<ServerPlayer> players, List<FormationSnapshot> formations) {
-        BattleSnapshot msg = new BattleSnapshot(formations);
+        sendBattleSnapshot(players, formations, Map.of());
+    }
+
+    /** As above, with what each formation's soldiers wear ({@link BattleSnapshot#gear}), by formation id. */
+    public static void sendBattleSnapshot(List<ServerPlayer> players, List<FormationSnapshot> formations, Map<Integer, int[]> gear) {
+        BattleSnapshot msg = new BattleSnapshot(formations, gear);
         for (ServerPlayer player : players) {
             CHANNEL.send(player, msg);
         }
     }
 
-    /** Server → client: every formation of the battle still standing. */
-    public record BattleSnapshot(List<FormationSnapshot> formations) {
+    /**
+     * Server → client: every formation of the battle still standing, and what its soldiers wear: by formation id, for
+     * each of head, chest, legs, feet, main hand, off hand and horse, the item's registry id (-1 for nothing) and its
+     * tint (-1 for none; see {@code GearColours}). Only a few kits differ, so each is sent once and formations name it.
+     */
+    public record BattleSnapshot(List<FormationSnapshot> formations, Map<Integer, int[]> gear) {
         private static final FormationSnapshot.Kind[] KINDS = FormationSnapshot.Kind.values();
 
         void write(FriendlyByteBuf buf) {
+            writeFormations(buf);
+            List<int[]> kits = new ArrayList<>();
+            int[] kitOf = new int[formations.size()];
+            for (int i = 0; i < kitOf.length; i++) {
+                int[] g = gear.get(formations.get(i).id());
+                if (g == null) {
+                    kitOf[i] = -1;
+                    continue;
+                }
+                int k = 0;
+                while (k < kits.size() && !java.util.Arrays.equals(kits.get(k), g)) {
+                    k++;
+                }
+                if (k == kits.size()) {
+                    kits.add(g);
+                }
+                kitOf[i] = k;
+            }
+            buf.writeVarInt(kits.size());
+            for (int[] kit : kits) {
+                buf.writeVarInt(kit.length);
+                for (int v : kit) {
+                    buf.writeVarInt(v + 1); // -1 (nothing) as 0
+                }
+            }
+            for (int k : kitOf) {
+                buf.writeVarInt(k + 1);
+            }
+        }
+
+        private void writeFormations(FriendlyByteBuf buf) {
             buf.writeVarInt(formations.size());
             for (FormationSnapshot f : formations) {
                 buf.writeVarInt(f.id());
@@ -1028,12 +1069,26 @@ public final class ConquestNetwork {
                 formations.add(new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth,
                         (flags & 1) != 0, (flags & 2) != 0, buf.readVarIntArray(), buf.readVarInt() - 1, readShip(buf, flags)));
             }
-            return new BattleSnapshot(formations);
+            int[][] kits = new int[buf.readVarInt()][];
+            for (int k = 0; k < kits.length; k++) {
+                kits[k] = new int[buf.readVarInt()];
+                for (int j = 0; j < kits[k].length; j++) {
+                    kits[k][j] = buf.readVarInt() - 1;
+                }
+            }
+            Map<Integer, int[]> gear = new java.util.HashMap<>();
+            for (FormationSnapshot f : formations) {
+                int k = buf.readVarInt() - 1;
+                if (k >= 0) {
+                    gear.put(f.id(), kits[k]);
+                }
+            }
+            return new BattleSnapshot(formations, gear);
         }
     }
 
     private static void handleBattleSnapshot(BattleSnapshot msg, IPayloadContext context) {
-        DistantArmies.receive(msg.formations());
+        DistantArmies.receive(msg.formations(), msg.gear());
     }
 
     /** Tells a player that an entity they now see wears this banner on its back (a battle's general). */

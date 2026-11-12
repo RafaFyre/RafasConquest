@@ -10,7 +10,9 @@ import rafasconquest.map.BaseMap;
 import rafasconquest.style.ShipHulls;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The ships the client draws, beyond the real ones: the sea lanes', and a battle's (one under each formation afloat).
@@ -50,7 +52,7 @@ final class DistantShips {
 
         /** Its hull's blocks, in its own frame, as the real one is built. */
         List<ShipHulls.Part> parts() {
-            return lane != null ? ShipHulls.of(lane)
+            return lane != null ? laneHull(lane)
                     : ShipHulls.battle(size, battle.cargo(), DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
         }
 
@@ -61,6 +63,23 @@ final class DistantShips {
         boolean shownReal(double flat, double fadeStart) {
             return real && (fadeStart <= 0 || flat < fadeStart - FADE_MARGIN);
         }
+    }
+
+    /**
+     * A sea-lane ship's hull, kept a while: finding it looks through the style folder on disk, too slow to do for every
+     * ship every frame. Forgotten every {@link #HULLS_KEPT_MILLIS}, so an edited ship file still shows. Client thread only.
+     */
+    private static final Map<String, List<ShipHulls.Part>> LANE_HULLS = new HashMap<>();
+    private static final long HULLS_KEPT_MILLIS = 10_000;
+    private static long hullsSince;
+
+    private static List<ShipHulls.Part> laneHull(SeaLanes.Ship ship) {
+        long now = net.minecraft.Util.getMillis();
+        if (now - hullsSince > HULLS_KEPT_MILLIS) {
+            hullsSince = now;
+            LANE_HULLS.clear();
+        }
+        return LANE_HULLS.computeIfAbsent(ship.id(), id -> ShipHulls.of(ship));
     }
 
     /** The sea lanes' ships, where the lanes have them now. */

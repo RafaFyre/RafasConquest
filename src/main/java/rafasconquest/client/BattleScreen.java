@@ -1149,14 +1149,20 @@ public final class BattleScreen extends Screen {
                 BattleSpotRing.strip(pose, cam.getPosition(), mid, mid.add(face.scale(Math.min(6, Math.max(2, len / 4)))), 0.2F, GOLD);
             }
         }
+        double[] rings = new double[screen.glowing.size() * 4];
+        int count = 0;
         for (int id : screen.glowing) {
             net.minecraft.world.entity.Entity e = mc.level.getEntity(id);
             if (e != null) {
                 net.minecraft.world.entity.Entity base = e.getRootVehicle();
                 Vec3 at = base.getPosition(partialTick);
-                float outer = base.getBbWidth() * 0.5F + 0.2F;
-                BattleSpotRing.ring(pose, cam.getPosition(), at.x, at.y, at.z, outer, outer - 0.15F, GOLD);
+                rings[4 * count] = at.x;
+                rings[4 * count + 1] = at.y;
+                rings[4 * count + 2] = at.z;
+                rings[4 * count + 3] = base.getBbWidth() * 0.5F + 0.2F;
+                count++;
             }
         }
+        BattleSpotRing.rings(pose, cam.getPosition(), rings, count, 0.15F, GOLD); // one draw for them all
     }
 }

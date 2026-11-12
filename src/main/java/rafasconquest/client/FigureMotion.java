@@ -168,9 +168,15 @@ final class FigureMotion {
     }
 
     /**
+     * How many times faster a figure goes to the real soldier it stands for than to a place in the ranks: quick enough
+     * to keep up with it, and the step from the ranks to where the soldier was spawned is a glide, not a jump.
+     */
+    static final double REAL_SPEEDUP = 3;
+
+    /**
      * Moves a figure toward its place ({@code tx}, {@code tz}) by up to {@code speed} blocks a second (more when far
-     * behind; a real soldier is simply where it stands), and turns it, by up to {@link #TURN} a second, the way it
-     * goes, or, standing, toward ({@code faceX}, {@code faceZ}).
+     * behind; {@link #REAL_SPEEDUP} times that to a real soldier), and turns it, by up to {@link #TURN} a second, the
+     * way it goes, or, standing, toward ({@code faceX}, {@code faceZ}).
      */
     static void move(State s, double tx, double tz, double faceX, double faceZ, boolean real, double speed, double dt) {
         double dx = tx - s.x;
@@ -183,7 +189,7 @@ final class FigureMotion {
             s.fz = faceZ;
             return;
         }
-        double step = real ? distance : Math.min(distance, speed * dt * Math.max(1, distance / CATCH_UP));
+        double step = Math.min(distance, (real ? REAL_SPEEDUP : 1) * speed * dt * Math.max(1, distance / CATCH_UP));
         if (distance > 1e-9) {
             s.x += dx / distance * step;
             s.z += dz / distance * step;

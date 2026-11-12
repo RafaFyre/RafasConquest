@@ -47,6 +47,17 @@ class FigureMotionTest {
     }
 
     @Test
+    void aFigureGlidesToTheRealSoldierSpawnedAwayFromItsPlaceThenKeepsUp() {
+        FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1);
+        FigureMotion.move(s, 2, 0, 0, -1, true, FigureMotion.FOOT_SPEED, 0.05); // spawned 2 blocks east
+        assertTrue(s.x > 0 && s.x < 2, "a glide, not a jump: " + s.x);
+        for (int i = 1; i <= 20; i++) { // the soldier then walks east at a foot soldier's pace
+            FigureMotion.move(s, 2 + i * FigureMotion.FOOT_SPEED * 0.05, 0, 0, -1, true, FigureMotion.FOOT_SPEED, 0.05);
+        }
+        assertEquals(2 + 20 * FigureMotion.FOOT_SPEED * 0.05, s.x, 1e-9, "caught up within a second");
+    }
+
+    @Test
     void aFigureShufflingAShortWaySidestepsFacingTheFront() {
         FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1); // facing north
         FigureMotion.move(s, 2, 0, 0, -1, false, FigureMotion.FOOT_SPEED, 0.1); // its place is 2 blocks east

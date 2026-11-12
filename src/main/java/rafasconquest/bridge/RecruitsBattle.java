@@ -154,6 +154,8 @@ public final class RecruitsBattle {
     private static final double KEEP_REAL_BIAS = 6;
     /** How far a block's soldiers may stand from its position, for skipping blocks far from everyone. */
     private static final double BLOCK_REACH = 40;
+    /** A block's ground starts loading this much further out than it turns real. */
+    private static final double GROUND_AHEAD = 32;
     /** A formation afloat within this of a player sails a real ship; wherever a client has none, it draws a stand-in. */
     public static final double SHIPS_WITHIN = NUMBERS_BEYOND + BLOCK_REACH;
     /** Ranks stand this many soldiers' spacings apart, front to back. */
@@ -334,6 +336,11 @@ public final class RecruitsBattle {
     /** Chunks held loaded, as {@link ChunkPos#toLong}. */
     private final Set<Long> heldChunks = new HashSet<>();
     /**
+     * Ground loading for blocks about to turn real ({@link #groundReady}), by chunk: the tick it is held until, so
+     * {@link #holdChunks} doesn't let go of it before the block's soldiers stand on it.
+     */
+    private final Map<Long, Integer> groundUntil = new HashMap<>();
+    /**
      * Ground heights where nothing is loaded, from the world generator, one for each chunk (taken at its middle):
      * asking the generator is slow, and distant figures need no finer ground than that.
      */
@@ -348,7 +355,7 @@ public final class RecruitsBattle {
     private final Map<FieldBlock, Double> lastHealth = new HashMap<>();
     private final Map<FieldBlock, Point> lastCentre = new HashMap<>();
     /** How the same battle came out fought only as numbers, for setting beside this one. */
-    private final String prediction;
+    private final CompletableFuture<String> prediction;
     private final boolean[] chargeAnnounced = new boolean[2];
     private boolean meleeAnnounced;
     private int ticks;
@@ -527,7 +534,7 @@ public final class RecruitsBattle {
         }
     }
 
-    private RecruitsBattle(ServerLevel level, FieldBattle field, Side[] sides, String prediction) {
+    private RecruitsBattle(ServerLevel level, FieldBattle field, Side[] sides, CompletableFuture<String> prediction) {
         this.level = level;
         this.field = field;
         this.sides = sides;
@@ -699,7 +706,9 @@ public final class RecruitsBattle {
                                 double axisX, double axisZ, @Nullable SiegeSurvey.Result survey) {
         // A siege's places are its walls': nothing is moved for the lie of the land.
         int hidden = survey == null ? GroundPlan.deploy(field, terrain) : 0;
-        String prediction = predict(blocksA, blocksB, sides, centre, axisX, axisZ);
+        // Plain numbers, fought in the background: up to 20 whole battles held the server up as the real one began.
+        CompletableFuture<String> prediction = CompletableFuture.supplyAsync(
+                () -> predict(blocksA, blocksB, sides, centre, axisX, axisZ), net.minecraft.Util.backgroundExecutor());
         RecruitsBattle battle = new RecruitsBattle(level, field, sides, prediction);
         battle.terrain = terrain;
         if (survey != null && field.siege() != null) {
@@ -1164,6 +1173,9 @@ public final class RecruitsBattle {
                     continue;
                 }
                 Live l = live.get(block);
+                if (l == null && near <= LIVE_WITHIN + GROUND_AHEAD) {
+                    groundReady(block.pos()); // coming: its ground loads now, so it turns real the moment it's near
+                }
                 float[] health = block.health();
                 Point front = front(block, health);
                 int cost = block.arm().mounted() && block.started() > 1 ? 2 : 1;
@@ -1263,13 +1275,87 @@ public final class RecruitsBattle {
         };
     }
 
+    /** The slots a figure shows, in {@link ConquestNetwork.BattleSnapshot#gear}'s order (the horse's armour last). */
+    private static final EquipmentSlot[] SHOWN = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET,
+            EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND};
+    /** What each kind of block wears, by side, duty and arm, worked out once a battle ({@link #gear}). */
+    private final Map<String, int[]> gearOf = new HashMap<>();
+
+    /**
+     * What a block's soldiers wear, for its figures: a soldier dressed as {@link #makeReal} dresses one, never put in
+     * the world, its items and their tints read off ({@link ConquestNetwork.BattleSnapshot#gear}). A captain wears the
+     * banner, which the client draws itself.
+     */
+    private int[] gear(FieldBlock block) {
+        boolean mountedAshore = block.arm().mounted() && !block.afloat();
+        String key = block.side() + "/" + block.duty() + "/" + block.arm() + "/" + block.superHeavy() + "/" + block.afloat();
+        return gearOf.computeIfAbsent(key, k -> {
+            Role role = block.duty() == Duty.GENERAL ? Role.GENERAL : block.duty() == Duty.BEARER ? Role.BEARER
+                    : block.duty() == Duty.GUARD || block.superHeavy() ? Role.GUARD : Role.SOLDIER;
+            EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get()
+                    : block.afloat() && block.arm().mounted() ? type(Arm.SKIRMISHERS) : type(block.arm());
+            Side side = sides[block.side()];
+            AbstractRecruitEntity sample = dressed(type, side, role, null, 0);
+            int[] gear = new int[(SHOWN.length + 1) * 2];
+            java.util.Arrays.fill(gear, -1);
+            if (sample == null) {
+                return gear;
+            }
+            if (role == Role.SOLDIER) {
+                kitFor(sample, side, block.afloat() && block.arm().mounted() ? Arm.SKIRMISHERS : block.arm(), role);
+            }
+            for (int s = 0; s < SHOWN.length; s++) {
+                item(gear, s, sample.getItemBySlot(SHOWN[s]));
+            }
+            if (mountedAshore) {
+                boolean iron = block.duty() == Duty.GUARD || block.duty() == Duty.GENERAL || block.arm() == Arm.HEAVY_CAVALRY;
+                item(gear, SHOWN.length, horseArmour(side, iron));
+            }
+            sample.discard();
+            return gear;
+        });
+    }
+
+    /**
+     * Writes an item and its tint into slot {@code s} of a gear list: a dyed item's dye, to colour its texture with; a
+     * shield's banner colour, flagged (bit 24) as standing in for its texture; else -1.
+     */
+    private static void item(int[] gear, int s, ItemStack stack) {
+        if (stack.isEmpty()) {
+            return;
+        }
+        gear[s * 2] = net.minecraft.core.registries.BuiltInRegistries.ITEM.getId(stack.getItem());
+        net.minecraft.world.item.component.DyedItemColor dyed = stack.get(net.minecraft.core.component.DataComponents.DYED_COLOR);
+        DyeColor base = stack.get(net.minecraft.core.component.DataComponents.BASE_COLOR);
+        gear[s * 2 + 1] = dyed != null ? dyed.rgb() & 0xFFFFFF : base != null ? rgb(base) | 0x1000000 : -1;
+    }
+
     @Nullable
     private AbstractRecruitEntity spawn(EntityType<? extends AbstractRecruitEntity> type, Side side, Role role, Point p, float yaw) {
+        AbstractRecruitEntity soldier = dressed(type, side, role, p, yaw);
+        if (soldier == null) {
+            return null;
+        }
+        ours.add(soldier.getUUID());
+        if (role == Role.GENERAL) {
+            backBanners.put(soldier.getId(), side.banner.copy());
+        }
+        level.addFreshEntity(soldier);
+        FactionEvents.addRecruitToTeam(soldier, side.team, level);
+        return soldier;
+    }
+
+    /**
+     * A soldier made and dressed for its side and role, standing at {@code p}, not yet in the world; nowhere ({@code p}
+     * null, a sample only looked at), so no ground is loaded for it.
+     */
+    @Nullable
+    private AbstractRecruitEntity dressed(EntityType<? extends AbstractRecruitEntity> type, Side side, Role role, @Nullable Point p, float yaw) {
         AbstractRecruitEntity soldier = type.create(level);
         if (soldier == null) {
             return null;
         }
-        BlockPos feet = ground(p);
+        BlockPos feet = p == null ? BlockPos.ZERO : ground(p);
         soldier.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, yaw, 0);
         soldier.finalizeSpawn(level, level.getCurrentDifficultyAt(feet), MobSpawnType.EVENT, null);
         if (soldier instanceof BowmanEntity) {
@@ -1281,12 +1367,6 @@ public final class RecruitsBattle {
         soldier.setHunger(100);
         soldier.setMoral(100);
         soldier.setAggroState(0); // neutral: fights monsters and enemies of its faction, and whoever attacks it
-        ours.add(soldier.getUUID());
-        if (role == Role.GENERAL) {
-            backBanners.put(soldier.getId(), side.banner.copy());
-        }
-        level.addFreshEntity(soldier);
-        FactionEvents.addRecruitToTeam(soldier, side.team, level);
         return soldier;
     }
 
@@ -1938,7 +2018,9 @@ public final class RecruitsBattle {
         if (regular || battle.swapped && battle.snapshotTicks % EARLY_SNAPSHOT_TICKS == 0) {
             battle.swapped = false;
             long t = System.nanoTime();
-            ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots(regular));
+            Map<Integer, int[]> gear = new HashMap<>();
+            List<FormationSnapshot> formations = battle.snapshots(regular, gear);
+            ConquestNetwork.sendBattleSnapshot(battle.level.players(), formations, gear);
             battle.snapshotNanos += System.nanoTime() - t;
         }
         battle.ownNanos += System.nanoTime() - ownStart;
@@ -5779,7 +5861,8 @@ public final class RecruitsBattle {
         SESSION_CALIBRATION.addAll(calibration);
         broadcast("[calibration] this battle: " + calibration.fit().describe());
         broadcast("[calibration] all battles so far: " + SESSION_CALIBRATION.fit().describe());
-        broadcast("[calibration] only as numbers: " + prediction);
+        broadcast("[calibration] only as numbers: " + prediction.exceptionally(e -> "couldn't be worked out: " + e.getMessage())
+                .getNow("still being worked out"));
     }
 
     // ---- keeping the ground loaded ----
@@ -5803,6 +5886,8 @@ public final class RecruitsBattle {
         if (works != null) {
             works.gates().forEach(g -> wanted.add(ChunkPos.asLong(g))); // the real gates stay there to fight for
         }
+        groundUntil.values().removeIf(until -> until < ticks);
+        wanted.addAll(groundUntil.keySet());
         for (long chunk : wanted) {
             hold(chunk);
         }
@@ -5837,7 +5922,13 @@ public final class RecruitsBattle {
         }
     }
 
-    /** Whether the ground a block would stand on is loaded; if not, holds it so it loads in the background. */
+    /** How long ground loaded ahead of a block is held for it, in ticks, renewed while the block is still coming. */
+    private static final int GROUND_HELD_TICKS = 100;
+
+    /**
+     * Whether the ground a block would stand on is loaded; if not, holds it (for {@link #GROUND_HELD_TICKS}) so it
+     * loads in the background.
+     */
     private boolean groundReady(Point at) {
         int cx = Mth.floor(at.x()) >> 4;
         int cz = Mth.floor(at.z()) >> 4;
@@ -5845,6 +5936,7 @@ public final class RecruitsBattle {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 hold(ChunkPos.asLong(cx + dx, cz + dz));
+                groundUntil.put(ChunkPos.asLong(cx + dx, cz + dz), ticks + GROUND_HELD_TICKS);
                 ready &= level.getChunkSource().getChunkNow(cx + dx, cz + dz) != null;
             }
         }
@@ -5892,6 +5984,7 @@ public final class RecruitsBattle {
             level.getChunkSource().removeRegionTicket(BATTLE_TICKET, pos, 2, pos, true);
         }
         heldChunks.clear();
+        groundUntil.clear();
     }
 
     /**
@@ -5929,9 +6022,10 @@ public final class RecruitsBattle {
     /**
      * Every block still standing, for clients to draw beyond the range at which they see soldiers: real blocks from
      * where their soldiers stand (with their entity ids), the others from the numbers. Only a {@code regular} one (once
-     * a second) starts a new second's ground lookups and riding measure; an early one shares the second's.
+     * a second) starts a new second's ground lookups and riding measure; an early one shares the second's. What each
+     * block wears goes into {@code gear}, by formation id.
      */
-    private List<FormationSnapshot> snapshots(boolean regular) {
+    private List<FormationSnapshot> snapshots(boolean regular, Map<Integer, int[]> gear) {
         if (regular) {
             groundLookups = 0;
         }
@@ -5946,6 +6040,7 @@ public final class RecruitsBattle {
                 if (block.alive() == 0) {
                     continue;
                 }
+                gear.put(block.id(), gear(block));
                 FormationSnapshot.Kind kind = block.duty() == Duty.GENERAL ? FormationSnapshot.Kind.GENERAL
                         : block.duty() == Duty.BEARER ? FormationSnapshot.Kind.BEARER : FormationSnapshot.Kind.of(block.arm());
                 double[] face = faceOf(block, regular);

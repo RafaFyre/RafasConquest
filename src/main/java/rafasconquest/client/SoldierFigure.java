@@ -1,5 +1,6 @@
 package rafasconquest.client;
 
+import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.FormationSnapshot;
 
 /**
@@ -31,55 +32,89 @@ final class SoldierFigure {
     private final double facingX;
     private final double facingZ;
     private final Boxes out;
+    /** What its soldiers wear; null if not known (it wears the army's colour). */
+    @Nullable
+    private final FigureGear gear;
 
-    private SoldierFigure(FormationSnapshot f, boolean leader, double facingX, double facingZ, Boxes out) {
+    private SoldierFigure(FormationSnapshot f, @Nullable FigureGear gear, boolean leader, double facingX, double facingZ, Boxes out) {
         this.f = f;
+        this.gear = gear;
         this.leader = leader;
         this.facingX = facingX;
         this.facingZ = facingZ;
         this.out = out;
     }
 
-    static void build(FormationSnapshot f, boolean leader, double facingX, double facingZ, Boxes out) {
-        new SoldierFigure(f, leader, facingX, facingZ, out).build();
+    static void build(FormationSnapshot f, @Nullable FigureGear gear, boolean leader, double facingX, double facingZ, Boxes out) {
+        new SoldierFigure(f, gear, leader, facingX, facingZ, out).build();
+    }
+
+    /** The colour of a piece of gear, or {@code otherwise} when none is worn there (or the gear isn't known). */
+    static int or(@Nullable FigureGear gear, java.util.function.ToIntFunction<FigureGear> piece, int otherwise) {
+        int rgb = gear == null ? -1 : piece.applyAsInt(gear);
+        return rgb < 0 ? otherwise : rgb;
     }
 
     private void build() {
         int uniform = f.rgb();
-        int shade = darker(uniform);
+        int chest = or(gear, FigureGear::chest, uniform);
+        int legs = or(gear, FigureGear::legs, or(gear, FigureGear::feet, darker(uniform)));
+        int cap = or(gear, FigureGear::head, uniform);
         int mark = f.mark();
         switch (f.kind()) {
             case CAVALRY, HEAVY_CAVALRY -> {
+                int horse = or(gear, FigureGear::horse, uniform); // the horse, in its barding
                 box(0, 0, 0.2, 0.25, 0, 0.7, HOOVES, Stuff.CLOTH);
-                box(0, 0, 0.3, 0.6, 0.7, 1.3, uniform, Stuff.CLOTH); // the horse, in leather armour
-                box(0, -0.75, 0.15, 0.2, 1.1, 1.7, uniform, Stuff.CLOTH); // its head, forward
-                box(0, 0, 0.25, 0.15, 1.3, 1.65, shade, Stuff.CLOTH);
-                box(0, 0, 0.3, 0.2, 1.65, 2.3, uniform, Stuff.CLOTH);
-                head(2.3, uniform, mark);
+                box(0, 0, 0.3, 0.6, 0.7, 1.3, horse, Stuff.CLOTH);
+                box(0, -0.75, 0.15, 0.2, 1.1, 1.7, horse, Stuff.CLOTH); // its head, forward
+                box(0, 0, 0.25, 0.15, 1.3, 1.65, legs, Stuff.CLOTH);
+                box(0, 0, 0.3, 0.2, 1.65, 2.3, chest, Stuff.CLOTH);
+                head(2.3, cap, mark);
+                arms(0.9);
             }
             case GENERAL -> {
-                body(uniform, shade);
+                body(chest, legs);
                 box(0, 0, 0.22, 0.22, 1.45, 1.7, SKIN, Stuff.CLOTH);
-                box(0, 0, 0.27, 0.27, 1.7, 2.0, GOLD, Stuff.METAL);
+                box(0, 0, 0.27, 0.27, 1.7, 2.0, or(gear, FigureGear::head, GOLD), Stuff.METAL);
                 box(0, 0.3, 0.04, 0.04, 1.0, 3.3, POLE, Stuff.WOOD); // the banner on the back
                 box(0.3, 0.3, 0.27, 0.04, 2.4, 3.25, mark, Stuff.CLOTH);
             }
             case BEARER -> {
-                body(uniform, shade);
-                head(1.45, uniform, mark);
+                body(chest, legs);
+                head(1.45, cap, mark);
                 box(0.45, 0, 0.04, 0.04, 0.3, 3.3, POLE, Stuff.WOOD);
                 box(0.77, 0, 0.28, 0.04, 2.3, 3.25, mark, Stuff.CLOTH);
             }
             default -> {
-                body(uniform, shade);
-                head(1.45, uniform, mark);
+                body(chest, legs);
+                head(1.45, cap, mark);
+                arms(0);
             }
         }
     }
 
-    private void body(int uniform, int shade) {
-        box(0, 0, 0.25, 0.13, 0, 0.75, shade, Stuff.CLOTH);
-        box(0, 0, 0.3, 0.15, 0.75, 1.45, uniform, Stuff.CLOTH);
+    /** What the soldier carries: a shield on the left arm, a weapon in the right hand; {@code lift} up, for a rider. */
+    private void arms(double lift) {
+        if (gear == null) {
+            return;
+        }
+        if (gear.shield()) {
+            box(-0.32, -0.2, 0.25, 0.04, lift + 0.55, lift + 1.35, or(gear, FigureGear::off, f.rgb()), Stuff.WOOD);
+        }
+        int rgb = or(gear, FigureGear::main, POLE);
+        switch (gear.weapon()) {
+            case SWORD -> box(0.38, -0.1, 0.04, 0.04, lift + 0.85, lift + 1.85, rgb, Stuff.METAL);
+            case GREAT -> box(0.38, -0.1, 0.05, 0.05, lift + 0.7, lift + 2.6, rgb, Stuff.METAL);
+            case LONG -> box(0.38, -0.1, 0.03, 0.03, lift + 0.3, lift + 3.1, rgb, Stuff.WOOD);
+            case BOW -> box(0.38, -0.15, 0.03, 0.1, lift + 0.55, lift + 1.85, rgb, Stuff.WOOD);
+            case NONE -> {
+            }
+        }
+    }
+
+    private void body(int chest, int legs) {
+        box(0, 0, 0.25, 0.13, 0, 0.75, legs, Stuff.CLOTH);
+        box(0, 0, 0.3, 0.15, 0.75, 1.45, chest, Stuff.CLOTH);
     }
 
     /** A face and a leather cap; a leader wears the faction banner instead, standing tall on the head. */

@@ -32,7 +32,19 @@ public final class DistantArmies {
     private DistantArmies() {
     }
 
-    public static void receive(List<FormationSnapshot> formations) {
+    /** What each formation's soldiers wear, by formation id, as of the last snapshot. */
+    private static Map<Integer, FigureGear> gear = new HashMap<>();
+
+    public static void receive(List<FormationSnapshot> formations, Map<Integer, int[]> kits) {
+        Map<int[], FigureGear> resolved = new java.util.IdentityHashMap<>(); // formations of one kit share its list
+        Map<Integer, FigureGear> worn = new HashMap<>();
+        kits.forEach((id, kit) -> {
+            FigureGear g = resolved.computeIfAbsent(kit, FigureGear::of);
+            if (g != null) {
+                worn.put(id, g);
+            }
+        });
+        gear = worn;
         Map<Integer, FormationSnapshot> drawn = new HashMap<>();
         now().forEach(f -> drawn.put(f.id(), f));
         from = drawn;
@@ -85,6 +97,12 @@ public final class DistantArmies {
         return Math.hypot(target.x() - start.x(), target.z() - start.z()) * 1000 / GLIDE_MILLIS;
     }
 
+    /** What a formation's soldiers wear; null if the server hasn't said (its figures wear the army's colour). */
+    @Nullable
+    static FigureGear gear(int id) {
+        return gear.get(id);
+    }
+
     /** Whether this entity is one of the battle's soldiers, or the horse under one. */
     public static boolean isOurs(Entity entity) {
         if (soldiers.contains(entity.getId())) {
@@ -124,5 +142,7 @@ public final class DistantArmies {
         from = new HashMap<>();
         to = new HashMap<>();
         soldiers = new HashSet<>();
+        gear = new HashMap<>();
+        FigureGear.clear();
     }
 }
