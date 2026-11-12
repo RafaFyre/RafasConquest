@@ -151,17 +151,12 @@ public final class FieldRules {
     public static final double PATROL_REACH = 12;
     /**
      * Infantry against stopped cavalry: enemy cavalry that moved less than {@link #STOPPED} last second is set on by
-     * up to {@link #HUNTERS_PER_RIDERS} idle infantry blocks within {@link #HUNT_REACH}, which let it go once it rides on.
+     * a free infantry unit with a block within {@link #HUNT_REACH}, which lets it go once it rides on.
      */
     public static final double STOPPED = 1;
     public static final double HUNT_REACH = 25;
-    public static final int HUNTERS_PER_RIDERS = 2;
-    /**
-     * Envelopment: a front block with no enemy ahead wheels onto enemy infantry beside it within this reach, at most
-     * this many onto each enemy block (its flank, then its rear).
-     */
+    /** Envelopment: a front unit with no enemy ahead wheels onto an enemy infantry unit beside it within this reach. */
     public static final double ENVELOP_REACH = 60;
-    public static final int ENVELOPERS = 2;
     /** A front block with fewer than this share of the soldiers of the block it fights gives ground this far a second. */
     public static final double GIVE_GROUND_SHARE = 0.7;
     public static final double GIVE_GROUND = 0.5;

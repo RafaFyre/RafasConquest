@@ -87,10 +87,6 @@ public final class DistantArmyRenderer {
     }
 
     public static void render(PoseStack pose, Camera camera, float partialTick) {
-        List<FormationSnapshot> formations = DistantArmies.now();
-        if (formations.isEmpty()) {
-            return;
-        }
         Minecraft mc = Minecraft.getInstance();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
@@ -101,12 +97,62 @@ public final class DistantArmyRenderer {
         }
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
+        player(mc, pose, eye, rightX, rightZ, renderBlocks, partialTick);
+        List<FormationSnapshot> formations = DistantArmies.now();
+        if (formations.isEmpty()) {
+            return;
+        }
 
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
         pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
             pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, selected);
+        }
+    }
+
+    /**
+     * The player seen from a camera away from their body (the battle screen's): a sprite where the game stops drawing
+     * them, in their army's colour with a gold cap, on a horse when riding; glowing when selected.
+     */
+    private static void player(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks, float partialTick) {
+        net.minecraft.world.entity.player.Player p = mc.player;
+        if (p == null || mc.getCameraEntity() == p) {
+            return;
+        }
+        Vec3 feet = p.getPosition(partialTick);
+        double dx = feet.x - eye.x;
+        double dy = feet.y - eye.y;
+        double dz = feet.z - eye.z;
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance <= Math.min(handover, drawnWithin(EntityType.PLAYER))) {
+            return; // the game draws the player itself
+        }
+        double scale = DistantOcclusion.scale(distance, renderBlocks);
+        int colour = BattleScreen.playerColour();
+        int uniform = colour < 0 ? 0x3C44AA : colour; // no units known yet: a plain blue
+        for (boolean glow : BattleScreen.playerSelected() ? new boolean[]{false, true} : new boolean[]{false}) {
+            BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
+            Figure f = new Figure(buffer, pose.last().pose(), rightX, rightZ);
+            f.tint = glow ? 0xFFFFFF : -1;
+            if (glow) {
+                double back = 1 + HALO_BEHIND / Math.max(distance, 1);
+                f.at((float) (dx * scale * back), (float) ((dy - 0.1) * scale * back), (float) (dz * scale * back),
+                        (float) scale * HALO_GROWTH, LightTexture.FULL_BRIGHT);
+            } else {
+                f.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, lightAt(mc, feet.x, feet.y, feet.z));
+            }
+            if (p.isPassenger()) { // as a cavalry sprite
+                f.rect(0, 0, 1.2F, 0.7F, HOOVES);
+                f.rect(0, 0.7F, 1.5F, 0.6F, uniform);
+                f.rect(0, 1.3F, 0.5F, 0.4F, darker(uniform));
+                f.rect(0, 1.7F, 0.6F, 0.6F, uniform);
+                head(f, 2.3F, GOLD, 0, false);
+            } else {
+                body(f, uniform, darker(uniform));
+                head(f, 1.45F, GOLD, 0, false);
+            }
+            finish(mc, buffer, 1);
         }
     }
 

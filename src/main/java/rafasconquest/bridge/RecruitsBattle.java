@@ -324,7 +324,7 @@ public final class RecruitsBattle {
     private final Map<Integer, Live> byEntity = new HashMap<>();
     /** When each side's general last sounded the horn. */
     private final int[] lastHorn = {-HORN_SECONDS, -HORN_SECONDS};
-    /** Generals' entity ids → the banner on their backs, for players who start seeing them. */
+    /** Generals' entity ids â†’ the banner on their backs, for players who start seeing them. */
     private final Map<Integer, ItemStack> backBanners = new HashMap<>();
     /** Chunks held loaded, as {@link ChunkPos#toLong}. */
     private final Set<Long> heldChunks = new HashSet<>();
@@ -2164,7 +2164,11 @@ public final class RecruitsBattle {
         sendVolleys();
         sendChargeHits();
         for (FieldBattle.Order order : field.takeCalls()) {
-            soundHorn(order.side());
+            soundHorn(order.side(), switch (order.call()) {
+                case CAVALRY_RECALL, BAIT -> HornCall.RETREATING;
+                case WALL -> HornCall.MOVING;
+                default -> HornCall.ATTACKING;
+            });
             if (order.call() == FieldBattle.Call.ADVANCE) {
                 announce(order.side(), say("orders.charge"));
             }
@@ -2449,7 +2453,7 @@ public final class RecruitsBattle {
             case FOOTMAN -> ModEntityTypes.RECRUIT.get();
             case ARCHER -> ModEntityTypes.BOWMAN.get();
             case SHIELDMAN -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
-            // With Epic Knights they wield a zweihänder in both hands, and carry no shield.
+            // With Epic Knights they wield a zweihÃ¤nder in both hands, and carry no shield.
             case HEAVY_INFANTRY -> rafasconquest.gear.Armoury.available() ? ModEntityTypes.RECRUIT.get() : ModEntityTypes.RECRUIT_SHIELDMAN.get();
         };
     }
@@ -2525,7 +2529,7 @@ public final class RecruitsBattle {
     /**
      * The player's own kit for their job, taken back when the battle ends: a horse to ride (cavalry), an iron sword
      * with Sweeping Edge (footman), a bow with Infinity and Unbreaking II (archer), the nation's shield (shieldman),
-     * iron armour, an axe and the nation's shield (heavy infantry; with Epic Knights a sallet, knightly harness and an iron zweihänder); and a glaive in support.
+     * iron armour, an axe and the nation's shield (heavy infantry; with Epic Knights a sallet, knightly harness and an iron zweihÃ¤nder); and a glaive in support.
      */
     private void kitPlayer(ServerPlayer player, Enlisted e) {
         Side side = sides[e.side];
@@ -2562,7 +2566,7 @@ public final class RecruitsBattle {
                 rafasconquest.gear.Armoury.Outfit knight = rafasconquest.gear.Armoury.outfit(rafasconquest.gear.Armoury.Kit.ZWEIHANDLER,
                         rafasconquest.gear.Armoury.style(ConquestRuntime.map(), side.faction.id()), side.uniform, side.banner);
                 if (!knight.isEmpty()) {
-                    // With Epic Knights: a sallet, knightly harness and an iron zweihänder.
+                    // With Epic Knights: a sallet, knightly harness and an iron zweihÃ¤nder.
                     knight.slots().values().stream().filter(s -> !s.isEmpty()).forEach(s -> kit.add(s.copy()));
                 } else {
                     kit.add(new ItemStack(Items.IRON_AXE));
@@ -3474,6 +3478,19 @@ public final class RecruitsBattle {
         if (e == null || orders.isEmpty()) {
             return;
         }
+        HornCall call = HornCall.MOVING;
+        for (int k = 0; k < orders.size(); k++) {
+            HornCall blown = switch (orders.get(k)) {
+                case CHARGE, LEAD_CHARGE -> HornCall.ATTACKING;
+                case GO -> places.get(k) != null && battle.enemyBlockAt(e.side, places.get(k)) != null ? HornCall.ATTACKING : HornCall.MOVING;
+                case RALLY, REFORM -> HornCall.RALLYING;
+                case FOLLOW -> HornCall.RETREATING; // falling back on the player
+                default -> HornCall.MOVING;
+            };
+            if (blown.ordinal() > call.ordinal()) {
+                call = blown;
+            }
+        }
         for (int k = 0; k < orders.size(); k++) {
             List<Unit> us = new ArrayList<>();
             for (int number : units.get(k)) {
@@ -3490,8 +3507,8 @@ public final class RecruitsBattle {
             }
             battle.command(e, us, orders.get(k), places.get(k), player);
         }
-        Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(battle.sides[e.side].horn);
-        battle.level.playSound(null, player.getX(), player.getEyeY(), player.getZ(), horn.value(), SoundSource.RECORDS, HORN_VOLUME, 1);
+        battle.level.playSound(null, player.getX(), player.getEyeY(), player.getZ(), hornSound(battle.sides[e.side], call),
+                SoundSource.RECORDS, HORN_VOLUME, 1);
     }
 
     private void command(Enlisted e, List<Unit> us, UnitOrder order, Vec3 place, ServerPlayer player) {
@@ -4279,7 +4296,7 @@ public final class RecruitsBattle {
      * charging, the final charge): the faction's own goat horn, heard far across the field. At most one every
      * {@link #HORN_SECONDS}; a fallen general sounds none.
      */
-    private void soundHorn(int side) {
+    private void soundHorn(int side, HornCall call) {
         FieldBlock commander = field.army(side).commander();
         if (commander == null || commander.alive() == 0 || field.seconds() - lastHorn[side] < HORN_SECONDS) {
             return;
@@ -4290,8 +4307,25 @@ public final class RecruitsBattle {
         double x = soldiers.isEmpty() ? commander.pos().x() : soldiers.get(0).getX();
         double z = soldiers.isEmpty() ? commander.pos().z() : soldiers.get(0).getZ();
         double y = soldiers.isEmpty() ? groundY(commander, x, z) + 2 : soldiers.get(0).getEyeY();
-        Holder<SoundEvent> horn = SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(sides[side].horn);
-        level.playSound(null, x, y, z, horn.value(), SoundSource.RECORDS, HORN_VOLUME, 1);
+        level.playSound(null, x, y, z, hornSound(sides[side], call), SoundSource.RECORDS, HORN_VOLUME, 1);
+    }
+
+    /** What a horn blow means; a nation's horn style has its own blows for each (most urgent last). */
+    public enum HornCall {
+        MOVING, RETREATING, RALLYING, ATTACKING
+    }
+
+    /** The horn styles shipped, each a folder of sounds/horns with a sounds.json event per {@link HornCall}. */
+    public static final List<String> HORN_STYLES = List.of("kraven");
+
+    /** The side's horn for the call: its nation's horn style, or its goat horn call when it has none. */
+    private static Holder<SoundEvent> hornSound(Side side, HornCall call) {
+        String style = side.faction.hornStyle();
+        if (style.isEmpty()) {
+            return SoundEvents.GOAT_HORN_SOUND_VARIANTS.get(side.horn);
+        }
+        return Holder.direct(SoundEvent.createVariableRangeEvent(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                rafasconquest.RafasConquest.MOD_ID, "horn." + style + "." + call.name().toLowerCase(java.util.Locale.ROOT))));
     }
 
     /**

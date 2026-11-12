@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794428961.8414385,
-    "seen": 1794429054.8112843,
-    "ast_hash": "cdaa3e9ec1ece83cd89e2b162f7f8971",
+    "mtime": 1794431546.623506,
+    "seen": 1794431588.7543504,
+    "ast_hash": "55ef37ec93f270fba149c102c70ee0f3",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -222,9 +222,9 @@
     "semantic_hash": "b4b367d198f74f77cefe518e92cfa224"
   },
   "src/main/java/rafasconquest/client/BattleSounds.java": {
-    "mtime": 1794421684.566999,
-    "seen": 1794422269.2505453,
-    "ast_hash": "ca5984cebdb6615f7255e4a5ce95b1cc",
+    "mtime": 1794431713.9322138,
+    "seen": 1794431740.4605389,
+    "ast_hash": "a64307b88aa94d6672d7be47bb2b66b0",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleSpotRing.java": {
@@ -300,21 +300,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794428391.4323769,
-    "seen": 1794428533.97533,
-    "ast_hash": "2116907a7fe3bcf972f85a8043df66d6",
+    "mtime": 1794432399.566281,
+    "seen": 1794432423.5207312,
+    "ast_hash": "7410d101eb392653cef736ab5f86bc74",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
-    "mtime": 1793994187.6279147,
-    "seen": 1793994402.5307245,
-    "ast_hash": "c5f94e86875f452f428a08e729ee6817",
+    "mtime": 1794434132.0416048,
+    "seen": 1794434175.0623891,
+    "ast_hash": "094738a24779cb85d9627f9ccf8f4c45",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsLink.java": {
-    "mtime": 1793994187.6867757,
-    "seen": 1793994402.530726,
-    "ast_hash": "6bed54fdd448870023e1e27c865b7d11",
+    "mtime": 1794430926.3480647,
+    "seen": 1794431588.754409,
+    "ast_hash": "3619c1d4f229304ded974d7f3cdffe4a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsQuality.java": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1794429616.985372,
-    "seen": 1794429653.7905855,
-    "ast_hash": "fa3f36a8cfaad6de8c133abf59cae84d",
+    "mtime": 1794431556.9873924,
+    "seen": 1794431588.75447,
+    "ast_hash": "88fc1104415fe670362955f4b47e51aa",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
@@ -660,10 +660,10 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/faction/Faction.java": {
-    "mtime": 1793163083.6586297,
-    "seen": 1793865705.7986698,
-    "ast_hash": "87f3e0d22568b7ff295e069ca501d5a3",
-    "semantic_hash": "87f3e0d22568b7ff295e069ca501d5a3"
+    "mtime": 1794431516.1640933,
+    "seen": 1794431588.7545395,
+    "ast_hash": "dc5530816e019b725789633ae2ce947b",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/faction/FactionBanner.java": {
     "mtime": 1793064516.761189,
@@ -1380,9 +1380,9 @@
     "semantic_hash": "07c704709a234c5a1bd0cf4550511c66"
   },
   "src/main/resources/assets/rafasconquest/sounds.json": {
-    "mtime": 1794409555.3217568,
-    "seen": 1794409930.7097943,
-    "ast_hash": "0c017262067715540ba9f7b56f3a90fd",
+    "mtime": 1794431713.868819,
+    "seen": 1794431740.4609365,
+    "ast_hash": "faeccc1884bf19e938a0454fe6697c36",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/worldgen/structure_set/villages.json": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleScreen.java": {
-    "mtime": 1794429178.9447932,
-    "seen": 1794429653.7904992,
-    "ast_hash": "a4e8d1733fc94328408e6abac0a366ee",
+    "mtime": 1794432399.439258,
+    "seen": 1794432423.5207064,
+    "ast_hash": "01c4ce9e7d6d8559f39830a7049eba4c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/StrategyBoardBlock.java": {
@@ -3027,6 +3027,168 @@
     "mtime": 1794427816.0330591,
     "seen": 1794427906.0342617,
     "ast_hash": "3300b4462340bce32164ba65b1ed1f96",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/1.ogg": {
+    "mtime": 1794431487.5157993,
+    "seen": 1794431588.75504,
+    "ast_hash": "e1e92a67ce6bdff03af631e3f49a9f45",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/2.ogg": {
+    "mtime": 1794431487.707926,
+    "seen": 1794431588.7550416,
+    "ast_hash": "49acd3f48d93ea7f792c9cd56dd8d8bb",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/3.ogg": {
+    "mtime": 1794431487.933347,
+    "seen": 1794431588.7550428,
+    "ast_hash": "7731b40840a130c56198d957a12a21e6",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/4.ogg": {
+    "mtime": 1794431488.151464,
+    "seen": 1794431588.7550445,
+    "ast_hash": "5dfb5c002db284f46e08ce6b43fc2106",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/5.ogg": {
+    "mtime": 1794431488.3611243,
+    "seen": 1794431588.7550454,
+    "ast_hash": "fbefb75bbb47f5e7a83c4eb5de83beb0",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/6.ogg": {
+    "mtime": 1794431488.5063167,
+    "seen": 1794431588.7550466,
+    "ast_hash": "eb9af801c778875968b94950e7fbdcc8",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/attacking/7.ogg": {
+    "mtime": 1794431488.715902,
+    "seen": 1794431588.7550478,
+    "ast_hash": "f619db4eebe1edb03fbac9dabe60a85a",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/1.ogg": {
+    "mtime": 1794431486.3227956,
+    "seen": 1794431588.7550488,
+    "ast_hash": "a3c18aa4b865f551f451ee028066f094",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/2.ogg": {
+    "mtime": 1794431486.5199163,
+    "seen": 1794431588.7550497,
+    "ast_hash": "ca2c5fce8601d196deb3ec77755cd82a",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/3.ogg": {
+    "mtime": 1794431486.7158315,
+    "seen": 1794431588.755051,
+    "ast_hash": "12dc7a73fe29b4a138203f0161c9a550",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/4.ogg": {
+    "mtime": 1794431486.9096766,
+    "seen": 1794431588.7550519,
+    "ast_hash": "abd1d1e3eae2a4be3bb48a7f2077bddb",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/5.ogg": {
+    "mtime": 1794431487.1168518,
+    "seen": 1794431588.7550528,
+    "ast_hash": "3546ab62fc0d1cf83a5470118103641a",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/moving/6.ogg": {
+    "mtime": 1794431487.3164034,
+    "seen": 1794431588.7550538,
+    "ast_hash": "a3abfb155fb4f3dfe35e7bce509d599b",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/rallying/1.ogg": {
+    "mtime": 1794431490.2729702,
+    "seen": 1794431588.755055,
+    "ast_hash": "8b25bf146494bdc0356a30dd10275103",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/rallying/2.ogg": {
+    "mtime": 1794431490.474011,
+    "seen": 1794431588.755056,
+    "ast_hash": "4dcf203ecd75d6513ea1583f04a412b7",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/rallying/3.ogg": {
+    "mtime": 1794431490.70688,
+    "seen": 1794431588.755057,
+    "ast_hash": "61e606c47e4facd7e2edad018b291a45",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/rallying/4.ogg": {
+    "mtime": 1794431490.900439,
+    "seen": 1794431588.7550585,
+    "ast_hash": "bea74fdb3f9ff109087e1ebb91ef3e35",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/rallying/5.ogg": {
+    "mtime": 1794431491.1514406,
+    "seen": 1794431588.7550595,
+    "ast_hash": "cc4da3b5845fb9ce89b8dc7ec3c95725",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/1.ogg": {
+    "mtime": 1794431488.9236124,
+    "seen": 1794431588.7550604,
+    "ast_hash": "154907ed74a422252f48f763539b206c",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/2.ogg": {
+    "mtime": 1794431489.1140206,
+    "seen": 1794431588.7550614,
+    "ast_hash": "7da23968e291f21accdbc1b74b69327c",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/3.ogg": {
+    "mtime": 1794431489.2969666,
+    "seen": 1794431588.7550628,
+    "ast_hash": "89ea6b16e4d8302cbcfe446604485b1c",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/4.ogg": {
+    "mtime": 1794431489.4835742,
+    "seen": 1794431588.7550638,
+    "ast_hash": "71a04125fe8eb1f998a4ec43fca945e5",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/5.ogg": {
+    "mtime": 1794431489.6761808,
+    "seen": 1794431588.7550647,
+    "ast_hash": "53f07957992b0988ebe14f132348fa65",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/6.ogg": {
+    "mtime": 1794431489.8703334,
+    "seen": 1794431588.7550662,
+    "ast_hash": "0bc209f095c51feb50876bb7a70307d6",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/horns/kraven/retreating/7.ogg": {
+    "mtime": 1794431490.068879,
+    "seen": 1794431588.755067,
+    "ast_hash": "0780a45f011f4ec1eff1c6b0b1e9fb58",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/army_charge.ogg": {
+    "mtime": 1794431713.5132356,
+    "seen": 1794431740.4611678,
+    "ast_hash": "d19e83061115614726f4054abe6aacf4",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/order_attack.ogg": {
+    "mtime": 1794432259.2987363,
+    "seen": 1794432334.0309453,
+    "ast_hash": "61723e7e302ac2590207972b51a5c4e6",
     "semantic_hash": ""
   }
 }

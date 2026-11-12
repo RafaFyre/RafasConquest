@@ -658,6 +658,7 @@ public final class FieldBattle {
         List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
+        army.baitFiles = new boolean[files];
         army.winged = slots.stream().anyMatch(s -> s.wing() != FieldArmy.CENTRE);
         double reserves = Double.MAX_VALUE;
         int id = side * SIDE_IDS;
@@ -751,7 +752,8 @@ public final class FieldBattle {
                 }
             }
         }
-        // Bait: a single block in the middle of each wing's front that has three files or more.
+        // Bait: the unit in the middle of each wing's front that has three files or more (its levies, when they stand
+        // up front), every front file of it, though it be the wing's whole front.
         if (plan.has(Strategy.BAIT)) {
             for (int wing = 0; wing < 3; wing++) {
                 List<Integer> inWing = new ArrayList<>();
@@ -761,7 +763,7 @@ public final class FieldBattle {
                     }
                 }
                 if (inWing.size() >= 3) {
-                    army.baitFile[wing] = inWing.get(inWing.size() / 2);
+                    makeBait(army, army.front[inWing.get(inWing.size() / 2)]);
                 }
             }
         }
@@ -798,14 +800,39 @@ public final class FieldBattle {
         return half;
     }
 
-    /** Whether a front file is one of its army's baits. */
-    private static boolean isBait(FieldArmy army, int file) {
-        for (int bait : army.baitFile) {
-            if (bait == file && bait >= 0) {
-                return true;
+    /**
+     * Makes {@code front}'s unit its wing's bait, in place of any other: every front file it holds runs ahead. Where the
+     * wing's front stands now is kept as its line, for when the bait is all of it.
+     */
+    private static void makeBait(FieldArmy army, FieldBlock front) {
+        int wing = front.wing;
+        double x = 0;
+        double z = 0;
+        int n = 0;
+        for (FieldBlock f : army.front) {
+            if (f.wing == wing) {
+                army.baitFiles[f.file] = f.duty == Duty.FRONT && sameUnit(f, front);
+                x += f.line.x();
+                z += f.line.z();
+                n++;
             }
         }
-        return false;
+        army.baitFile[wing] = front.file;
+        army.baitUnit[wing] = unitKey(front);
+        army.baitLine[wing] = new Point(x / n, z / n);
+    }
+
+    /** Whether a front file is one of its army's baits. */
+    private static boolean isBait(FieldArmy army, int file) {
+        return file >= 0 && file < army.baitFiles.length && army.baitFiles[file];
+    }
+
+    /**
+     * Whether a block waits in a bait's file without being of the bait's unit: it doesn't follow the bait out or go up
+     * to relieve it, but keeps to its wing's line.
+     */
+    private static boolean holdsBehindBait(FieldArmy army, FieldBlock b) {
+        return b.duty == Duty.LINE && isBait(army, b.file) && unitKey(b) != army.baitUnit[b.wing];
     }
 
     /** Whether the battle has begun: its first second has run. Before then blocks may be placed by hand. */
@@ -1107,7 +1134,11 @@ public final class FieldBattle {
                 if (block.arm.mounted() && block.momentum < FieldRules.SPENT_MOMENTUM
                         && block.contactSeconds >= FieldRules.SPENT_SECONDS
                         && (block.duty == Duty.SUPPORT || block.duty == Duty.GUARD || block.duty == Duty.GENERAL)) {
-                    recall(army, block);
+                    for (FieldBlock mate : unit(army, block, block.pos)) {
+                        if (mate.charged && !mate.led) {
+                            recall(army, mate); // its unit rode in together and rides out together
+                        }
+                    }
                 }
                 continue;
             }
@@ -1129,7 +1160,13 @@ public final class FieldBattle {
                     Point offset = block.placed != null ? block.placed
                             : block.reserve != null && (army.stackFiles() == 0 || place >= army.stackDepth) ? block.reserve
                             : new Point(0, BattlePlan.fileBack(place, army.stackFiles()));
-                    block.line = BattlePlan.place(army.front[block.file].line, army.facingX, army.facingZ, offset.x(), offset.z());
+                    Point fileFront = army.front[block.file].line;
+                    if (holdsBehindBait(army, block)) {
+                        // Behind a bait, from where its file's front would stand in the wing's line.
+                        double back = behindOthers(army, block.wing, fileFront);
+                        fileFront = fileFront.plus(army.facingX * back, army.facingZ * back);
+                    }
+                    block.line = BattlePlan.place(fileFront, army.facingX, army.facingZ, offset.x(), offset.z());
                 }
                 case RELIEVING -> {
                     if (block.pos.distanceTo(block.line) <= BattlePlan.RELIEF_ARRIVED || seconds - block.dutySince >= BattlePlan.RELIEF_SECONDS) {
@@ -1250,7 +1287,10 @@ public final class FieldBattle {
         }
     }
 
-    /** How far behind the lines of a wing's front blocks, baits aside, a point is (negative: ahead of them). */
+    /**
+     * How far behind the lines of a wing's front blocks, baits aside, a point is (negative: ahead of them); behind where
+     * its front stood when its bait was chosen, if the bait is all of its front.
+     */
     private static double behindOthers(FieldArmy army, int wing, Point at) {
         double x = 0;
         double z = 0;
@@ -1263,7 +1303,8 @@ public final class FieldBattle {
             }
         }
         if (n == 0) {
-            return 0;
+            Point line = army.baitLine[wing];
+            return line == null ? 0 : (line.x() - at.x()) * army.facingX + (line.z() - at.z()) * army.facingZ;
         }
         return (x / n - at.x()) * army.facingX + (z / n - at.z()) * army.facingZ;
     }
@@ -1278,12 +1319,15 @@ public final class FieldBattle {
             if (held.strikeAt != null || held.led) {
                 continue; // a player's block is relieved when its player says
             }
+            if (isBait(army, file) && unit(army, held, held.pos).isEmpty()) {
+                army.baitFiles[file] = false; // the bait's unit is spent here: the file is its line's again
+            }
             boolean worn = BattlePlan.needsRelief(held.alive, held.started());
             if (!worn) {
                 // The conveyor: after ROTATE_SECONDS of fighting, the block behind takes its place, and it goes to the
                 // back of its file's stack to rest.
                 List<FieldBlock> stack = new ArrayList<>(army.queue(file));
-                stack.removeIf(f -> f.led);
+                stack.removeIf(f -> f.led || holdsBehindBait(army, f));
                 if (army.stackDepth > 1 && held.fightSeconds >= FieldRules.ROTATE_SECONDS && !stack.isEmpty() && held.alive > 0) {
                     FieldBlock next = stack.get(0);
                     next.duty = Duty.RELIEVING;
@@ -1313,12 +1357,12 @@ public final class FieldBattle {
     @Nullable
     private static FieldBlock pickRelief(FieldArmy army, int file, Point spot) {
         for (FieldBlock f : army.queue(file)) {
-            if (!f.led && BattlePlan.fitToRelieve(f.alive, f.started())) {
+            if (!f.led && !holdsBehindBait(army, f) && BattlePlan.fitToRelieve(f.alive, f.started())) {
                 return f;
             }
         }
         return army.blocks.stream()
-                .filter(f -> !f.led && f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && f.task == FieldBlock.Task.NONE && BattlePlan.fitToRelieve(f.alive, f.started()))
+                .filter(f -> !f.led && !holdsBehindBait(army, f) && f.duty == Duty.LINE && f.alive > 0 && f.strikeAt == null && f.task == FieldBlock.Task.NONE && BattlePlan.fitToRelieve(f.alive, f.started()))
                 .min(Comparator.comparingDouble(f -> f.line.distanceTo(spot))).orElse(null);
     }
 
@@ -1421,9 +1465,21 @@ public final class FieldBattle {
     /**
      * Sends a block in at {@code prey} (or whom its general's strategies choose): cavalry following Cavalry Flank at
      * infantry first rides out to the side of its prey's line and turns in there; anyone else breaks formation now.
+     * Its whole unit goes with it, those of it free to, spread over its prey's unit; the wedge rides as its general leads.
      */
     private void charge(FieldArmy army, FieldBlock block, @Nullable FieldBlock prey) {
         FieldBlock enemyPick = prey != null ? prey : choosePrey(army, armies[1 - army.side], block);
+        List<FieldBlock> riders = unit(army, block, block.pos);
+        riders.removeIf(b -> b != block && (b.charged || b.approaching || b.led || b.strikeAt != null || b.duty != block.duty
+                || seconds < b.reformUntil));
+        List<FieldBlock> preys = enemyPick == null ? List.of() : unit(armies[enemyPick.side], enemyPick, enemyPick.pos);
+        for (int i = 0; i < riders.size(); i++) {
+            chargeOne(army, riders.get(i), preys.isEmpty() ? enemyPick : preys.get(i % preys.size()));
+        }
+        calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
+    }
+
+    private void chargeOne(FieldArmy army, FieldBlock block, @Nullable FieldBlock enemyPick) {
         block.prey = enemyPick;
         block.rode = block.arm.mounted();
         if (enemyPick != null && block.arm.mounted() && enemyPick.arm.infantry() && army.plan.has(Strategy.CAVALRY_FLANK)) {
@@ -1433,7 +1489,6 @@ public final class FieldBattle {
         } else {
             block.charged = true;
         }
-        calls.add(new Order(army.side, Call.CAVALRY_CHARGE));
     }
 
     /**
@@ -1954,10 +2009,10 @@ public final class FieldBattle {
 
     private void pincer(FieldArmy army, FieldArmy enemy, int wing) {
         FieldBlock target = army.pincerTarget[wing];
-        if (target != null && (target.alive == 0 || target.duty == Duty.FLEEING || seconds - army.pincerSince[wing] > FieldRules.PINCER_SECONDS)) {
+        if (target != null && (unit(enemy, target, target.pos).isEmpty() || seconds - army.pincerSince[wing] > FieldRules.PINCER_SECONDS)) {
             army.pincerTarget[wing] = null;
             for (FieldBlock b : army.blocks) {
-                if (b.strikeAt == target) {
+                if (b.strikeAt != null && sameUnit(b.strikeAt, target)) {
                     release(army, b);
                 }
             }
@@ -2000,19 +2055,53 @@ public final class FieldBattle {
             events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_cavalry", "where", where)));
             return;
         }
-        // Else the wing's infantry not fighting, nearest first: three surround it, or one strikes its flank.
-        List<FieldBlock> free = idleInfantry(army, wing, lured, Double.MAX_VALUE);
+        // Else the wing's nearest infantry unit not fighting: three blocks or more surround the lured unit (each block of
+        // it struck on both flanks and the rear), fewer strike its flank.
+        List<FieldBlock> free = freeUnit(army, idleInfantry(army, wing, lured, Double.MAX_VALUE), lured);
+        int s = free.isEmpty() ? 0 : sideNearer(lured, free.get(0).pos);
         if (free.size() >= 3) {
-            send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
-            send(free.get(1), lured, -free.get(0).strikeSide);
-            send(free.get(2), lured, 0);
+            sendUnit(free, lured, s, -s, 0);
             events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_surround", "where", where)));
         } else if (!free.isEmpty()) {
-            send(free.get(0), lured, sideNearer(lured, free.get(0).pos));
+            sendUnit(free, lured, s);
             events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.pincer_flank", "where", where)));
         } else {
             army.pincerTarget[wing] = null;
         }
+    }
+
+    /**
+     * The first unit among {@code idle} blocks' units (in their order) that is free to strike, as its blocks that go,
+     * nearest {@code target} first; empty if none ({@link #goers}).
+     */
+    private static List<FieldBlock> freeUnit(FieldArmy army, List<FieldBlock> idle, FieldBlock target) {
+        java.util.Set<Integer> seen = new java.util.HashSet<>();
+        for (FieldBlock b : idle) {
+            if (seen.add(unitKey(b))) {
+                List<FieldBlock> goers = goers(army, b, target.pos);
+                if (!goers.isEmpty()) {
+                    return goers;
+                }
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    /**
+     * The blocks of {@code block}'s unit that go when it is sent to strike, nearest {@code to} first: all of it in the
+     * front or the files and not busy; none if any of it is busy (fighting, striking, charging, braced, a bait, given a
+     * task or led), so a unit goes whole or not at all.
+     */
+    private static List<FieldBlock> goers(FieldArmy army, FieldBlock block, Point to) {
+        List<FieldBlock> unit = unit(army, block, to);
+        for (FieldBlock b : unit) {
+            if (b.led || b.task != FieldBlock.Task.NONE || b.charged || b.braced || b.strikeAt != null || b.contactFoe != null
+                    || b.duty == Duty.FRONT && isBait(army, b.file)) {
+                return new ArrayList<>();
+            }
+        }
+        unit.removeIf(b -> b.duty != Duty.FRONT && b.duty != Duty.LINE || !b.arm.infantry());
+        return unit;
     }
 
     /**
@@ -2039,37 +2128,34 @@ public final class FieldBattle {
                 && (idleFront || b.duty == Duty.LINE) && BattlePlan.fitToRelieve(b.alive, b.started());
     }
 
-    /** Whether any of the army's infantry has been sent against {@code target} already. */
+    /** Whether any of the army's infantry has been sent against {@code target}'s unit already. */
     private static boolean struck(FieldArmy army, FieldBlock target) {
+        return struckUnits(army).contains(unitKey(target));
+    }
+
+    /** The enemy units ({@link #unitKey}) the army's infantry has been sent against. */
+    private static java.util.Set<Integer> struckUnits(FieldArmy army) {
+        java.util.Set<Integer> struck = new java.util.HashSet<>();
         for (FieldBlock b : army.blocks) {
-            if (b.strikeAt == target) {
-                return true;
+            if (b.strikeAt != null) {
+                struck.add(unitKey(b.strikeAt));
             }
         }
-        return false;
+        return struck;
     }
 
     /**
-     * Enemy cavalry that has stopped (caught in a melee, or waiting) is set on by the infantry near it: up to
-     * {@link FieldRules#HUNTERS_PER_RIDERS} idle blocks within {@link FieldRules#HUNT_REACH} close in on its flanks.
-     * They let it go once it rides on ({@link #strike}).
-     */
-    /**
      * Envelopment: once the army is fighting, a front block with no enemy ahead of it (its wing reaches past the end
-     * of the enemy's line) wheels onto the nearest enemy infantry beside it, within {@link FieldRules#ENVELOP_REACH}:
-     * the first block strikes its flank, a second its rear. When that block falls it turns on the next, so an
-     * overlapping wing rolls up the enemy's exposed flank. The blocks waiting in its file follow it round.
+     * of the enemy's line) wheels its whole unit, if none of it is fighting, onto the nearest enemy infantry unit beside
+     * it within {@link FieldRules#ENVELOP_REACH} that no unit of ours strikes yet: two blocks on each enemy block, its
+     * flank and its rear. When an enemy block falls its strikers turn on the next of its unit ({@link #strike}), so an
+     * overlapping wing rolls up the enemy's exposed flank.
      */
     private void envelop(FieldArmy army, FieldArmy enemy) {
         if (seconds < BattlePlan.FORMING_SECONDS || !army.infantryEngaged()) {
             return;
         }
-        java.util.Map<FieldBlock, Integer> attackers = new java.util.HashMap<>();
-        for (FieldBlock b : army.blocks) {
-            if (b.strikeAt != null) {
-                attackers.merge(b.strikeAt, 1, Integer::sum);
-            }
-        }
+        java.util.Set<Integer> struck = struckUnits(army);
         boolean[] wheeling = new boolean[3];
         for (FieldBlock b : army.front) {
             if (b.alive == 0 || b.duty != Duty.FRONT || b.contactFoe != null || b.strikeAt != null || b.braced
@@ -2097,10 +2183,14 @@ public final class FieldBattle {
             }
             beside.sort(Comparator.comparingDouble(e -> e.pos.distanceTo(b.pos)));
             for (FieldBlock target : beside) {
-                int n = attackers.getOrDefault(target, 0);
-                if (n < FieldRules.ENVELOPERS) {
-                    send(b, target, n == 0 ? sideNearer(target, b.pos) : 0);
-                    attackers.merge(target, 1, Integer::sum);
+                if (struck.add(unitKey(target))) {
+                    // Its whole unit wheels, if none of it is fighting: each enemy block struck in its flank, then its rear.
+                    List<FieldBlock> unit = goers(army, b, target.pos);
+                    if (unit.isEmpty()) {
+                        struck.remove(unitKey(target));
+                        break;
+                    }
+                    sendUnit(unit, target, sideNearer(target, b.pos), 0);
                     wheeling[b.wing] = true;
                     break;
                 }
@@ -2124,23 +2214,20 @@ public final class FieldBattle {
         return false;
     }
 
+    /**
+     * Enemy cavalry that has stopped (caught in a melee, or waiting) is set on by the infantry near it: the nearest
+     * free unit with an idle block within {@link FieldRules#HUNT_REACH} closes in on its unit, two blocks on each
+     * rider block, one on each flank. They let it go once it rides on ({@link #strike}).
+     */
     private void huntStoppedCavalry(FieldArmy army, FieldArmy enemy) {
         if (seconds < BattlePlan.FORMING_SECONDS) {
             return;
         }
-        // Who is already hunting whom, and who is free, once for all the stopped cavalry.
-        java.util.Map<FieldBlock, Integer> hunters = new java.util.HashMap<>();
-        for (FieldBlock b : army.blocks) {
-            if (b.strikeAt != null) {
-                hunters.merge(b.strikeAt, 1, Integer::sum);
-            }
-        }
+        // Whose units are hunted already, once for all the stopped cavalry.
+        java.util.Set<Integer> hunted = struckUnits(army);
         for (FieldBlock c : enemy.blocks) {
-            if (c.alive == 0 || !c.arm.mounted() || c.duty == Duty.FLEEING || c.lastPos == null || c.moved >= FieldRules.STOPPED) {
-                continue;
-            }
-            int sent = hunters.getOrDefault(c, 0);
-            if (sent >= FieldRules.HUNTERS_PER_RIDERS) {
+            if (c.alive == 0 || !c.arm.mounted() || c.duty == Duty.FLEEING || c.lastPos == null || c.moved >= FieldRules.STOPPED
+                    || hunted.contains(unitKey(c))) {
                 continue;
             }
             List<FieldBlock> near = new ArrayList<>();
@@ -2155,12 +2242,12 @@ public final class FieldBattle {
                 army.blocks.forEach(consider);
             }
             near.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(c.pos)));
-            for (int i = 0; i < near.size() && sent < FieldRules.HUNTERS_PER_RIDERS; i++, sent++) {
-                FieldBlock hunter = near.get(i);
-                send(hunter, c, i == 0 ? sideNearer(c, hunter.pos) : -sideNearer(c, near.get(0).pos));
-                if (i == 0) {
-                    events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.hunt_cavalry", "where", army.where(hunter.wing))));
-                }
+            List<FieldBlock> hunters = freeUnit(army, near, c);
+            if (!hunters.isEmpty()) {
+                int s = sideNearer(c, hunters.get(0).pos);
+                sendUnit(hunters, c, s, -s);
+                hunted.add(unitKey(c));
+                events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.hunt_cavalry", "where", army.where(hunters.get(0).wing))));
             }
         }
     }
@@ -2175,7 +2262,7 @@ public final class FieldBattle {
         }
         block.task = task;
         if (task == FieldBlock.Task.BAIT && block.duty == Duty.FRONT) {
-            armies[block.side].baitFile[block.wing] = block.file;
+            makeBait(armies[block.side], block); // a player's unit takes the place of the general's bait in its wing
         }
     }
 
@@ -2374,6 +2461,48 @@ public final class FieldBattle {
         block.strikeSide = side;
     }
 
+    /**
+     * Sends a unit's blocks at {@code target}'s unit (as {@link #send}): the enemy blocks nearest {@code target} first
+     * (it first), each taking {@code sides.length} of ours, one from each of {@code sides} in turn, nearest of ours first;
+     * more of ours than that go round again.
+     */
+    private void sendUnit(List<FieldBlock> unit, FieldBlock target, int... sides) {
+        List<FieldBlock> foes = unit(armies[target.side], target, target.pos);
+        if (foes.isEmpty()) {
+            foes = List.of(target);
+        }
+        unit.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(target.pos)));
+        for (int i = 0; i < unit.size(); i++) {
+            send(unit.get(i), foes.get(i / sides.length % foes.size()), sides[i % sides.length]);
+        }
+    }
+
+    /**
+     * Whether two blocks are of one unit (a platoon of up to 200, {@link BattlePlan#platoons}), which the general
+     * sends whole: the same block, or of one platoon of one army. The wedge's riders ride as their general leads them,
+     * each its own unit.
+     */
+    private static boolean sameUnit(FieldBlock a, FieldBlock b) {
+        return a == b || a.side == b.side && a.platoon >= 0 && a.platoon == b.platoon && !a.inWedge && !b.inWedge;
+    }
+
+    /** A key for a block's unit, unique within its army: its platoon, else its own. */
+    private static int unitKey(FieldBlock b) {
+        return b.platoon >= 0 && !b.inWedge ? b.platoon : -1 - b.id;
+    }
+
+    /** The standing blocks (alive and not fleeing) of {@code block}'s unit in {@code army}, nearest {@code to} first. */
+    private static List<FieldBlock> unit(FieldArmy army, FieldBlock block, Point to) {
+        List<FieldBlock> unit = new ArrayList<>();
+        for (FieldBlock b : block.platoon >= 0 && !block.inWedge ? army.platoon(block.platoon) : List.of(block)) {
+            if (sameUnit(b, block) && b.alive > 0 && b.duty != Duty.FLEEING) {
+                unit.add(b);
+            }
+        }
+        unit.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(to)));
+        return unit;
+    }
+
     /** Which flank of {@code target} is nearer {@code from}: -1 its left, 1 its right. */
     private static int sideNearer(FieldBlock target, Point from) {
         double right = (from.x() - target.pos.x()) * -target.facingZ + (from.z() - target.pos.z()) * target.facingX;
@@ -2386,6 +2515,14 @@ public final class FieldBattle {
      */
     private void strike(FieldArmy army, FieldBlock block) {
         FieldBlock t = block.strikeAt;
+        if (t != null && (t.alive == 0 || t.duty == Duty.FLEEING) && !block.led) {
+            // Its block gone, it turns on the nearest of that block's unit still standing.
+            List<FieldBlock> rest = unit(armies[t.side], t, block.pos);
+            if (!rest.isEmpty()) {
+                t = rest.get(0);
+                block.strikeAt = t;
+            }
+        }
         boolean gone = t == null || t.alive == 0 || t.duty == Duty.FLEEING;
         // A kill squad keeps after its officer, mounted or not.
         boolean escaped = !gone && block.task != FieldBlock.Task.KILL && t.arm.mounted() && (t.moved >= FieldRules.STOPPED * 3

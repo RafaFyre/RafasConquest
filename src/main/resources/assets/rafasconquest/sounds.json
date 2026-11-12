@@ -30,6 +30,7 @@
   "battle.select.cavalry": {"sounds": ["rafasconquest:battle/select_cavalry"]},
   "battle.order.move": {"sounds": ["rafasconquest:battle/order_move"]},
   "battle.order.attack": {"sounds": ["rafasconquest:battle/order_attack"]},
+  "battle.army_charge": {"sounds": ["rafasconquest:battle/army_charge"]},
   "music.to_shores_distant": {
     "sounds": [{"name": "rafasconquest:music/to_shores_distant", "stream": true}]
   },
@@ -38,5 +39,23 @@
   },
   "ambient.city_market": {
     "sounds": [{"name": "rafasconquest:ambient/city_market", "stream": true}]
+  },
+  "horn.kraven.moving": {
+    "sounds": ["rafasconquest:horns/kraven/moving/1", "rafasconquest:horns/kraven/moving/2", "rafasconquest:horns/kraven/moving/3",
+      "rafasconquest:horns/kraven/moving/4", "rafasconquest:horns/kraven/moving/5", "rafasconquest:horns/kraven/moving/6"]
+  },
+  "horn.kraven.attacking": {
+    "sounds": ["rafasconquest:horns/kraven/attacking/1", "rafasconquest:horns/kraven/attacking/2", "rafasconquest:horns/kraven/attacking/3",
+      "rafasconquest:horns/kraven/attacking/4", "rafasconquest:horns/kraven/attacking/5", "rafasconquest:horns/kraven/attacking/6",
+      "rafasconquest:horns/kraven/attacking/7"]
+  },
+  "horn.kraven.retreating": {
+    "sounds": ["rafasconquest:horns/kraven/retreating/1", "rafasconquest:horns/kraven/retreating/2", "rafasconquest:horns/kraven/retreating/3",
+      "rafasconquest:horns/kraven/retreating/4", "rafasconquest:horns/kraven/retreating/5", "rafasconquest:horns/kraven/retreating/6",
+      "rafasconquest:horns/kraven/retreating/7"]
+  },
+  "horn.kraven.rallying": {
+    "sounds": ["rafasconquest:horns/kraven/rallying/1", "rafasconquest:horns/kraven/rallying/2", "rafasconquest:horns/kraven/rallying/3",
+      "rafasconquest:horns/kraven/rallying/4", "rafasconquest:horns/kraven/rallying/5"]
   }
 }

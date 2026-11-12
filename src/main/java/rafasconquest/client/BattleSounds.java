@@ -191,6 +191,11 @@ public final class BattleSounds {
         return true;
     }
 
+    /** A cavalry block's next charge clip starts no sooner than {@code delay} ticks from now (after its war cry). */
+    public static void holdCharge(int formation, int delay) {
+        nextCharge.put((long) formation, ticks + delay);
+    }
+
     public static void clear() {
         hooves = List.of();
         din = List.of();

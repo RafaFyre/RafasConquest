@@ -24,6 +24,7 @@ public class Faction {
     private final Map<ResourceType, Integer> stockpile = new EnumMap<>(ResourceType.class);
     /** The doctrines its generals draw on; every doctrine for now, until factions differ. */
     private final List<Doctrine> doctrines = new ArrayList<>(List.of(Doctrine.values()));
+    private String hornStyle = "";
 
     public Faction(UUID id, String name, FactionType type, BlockPos origin, int radiusSteps, int strength) {
         this.id = id;
@@ -66,6 +67,15 @@ public class Faction {
         return List.copyOf(doctrines);
     }
 
+    /** The nation's horn style (a folder of sounds/horns), or "" for its goat horn call. */
+    public String hornStyle() {
+        return hornStyle;
+    }
+
+    public void setHornStyle(String hornStyle) {
+        this.hornStyle = hornStyle;
+    }
+
     public int stock(ResourceType resource) {
         return stockpile.getOrDefault(resource, 0);
     }
@@ -94,6 +104,7 @@ public class Faction {
         ListTag doctrineList = new ListTag();
         doctrines.forEach(d -> doctrineList.add(StringTag.valueOf(d.name())));
         tag.put("doctrines", doctrineList);
+        tag.putString("hornStyle", hornStyle);
         return tag;
     }
 
@@ -105,6 +116,7 @@ public class Faction {
                 BlockPos.of(tag.getLong("origin")),
                 tag.getInt("radiusSteps"),
                 tag.getInt("strength"));
+        faction.hornStyle = tag.getString("hornStyle"); // "" in saves from before horn styles
         CompoundTag stock = tag.getCompound("stockpile");
         for (String key : stock.getAllKeys()) {
             faction.stockpile.put(ResourceType.valueOf(key), stock.getInt(key));

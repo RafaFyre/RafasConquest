@@ -33,11 +33,13 @@ final class DistantHorizonsArmies {
                 return null;
             }
             DhApiResult<com.seibel.distanthorizons.api.objects.data.DhApiRaycastResult> hit = DhApi.Delayed.terrainRepo.raycast(
-                    level, from.x, from.y, from.z, (float) dir.x, (float) dir.y, (float) dir.z, reach, null);
-            if (!hit.success || hit.payload == null || hit.payload.pos == null) {
+                    level, from.x, from.y, from.z, (float) dir.x, (float) dir.y, (float) dir.z, reach,
+                    DhApi.Delayed.terrainRepo.createSoftCache()); // without a cache Distant Horizons fails every column
+            if (!hit.success || hit.payload == null || hit.payload.pos == null || hit.payload.dataPoint == null) {
                 return null;
             }
-            return new net.minecraft.world.phys.Vec3(hit.payload.pos.x + 0.5, hit.payload.pos.y + 1, hit.payload.pos.z + 0.5);
+            // pos.y is the bottom of the column it met, which may run far underground; the ground is its top
+            return new net.minecraft.world.phys.Vec3(hit.payload.pos.x + 0.5, hit.payload.dataPoint.topYBlockPos, hit.payload.pos.z + 0.5);
         } catch (RuntimeException e) {
             return null; // Distant Horizons has no world loaded yet
         }

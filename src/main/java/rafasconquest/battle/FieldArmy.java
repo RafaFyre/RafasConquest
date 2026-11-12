@@ -14,6 +14,9 @@ public final class FieldArmy {
     final double facingX;
     final double facingZ;
     final List<FieldBlock> blocks = new ArrayList<>();
+    /** Each platoon's blocks ({@link FieldBlock#platoon}, fixed when it deploys), filed when first asked ({@link #platoon}). */
+    @Nullable
+    private java.util.Map<Integer, List<FieldBlock>> platoons;
     /** The block holding each file of the front line (it may have fallen; a relief then takes its place). */
     FieldBlock[] front = new FieldBlock[0];
     @Nullable
@@ -59,8 +62,15 @@ public final class FieldArmy {
     /** How far to the army's right the middle of each wing stands, and how far behind the front its backline is. */
     final double[] wingRight = new double[3];
     double rearBack;
-    /** Bait: the front file in each wing that runs ahead as bait (-1 none), and whether it has drawn the enemy in. */
+    /**
+     * Bait: a front file of the unit in each wing that runs ahead as bait (-1 none), every front file of that unit
+     * ({@link #baitFiles}), the unit, where the wing's line stood when it was chosen (the line it falls back behind
+     * when it is the wing's whole front), and whether it has drawn the enemy in.
+     */
     final int[] baitFile = {-1, -1, -1};
+    boolean[] baitFiles = new boolean[0];
+    final int[] baitUnit = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+    final Point[] baitLine = new Point[3];
     final boolean[] baitSprung = new boolean[3];
     /** Pincer: the lured enemy block each wing is striking, and since when. */
     final FieldBlock[] pincerTarget = new FieldBlock[3];
@@ -171,6 +181,19 @@ public final class FieldArmy {
             }
         }
         return !any && infantryEngaged();
+    }
+
+    /** The blocks of platoon {@code n}, standing or not; none for a number no block has. */
+    List<FieldBlock> platoon(int n) {
+        if (platoons == null) {
+            platoons = new java.util.HashMap<>();
+            for (FieldBlock b : blocks) {
+                if (b.platoon >= 0) {
+                    platoons.computeIfAbsent(b.platoon, k -> new ArrayList<>()).add(b);
+                }
+            }
+        }
+        return platoons.getOrDefault(n, List.of());
     }
 
     /** Whether a wing is holding its ground while its bait draws the enemy in. */

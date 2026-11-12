@@ -100,6 +100,14 @@ public final class PveCommands {
                                 .then(Commands.literal("none").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.NONE)))
                                 .then(Commands.literal("knight").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.KNIGHT)))
                                 .then(Commands.literal("count").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.COUNT)))))
+                // A nation's horn style in battle ("goat": its goat horn call, as before horn styles).
+                .then(Commands.literal("horn").requires(source -> source.hasPermission(2))
+                        .then(Commands.argument("nation", StringArgumentType.string())
+                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(quotedFactionNames(), builder))
+                                .then(Commands.argument("style", StringArgumentType.word())
+                                        .suggests((ctx, b) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
+                                                java.util.stream.Stream.of("goat"), rafasconquest.bridge.RecruitsBattle.HORN_STYLES.stream()), b))
+                                        .executes(PveCommands::hornSet))))
                 .then(Commands.literal("muster")
                         .executes(ctx -> say(ctx, rafasconquest.politics.Wars.muster(ctx.getSource().getPlayerOrException()))))
                 .then(Commands.literal("politics")
@@ -704,6 +712,24 @@ public final class PveCommands {
     private static int say(CommandContext<CommandSourceStack> ctx, String text) {
         ctx.getSource().sendSuccess(() -> Component.literal(text), false);
         return 1;
+    }
+
+    private static int hornSet(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ConquestServer server = server();
+        Faction nation = byName(server, arg(ctx, "nation"));
+        String style = arg(ctx, "style").toLowerCase(java.util.Locale.ROOT);
+        if (nation == null) {
+            ctx.getSource().sendFailure(Component.literal("No nation named " + arg(ctx, "nation")));
+            return 0;
+        }
+        if (!style.equals("goat") && !rafasconquest.bridge.RecruitsBattle.HORN_STYLES.contains(style)) {
+            ctx.getSource().sendFailure(Component.literal("No horn style " + style + "; there are: goat, "
+                    + String.join(", ", rafasconquest.bridge.RecruitsBattle.HORN_STYLES)));
+            return 0;
+        }
+        nation.setHornStyle(style.equals("goat") ? "" : style);
+        server.data().setDirty();
+        return say(ctx, nation.name() + " now sounds the " + style + " horn");
     }
 
     private static Faction byName(ConquestServer server, String name) {

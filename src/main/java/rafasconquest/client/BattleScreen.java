@@ -70,6 +70,9 @@ public final class BattleScreen extends Screen {
             sound("battle.select.cavalry"), sound("battle.select.cavalry")}; // by Arm, in order
     private static final SoundEvent ORDER_MOVE = sound("battle.order.move");
     private static final SoundEvent ORDER_ATTACK = sound("battle.order.attack");
+    private static final SoundEvent ARMY_CHARGE = sound("battle.army_charge");
+    /** Cavalry's hooves are heard this long after the war cry: 0.45 s. */
+    private static final int HOOVES_AFTER_CRY = 9;
 
     private static SoundEvent sound(String name) {
         return SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(rafasconquest.RafasConquest.MOD_ID, name));
@@ -154,6 +157,16 @@ public final class BattleScreen extends Screen {
     }
 
     /** The formations (block ids) selected in the open battle screen, to glow where they are only figures; else none. */
+    /** The player's army colour (their units'), or -1 before any units are known. */
+    static int playerColour() {
+        return units.isEmpty() ? -1 : units.get(0).rgb();
+    }
+
+    /** Whether the player themself is selected in the battle screen. */
+    static boolean playerSelected() {
+        return Minecraft.getInstance().screen instanceof BattleScreen screen && screen.playerSelected;
+    }
+
     static Set<Integer> selectedFormations() {
         if (!(Minecraft.getInstance().screen instanceof BattleScreen screen) || screen.selected.isEmpty()) {
             return Set.of();
@@ -240,7 +253,7 @@ public final class BattleScreen extends Screen {
         }
         if (minecraft.level.hasChunkAt(Mth.floor(camX), Mth.floor(camZ))) { // an unarrived chunk reads as the world's floor
             double ground = minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(camX), Mth.floor(camZ));
-            camY = Mth.clamp(camY, ground + 2, ground + 120);
+            camY = Mth.clamp(camY, ground + 2, ground + 240);
         }
     }
 
@@ -854,6 +867,17 @@ public final class BattleScreen extends Screen {
         play(SELECT[arm]);
     }
 
+    /** Units sent to attack charge: the army's war cry, and any cavalry's hooves only {@link #HOOVES_AFTER_CRY} after it. */
+    private void charged(List<Integer> numbers) {
+        play(ARMY_CHARGE);
+        for (UnitInfo u : units) {
+            FormationSnapshot f = numbers.contains(u.number()) ? DistantArmies.at(u.block()) : null;
+            if (f != null && f.kind().mounted()) {
+                BattleSounds.holdCharge(u.block(), HOOVES_AFTER_CRY);
+            }
+        }
+    }
+
     private void play(SoundEvent sound) {
         minecraft.getSoundManager().play(SimpleSoundInstance.forUI(sound, 1.0F, 1.0F));
     }
@@ -934,11 +958,17 @@ public final class BattleScreen extends Screen {
             send(chosen, UnitOrder.LEAD_CHARGE, at);
             walkTo = at; // the player goes in at their head
             play(heard);
+            if (heard == ORDER_ATTACK) {
+                charged(chosen);
+            }
             return;
         }
         if (!chosen.isEmpty()) {
             send(chosen, UnitOrder.GO, at);
             play(heard);
+            if (heard == ORDER_ATTACK) {
+                charged(chosen);
+            }
         }
         if (me) {
             walkTo = at;
@@ -960,6 +990,7 @@ public final class BattleScreen extends Screen {
         entries.add(new Entry("Charge", () -> {
             send(numbers, UnitOrder.CHARGE, null);
             play(ORDER_ATTACK);
+            charged(numbers);
         }));
         entries.add(new Entry("Brace", () -> send(numbers, UnitOrder.BRACE, null)));
         entries.add(new Entry("Follow me", () -> send(numbers, UnitOrder.FOLLOW, null)));

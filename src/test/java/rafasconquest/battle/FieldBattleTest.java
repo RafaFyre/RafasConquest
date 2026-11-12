@@ -309,6 +309,24 @@ class FieldBattleTest {
     }
 
     @Test
+    void cavalryChargesAsAWholeUnit() {
+        FieldBattle battle = battle(100, 100, 5);
+        for (int i = 0; i < 600; i++) {
+            battle.second();
+            for (FieldBlock c : battle.army(0).blocks()) {
+                if (c.arm().mounted() && c.platoon() >= 0 && !c.inWedge && (c.charged || c.approaching)) {
+                    for (FieldBlock mate : battle.army(0).platoon(c.platoon())) {
+                        assertTrue(mate.alive() == 0 || mate.charged || mate.approaching || mate.duty() != c.duty(),
+                                "a rider of the unit stayed behind when it charged");
+                    }
+                    return;
+                }
+            }
+        }
+        throw new AssertionError("no cavalry charged");
+    }
+
+    @Test
     void inTheMorningTheArmiesMarchOutOfCampToTheirPlaces() {
         FieldBattle battle = battle(60, 60, 3);
         battle.formUp(25);
