@@ -46,7 +46,7 @@ public final class FieldBlock {
         BEARER,
         /** Cavalry that spent its momentum, riding back to reform; doesn't fight on the way. */
         RALLYING,
-        /** An infantry block that broke (lost half its soldiers within a minute): running to its wing's backline to
+        /** A block that broke (its morale, {@link rafasconquest.battle.FieldBattle.Morale}, gave way): running to its wing's backline to
          * regroup, not fighting on the way. */
         ROUTED,
         /** Running from a lost battle; never fights. */
@@ -148,6 +148,11 @@ public final class FieldBlock {
     int wing = FieldArmy.CENTRE;
     /** Its platoon in its army ({@link BattlePlan#platoons}), or -1 (the general, guard and bearer, ships). */
     int platoon = -1;
+    /**
+     * The unit its general moves it with: its platoon in a battle of over {@link FieldRules#UNIT_TACTICS_OVER} soldiers,
+     * else -1, and it is moved block by block.
+     */
+    int unit = -1;
     /** Cavalry outside the wedge: how far to the army's right its wing's backline post is, whether it has charged yet, and
      * which way it is riding along the backline. */
     double homeRight;
@@ -167,6 +172,16 @@ public final class FieldBlock {
     int shakenUntil;
     int rallyUntil;
     boolean captainWasAlive = true;
+    /** Until when it is shaken by blows on its flank, on its rear, and by a rout of its own nearby; how often it routed. */
+    int flankedUntil;
+    int rearedUntil;
+    int frightUntil;
+    int routs;
+
+    /** Routed {@link FieldRules#SHATTER_ROUTS} times: it retreats to camp and doesn't regroup. */
+    public boolean shattered() {
+        return routs >= FieldRules.SHATTER_ROUTS;
+    }
 
     /** Seconds it has fought in the front since it last rotated in, and whether it is being rotated out. */
     int fightSeconds;
@@ -358,6 +373,7 @@ public final class FieldBlock {
     public void rally(int until) {
         rallyUntil = Math.max(rallyUntil, until);
         shakenUntil = 0;
+        frightUntil = 0;
     }
 
     /** The enemy block it fought this second, or null. */

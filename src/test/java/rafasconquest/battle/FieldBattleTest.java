@@ -242,6 +242,119 @@ class FieldBattleTest {
     }
 
     @Test
+    void aFlankersBlowsShakeTheBlockItStrikes() {
+        FieldBattle battle = battle(100, 100, 5);
+        FieldBlock flanker = reserveBlock(battle);
+        battle.assign(flanker, FieldBlock.Task.FLANK);
+        boolean shaken = false;
+        for (int i = 0; i < 400 && !shaken && !battle.over(); i++) {
+            battle.second();
+            FieldBlock t = flanker.contactFoe();
+            shaken = t != null && t == flanker.strikeAt()
+                    && (t.flankedUntil > battle.seconds() || t.rearedUntil > battle.seconds());
+        }
+        assertTrue(shaken, "struck from the side, its target is never shaken");
+    }
+
+    @Test
+    void flankAndRearBlowsAndTheArmysLossesPressABlockTowardBreaking() {
+        FieldBattle battle = battle(25, 25, 8);
+        battle.second();
+        FieldArmy army = battle.army(0);
+        FieldBlock b = reserveBlock(battle);
+        FieldBattle.Morale calm = battle.moraleOf(b);
+        assertNotNull(calm);
+        b.flankedUntil = battle.seconds() + FieldRules.FLANK_LINGER;
+        b.rearedUntil = battle.seconds() + FieldRules.FLANK_LINGER;
+        assertEquals(calm.pressure() + FieldRules.FLANK_SHOCK + FieldRules.REAR_SHOCK, battle.moraleOf(b).pressure(), 1e-9);
+        for (FieldBlock o : army.blocks()) {
+            if (o != b && army.standing() > army.started() / 2) {
+                o.alive = 0;
+            }
+        }
+        double lost = 1 - (double) army.standing() / army.started();
+        assertTrue(lost >= 0.5);
+        assertEquals(FieldRules.ARMY_SHOCK * lost, battle.moraleOf(b).army(), 1e-9);
+        assertTrue(battle.routRisk(b) > 0);
+    }
+
+    @Test
+    void aRoutFrightensItsOwnNearbyButAnExpendableRoutOnlyOtherExpendables() {
+        FieldBattle battle = battle(25, 25, 8);
+        battle.second();
+        FieldArmy army = battle.army(0);
+        java.util.List<FieldBlock> levy = army.blocks().stream().filter(b -> b.arm() == Arm.LEVY).toList();
+        FieldBlock heavy = army.blocks().stream().filter(b -> b.arm() == Arm.HEAVY_INFANTRY).findFirst().orElseThrow();
+        FieldBlock far = army.blocks().stream().filter(b -> b.arm().infantry() && b != heavy && !levy.subList(0, 2).contains(b))
+                .findFirst().orElseThrow();
+        FieldBlock routed = levy.get(0);
+        FieldBlock otherLevy = levy.get(1);
+        heavy.pos = routed.pos.plus(5, 0);
+        otherLevy.pos = routed.pos.plus(0, 5);
+        far.pos = routed.pos.plus(100, 0);
+        battle.rout(army, routed);
+        assertTrue(otherLevy.frightUntil > battle.seconds(), "a levy's rout frightens the levy beside it");
+        assertEquals(0, heavy.frightUntil, "but not the heavy infantry: levy is expendable");
+        assertEquals(0, far.frightUntil, "nor anyone out of reach");
+        otherLevy.frightUntil = 0;
+        battle.rout(army, heavy);
+        assertTrue(otherLevy.frightUntil > battle.seconds(), "the heavy infantry's rout frightens the levy beside it");
+    }
+
+    @Test
+    void onlyBattlesOfOverAThousandAreFoughtByUnits() {
+        // 50 blocks of 20 is exactly 1000: block by block. One block more and the generals move units.
+        FieldBattle small = battle(25, 25, 8);
+        assertTrue(small.army(0).blocks().stream().allMatch(b -> b.unit == -1), "a battle of 1000 moves blocks alone");
+        assertTrue(small.army(0).blocks().stream().anyMatch(b -> b.platoon() >= 0), "but still deploys by platoons");
+        FieldBattle big = battle(26, 25, 8);
+        assertTrue(big.army(0).blocks().stream().filter(b -> b.platoon() >= 0).allMatch(b -> b.unit == b.platoon()),
+                "a battle of over 1000 moves units");
+    }
+
+    @Test
+    void cavalryAndArchersHaveMoraleAndRegroupToTheirOwnWork() {
+        FieldBattle battle = battle(25, 25, 8);
+        battle.second();
+        FieldArmy army = battle.army(0);
+        for (Arm arm : new Arm[]{Arm.ARCHERS, Arm.CAVALRY}) {
+            FieldBlock b = army.blocks().stream().filter(x -> x.arm() == arm && x.duty() == Duty.SUPPORT && !x.inWedge)
+                    .findFirst().orElseThrow();
+            assertNotNull(battle.moraleOf(b), arm + " has morale");
+            battle.rout(army, b);
+            assertEquals(Duty.ROUTED, b.duty());
+            int routedAt = battle.seconds();
+            while (battle.seconds() < routedAt + FieldRules.REGROUP_SECONDS + 2 && !battle.over()) {
+                battle.second();
+            }
+            assertTrue(b.duty() != Duty.ROUTED && b.duty() != Duty.LINE, arm + " back at " + b.duty() + ", not in a file");
+        }
+    }
+
+    @Test
+    void aBlockShatteredOnItsThirdRoutRetreatsToCampAndStaysOutOfTheDay() {
+        FieldBattle battle = battle(25, 25, 8);
+        Point camp = new Point(-200, 0);
+        battle.setCamp(0, FieldArmy.CENTRE, camp);
+        battle.second();
+        FieldArmy army = battle.army(0);
+        FieldBlock b = reserveBlock(battle);
+        int standing = army.standing();
+        battle.rout(army, b);
+        battle.rout(army, b);
+        assertFalse(b.shattered());
+        assertFalse(camp.equals(b.line()), "routed, not yet shattered: it regroups behind the lines");
+        battle.rout(army, b);
+        assertTrue(b.shattered());
+        assertEquals(camp, b.line());
+        assertEquals(standing - b.alive(), army.standing(), "the shattered count as lost");
+        for (int i = 0; i < FieldRules.REGROUP_SECONDS + 10 && !battle.over(); i++) {
+            battle.second();
+        }
+        assertEquals(Duty.ROUTED, b.duty(), "a shattered block doesn't regroup");
+    }
+
+    @Test
     void aSupportBlockReinforcesALosingBlockOfItsWing() {
         FieldBattle battle = battle(100, 100, 5);
         FieldBlock support = reserveBlock(battle);

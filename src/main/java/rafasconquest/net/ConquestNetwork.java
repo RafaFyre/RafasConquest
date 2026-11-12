@@ -736,7 +736,8 @@ public final class ConquestNetwork {
      * another, its wing, its arm ({@code BattlePlan.Arm}), and whether it is fighting, or tired; its soldiers (entity ids).
      */
     public record UnitInfo(int number, int soldiers, int started, double x, double z, int mode, int shape, boolean shields, int rgb,
-                           int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids, int block) {
+                           int card, boolean split, int wing, int arm, boolean fighting, boolean tired, int[] ids, int block,
+                           @org.jetbrains.annotations.Nullable rafasconquest.battle.FieldBattle.Morale morale) {
     }
 
     /** Server → client: an officer's deployment begins; open the strategy view with their whole army selected. */
@@ -790,6 +791,7 @@ public final class ConquestNetwork {
                 buf.writeBoolean(u.tired());
                 buf.writeVarIntArray(u.ids());
                 buf.writeVarInt(u.block());
+                writeMorale(buf, u.morale());
             }
         }
 
@@ -799,9 +801,28 @@ public final class ConquestNetwork {
             for (int i = 0; i < n; i++) {
                 units.add(new UnitInfo(buf.readVarInt(), buf.readVarInt(), buf.readVarInt(), buf.readDouble(), buf.readDouble(),
                         buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readInt(), buf.readVarInt(), buf.readBoolean(),
-                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256), buf.readVarInt()));
+                        buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256), buf.readVarInt(), readMorale(buf)));
             }
             return new UnitsState(units);
+        }
+
+        private static void writeMorale(FriendlyByteBuf buf, @org.jetbrains.annotations.Nullable rafasconquest.battle.FieldBattle.Morale m) {
+            buf.writeBoolean(m != null);
+            if (m != null) {
+                for (double v : new double[]{m.losses(), m.captain(), m.flanked(), m.rear(), m.fright(), m.army(), m.breaksAt()}) {
+                    buf.writeFloat((float) v);
+                }
+                buf.writeEnum(m.state());
+            }
+        }
+
+        @org.jetbrains.annotations.Nullable
+        private static rafasconquest.battle.FieldBattle.Morale readMorale(FriendlyByteBuf buf) {
+            if (!buf.readBoolean()) {
+                return null;
+            }
+            return new rafasconquest.battle.FieldBattle.Morale(buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readFloat(),
+                    buf.readFloat(), buf.readFloat(), buf.readFloat(), buf.readEnum(rafasconquest.battle.FieldBattle.Morale.State.class));
         }
     }
 

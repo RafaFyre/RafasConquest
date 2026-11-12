@@ -504,6 +504,7 @@ public final class BattleScreen extends Screen {
         }
         drawTrack(g, mouseX, mouseY);
         drawPlayer(g, mouseX, mouseY);
+        drawMoraleTip(g, mouseX, mouseY);
         if (menu != null) {
             drawMenu(g, mouseX, mouseY);
         }
@@ -763,17 +764,8 @@ public final class BattleScreen extends Screen {
             return;
         }
         // On the field: the unit of the soldier nearest the click, or the player's body; else nothing.
-        UnitInfo best = null;
-        double bestD = PICK;
-        for (UnitInfo u : units) {
-            for (Vec3 mark : marks(u)) {
-                double[] at = project(mark);
-                if (at != null && Math.hypot(at[0] - mx, at[1] - my) < bestD) {
-                    bestD = Math.hypot(at[0] - mx, at[1] - my);
-                    best = u;
-                }
-            }
-        }
+        UnitInfo best = unitAt(mx, my);
+        double bestD = best == null ? PICK : pickDistance(best, mx, my);
         double[] me = project(minecraft.player.position().add(0, 1, 0));
         boolean onMe = me != null && Math.hypot(me[0] - mx, me[1] - my) < Math.min(bestD, PICK);
         if (!add) {
@@ -837,6 +829,78 @@ public final class BattleScreen extends Screen {
             return true;
         }
         return super.keyPressed(key, scanCode, modifiers);
+    }
+
+    /** The player's unit with a soldier nearest the mouse, within {@link #PICK} pixels; else null. */
+    @Nullable
+    private UnitInfo unitAt(double mx, double my) {
+        UnitInfo best = null;
+        double bestD = PICK;
+        for (UnitInfo u : units) {
+            double d = pickDistance(u, mx, my);
+            if (d < bestD) {
+                bestD = d;
+                best = u;
+            }
+        }
+        return best;
+    }
+
+    /** How far, in pixels, the mouse is from the nearest soldier of a unit on screen. */
+    private double pickDistance(UnitInfo u, double mx, double my) {
+        double best = Double.MAX_VALUE;
+        for (Vec3 mark : marks(u)) {
+            double[] at = project(mark);
+            if (at != null) {
+                best = Math.min(best, Math.hypot(at[0] - mx, at[1] - my));
+            }
+        }
+        return best;
+    }
+
+    /** The mouse held this long over one of the player's units on the field shows what presses it toward breaking. */
+    private static final long MORALE_HOVER_MS = 3000;
+    private int hoverUnit = -1;
+    private long hoverSince;
+
+    private void drawMoraleTip(GuiGraphics g, int mouseX, int mouseY) {
+        UnitInfo over = menu == null && pressButton < 0 && mouseY < cardTop() ? unitAt(mouseX, mouseY) : null;
+        if (over == null || over.number() != hoverUnit) {
+            hoverUnit = over == null ? -1 : over.number();
+            hoverSince = net.minecraft.Util.getMillis();
+            return;
+        }
+        if (over.morale() != null && net.minecraft.Util.getMillis() - hoverSince >= MORALE_HOVER_MS) {
+            g.renderComponentTooltip(font, moraleLines(over.morale()), mouseX, mouseY);
+        }
+    }
+
+    /** A block's morale in words: its state, then each thing pressing it, as a share of its breaking point. */
+    static List<Component> moraleLines(rafasconquest.battle.FieldBattle.Morale m) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.literal(switch (m.state()) {
+            case SHATTERED -> "Shattered: retreating to camp for the day";
+            case ROUTED -> "Routed: regrouping behind the lines";
+            case RALLIED -> "Rallied: it won't break for now";
+            case STEADY -> "Morale: " + Math.round(m.risk() * 100) + "% of the way to breaking";
+        }));
+        if (m.state() == rafasconquest.battle.FieldBattle.Morale.State.SHATTERED
+                || m.state() == rafasconquest.battle.FieldBattle.Morale.State.ROUTED) {
+            return lines;
+        }
+        String[] whys = {"Recent losses", "Captain fell", "Attacked in the flank", "Attacked from the rear",
+                "Allies routed nearby", "The army's losses"};
+        double[] shares = {m.losses(), m.captain(), m.flanked(), m.rear(), m.fright(), m.army()};
+        for (int i = 0; i < whys.length; i++) {
+            long pct = Math.round(shares[i] / m.breaksAt() * 100);
+            if (pct > 0) {
+                lines.add(Component.literal("  " + whys[i] + ": +" + pct + "%").withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+        }
+        if (lines.size() == 1) {
+            lines.add(Component.literal("  Nothing presses it").withStyle(net.minecraft.ChatFormatting.GRAY));
+        }
+        return lines;
     }
 
     /** A unit picked on the field selects its whole platoon (its card), or with ctrl held only itself (its block). */

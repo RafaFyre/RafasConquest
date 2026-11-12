@@ -3873,7 +3873,8 @@ public final class RecruitsBattle {
             boolean tired = u.block.fightSeconds() >= FieldRules.ROTATE_SECONDS / 2;
             info.add(new ConquestNetwork.UnitInfo(u.number, real ? soldiers.size() : u.block.alive(), real ? u.ids.size() : u.block.started(), c.x, c.z, u.mode.ordinal(),
                     u.card.shape.ordinal(), u.shields, battle.mainColorOf(e.side), u.card.id, u.card.parent >= 0, u.block.wing(),
-                    u.block.arm().ordinal(), fighting, tired, soldiers.stream().mapToInt(AbstractRecruitEntity::getId).toArray(), u.block.id()));
+                    u.block.arm().ordinal(), fighting, tired, soldiers.stream().mapToInt(AbstractRecruitEntity::getId).toArray(), u.block.id(),
+                    battle.field.moraleOf(u.block)));
         }
         return info;
     }
@@ -4650,6 +4651,20 @@ public final class RecruitsBattle {
                 spawnGuards(side, camp);
             }
         }
+        handCamps();
+    }
+
+    /** Tells the field where each camp stands: its shattered blocks retreat there. */
+    private void handCamps() {
+        for (int side = 0; side < 2; side++) {
+            for (int wing = 0; wing < 3; wing++) {
+                WarCamp camp = wing == FieldArmy.CENTRE ? camps[side] : wingCamps[side][wing];
+                if (camp != null) {
+                    Vec3 at = camp.entrance();
+                    field.setCamp(side, wing, new Point(at.x, at.z));
+                }
+            }
+        }
     }
 
     /** The way into a faction's command tent in the battle on now; null if it has no camp up. */
@@ -5407,6 +5422,7 @@ public final class RecruitsBattle {
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
                 level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
         field.setType(type); // a sea battle stays at sea the next day
+        handCamps(); // the camps stand where they were; a night there mends the shattered
         if (works != null && survey != null) {
             field.besiege(survey.plan()); // the strategems are brought out again, the walls manned afresh
             works.rebind(field.siege());

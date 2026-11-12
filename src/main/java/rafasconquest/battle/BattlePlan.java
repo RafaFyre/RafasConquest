@@ -160,6 +160,11 @@ public final class BattlePlan {
             return nerve;
         }
 
+        /** Expendable, as in Total War: its rout frightens no one but other expendables. */
+        public boolean expendable() {
+            return this == LEVY;
+        }
+
         /** Foot that fights hand to hand, in files. */
         public boolean infantry() {
             return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS;

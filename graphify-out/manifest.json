@@ -42,9 +42,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattlePlan.java": {
-    "mtime": 1794422059.1238143,
-    "seen": 1794422269.2504785,
-    "ast_hash": "8de8f77b9a3dae6aa0e203be17016d8a",
+    "mtime": 1794442460.6927576,
+    "seen": 1794442756.6185908,
+    "ast_hash": "e55b83185d6a7ac1968110cbfa10a48b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattleSite.java": {
@@ -78,27 +78,27 @@
     "semantic_hash": "0f38673dfc737e56b2e6675fb9f18960"
   },
   "src/main/java/rafasconquest/battle/FieldArmy.java": {
-    "mtime": 1793998246.1971807,
-    "seen": 1793998889.9351172,
-    "ast_hash": "9a77a8dcc5643b0f5507157abea76f2f",
+    "mtime": 1794442464.488892,
+    "seen": 1794442756.6186016,
+    "ast_hash": "8cf84c99f8fc70c80d61caf442b81861",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1794428952.5632794,
-    "seen": 1794429054.8112605,
-    "ast_hash": "e2f00bc5b507d7b7dde4be2da5ca9680",
+    "mtime": 1794446726.6809797,
+    "seen": 1794446820.998882,
+    "ast_hash": "2e4816349838ae05be1dbb111e84e86b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
-    "mtime": 1794409264.9578497,
-    "seen": 1794409930.7093558,
-    "ast_hash": "b019f836e39d6ebeba1f35479f86ea3d",
+    "mtime": 1794446717.1820467,
+    "seen": 1794446820.9988842,
+    "ast_hash": "cb48203bb71128d703f239d00fd16105",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
-    "mtime": 1794421610.8408048,
-    "seen": 1794422269.2504935,
-    "ast_hash": "6b0c2be12d2fbbe8792c9c7675b66094",
+    "mtime": 1794446735.2816896,
+    "seen": 1794446820.9988854,
+    "ast_hash": "7c065501c52f94f30f1d186c9b1668df",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FormationSnapshot.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794431546.623506,
-    "seen": 1794431588.7543504,
-    "ast_hash": "55ef37ec93f270fba149c102c70ee0f3",
+    "mtime": 1794442570.5929892,
+    "seen": 1794442756.618625,
+    "ast_hash": "f2f2e1cfde33a509ee28367fa4e24857",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -750,9 +750,9 @@
     "semantic_hash": "a45b3d18ba3c3d8f337bd8690bc2ded7"
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1794428952.6912382,
-    "seen": 1794429054.8115072,
-    "ast_hash": "21bacf1f18ffe3dd9eea74a74ae55dc5",
+    "mtime": 1794442570.5266325,
+    "seen": 1794442756.618845,
+    "ast_hash": "deb1378de52adbe4309b10ebf16b2bd8",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1674,9 +1674,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1794422748.6526814,
-    "seen": 1794422891.0713127,
-    "ast_hash": "fa36f0fda15cd913d91a4e30a3a01cf7",
+    "mtime": 1794446748.4612637,
+    "seen": 1794446820.9994445,
+    "ast_hash": "35089d20ea9b68e189bd94f5c090f500",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleScreen.java": {
-    "mtime": 1794432399.439258,
-    "seen": 1794432423.5207064,
-    "ast_hash": "01c4ce9e7d6d8559f39830a7049eba4c",
+    "mtime": 1794442606.28706,
+    "seen": 1794442756.6186562,
+    "ast_hash": "acc49979d6dd94c8bc94b19c82633c28",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/StrategyBoardBlock.java": {
@@ -3189,6 +3189,12 @@
     "mtime": 1794432259.2987363,
     "seen": 1794432334.0309453,
     "ast_hash": "61723e7e302ac2590207972b51a5c4e6",
+    "semantic_hash": ""
+  },
+  "research_notes/Total War battle calculation.md": {
+    "mtime": 1794443529.6341114,
+    "seen": 1794443542.828437,
+    "ast_hash": "10d9e745c32512149c93ee05084c480f",
     "semantic_hash": ""
   }
 }

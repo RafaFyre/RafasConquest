@@ -152,6 +152,15 @@ public final class FieldArmy {
         return n;
     }
 
+    /** Its soldiers still in the fight: alive and not shattered (those have retreated to camp for the day). */
+    public int standing() {
+        int n = 0;
+        for (FieldBlock b : blocks) {
+            n += b.shattered() ? 0 : b.alive;
+        }
+        return n;
+    }
+
     public boolean generalAlive() {
         return commander != null && commander.alive > 0;
     }

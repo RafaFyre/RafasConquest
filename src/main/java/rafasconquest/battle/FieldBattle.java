@@ -619,9 +619,11 @@ public final class FieldBattle {
         this.rates = rates;
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
+        // Over UNIT_TACTICS_OVER soldiers the generals move their armies unit by unit (platoons); below it, block by block.
+        boolean byUnits = (firstBlocks + secondBlocks) * BattlePlan.SOLDIERS_PER_FORMATION > FieldRules.UNIT_TACTICS_OVER;
         armies = new FieldArmy[]{
-                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random)),
-                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random))};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random), byUnits),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random), byUnits)};
     }
 
     /**
@@ -647,7 +649,8 @@ public final class FieldBattle {
         return blockId / SIDE_IDS;
     }
 
-    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan, boolean levyFront) {
+    private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan, boolean levyFront,
+                                    boolean byUnits) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
         army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
@@ -679,6 +682,7 @@ public final class FieldBattle {
             block.homeRight = slot.right();
             block.wing = slot.wing();
             block.platoon = platoons[k++];
+            block.unit = byUnits ? block.platoon : -1;
             army.blocks.add(block);
             if (duty == Duty.FRONT) {
                 army.front[slot.file()] = block;
@@ -1212,10 +1216,19 @@ public final class FieldBattle {
                 case GENERAL -> general(army, enemy, block);
                 case GUARD -> guard(army, enemy, block);
                 case ROUTED -> {
-                    if (seconds - block.dutySince >= FieldRules.REGROUP_SECONDS) {
-                        // Regrouped: back to the back of its file, its morale whole again.
+                    if (!block.shattered() && seconds - block.dutySince >= FieldRules.REGROUP_SECONDS) {
+                        // Regrouped, its morale whole again: foot of the line back to the back of its file; cavalry,
+                        // archers and the guard back to their own work.
                         java.util.Arrays.fill(block.history, block.alive);
-                        army.join(block, block.file);
+                        if (block.homeDuty == Duty.FRONT || block.homeDuty == Duty.LINE) {
+                            army.join(block, block.file);
+                        } else {
+                            block.duty = block.homeDuty;
+                            block.dutySince = seconds;
+                            if (block.arm.mounted() && block.duty == Duty.SUPPORT && !block.inWedge) {
+                                patrol(army, block); // rides its wing's backline again
+                            }
+                        }
                     }
                 }
                 case BEARER -> {
@@ -1366,7 +1379,7 @@ public final class FieldBattle {
         FieldBlock first = army.front[files.get(0)];
         int alive = 0;
         int started = 0;
-        for (FieldBlock b : first.platoon >= 0 && !first.inWedge ? army.platoon(first.platoon) : List.of(first)) {
+        for (FieldBlock b : unitBlocks(army, first)) {
             alive += b.alive;
             started += b.started();
         }
@@ -1906,7 +1919,7 @@ public final class FieldBattle {
     private static List<FieldBlock> wedgeRiders(FieldArmy army, int half) {
         List<FieldBlock> riders = new ArrayList<>();
         for (FieldBlock m : army.wedge) {
-            if (m.alive > 0 && (half < 0 || m.half == half)) {
+            if (m.alive > 0 && m.duty != Duty.ROUTED && (half < 0 || m.half == half)) { // a routed rider sits the charge out
                 riders.add(m);
             }
         }
@@ -2602,18 +2615,23 @@ public final class FieldBattle {
      * each its own unit.
      */
     private static boolean sameUnit(FieldBlock a, FieldBlock b) {
-        return a == b || a.side == b.side && a.platoon >= 0 && a.platoon == b.platoon && !a.inWedge && !b.inWedge;
+        return a == b || a.side == b.side && a.unit >= 0 && a.unit == b.unit && !a.inWedge && !b.inWedge;
     }
 
-    /** A key for a block's unit, unique within its army: its platoon, else its own. */
+    /** A key for a block's unit, unique within its army: its unit (platoon), else its own. */
     private static int unitKey(FieldBlock b) {
-        return b.platoon >= 0 && !b.inWedge ? b.platoon : -1 - b.id;
+        return b.unit >= 0 && !b.inWedge ? b.unit : -1 - b.id;
+    }
+
+    /** The blocks of {@code block}'s unit, standing or not: its platoon in a battle fought by units, else itself. */
+    private static List<FieldBlock> unitBlocks(FieldArmy army, FieldBlock block) {
+        return block.unit >= 0 && !block.inWedge ? army.platoon(block.unit) : List.of(block);
     }
 
     /** The standing blocks (alive and not fleeing) of {@code block}'s unit in {@code army}, nearest {@code to} first. */
     private static List<FieldBlock> unit(FieldArmy army, FieldBlock block, Point to) {
         List<FieldBlock> unit = new ArrayList<>();
-        for (FieldBlock b : block.platoon >= 0 && !block.inWedge ? army.platoon(block.platoon) : List.of(block)) {
+        for (FieldBlock b : unitBlocks(army, block)) {
             if (sameUnit(b, block) && b.alive > 0 && b.duty != Duty.FLEEING) {
                 unit.add(b);
             }
@@ -2675,18 +2693,66 @@ public final class FieldBattle {
     // ---- morale ----
 
     /**
-     * Each second, after the fighting: an infantry block that has lost {@link FieldRules#ROUT_LOSS} of its soldiers
-     * within the last {@link FieldRules#ROUT_WINDOW} seconds routs, unless rallied; its captain's fall shakes it, counting
-     * as {@link FieldRules#CAPTAIN_SHOCK} more for as long. The enemy blocks fighting a block that routs or loses its
-     * captain rally.
+     * What presses a block toward breaking, each as a share of its soldiers: its losses over the last
+     * {@link FieldRules#ROUT_WINDOW} seconds and every shock on it now. It routs once they add up to {@code breaksAt}
+     * ({@link FieldRules#ROUT_LOSS} times its nerve), unless rallied.
+     */
+    public record Morale(double losses, double captain, double flanked, double rear, double fright, double army,
+                         double breaksAt, State state) {
+        public enum State {
+            STEADY, RALLIED, ROUTED, SHATTERED
+        }
+
+        public double pressure() {
+            return losses + captain + flanked + rear + fright + army;
+        }
+
+        /** How near it is to breaking, from 0 (steady) to 1 (it breaks). */
+        public double risk() {
+            return Math.max(0, Math.min(1, pressure() / breaksAt));
+        }
+    }
+
+    /**
+     * A block's morale now; null for one that never breaks (a lone general or standard-bearer, a besieged garrison) or
+     * before its first second.
+     */
+    @Nullable
+    public Morale moraleOf(FieldBlock block) {
+        if (block.history == null) {
+            return null;
+        }
+        return moraleOf(block, block.history[(seconds + 1) % FieldRules.ROUT_WINDOW], armyShock(armies[block.side]));
+    }
+
+    private Morale moraleOf(FieldBlock block, int before, double armyShock) {
+        Morale.State state = block.shattered() ? Morale.State.SHATTERED : block.duty == Duty.ROUTED ? Morale.State.ROUTED
+                : block.rallied(seconds) ? Morale.State.RALLIED : Morale.State.STEADY;
+        return new Morale(before == 0 ? 0 : Math.max(0, (double) (before - block.alive) / before),
+                seconds < block.shakenUntil ? FieldRules.CAPTAIN_SHOCK : 0,
+                seconds < block.flankedUntil ? FieldRules.FLANK_SHOCK : 0,
+                seconds < block.rearedUntil ? FieldRules.REAR_SHOCK : 0,
+                seconds < block.frightUntil ? FieldRules.FRIGHT_SHOCK : 0,
+                armyShock, FieldRules.ROUT_LOSS * block.arm.nerve(), state);
+    }
+
+    /** The shock of an army's losses (the shattered count as lost) on each of its blocks. */
+    private static double armyShock(FieldArmy army) {
+        return army.started == 0 ? 0 : FieldRules.ARMY_SHOCK * Math.max(0, 1 - (double) army.standing() / army.started);
+    }
+
+    /**
+     * Each second, after the fighting: a block (foot, horse or archers) whose {@link Morale} adds up to its breaking
+     * point routs, unless rallied. The enemy blocks fighting a block that routs or loses its captain rally.
      */
     private void morale(FieldArmy army, FieldArmy enemy) {
         if (siege != null && army.side == 1) {
             return; // the defenders of a siege never break: there is nowhere to go
         }
+        double armyShock = armyShock(army);
         int slot = seconds % FieldRules.ROUT_WINDOW;
         for (FieldBlock block : army.blocks) {
-            if (!block.arm.infantry() || block.started() == 1) {
+            if (block.started() == 1) { // a lone general or standard-bearer: the general's fall ends the day anyway
                 continue;
             }
             if (block.history == null) {
@@ -2705,11 +2771,8 @@ public final class FieldBattle {
                 block.shakenUntil = seconds + FieldRules.ROUT_WINDOW;
                 rallyAgainst(enemy, block);
             }
-            double lost = before == 0 ? 0 : (double) (before - block.alive) / before;
-            if (seconds < block.shakenUntil) {
-                lost += FieldRules.CAPTAIN_SHOCK;
-            }
-            if (lost >= FieldRules.ROUT_LOSS * block.arm.nerve() && !block.rallied(seconds)) {
+            Morale m = moraleOf(block, before, armyShock);
+            if (m.pressure() >= m.breaksAt() && !block.rallied(seconds)) {
                 rout(army, block);
                 rallyAgainst(enemy, block);
             }
@@ -2717,21 +2780,41 @@ public final class FieldBattle {
     }
 
     /**
-     * How near a block is to breaking, from 0 (steady) to 1 (it routs at its next loss): its losses over the last
-     * {@link FieldRules#ROUT_WINDOW}, and the shock of a fallen captain, against {@link FieldRules#ROUT_LOSS}. A rallied,
+     * How near a block is to breaking, from 0 (steady) to 1 (it routs at its next loss): its {@link Morale}. A rallied,
      * broken or beaten block is 0.
      */
     public double routRisk(FieldBlock block) {
-        if (block.history == null || block.alive == 0 || block.rallied(seconds) || block.duty == Duty.ROUTED
-                || block.duty == Duty.FLEEING || block.duty == Duty.WITHDRAWING || !block.arm.infantry()) {
+        if (block.alive == 0 || block.rallied(seconds) || block.duty == Duty.ROUTED || block.duty == Duty.FLEEING
+                || block.duty == Duty.WITHDRAWING) {
             return 0;
         }
-        int before = block.history[(seconds + 1) % FieldRules.ROUT_WINDOW];
-        double lost = before == 0 ? 0 : (double) (before - block.alive) / before;
-        if (seconds < block.shakenUntil) {
-            lost += FieldRules.CAPTAIN_SHOCK;
+        Morale m = moraleOf(block);
+        return m == null ? 0 : m.risk();
+    }
+
+    /** Where each army's wings camp ({@link FieldArmy#LEFT}, CENTRE, RIGHT), or null: where its shattered blocks go. */
+    private final Point[][] camps = new Point[2][3];
+
+    /** An army's camp for a wing (its centre's for the whole army), built on the field: shattered blocks retreat there. */
+    public void setCamp(int side, int wing, Point at) {
+        camps[side][wing] = at;
+    }
+
+    @Nullable
+    private Point campOf(FieldBlock block) {
+        int wing = block.wing();
+        Point camp = wing >= 0 && wing < 3 ? camps[block.side][wing] : null;
+        return camp != null ? camp : camps[block.side][FieldArmy.CENTRE];
+    }
+
+    /** A block's rout frightens its army's blocks near it; an expendable block's rout, only other expendables. */
+    private void frighten(FieldArmy army, FieldBlock routed) {
+        for (FieldBlock b : army.blocks) {
+            if (b != routed && b.alive > 0 && b.started() > 1 && (!routed.arm.expendable() || b.arm.expendable())
+                    && b.pos.distanceTo(routed.pos) <= FieldRules.FRIGHT_REACH) {
+                b.frightUntil = seconds + FieldRules.FRIGHT_SECONDS;
+            }
         }
-        return Math.max(0, Math.min(1, lost / (FieldRules.ROUT_LOSS * block.arm.nerve())));
     }
 
     /** The enemy blocks fighting a block that just broke, or lost its captain, rally. */
@@ -2743,15 +2826,19 @@ public final class FieldBattle {
                     java.util.Arrays.fill(e.history, e.alive);
                 }
                 e.shakenUntil = 0;
+                e.frightUntil = 0;
             }
         }
     }
 
     /**
-     * A block routs: it stops fighting and runs behind its army's reserves to regroup. A front block's place is
-     * taken at once by the next block of its file, if there is one.
+     * A block routs: it stops fighting and runs behind its army's reserves to regroup, frightening its own near it
+     * ({@link #frighten}); shattered ({@link FieldBlock#shattered}), it retreats to its camp instead, if it has one. A
+     * front block's place is taken at once by the next block of its file, if there is one.
      */
-    private void rout(FieldArmy army, FieldBlock block) {
+    void rout(FieldArmy army, FieldBlock block) {
+        block.routs++;
+        frighten(army, block);
         if (block.duty == Duty.FRONT && army.front[block.file] == block) {
             List<FieldBlock> queue = army.queue(block.file);
             if (!queue.isEmpty()) {
@@ -2779,7 +2866,9 @@ public final class FieldBattle {
         block.fightSeconds = 0;
         block.facingX = army.facingX;
         block.facingZ = army.facingZ;
-        block.line = BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, block.homeRight, army.rearBack + FieldRules.ROUT_RUN);
+        Point camp = block.shattered() ? campOf(block) : null;
+        block.line = camp != null ? camp
+                : BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, block.homeRight, army.rearBack + FieldRules.ROUT_RUN);
     }
 
     // ---- judging the enemy ----
@@ -3109,6 +3198,12 @@ public final class FieldBattle {
                         block.fightSeconds++;
                     }
                     block.contactFoe = foe;
+                    switch (sideOf(foe, block)) { // blows on its flank or rear shake it (before real soldiers' blocks skip on)
+                        case FLANK -> foe.flankedUntil = seconds + FieldRules.FLANK_LINGER;
+                        case REAR -> foe.rearedUntil = seconds + FieldRules.FLANK_LINGER;
+                        default -> {
+                        }
+                    }
                     double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
                     if (block.live && foe.live && (type == BattleType.OCEAN || !block.afloat && !foe.afloat)) {
                         // Real soldiers on both sides: Recruits fights it out between them. Those of the block still
@@ -3269,8 +3364,8 @@ public final class FieldBattle {
             }
             return;
         }
-        boolean routA = BattlePlan.routs(armies[0].alive(), armies[0].started);
-        boolean routB = BattlePlan.routs(armies[1].alive(), armies[1].started);
+        boolean routA = BattlePlan.routs(armies[0].standing(), armies[0].started);
+        boolean routB = BattlePlan.routs(armies[1].standing(), armies[1].started);
         if (routA && routB) {
             outcome = new Outcome(-1, "both armies broke", seconds);
         } else if (routA || routB) {
@@ -3299,7 +3394,7 @@ public final class FieldBattle {
         if (armies[0].commander != null && armies[0].commander.alive == 0) {
             outcome = new Outcome(1, "side 0's general fell; side 0 retreats", seconds);
             flee(armies[0]);
-        } else if (BattlePlan.routs(armies[0].alive(), armies[0].started)) {
+        } else if (BattlePlan.routs(armies[0].standing(), armies[0].started)) {
             outcome = new Outcome(1, "side 1 wins; side 0 routs", seconds);
             flee(armies[0]);
         } else if (seconds >= BattlePlan.TIME_LIMIT_SECONDS) {

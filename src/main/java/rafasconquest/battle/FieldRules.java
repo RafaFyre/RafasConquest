@@ -122,7 +122,7 @@ public final class FieldRules {
     /** The conveyor: a front block that has fought this long is rotated to the back of its file's stack. */
     public static final int ROTATE_SECONDS = 120;
     /**
-     * Morale: an infantry block that loses {@link #ROUT_LOSS} of its soldiers within {@link #ROUT_WINDOW} seconds routs
+     * Morale: a block (foot, horse or archers) that loses {@link #ROUT_LOSS} of its soldiers within {@link #ROUT_WINDOW} seconds routs
      * (its captain's fall counts as {@link #CAPTAIN_SHOCK} more for as long), runs {@link #ROUT_RUN} behind its army's
      * reserves and regroups for {@link #REGROUP_SECONDS} before rejoining its file. The blocks that broke it, or killed
      * its captain, rally: for {@link #RALLIED_SECONDS} they can't rout.
@@ -133,6 +133,26 @@ public final class FieldRules {
     public static final double ROUT_RUN = 30;
     public static final int REGROUP_SECONDS = 120;
     public static final int RALLIED_SECONDS = 45;
+    /**
+     * Morale shocks, added to a block's recent losses as Total War adds leadership modifiers: struck in the flank or the
+     * rear (for {@link #FLANK_LINGER} seconds after each blow), a block of its own routing within {@link #FRIGHT_REACH}
+     * (for {@link #FRIGHT_SECONDS}; an expendable block's rout frightens only other expendables), and its army's losses
+     * ({@link #ARMY_SHOCK} times the share lost). A block that routs {@link #SHATTER_ROUTS} times is shattered: it
+     * retreats to its camp and doesn't come back that day.
+     */
+    public static final double FLANK_SHOCK = 0.15;
+    public static final double REAR_SHOCK = 0.25;
+    public static final int FLANK_LINGER = 5;
+    public static final double FRIGHT_SHOCK = 0.15;
+    public static final double FRIGHT_REACH = 20;
+    public static final int FRIGHT_SECONDS = 30;
+    public static final double ARMY_SHOCK = 0.3;
+    public static final int SHATTER_ROUTS = 3;
+    /**
+     * A battle of more soldiers than this (both armies together) is fought unit by unit: the generals send, relieve and
+     * bait with whole platoons. A smaller one is fought block by block.
+     */
+    public static final int UNIT_TACTICS_OVER = 1000;
     /** Wing cavalry looks for exposed enemies this far around it. */
     public static final double WING_REACH = 80;
     /** A player's unit with a task (flank, kill) looks for targets this far off. */
