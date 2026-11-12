@@ -143,8 +143,13 @@ public final class RecruitsBattle {
     /** The cap in force: {@code /pve debug battle livecap}, kept in {@link #LIVE_CAP_FILE} across restarts. */
     private static int liveCap = loadLiveCap();
     private static final String LIVE_CAP_FILE = "livecap.txt";
-    /** At most this many soldiers become real each second, the nearest first, so a crowd doesn't appear in one tick. */
-    private static final int SPAWNS_PER_SECOND = 160;
+    /**
+     * At most this many soldiers become real each tick, the nearest first (160 a second), so a crowd doesn't appear in
+     * one tick; the rest come on the ticks after ({@link #moreToSpawn}).
+     */
+    private static final int SPAWNS_PER_TICK = 8;
+    /** Ticks between the early snapshots that tell clients of soldiers made real between the regular ones. */
+    private static final int EARLY_SNAPSHOT_TICKS = 5;
     /** A real soldier stays real until this much further out than one that is numbers becomes real, against flicker. */
     private static final double KEEP_REAL_BIAS = 6;
     /** How far a block's soldiers may stand from its position, for skipping blocks far from everyone. */
@@ -361,6 +366,10 @@ public final class RecruitsBattle {
     private final TickTimes window = new TickTimes();
     private long tickStart;
     private int snapshotTicks;
+    /** The last switch stopped at {@link #SPAWNS_PER_TICK}: switch again next tick for the rest. */
+    private boolean moreToSpawn;
+    /** Soldiers came or went since the last snapshot: clients need their ids before the next regular one. */
+    private boolean swapped;
     /** Time spent on the battle's own work since the last report, in nanoseconds. */
     private long ownNanos;
     /** Of that, the numbers' own second, the switching between real and numbers, and the snapshots. */
@@ -1180,12 +1189,7 @@ public final class RecruitsBattle {
         }
         wanted.sort(Comparator.comparingDouble(Candidate::distance));
         Map<FieldBlock, Set<Integer>> keep = new HashMap<>();
-        int soldiers = 0;
-        for (Candidate c : wanted) {
-            if (soldiers + c.cost() > liveCap) {
-                break;
-            }
-            soldiers += c.cost();
+        for (Candidate c : rafasconquest.battle.FieldRules.shareLive(wanted, w -> w.block().side(), Candidate::cost, liveCap)) {
             keep.computeIfAbsent(c.block(), b -> new HashSet<>()).add(c.index());
         }
         Set<Live> changed = new HashSet<>();
@@ -1210,8 +1214,10 @@ public final class RecruitsBattle {
             changed.add(l);
         }
         int spawned = 0;
+        moreToSpawn = false;
         for (Candidate c : wanted) {
-            if (spawned >= SPAWNS_PER_SECOND) {
+            if (spawned >= SPAWNS_PER_TICK) {
+                moreToSpawn = true;
                 break;
             }
             if (c.real() || !keep.getOrDefault(c.block(), Set.of()).contains(c.index())) {
@@ -1228,6 +1234,7 @@ public final class RecruitsBattle {
             changed.add(l);
             spawned++;
         }
+        swapped |= !changed.isEmpty();
         for (Live l : changed) {
             int real = l.living().size();
             if (real == 0) {
@@ -1904,6 +1911,10 @@ public final class RecruitsBattle {
         long ownStart = System.nanoTime();
         if (++battle.ticks % 20 == 0) {
             battle.second();
+        } else if (battle.moreToSpawn) {
+            long t = System.nanoTime();
+            battle.switchLive();
+            battle.switchNanos += System.nanoTime() - t;
         }
         battle.sail();
         if (battle.works != null) {
@@ -1918,10 +1929,16 @@ public final class RecruitsBattle {
             battle.trample();
         }
         battle.fadeSome();
-        if (++battle.snapshotTicks % SNAPSHOT_TICKS == 0) {
+        boolean regular = ++battle.snapshotTicks % SNAPSHOT_TICKS == 0;
+        if (regular) {
             battle.holdChunks();
+        }
+        // Between the regular snapshots, an early one when soldiers came or went, else a client would draw a new
+        // soldier and its figure both until the next.
+        if (regular || battle.swapped && battle.snapshotTicks % EARLY_SNAPSHOT_TICKS == 0) {
+            battle.swapped = false;
             long t = System.nanoTime();
-            ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots());
+            ConquestNetwork.sendBattleSnapshot(battle.level.players(), battle.snapshots(regular));
             battle.snapshotNanos += System.nanoTime() - t;
         }
         battle.ownNanos += System.nanoTime() - ownStart;
@@ -5911,10 +5928,13 @@ public final class RecruitsBattle {
 
     /**
      * Every block still standing, for clients to draw beyond the range at which they see soldiers: real blocks from
-     * where their soldiers stand (with their entity ids), the others from the numbers.
+     * where their soldiers stand (with their entity ids), the others from the numbers. Only a {@code regular} one (once
+     * a second) starts a new second's ground lookups and riding measure; an early one shares the second's.
      */
-    private List<FormationSnapshot> snapshots() {
-        groundLookups = 0;
+    private List<FormationSnapshot> snapshots(boolean regular) {
+        if (regular) {
+            groundLookups = 0;
+        }
         List<FormationSnapshot> all = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
             if (faded[side]) {
@@ -5928,7 +5948,7 @@ public final class RecruitsBattle {
                 }
                 FormationSnapshot.Kind kind = block.duty() == Duty.GENERAL ? FormationSnapshot.Kind.GENERAL
                         : block.duty() == Duty.BEARER ? FormationSnapshot.Kind.BEARER : FormationSnapshot.Kind.of(block.arm());
-                double[] face = faceOf(block);
+                double[] face = faceOf(block, regular);
                 Live l = live.get(block);
                 List<AbstractRecruitEntity> living = l == null ? List.of() : l.living();
                 if (!living.isEmpty()) {
@@ -5964,8 +5984,8 @@ public final class RecruitsBattle {
      * Which way a block's figures face, a unit vector: cavalry on the move the way it rides; a block in melee toward
      * the block it fights; otherwise the way it stands, toward the enemy from deployment on. A ship, its heading.
      */
-    private double[] faceOf(FieldBlock block) {
-        Point was = snappedAt.put(block.id(), block.pos());
+    private double[] faceOf(FieldBlock block, boolean regular) {
+        Point was = regular ? snappedAt.put(block.id(), block.pos()) : snappedAt.get(block.id());
         Point from = block.pos();
         Point to = null;
         if (block.afloat()) {

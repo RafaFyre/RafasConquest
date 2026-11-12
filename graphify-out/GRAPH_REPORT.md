@@ -1,37 +1,37 @@
 # Graph Report - RafasConquest  (2026-11-11)
 
 ## Corpus Check
-- 465 files · ~409,175 words
+- 466 files · ~410,079 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 119 file(s) not represented in the graph (top: .nbt 84, .toml 18, (none) 3)
 
 ## Summary
-- 6637 nodes · 21102 edges · 344 communities (146 shown, 198 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 2831 edges (avg confidence: 0.86)
+- 6646 nodes · 21108 edges · 358 communities (146 shown, 212 thin omitted)
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 2832 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `502ee3db`
+- Built from commit: `32840a54`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - FieldBlock
-- PoliticsData
+- Politics
 - net.minecraft.world.level.levelgen.structure.BoundingBox
 - .army
 - CityTerrain
 - BattleScreen
 - .onLogout
-- dev.ryanhcode.sable.sublevel.ServerSubLevel
+- SableLink
 - SiegeWorks
 - ConquestNetwork
 - net.minecraft.world.entity.Entity
 - Server-side performance techniques for a large NeoForge 1.21.1 content mod (RafasConquest)
-- City
+- Roads
 - BaseMap
-- net.minecraft.world.phys.Vec3
-- Peerage
+- RecruitsBattle
+- WarCamp.java
 - BattlePlan
 - Battle Map Web Page & Site
 - Person
@@ -45,9 +45,9 @@
 - .shift
 - WarCouncil
 - TechTreeScreen
-- ConquestEvents.java
+- RecruitsFactions.java
 - net.minecraft.network.FriendlyByteBuf
-- CapitalLayout
+- WorldSettings
 - PveCommands Registration
 - School
 - CityPlan
@@ -56,43 +56,41 @@
 - .render
 - net.minecraft.core.Direction
 - rafasconquest.faction.Faction
-- Swell
-- .stat
+- SeaCalm
+- Front
 - net.minecraft.server.MinecraftServer
 - Faction
-- War
+- ConquestServer
 - Personalities
 - SeaLanes
 - org.spongepowered.asm.mixin.Mixin
 - .feudFight
-- CityVariant
-- org.jetbrains.annotations.Nullable
+- Site
 - Centre
 - Barracks
 - Row
-- .accept
-- City
+- .name
+- SeatCities
 - Faction Map View
-- .wallSegments
+- RecruitsBattle
 - Cited Findings
-- net.minecraft.world.level.block.state.BlockState
+- MarkerBlock.java
 - TitleMapTest
 - .saveFormation
 - StyleLibrary
-- .step
-- net.minecraft.world.level.block.Rotation
+- FormationSnapshot
+- Layout
 - RafasConquest.java
-- CityTerrainPiece
-- Cited Findings
+- rafasconquest.battle.FieldBlock
+- ShipHulls
 - DistantOcclusion
-- Countryside
+- net.minecraft.world.level.Level
 - MapLands
 - RafasConquest server/common code audit: CPU, memory, disk and bandwidth hotspots
 - PlaceMusicClient
 - GateBlockEntity
 - Quests
 - BattleType
-- Realm
 - Ownership & Territory
 - .choose
 - .view
@@ -102,17 +100,17 @@
 - Recruits PvE Addon — Design Doc (Oct 26, 2026)
 - AgeTest.java
 - DialogueScreen
-- How do world generation and structure placement work, and what do they cost?
-- .view
+- .stat
+- Retinues
 - MapLayer
 - .generate
 - ConquestSavedData
-- .walks
+- .cellMax
 - FactionInfoScreen
-- RoadFeature.java
+- arraylist
 - ConquestWorldgen
 - CityStyles
-- .layout
+- com.talhanation.recruits.entities.AbstractRecruitEntity
 - Realm
 - MouthLayer.java
 - rafasconquest.battle.FormationSnapshot
@@ -126,123 +124,135 @@
 - NobleTitle
 - WallTemplates
 - RoadLayer
-- .fire
+- net.minecraft.nbt.CompoundTag
 - GrandStrategyScreen
 - Terrain
 - ClientPolitics
-- Kind
+- .column
 - UnitOrder
 - BlockPos
 - CityLayout
-- RoadNetwork
-- .hash
+- .place
+- CityGridBuilder.java
 - BattleShips
 - .render
-- net.minecraft.core.Vec3i
-- .sendToServer
-- Plan
-- .readPlacements
+- .hash
+- Quest
+- .roadStart
+- Cited Findings
 - RafasConquest client-side performance audit (rendering, screens, client tick, sound)
 - Client rendering and frame-time techniques for a NeoForge 1.21.1 mod (RafasConquest)
 - StatsScreen
 - ConquestWorldScreen
 - CourtSet
 - CityGridBuilder
-- Race
-- Ranks
-- .build
+- Homeland
+- Job
+- Grid
 - CLAUDE.md
-- Feud
-- .place
+- Lands
+- net.minecraft.world.level.block.state.BlockState
 - .plan
-- .startAt
+- .plus
 - How Total War calculates battles between units
 - net.minecraft.network.RegistryFriendlyByteBuf
-- Override
+- .world
 - net.minecraft.world.item.ItemStack
 - Small Cluster 170
-- Override
+- DayClockTest
 - MapContext
 - BoardScreen
-- Build
+- CountryPiece
 - NobleDistrictTest
-- net.neoforged.neoforge.network.handling.IPayloadContext
+- CityLayoutTest
 - .pack
 - GatePlanksBlock.java
 - .drawEmpire
 - Point
-- Morale
+- .moraleOf
 - DistantArmyRenderer.java
-- Chunks
+- Piece
+- .plan
+- .view
 - .touches
-- GateScreen
-- BattleSounds
 - net.neoforged.bus.api.SubscribeEvent
-- BlockGrid
+- Ranks
 - SetSetting
 - DistantArmyRenderer
 - net.minecraft.resources.ResourceLocation
 - ConquestGameRules
-- ShipKind
+- net.minecraft.core.Vec3i
 - Trait
-- ThrownFigures
 - Call
 - Ramming
 - ClientEvents
 - Profiling run sheet (baseline)
 - .measure
-- .view
-- RafasConquest (PvE addon for Villager Recruits)
-- OrganizationScreen
+- Swell
+- HarbourCut
+- CourtView
 - CourtView
 - .boundsAt
-- CameraView
-- 7. Client tick, stutter and sound
+- Override
+- 9. Memory: client caches, textures and NativeImages that are never freed or grow without bound
 - Kind
 - WarCamp
-- ClientScreens
-- ShipHulls
-- How do the simulation and daily-decision systems schedule work? Do they spike?
-- Cited Findings
+- DistantGeneration
+- QuestBoardBlock
+- ConquestConfig
+- BlockGrid
+- CountryStructure
+- ShipKind
 - .postChunk
-- RecruitsBattle
+- .of
+- .second
 - BattleKeepInventory
-- org.joml.Matrix4f
+- ChunkMapAccess
+- net.minecraft.world.level.biome.Biome
 - Task
 - .onLevelLoad
+- rafasconquest.battle.FormationSnapshot
+- TalkChoice
 - Role
-- HarbourCut
+- .named
+- .build
 - Duty
 - Recruiter
-- .roadStart
-- ClientModEvents.java
-- ClientBarks
-- ConquestConfig
+- .sendPeerage
+- WorldStretch
 - CityManager
+- ClientBarks
+- 5. Mixins: what client methods do they inject into, how hot, added per-call cost, and conflicts with Sodium/Iris/DH fast paths?
+- UnitMode
+- Battles: per-tick cost of FieldBattle, armies, BlockGrid, sieges, ramming and naval AI
+- View
+- Kind
+- ClientModEvents.java
+- .theFoamNoiseRepeatsWithoutASeamAndHasPhysicsModsSpread
 
 ## God Nodes (most connected - your core abstractions)
 1. `RecruitsBattle` - 283 edges
-2. `FieldBlock` - 216 edges
-3. `FieldBattle` - 194 edges
-4. `FieldArmy` - 136 edges
-5. `Point` - 128 edges
-6. `ConquestNetwork` - 121 edges
-7. `Lands` - 89 edges
+2. `FieldBattle` - 184 edges
+3. `FieldBlock` - 182 edges
+4. `FieldArmy` - 128 edges
+5. `ConquestNetwork` - 119 edges
+6. `Lands` - 89 edges
+7. `Point` - 84 edges
 8. `BattleScreen` - 82 edges
 9. `Politics` - 79 edges
 10. `BaseMap` - 77 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Cited Findings` --references--> `FormationSnapshot`  [INFERRED]
-  research_notes/RafasConquest performance gameplan/code_audit_client.md → src/main/java/rafasconquest/battle/FormationSnapshot.java
-- `Cited Findings` --references--> `Sprite`  [INFERRED]
-  research_notes/RafasConquest performance gameplan/code_audit_client.md → src/main/java/rafasconquest/battle/FormationSnapshot.java
 - `Conclusion` --references--> `RoadLayer`  [INFERRED]
   reports/RafasConquest performance gameplan.md → src/main/java/rafasconquest/client/map/RoadLayer.java
 - `Cited Findings` --references--> `RoadLayer`  [INFERRED]
   research_notes/RafasConquest performance gameplan/code_audit_client.md → src/main/java/rafasconquest/client/map/RoadLayer.java
 - `Takeaway` --references--> `RoadLayer`  [INFERRED]
   research_notes/RafasConquest performance gameplan/code_audit_client.md → src/main/java/rafasconquest/client/map/RoadLayer.java
+- `A tick budget and staggered schedules make the fixes stick` --references--> `BaseMap`  [INFERRED]
+  reports/RafasConquest performance gameplan.md → src/main/java/rafasconquest/map/BaseMap.java
+- `Inferences` --references--> `BaseMap`  [INFERRED]
+  research_notes/RafasConquest performance gameplan/code_audit_client.md → src/main/java/rafasconquest/map/BaseMap.java
 
 ## Import Cycles
 - None detected.
@@ -258,79 +268,83 @@
 - **Hybrid live/numeric battle with distant rendering** — readme_battles_as_numbers, readme_live_area, readme_calibration, readme_distant_figures, readme_arrow_volleys, readme_battle_sounds [INFERRED 0.85]
 - **Player military career: recruitment, ranks, peerage, battle roles** — readme_recruitment_posts, readme_ranks, readme_peerage, readme_enlisted_players, readme_jobs, readme_roles, readme_land_grants [INFERRED 0.85]
 
-## Communities (344 total, 198 thin omitted)
+## Communities (358 total, 212 thin omitted)
 
 ### Community 0 - "FieldBlock"
 Cohesion: 0.05
-Nodes (9): The core change: morale becomes a sum, FieldArmy, Event, FieldBattle, Order, Target, Volley, FieldBlock (+1 more)
+Nodes (7): FieldArmy, Event, FieldBattle, Order, Target, Volley, FieldBlock
+
+### Community 1 - "Politics"
+Cohesion: 0.09
+Nodes (9): Gaps, How do the simulation and daily-decision systems schedule work? Do they spike?, Inferences, Takeaway, Muster, CEREMONIAL, OFFENSIVE, Politics (+1 more)
 
 ### Community 2 - "net.minecraft.world.level.levelgen.structure.BoundingBox"
-Cohesion: 0.06
-Nodes (9): BarracksPiece, CityRoadPiece, CountryPiece, FarmPiece, GoldChurchPiece, HarbourCutPiece, HarbourPiece, NoblePathPiece (+1 more)
+Cohesion: 0.07
+Nodes (8): BarracksPiece, CityRoadPiece, FarmPiece, GoldChurchPiece, HarbourCutPiece, HarbourPiece, NoblePathPiece, PlaceholderPiece
 
 ### Community 3 - ".army"
-Cohesion: 0.07
-Nodes (4): DoctrineTest, FieldBattleTest, GrandStrategyDateTest, ArmouryTest
+Cohesion: 0.08
+Nodes (3): DoctrineTest, FieldBattleTest, GrandStrategyDateTest
 
 ### Community 4 - "CityTerrain"
-Cohesion: 0.07
-Nodes (20): CityTerrain, Column, Edge, CARVE, FILL, VALLEY, Heights, Kind (+12 more)
+Cohesion: 0.11
+Nodes (12): CityTerrain, Edge, CARVE, FILL, VALLEY, Heights, Plan, Side (+4 more)
 
 ### Community 5 - "BattleScreen"
 Cohesion: 0.07
-Nodes (4): BattleScreen, Entry, Menu, UnitInfo
+Nodes (4): BattleScreen, Entry, Menu, HornOrders
 
 ### Community 6 - ".onLogout"
-Cohesion: 0.07
-Nodes (4): DistantHorizonsArmies, DhApiBeforeApplyShaderRenderEvent, DistantHorizonsLink, DistantHorizonsQuality
+Cohesion: 0.04
+Nodes (11): Recruits PvE Addon Design Doc (PDF), Distant Horizons (recommended mod), Embeddium (recommended mod), RafasConquest (PvE addon for Villager Recruits), Villager Recruits, DistantHorizonsArmies, DhApiBeforeApplyShaderRenderEvent, DistantHorizonsLink (+3 more)
 
-### Community 7 - "dev.ryanhcode.sable.sublevel.ServerSubLevel"
-Cohesion: 0.13
-Nodes (4): GateDoors, Frame, SableLink, SiegeFrames
+### Community 7 - "SableLink"
+Cohesion: 0.19
+Nodes (3): Frame, SableLink, SiegeFrames
 
 ### Community 8 - "SiegeWorks"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (6): State, CARRIED, RAISING, UP, Work, SiegeWorks
 
 ### Community 9 - "ConquestNetwork"
-Cohesion: 0.07
-Nodes (14): Bark, ChargeHits, CityClose, ConquestNetwork, GrandStrategyView, OpenBattleScreen, PeerageView, Place (+6 more)
+Cohesion: 0.08
+Nodes (14): Bark, CameraAt, CityClose, CityView, ConquestNetwork, FactionInfoReply, FigureStrike, OpenBattleScreen (+6 more)
 
 ### Community 10 - "net.minecraft.world.entity.Entity"
-Cohesion: 0.10
-Nodes (6): FieldRules, Rates, Side, FLANK, FRONT, REAR
+Cohesion: 0.08
+Nodes (16): Arm, ARCHERS, CAVALRY, HEAVY_CAVALRY, HEAVY_INFANTRY, LEVY, SKIRMISHERS, ZWEIHANDLERS (+8 more)
 
 ### Community 11 - "Server-side performance techniques for a large NeoForge 1.21.1 content mod (RafasConquest)"
 Cohesion: 0.04
 Nodes (45): Bulk block placement in worldgen and at runtime (setBlock flags, section writes, lighting, heightmaps, chunk loads, tickets, WorldEdit/FAWE, Chunky), Cited Findings, Cited Findings, Cited Findings, Cited Findings, Cited Findings, Cited Findings, Cited Findings (+37 more)
 
-### Community 12 - "City"
-Cohesion: 0.08
-Nodes (17): Grade, CITY, DOJO, HIGH, SEA, TOWN, Junction, Link (+9 more)
+### Community 12 - "Roads"
+Cohesion: 0.10
+Nodes (15): Grade, CITY, DOJO, HIGH, SEA, TOWN, Junction, Link (+7 more)
 
 ### Community 13 - "BaseMap"
-Cohesion: 0.08
+Cohesion: 0.07
 Nodes (12): Cited Findings, Gaps, Inferences, Memory: unbounded static caches, leaked Level/Entity references, large arrays, Takeaway, ClientMapCache, MapPreview, BaseMap (+4 more)
 
-### Community 14 - "net.minecraft.world.phys.Vec3"
-Cohesion: 0.06
-Nodes (21): Cited Findings, Card, Enlisted, Role, BEARER, GENERAL, GUARD, LEADER (+13 more)
+### Community 14 - "RecruitsBattle"
+Cohesion: 0.08
+Nodes (12): Cited Findings, Camera, CameraView, Card, Enlisted, Shape, LINE, SQUARE (+4 more)
 
-### Community 15 - "Peerage"
-Cohesion: 0.15
-Nodes (8): Boards, Entry, View, Quest, Type, CLEAR, DELIVER, SCOUT
+### Community 15 - "WarCamp.java"
+Cohesion: 0.04
+Nodes (35): Battle phases and days, Battles (prototype), Blocks of 20 soldiers, Braced walls against cavalry, Character page, Characters (holders, skills, prowess, traits), Court 3D scene (CourtView), Cultures (seven homelands) (+27 more)
 
 ### Community 16 - "BattlePlan"
-Cohesion: 0.04
-Nodes (22): 1. Flank and rear shock, 2. Nearby rout (fright), 3. Army-wide losses, 4. Shattering, Design: adding the four morale shocks (built 2026-11-11, untested in game), Tests (FieldBattleTest), Arm, ARCHERS (+14 more)
+Cohesion: 0.06
+Nodes (9): BattlePlan, Order, CHARGE, ENGAGE, HOLD, MARCH, Slot, WarPlan (+1 more)
 
 ### Community 17 - "Battle Map Web Page & Site"
 Cohesion: 0.06
 Nodes (50): Battles (centre and two wings), Bigger world (horizontal stretch), Characters and faiths (sword sanctums), Land titles (counties, duchies, kingdoms, empires), Latest pre-release jar link script, Living nations, Optional mods (Epic Knights, Distant Horizons, Embeddium), Peerage (military and noble ladders) (+42 more)
 
 ### Community 18 - "Person"
-Cohesion: 0.15
-Nodes (9): Culture, Marriages, Setter, Wedding, Organizations, Sanctum, Hold, Person (+1 more)
+Cohesion: 0.13
+Nodes (10): Culture, Marriages, Setter, Wedding, Organization, Organizations, Sanctum, Hold (+2 more)
 
 ### Community 20 - "PveCommands.java"
 Cohesion: 0.08
@@ -345,72 +359,72 @@ Cohesion: 0.14
 Nodes (11): Nation, Nations, Plan, Seats, Tier, COUNTY, DUCHY, EMPIRE (+3 more)
 
 ### Community 26 - "org.jetbrains.annotations.Nullable"
-Cohesion: 0.09
-Nodes (13): TerritoryMap, FactionType, BANDIT, CITY_STATE, EMPIRE, ResourceType, FOOD, PoliticalMap (+5 more)
+Cohesion: 0.06
+Nodes (15): SeedHash, FactionType, BANDIT, CITY_STATE, EMPIRE, ResourceType, FOOD, PoliticalMap (+7 more)
 
 ### Community 27 - ".shift"
-Cohesion: 0.20
-Nodes (5): BattleSite, Part, Water, BattleSite.Water, BattleSiteTest
+Cohesion: 0.30
+Nodes (4): BattleSite, Part, Water, BattleSiteTest
 
 ### Community 28 - "WarCouncil"
-Cohesion: 0.13
+Cohesion: 0.16
 Nodes (5): Facts, Officer, Said, Talk, WarCouncil
 
 ### Community 29 - "TechTreeScreen"
 Cohesion: 0.18
 Nodes (4): TechTreeScreen, Tech, TechTree, TechTreeTest
 
-### Community 30 - "ConquestEvents.java"
-Cohesion: 0.04
-Nodes (8): CityDistrictStructure, CitySlopeStructure, CityStructure, ConquestWorldgen, CountryPlacement, DojoPlacement, FarmPlacement, FarmStructure
+### Community 30 - "RecruitsFactions.java"
+Cohesion: 0.07
+Nodes (7): Ambushes from woods, Cities (grid, plots, vanilla village buildings), City wall, banners and wall guards, Deploying to the land (GroundPlan), Package layout (core, data, worldgen, sim, bridge), Recruits faction registration (bridge package), TickWeave experiment
 
 ### Community 31 - "net.minecraft.network.FriendlyByteBuf"
 Cohesion: 0.07
-Nodes (8): BattleSnapshot, BoardView, FactionInfoReply, PoliticsView, TalkView, UnitsRequest, UnitsState, Volleys
+Nodes (8): BaseMapPart, BattleSpot, PoliticsView, StatsView, UnitInfo, UnitsRequest, UnitsState, Volleys
 
-### Community 32 - "CapitalLayout"
-Cohesion: 0.17
-Nodes (5): CapitalLayout, Land, Site, CapitalRelocationTest, LayoutTest
+### Community 32 - "WorldSettings"
+Cohesion: 0.15
+Nodes (6): CapitalLayout, Land, Site, WorldSettings, CapitalRelocationTest, LayoutTest
 
 ### Community 34 - "School"
-Cohesion: 0.09
-Nodes (15): Dojo, Dojos, Ground, School, BLOOD, FIRE, ICE, IRON (+7 more)
-
-### Community 35 - "CityPlan"
 Cohesion: 0.14
-Nodes (3): CityPlan, Piece, Plan
+Nodes (11): School, BLOOD, FIRE, ICE, IRON, LIGHT, LIGHTNING, SHADOW (+3 more)
 
 ### Community 36 - "Land"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (5): Heap, Land, Router, Search, ShippingRoutes
 
+### Community 37 - "Townsperson"
+Cohesion: 0.10
+Nodes (5): Walk, DistrictKey, Townsfolk, Townsperson, StreetWalksTest
+
 ### Community 38 - ".render"
-Cohesion: 0.12
-Nodes (5): CharacterScreen, Retainer, Spot, Banner, Portraits
+Cohesion: 0.13
+Nodes (4): CharacterScreen, Spot, Banner, Portraits
 
 ### Community 39 - "net.minecraft.core.Direction"
 Cohesion: 0.13
 Nodes (7): Land, Result, SiegeSurvey, Wall, CityGates, Done, SiegeSurveyTest
 
-### Community 41 - "Swell"
-Cohesion: 0.13
-Nodes (4): Depths, SeaCalm, Swell, SwellTest
+### Community 41 - "SeaCalm"
+Cohesion: 0.28
+Nodes (3): Depths, SeaCalm, SwellTest
 
-### Community 42 - ".stat"
-Cohesion: 0.09
-Nodes (10): ClientPeerage, Honour, Honours, Stat, DIPLOMACY, INTRIGUE, LEARNING, MARTIAL (+2 more)
+### Community 42 - "Front"
+Cohesion: 0.15
+Nodes (3): Lord, Feuds, Front
 
 ### Community 43 - "net.minecraft.server.MinecraftServer"
-Cohesion: 0.11
-Nodes (5): Cited Findings, Goal, MusterBars, PoliticsSync, Wars
+Cohesion: 0.09
+Nodes (7): Cited Findings, Army, Goal, MusterBars, PoliticsSync, War, Wars
 
 ### Community 44 - "Faction"
-Cohesion: 0.09
-Nodes (5): Package layout (core, data, worldgen, sim, bridge), Recruits faction registration (bridge package), RecruitsBridge, Faction, FactionInfoTest
-
-### Community 45 - "War"
 Cohesion: 0.10
-Nodes (5): Army, Muster, CEREMONIAL, OFFENSIVE, War
+Nodes (3): RecruitsBridge, Faction, FactionInfoTest
+
+### Community 45 - "ConquestServer"
+Cohesion: 0.14
+Nodes (3): ConquestServer, StructureLink, PoiPrecomputer
 
 ### Community 46 - "Personalities"
 Cohesion: 0.06
@@ -421,84 +435,72 @@ Cohesion: 0.11
 Nodes (12): Lane, Leg, Port, SeaLanes, Ship, Size, LARGE, MEDIUM (+4 more)
 
 ### Community 48 - "org.spongepowered.asm.mixin.Mixin"
-Cohesion: 0.16
-Nodes (5): ChunkMapCameraMixin, CityVegetationMixin, ClientChunkWindowMixin, SodiumShaderInterfaceMixin, SodiumShaderLoaderMixin
+Cohesion: 0.14
+Nodes (8): Battle code costs 0.2 ms; the multi-second freezes come from blocking, Cited Findings, ChunkMapCameraMixin, CityVegetationMixin, ClientChunkWindowMixin, RecruitsArrowCleanerMixin, SodiumShaderInterfaceMixin, SodiumShaderLoaderMixin
 
 ### Community 50 - ".feudFight"
-Cohesion: 0.14
+Cohesion: 0.15
 Nodes (6): Clash, Feud, Kind, DUEL, SKIRMISH, FeudDuel
 
-### Community 51 - "CityVariant"
-Cohesion: 0.16
-Nodes (6): CityVariant, DESERT, PLAINS, SAVANNA, SNOWY, TAIGA
-
-### Community 52 - "org.jetbrains.annotations.Nullable"
-Cohesion: 0.03
-Nodes (4): Battle phases and days, Envelopment, War camps, War council
+### Community 51 - "Site"
+Cohesion: 0.10
+Nodes (3): District, Site, SlopeTile
 
 ### Community 53 - "Centre"
 Cohesion: 0.18
 Nodes (3): ProvinceMap, Terrain, ProvinceMapTest
 
-### Community 55 - "Row"
+### Community 57 - "SeatCities"
 Cohesion: 0.12
-Nodes (3): Fort, Stronghold, Row
-
-### Community 57 - "City"
-Cohesion: 0.10
-Nodes (6): Grid, SeatCities, CountrysideTest, World, SeatCitiesTest, World
+Nodes (3): SeatCities, SeatCitiesTest, World
 
 ### Community 58 - "Faction Map View"
-Cohesion: 0.14
+Cohesion: 0.16
 Nodes (3): Cited Findings, FactionMapScreen, MapView
 
-### Community 59 - ".wallSegments"
-Cohesion: 0.18
-Nodes (7): Side, EAST, NORTH, SOUTH, WEST, WallSegment, CityWallTest
+### Community 59 - "RecruitsBattle"
+Cohesion: 0.05
+Nodes (10): HornCall, ATTACKING, MOVING, RALLYING, RETREATING, Officers, RecruitsBattle, BattleSite.Water (+2 more)
 
 ### Community 60 - "Cited Findings"
-Cohesion: 0.15
-Nodes (6): 6. Client tick handlers and packet handlers: per-tick allocations, entity scans, heavy render-thread work on packet arrival, Cited Findings, Gaps, Inferences, Takeaway, DistantArmies
-
-### Community 61 - "net.minecraft.world.level.block.state.BlockState"
-Cohesion: 0.06
-Nodes (8): Sea, CommandTableBlock, GateBlock, GrandStrategyBlock, QuestBoardBlock, StrategyBoardBlock, Builder, MarkerBlock
+Cohesion: 0.09
+Nodes (10): 6. Client tick handlers and packet handlers: per-tick allocations, entity scans, heavy render-thread work on packet arrival, Cited Findings, Gaps, Inferences, Takeaway, BattleSounds, ChargeSound, DinSound (+2 more)
 
 ### Community 63 - "TitleMapTest"
 Cohesion: 0.14
 Nodes (4): TitleMap, TitleStyle, Land, TitleMapTest
 
-### Community 64 - ".saveFormation"
-Cohesion: 0.08
-Nodes (3): BattleMap, GroundPlanTest, Land
+### Community 65 - "StyleLibrary"
+Cohesion: 0.11
+Nodes (5): Loaded, Offsets, Placement, StyleLibrary, PlacementOffsetsTest
 
-### Community 66 - ".step"
-Cohesion: 0.18
-Nodes (5): FigureMotion, Match, Placed, State, FigureMotionTest
-
-### Community 67 - "net.minecraft.world.level.block.Rotation"
-Cohesion: 0.14
-Nodes (10): Battles (prototype), Blocks of 20 soldiers, Gold church, Land grants (seven ways), Peerage (military and noble ladders), Quest board and quests, Ranks (Soldier to Grand Marshal), Recruitment posts and recruiter (+2 more)
+### Community 66 - "FormationSnapshot"
+Cohesion: 0.05
+Nodes (25): Cited Findings, FormationSnapshot, Kind, ARCHERS, BEARER, CAVALRY, GENERAL, HEAVY_CAVALRY (+17 more)
 
 ### Community 69 - "RafasConquest.java"
-Cohesion: 0.03
+Cohesion: 0.04
 Nodes (4): Battle map developer web page, Morale, rout and rally, StreetWalks, RafasConquest
 
-### Community 71 - "Cited Findings"
-Cohesion: 0.13
-Nodes (7): 1. Which render events and stages does the mod hook, and what does each do per frame? Is geometry rebuilt and re-uploaded every frame?, Cited Findings, Cited Findings, Gaps, Inferences, Takeaway, BattleSpotRing
+### Community 70 - "rafasconquest.battle.FieldBlock"
+Cohesion: 0.07
+Nodes (4): Figure, Landing, Live, ChargeHits
+
+### Community 71 - "ShipHulls"
+Cohesion: 0.14
+Nodes (6): DistantShips, Far, SableSeen, BattleKind, Part, ShipHulls
 
 ### Community 72 - "DistantOcclusion"
 Cohesion: 0.13
 Nodes (6): DistantOcclusion, Mode, OFF, ON, VIEW, DistantOcclusionTest
 
-### Community 73 - "Countryside"
-Cohesion: 0.09
-Nodes (11): Countryside, Kind, CASTLE, HAMLET, RUIN, VILLAGE, WATCHTOWER, Plan (+3 more)
+### Community 73 - "net.minecraft.world.level.Level"
+Cohesion: 0.12
+Nodes (4): Sea, GrandStrategyBlock, StrategyBoardBlock, WorldMapItem
 
 ### Community 75 - "RafasConquest server/common code audit: CPU, memory, disk and bandwidth hotspots"
-Cohesion: 0.08
-Nodes (24): Battles: per-tick cost of FieldBattle, armies, BlockGrid, sieges, ramming and naval AI, Cited Findings, Cited Findings, Cited Findings, Gaps, Gaps, Gaps, Gaps (+16 more)
+Cohesion: 0.06
+Nodes (30): Cited Findings, Cited Findings, Gaps, Gaps, Gaps, Gaps, Gaps, Gaps (+22 more)
 
 ### Community 76 - "PlaceMusicClient"
 Cohesion: 0.18
@@ -506,26 +508,22 @@ Nodes (3): PlaceMusicClient, Track, PlaceMusicClientTest
 
 ### Community 77 - "GateBlockEntity"
 Cohesion: 0.07
-Nodes (10): Door, GateBlockEntity, Swing, CLOSED, CLOSING, OPEN, OPENING, GateGeometry (+2 more)
+Nodes (11): GateDoors, Door, GateBlockEntity, Swing, CLOSED, CLOSING, OPEN, OPENING (+3 more)
 
 ### Community 78 - "Quests"
-Cohesion: 0.12
-Nodes (9): DataFiles, Dialogue, Ladder, MILITARY, NOBLE, NONE, Kind, Quests (+1 more)
+Cohesion: 0.13
+Nodes (5): DataFiles, Dialogue, Kind, Quests, Target
 
 ### Community 79 - "BattleType"
 Cohesion: 0.14
 Nodes (6): BattleType, AMPHIBIOUS, LAND, OCEAN, SIEGE, Outcome
 
-### Community 81 - "Realm"
-Cohesion: 0.22
-Nodes (4): Kind, FRIEND, RIVAL, Realm
-
 ### Community 82 - "Ownership & Territory"
-Cohesion: 0.20
-Nodes (5): Candidate, OwnershipResolver, Claim, OwnershipResolverTest, TerritoryMapTest
+Cohesion: 0.18
+Nodes (6): Candidate, OwnershipResolver, Claim, TerritoryMap, OwnershipResolverTest, TerritoryMapTest
 
 ### Community 83 - ".choose"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (10): Grant, LandGrants, Way, DEAD_VASSAL_FREE, DEAD_VASSAL_SWORN, DISLIKED_VASSAL, EMPTY_COUNTY, OWN_COUNTY (+2 more)
 
 ### Community 84 - ".view"
@@ -533,147 +531,139 @@ Cohesion: 0.19
 Nodes (5): Option, Talk, View, WarCouncilPagesTest, DialogueTest
 
 ### Community 86 - "Calibration"
-Cohesion: 0.17
+Cohesion: 0.14
 Nodes (8): Calibration, Fit, Striker, ARCHER_MELEE, ARROWS, CAVALRY, INFANTRY, CalibrationTest
 
 ### Community 87 - "Doctrine"
-Cohesion: 0.06
-Nodes (25): Braced walls against cavalry, Doctrines (Spear and Shield, Charge and Decapitate, Bait and Pincer), The general and guard, Victory, pursuit and surrender, Distribution, EVEN, STACKED_CENTRE, STACKED_LEFT (+17 more)
-
-### Community 88 - "Recruits PvE Addon — Design Doc (Oct 26, 2026)"
 Cohesion: 0.07
-Nodes (4): Recruits PvE Addon — Design Doc (Oct 26, 2026), DayClock, Step, DayClockTest
+Nodes (21): Distribution, EVEN, STACKED_CENTRE, STACKED_LEFT, STACKED_RIGHT, Doctrine, BAIT_AND_PINCER, CHARGE_AND_DECAPITATE (+13 more)
 
 ### Community 89 - "AgeTest.java"
-Cohesion: 0.13
+Cohesion: 0.12
 Nodes (8): Age, BRONZE, GUNPOWDER, STEAM, STEEL, Range, WorldFeatures, AgeTest
 
-### Community 91 - "How do world generation and structure placement work, and what do they cost?"
-Cohesion: 0.40
-Nodes (4): Gaps, How do world generation and structure placement work, and what do they cost?, Inferences, Takeaway
+### Community 91 - ".stat"
+Cohesion: 0.09
+Nodes (11): ClientPeerage, Names, Honour, Honours, Stat, DIPLOMACY, INTRIGUE, LEARNING (+3 more)
 
-### Community 92 - ".view"
-Cohesion: 0.08
-Nodes (14): Rank, CAPTAIN, COLONEL, CORPORAL, GRAND_MARSHAL, MAJOR, MARSHAL, SERJEANT (+6 more)
+### Community 92 - "Retinues"
+Cohesion: 0.15
+Nodes (4): PlayerStats, View, Retinues, RetinuesTest
 
 ### Community 94 - "MapLayer"
-Cohesion: 0.18
-Nodes (5): BaseMapLayer, LegendEntry, MapLayer, Symbol, TerritoryLayer
-
-### Community 95 - ".generate"
-Cohesion: 0.09
-Nodes (6): ProvinceNames, BaseMapGenerator, Heights, BiomePalette, Entry, MapColors
+Cohesion: 0.23
+Nodes (4): LegendEntry, MapLayer, Symbol, TerritoryLayer
 
 ### Community 96 - "ConquestSavedData"
-Cohesion: 0.06
-Nodes (8): Cited Findings, ConquestSavedData, Poi, CityBanners, ConquestServer, EconomyTick, PoiPrecomputer, ConquestSavedDataTest
-
-### Community 98 - ".walks"
 Cohesion: 0.10
-Nodes (4): DistrictKey, Townsfolk, CitySizesTest, StreetWalksTest
+Nodes (4): Cited Findings, ConquestSavedData, EconomyTick, ConquestSavedDataTest
 
 ### Community 99 - "FactionInfoScreen"
-Cohesion: 0.15
-Nodes (3): FactionInfoScreen, Line, StructureLink
+Cohesion: 0.10
+Nodes (3): ClientScreens, FactionInfoScreen, Line
 
-### Community 100 - "RoadFeature.java"
-Cohesion: 0.05
-Nodes (34): Ambushes from woods, Base map generated from seed, Character page, Characters (holders, skills, prowess, traits), Cities (grid, plots, vanilla village buildings), City wall, banners and wall guards, Command Table block, Countryside (hamlets, villages, watchtowers, castles) (+26 more)
+### Community 100 - "arraylist"
+Cohesion: 0.06
+Nodes (14): Base map generated from seed, Command Table block, Countryside (hamlets, villages, watchtowers, castles), Faction Info screen, Land titles (county, duchy, kingdom, empire), Mantra schools and dojos, World map layers, Nations by zone (+6 more)
 
-### Community 103 - ".layout"
-Cohesion: 0.20
-Nodes (4): Cited Findings, Positions, Sprite, FormationSnapshotTest
+### Community 103 - "com.talhanation.recruits.entities.AbstractRecruitEntity"
+Cohesion: 0.16
+Nodes (6): Role, BEARER, GENERAL, GUARD, LEADER, SOLDIER
 
 ### Community 105 - "Realm"
-Cohesion: 0.09
-Nodes (8): Hook, Kind, FAVOUR, SECRET, Succession, Taking, RealmPlannerTest, World
+Cohesion: 0.11
+Nodes (5): Retainer, Hook, Realm, Succession, Taking
 
 ### Community 106 - "MouthLayer.java"
-Cohesion: 0.11
+Cohesion: 0.09
 Nodes (4): BackBannerLayer, GateRenderer, MarkerRenderer, MouthLayer
 
 ### Community 107 - "rafasconquest.battle.FormationSnapshot"
-Cohesion: 0.15
-Nodes (8): FormationSnapshot, Ship, Boxes, SoldierFigure, Stuff, CLOTH, METAL, WOOD
+Cohesion: 0.31
+Nodes (6): Boxes, SoldierFigure, Stuff, CLOTH, METAL, WOOD
 
 ### Community 109 - ".send"
-Cohesion: 0.11
-Nodes (6): BattleSpot, Msg, NetworkDirection, PLAY_TO_CLIENT, PLAY_TO_SERVER, SimpleChannel
+Cohesion: 0.17
+Nodes (5): Msg, NetworkDirection, PLAY_TO_CLIENT, PLAY_TO_SERVER, SimpleChannel
 
 ### Community 110 - "Peerage"
-Cohesion: 0.12
-Nodes (6): Merit, Peer, Peerage, Taken, PeerageSync, QuestProgress
+Cohesion: 0.11
+Nodes (9): Boards, Entry, View, Merit, Peer, Peerage, Taken, PeerageSync (+1 more)
 
 ### Community 111 - ".of"
-Cohesion: 0.20
-Nodes (4): FactionBanner, Layer, FactionBannerNbt, FactionBannerTest
-
-### Community 112 - "dev.ryanhcode.sable.sublevel.ServerSubLevel"
-Cohesion: 0.15
-Nodes (6): Gaps, Inferences, Takeaway, What runs every server tick or level tick, and how much does each do?, SableShips, Ride
+Cohesion: 0.19
+Nodes (4): FactionBanner, Layer, FactionBannerNbt, CityBanners
 
 ### Community 113 - "WaterSwell"
-Cohesion: 0.13
-Nodes (8): 4. Sea swell: CPU or shader? How many columns? Interaction with Sodium chunk meshing? Foam noise cost?, Cited Findings, Gaps, Inferences, Takeaway, SableSeen, WaterSwell, SeaFoamTest
+Cohesion: 0.18
+Nodes (6): 4. Sea swell: CPU or shader? How many columns? Interaction with Sodium chunk meshing? Foam noise cost?, Cited Findings, Gaps, Inferences, Takeaway, WaterSwell
 
 ### Community 114 - "Phase"
 Cohesion: 0.22
 Nodes (8): Phase, AFTERMATH, BATTLE, DEPLOYMENT, DONE, NIGHT, PULLBACK, PURSUIT
 
 ### Community 115 - "NobleTitle"
-Cohesion: 0.14
-Nodes (6): Names, NobleTitle, COUNT, KNIGHT, NONE, PeerageTest
+Cohesion: 0.28
+Nodes (4): NobleTitle, COUNT, KNIGHT, NONE
 
 ### Community 117 - "RoadLayer"
-Cohesion: 0.16
+Cohesion: 0.17
 Nodes (11): A tick budget and staggered schedules make the fixes stick, C2ME, Moonrise and Iris set the rules for every optimization, Conclusion, Every frame pays for disk listings, per-rectangle flushes and unculled soldiers, One JVM, six scenarios and JFR beat guesswork on Windows, Profile once, then flatten RafasConquest's spikes, 2. Map screens (FactionMapScreen, GrandStrategyScreen, layers): cached textures or per-frame redraw? Text volume? Work on mouse move and zoom?, Gaps (+3 more)
 
-### Community 123 - "Kind"
+### Community 118 - "net.minecraft.nbt.CompoundTag"
+Cohesion: 0.05
+Nodes (5): Saved, Placed, MarkerBlockEntity, MarkerSpec, CityTerrainPiece
+
+### Community 123 - ".column"
 Cohesion: 0.15
-Nodes (10): Kind, ARCHERS, BEARER, CAVALRY, GENERAL, HEAVY_CAVALRY, HEAVY_INFANTRY, LEVY (+2 more)
+Nodes (8): Column, Kind, CLEAR_ABOVE, NONE, PLATE, SLOPE, WALL_BASE, CityTerrainTest
 
 ### Community 124 - "UnitOrder"
 Cohesion: 0.12
 Nodes (17): UnitOrder, BRACE, CHARGE, FOLLOW, GO, HOLD, LEAD_CHARGE, LINE (+9 more)
 
 ### Community 125 - "BlockPos"
-Cohesion: 0.15
-Nodes (4): BoardAction, GateView, MarkerSet, MarkerView
+Cohesion: 0.16
+Nodes (4): GateSet, GateView, MarkerSet, MarkerView
 
 ### Community 126 - "CityLayout"
+Cohesion: 0.15
+Nodes (8): CityLayout, Side, EAST, NORTH, SOUTH, WEST, WallSegment, CityWallTest
+
+### Community 128 - ".place"
 Cohesion: 0.08
-Nodes (6): CityLayout, District, Site, SlopeTile, WorldSettings, CityLayoutTest
+Nodes (7): Cited Findings, CityIndex, RoadFeature, Profile, RoadNetwork, Stretch, RoadNetworkTest
 
-### Community 128 - "RoadNetwork"
-Cohesion: 0.14
-Nodes (4): Profile, RoadNetwork, Stretch, RoadNetworkTest
-
-### Community 129 - ".hash"
-Cohesion: 0.14
-Nodes (6): ChunkCoord, FarmLayout, NobleAnnex, OriginRoller, Roll, SeedHash
+### Community 129 - "CityGridBuilder.java"
+Cohesion: 0.06
+Nodes (5): CityDistrictStructure, CitySlopeStructure, CityStructure, ConquestWorldgen, FarmStructure
 
 ### Community 130 - "BattleShips"
 Cohesion: 0.27
 Nodes (3): BattleShips, Helm, Ram
 
-### Community 136 - "Plan"
-Cohesion: 0.22
-Nodes (7): Kind, BARRACKS, CHURCH, NOBLE, PALACE, SQUARE, WALL
+### Community 133 - ".hash"
+Cohesion: 0.12
+Nodes (5): NobleAnnex, OriginRoller, Roll, ProvinceNames, NobleAnnexTest
 
-### Community 137 - ".readPlacements"
-Cohesion: 0.27
-Nodes (3): Offsets, Placement, PlacementOffsetsTest
+### Community 134 - "Quest"
+Cohesion: 0.10
+Nodes (11): Advancement, Ladder, MILITARY, NOBLE, NONE, Quest, Type, CLEAR (+3 more)
+
+### Community 136 - ".roadStart"
+Cohesion: 0.09
+Nodes (10): PlaceMusic, Kind, BARRACKS, CHURCH, NOBLE, PALACE, SQUARE, WALL (+2 more)
 
 ### Community 138 - "RafasConquest client-side performance audit (rendering, screens, client tick, sound)"
-Cohesion: 0.08
-Nodes (24): 10. Overall ranking, and areas checked that look fine, 3. Depth texture / DH occlusion: per-frame framebuffer copies, blits, GPU→CPU syncs, reallocations, program switches? Skipped when not needed?, 7. Per-frame allocations in hot paths, 8. Sounds: how many instances are created and updated, and how often?, 9. Memory: client caches, textures and NativeImages that are never freed or grow without bound, Cited Findings, Cited Findings, Cited Findings (+16 more)
+Cohesion: 0.10
+Nodes (19): 10. Overall ranking, and areas checked that look fine, 3. Depth texture / DH occlusion: per-frame framebuffer copies, blits, GPU→CPU syncs, reallocations, program switches? Skipped when not needed?, 7. Per-frame allocations in hot paths, 8. Sounds: how many instances are created and updated, and how often?, Cited Findings, Cited Findings, Gaps, Gaps (+11 more)
 
 ### Community 139 - "Client rendering and frame-time techniques for a NeoForge 1.21.1 mod (RafasConquest)"
-Cohesion: 0.06
-Nodes (35): 1. Custom world rendering in 1.21.1 (RenderLevelStageEvent, VertexBuffer vs immediate mode, batching, Flywheel), 2. Rendering hundreds of mobs (Recruits soldiers, ships): culling, LOD, impostors, animation throttling, 3. GUI and map screens (strategy map, faction map, battle overlays), 4. Depth buffers and post effects (DH depth, occlusion, GPU sync), 5. Water/ocean waves (sea swell, foam, boats on waves), 6. Sodium (and Iris) compatibility, 8. Lessons from performance mods that a content mod can apply, Cited Findings (+27 more)
+Cohesion: 0.05
+Nodes (41): 1. Custom world rendering in 1.21.1 (RenderLevelStageEvent, VertexBuffer vs immediate mode, batching, Flywheel), 2. Rendering hundreds of mobs (Recruits soldiers, ships): culling, LOD, impostors, animation throttling, 3. GUI and map screens (strategy map, faction map, battle overlays), 4. Depth buffers and post effects (DH depth, occlusion, GPU sync), 5. Water/ocean waves (sea swell, foam, boats on waves), 6. Sodium (and Iris) compatibility, 7. Client tick, stutter and sound, 8. Lessons from performance mods that a content mod can apply (+33 more)
 
 ### Community 141 - "ConquestWorldScreen"
-Cohesion: 0.22
+Cohesion: 0.20
 Nodes (3): ConquestWorldScreen, AbstractSliderButton, AbstractSliderButton
 
 ### Community 142 - "CourtSet"
@@ -681,28 +671,32 @@ Cohesion: 0.35
 Nodes (3): CourtSet, Seat, Style
 
 ### Community 143 - "CityGridBuilder"
-Cohesion: 0.09
-Nodes (5): Houses, CityGridBuilder, Ground, PlacedWall, Platform
+Cohesion: 0.07
+Nodes (10): CityGridBuilder, Ground, PlacedWall, Platform, CityVariant, DESERT, PLAINS, SAVANNA (+2 more)
 
-### Community 146 - "Race"
-Cohesion: 0.20
-Nodes (8): Race, BOGFOLK, FROSTBORN, GRASSWALKERS, MEADOWFOLK, PINEKIN, SUNBORN, VINEKIN
+### Community 146 - "Homeland"
+Cohesion: 0.10
+Nodes (16): Homeland, DESERT, JUNGLE, PLAINS, SAVANNA, SNOW, SWAMP, TAIGA (+8 more)
 
-### Community 148 - "Ranks"
+### Community 148 - "Job"
 Cohesion: 0.06
-Nodes (18): Enlisted players, Jobs (cavalry, footman, archer, shieldman, heavy infantry), Battle roles (frontline, bait, support, flanker, kill squad), The war horn, GeneralTask, BattleRole, BAIT, FLANKER (+10 more)
+Nodes (21): BattleRole, BAIT, FLANKER, FRONTLINE, KILL_SQUAD, SUPPORT, Job, ARCHER (+13 more)
 
-### Community 152 - "Feud"
-Cohesion: 0.08
-Nodes (7): Cited Findings, Lord, Feuds, Lands, Claim, Front, Politics
+### Community 149 - "Grid"
+Cohesion: 0.12
+Nodes (13): Countryside, Kind, CASTLE, HAMLET, RUIN, VILLAGE, WATCHTOWER, Plan (+5 more)
+
+### Community 152 - "Lands"
+Cohesion: 0.11
+Nodes (3): Lands, Stronghold, Claim
 
 ### Community 156 - ".plan"
-Cohesion: 0.09
-Nodes (13): Centre, Faith, Homeland, DESERT, JUNGLE, PLAINS, SAVANNA, SNOW (+5 more)
+Cohesion: 0.12
+Nodes (8): Centre, Faith, Bond, Kind, FRIEND, RIVAL, RealmPlanner, Seat
 
-### Community 157 - ".startAt"
-Cohesion: 0.14
-Nodes (4): Ground, GroundPlan, Api, DistantGeneration
+### Community 157 - ".plus"
+Cohesion: 0.08
+Nodes (7): Ground, GroundPlan, GroundPlanTest, Land, Land, Land, Land
 
 ### Community 160 - "How Total War calculates battles between units"
 Cohesion: 0.17
@@ -710,58 +704,66 @@ Nodes (11): 1. Combat is per soldier, not per unit, 2. Does the swing land?, 3. 
 
 ### Community 167 - "net.minecraft.world.item.ItemStack"
 Cohesion: 0.06
-Nodes (25): WarHorn, BackBanners, Armoury, Kit, ARCHER, ARCHER_GUARD, CAPTAIN, CAVALRY (+17 more)
+Nodes (26): WarHorn, BackBanners, Armoury, Kit, ARCHER, ARCHER_GUARD, CAPTAIN, CAVALRY (+18 more)
 
-### Community 174 - "Override"
-Cohesion: 0.24
-Nodes (3): Land, Land, Land
+### Community 174 - "DayClockTest"
+Cohesion: 0.23
+Nodes (3): DayClock, Step, DayClockTest
 
 ### Community 178 - "MapContext"
-Cohesion: 0.18
+Cohesion: 0.17
 Nodes (4): MapContext, Place, PlaceMenuLayer, PoiIconLayer
 
-### Community 204 - "Build"
-Cohesion: 0.25
-Nodes (6): Build, CASTLE, HAMLET, RUIN, TOWER, WELL
+### Community 204 - "CountryPiece"
+Cohesion: 0.16
+Nodes (7): Build, CASTLE, HAMLET, RUIN, TOWER, WELL, CountryPiece
 
-### Community 206 - "net.neoforged.neoforge.network.handling.IPayloadContext"
-Cohesion: 0.10
-Nodes (6): CameraAt, CityView, GateSet, TalkChoice, TeleportTo, Entry
+### Community 206 - "CityLayoutTest"
+Cohesion: 0.18
+Nodes (3): ChunkCoord, FarmLayout, CityLayoutTest
 
 ### Community 217 - ".pack"
 Cohesion: 0.27
 Nodes (5): BlockPacker, Placed, Rect, Size, BlockPackerTest
 
 ### Community 219 - ".drawEmpire"
-Cohesion: 0.27
+Cohesion: 0.29
 Nodes (3): Hit, LabelLayer, LabelShape
 
 ### Community 221 - "Point"
-Cohesion: 0.06
-Nodes (18): Engine, LADDERS, RAMS, TOWERS, Gate, GateAction, GateState, Kind (+10 more)
+Cohesion: 0.07
+Nodes (15): Point, Engine, LADDERS, RAMS, TOWERS, Gate, GateAction, GateState (+7 more)
 
-### Community 223 - "Morale"
-Cohesion: 0.28
-Nodes (6): Morale, State, RALLIED, ROUTED, SHATTERED, STEADY
+### Community 223 - ".moraleOf"
+Cohesion: 0.11
+Nodes (13): 1. Flank and rear shock, 2. Nearby rout (fright), 3. Army-wide losses, 4. Shattering, Design: adding the four morale shocks (built 2026-11-11, untested in game), Tests (FieldBattleTest), The core change: morale becomes a sum, Morale (+5 more)
 
-### Community 232 - "BattleSounds"
-Cohesion: 0.19
-Nodes (4): BattleSounds, ChargeSound, DinSound, Source
+### Community 224 - "DistantArmyRenderer.java"
+Cohesion: 0.07
+Nodes (4): Arrows in flight (figure volleys), Battle sounds, Seeing the whole field (distant flat figures), DistantDepth
+
+### Community 228 - ".plan"
+Cohesion: 0.23
+Nodes (4): Dojo, Dojos, Ground, DojosTest
+
+### Community 231 - ".view"
+Cohesion: 0.24
+Nodes (7): Cited Findings, Gaps, Inferences, Takeaway, Which areas were checked and look fine?, GrandStrategy, View
 
 ### Community 237 - "DistantArmyRenderer"
-Cohesion: 0.15
-Nodes (3): DistantArmyRenderer, Figure, Hull
+Cohesion: 0.06
+Nodes (12): 1. Which render events and stages does the mod hook, and what does each do per frame? Is geometry rebuilt and re-uploaded every frame?, Cited Findings, Cited Findings, Gaps, Inferences, Takeaway, Arrow, ArrowVolleys (+4 more)
 
 ### Community 238 - "net.minecraft.resources.ResourceLocation"
-Cohesion: 0.18
+Cohesion: 0.22
 Nodes (3): UnitLayer, RecruiterRenderer, TownspersonRenderer
 
-### Community 249 - "ShipKind"
-Cohesion: 0.33
-Nodes (5): ShipKind, ARCHERS, CAMP, SHOCK, SWORDSMEN
+### Community 249 - "net.minecraft.core.Vec3i"
+Cohesion: 0.07
+Nodes (5): StylePiece, CityPlacement, CountryPlacement, DojoPlacement, FarmPlacement
 
 ### Community 252 - "Trait"
-Cohesion: 0.20
+Cohesion: 0.22
 Nodes (5): Trait, BOLD, CAUTIOUS, CUNNING, PROUD
 
 ### Community 255 - "Call"
@@ -776,103 +778,111 @@ Nodes (3): Hull, Ramming, RammingTest
 Cohesion: 0.33
 Nodes (5): Before you start, Each scenario, JFR (allocations; spark can't record them on Windows), Profiling run sheet (baseline), Results
 
-### Community 263 - ".view"
-Cohesion: 0.24
-Nodes (7): Cited Findings, Gaps, Inferences, Takeaway, Which areas were checked and look fine?, GrandStrategy, View
-
-### Community 267 - "RafasConquest (PvE addon for Villager Recruits)"
-Cohesion: 0.17
-Nodes (8): Arrows in flight (figure volleys), Battle sounds, Recruits PvE Addon Design Doc (PDF), Seeing the whole field (distant flat figures), Distant Horizons (recommended mod), Embeddium (recommended mod), RafasConquest (PvE addon for Villager Recruits), Villager Recruits
+### Community 274 - "CourtView"
+Cohesion: 0.12
+Nodes (4): Camera, CourtView, Figure, OrganizationScreen
 
 ### Community 275 - "CourtView"
-Cohesion: 0.08
-Nodes (6): Camera, CourtView, Figure, NationScreen, Demographics, Share
+Cohesion: 0.14
+Nodes (3): NationScreen, Demographics, Share
 
 ### Community 277 - ".boundsAt"
 Cohesion: 0.30
 Nodes (3): Bounds, DistanceScaling, DistanceScalingTest
 
-### Community 283 - "CameraView"
-Cohesion: 0.11
-Nodes (11): Battle code costs 0.2 ms; the multi-second freezes come from blocking, Inferences, Cited Findings, Gaps, Inferences, Mixins on server paths: what they hook, how hot, added cost, Takeaway, Camera (+3 more)
+### Community 283 - "Override"
+Cohesion: 0.13
+Nodes (3): Chunks, SettingsScreen, Politics.Front
 
-### Community 288 - "7. Client tick, stutter and sound"
-Cohesion: 0.40
-Nodes (5): 7. Client tick, stutter and sound, Cited Findings, Gaps, Inferences, Takeaway
+### Community 288 - "9. Memory: client caches, textures and NativeImages that are never freed or grow without bound"
+Cohesion: 0.25
+Nodes (5): 9. Memory: client caches, textures and NativeImages that are never freed or grow without bound, Cited Findings, Gaps, Inferences, Takeaway
 
 ### Community 289 - "Kind"
 Cohesion: 0.15
 Nodes (12): Kind, CAPITAL, CASTLE, CHILD, CITY, DEAD, EXILE, LORD (+4 more)
 
-### Community 291 - "WarCamp"
-Cohesion: 0.09
-Nodes (4): Saved, WarCamp, CharacterMarkers, Placed
+### Community 292 - "DistantGeneration"
+Cohesion: 0.32
+Nodes (3): Inferences, Api, DistantGeneration
 
-### Community 295 - "ShipHulls"
-Cohesion: 0.17
-Nodes (5): DistantShips, Far, BattleKind, Part, ShipHulls
-
-### Community 298 - "How do the simulation and daily-decision systems schedule work? Do they spike?"
-Cohesion: 0.50
-Nodes (4): Gaps, How do the simulation and daily-decision systems schedule work? Do they spike?, Inferences, Takeaway
-
-### Community 302 - "Cited Findings"
-Cohesion: 0.24
-Nodes (6): 5. Mixins: what client methods do they inject into, how hot, added per-call cost, and conflicts with Sodium/Iris/DH fast paths?, Cited Findings, Gaps, Inferences, Takeaway, ChunkMapAccess
+### Community 302 - "ShipKind"
+Cohesion: 0.33
+Nodes (5): ShipKind, ARCHERS, CAMP, SHOCK, SWORDSMEN
 
 ### Community 303 - ".postChunk"
-Cohesion: 0.15
+Cohesion: 0.13
 Nodes (3): Cited Findings, BarracksPeople, CityGuards
-
-### Community 306 - "RecruitsBattle"
-Cohesion: 0.03
-Nodes (13): Point, Figure, HornCall, ATTACKING, MOVING, RALLYING, RETREATING, Landing (+5 more)
 
 ### Community 311 - "Task"
 Cohesion: 0.25
 Nodes (7): Task, AMBUSH, BAIT, FLANK, KILL, NONE, SUPPORT
 
 ### Community 320 - "Role"
-Cohesion: 0.16
-Nodes (9): GameCharacter, Role, ADVISOR, GENERAL, KING, MERCHANT, POLITICIAN, TACTICIAN (+1 more)
+Cohesion: 0.25
+Nodes (8): Role, ADVISOR, GENERAL, KING, MERCHANT, POLITICIAN, TACTICIAN, WARRIOR
+
+### Community 322 - ".build"
+Cohesion: 0.17
+Nodes (3): Frame, Harbour, HarbourCutTest
 
 ### Community 323 - "Duty"
 Cohesion: 0.14
 Nodes (13): Duty, BEARER, FLEEING, FRONT, GENERAL, GUARD, LINE, RALLYING (+5 more)
 
 ### Community 324 - "Recruiter"
-Cohesion: 0.08
-Nodes (4): WorldMapItem, Barks, Ear, Recruiter
+Cohesion: 0.12
+Nodes (3): Barks, Ear, Recruiter
+
+### Community 335 - "5. Mixins: what client methods do they inject into, how hot, added per-call cost, and conflicts with Sodium/Iris/DH fast paths?"
+Cohesion: 0.50
+Nodes (4): 5. Mixins: what client methods do they inject into, how hot, added per-call cost, and conflicts with Sodium/Iris/DH fast paths?, Gaps, Inferences, Takeaway
+
+### Community 344 - "UnitMode"
+Cohesion: 0.33
+Nodes (6): UnitMode, CHARGE, FOLLOW, HOLD, MOVE, RECRUITS
+
+### Community 345 - "Battles: per-tick cost of FieldBattle, armies, BlockGrid, sieges, ramming and naval AI"
+Cohesion: 0.29
+Nodes (5): Battles: per-tick cost of FieldBattle, armies, BlockGrid, sieges, ramming and naval AI, Cited Findings, Gaps, Inferences, Takeaway
+
+### Community 351 - "View"
+Cohesion: 0.15
+Nodes (3): BoardView, GrandStrategyView, TalkView
+
+### Community 352 - "Kind"
+Cohesion: 0.40
+Nodes (3): Kind, FAVOUR, SECRET
 
 ## Ambiguous Edges - Review These
-- `Roads (high, city, town roads; bridges; signposts)` → `Mustering (offensive and ceremonial)`  [AMBIGUOUS]
+- `Mustering (offensive and ceremonial)` → `Roads (high, city, town roads; bridges; signposts)`  [AMBIGUOUS]
   README.md · relation: conceptually_related_to
 - `/pve debug battle simulate` → `Open questions (R1/R2, thresholds, capture rules, resources, off-player battles)`  [AMBIGUOUS]
   Recruits PvE Addon — Design Doc.pdf · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **371 isolated node(s):** `ADVANCE`, `CAVALRY_CHARGE`, `CAVALRY_RECALL`, `WALL`, `GENERAL_CHARGES` (+366 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1273 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **198 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **371 isolated node(s):** `SOLDIER`, `LEADER`, `GENERAL`, `BEARER`, `GUARD` (+366 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1271 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **212 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RecruitsBattle` connect `RecruitsBattle` to `FieldBlock`, `net.minecraft.world.level.levelgen.structure.BoundingBox`, `.army`, `SiegeWorks`, `net.minecraft.world.entity.Entity`, `net.minecraft.world.phys.Vec3`, `Ranks`, `PveCommands.java`, `.shift`, `WarCouncil`, `.startAt`, `ConquestEvents.java`, `PveCommands Registration`, `WarCamp`, `net.minecraft.network.RegistryFriendlyByteBuf`, `net.minecraft.world.item.ItemStack`, `rafasconquest.faction.Faction`, `ShipHulls`, `net.minecraft.core.Direction`, `.feudFight`, `org.jetbrains.annotations.Nullable`, `.saveFormation`, `Role`, `RafasConquest.java`, `.roadStart`, `Calibration`, `.generate`, `net.neoforged.bus.api.SubscribeEvent`, `.send`, `Peerage`, `UnitOrder`, `Phase`, `Trait`?**
-  _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **What connects `ADVANCE`, `CAVALRY_CHARGE`, `CAVALRY_RECALL` to the rest of the system?**
+- **Why does `RecruitsBattle` connect `RecruitsBattle` to `FieldBlock`, `net.minecraft.world.level.levelgen.structure.BoundingBox`, `.army`, `SiegeWorks`, `Cited Findings`, `RecruitsBattle`, `PveCommands.java`, `WarCouncil`, `PveCommands Registration`, `WarCamp`, `net.minecraft.world.item.ItemStack`, `rafasconquest.faction.Faction`, `net.minecraft.core.Direction`, `.postChunk`, `.of`, `.second`, `.feudFight`, `org.jetbrains.annotations.Nullable`, `net.minecraft.server.level.ServerLevel`, `.saveFormation`, `RafasConquest.java`, `rafasconquest.battle.FieldBlock`, `ConquestEvents.java`, `.onServerTick`, `Calibration`, `UnitMode`, `com.talhanation.recruits.entities.AbstractRecruitEntity`, `Phase`, `UnitOrder`?**
+  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+- **What connects `SOLDIER`, `LEADER`, `GENERAL` to the rest of the system?**
   _371 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `FieldBlock` be split into smaller, more focused modules?**
-  _Cohesion score 0.04610834789622261 - nodes in this community are weakly interconnected._
-- **Why does `ConquestNetwork` connect `ConquestNetwork` to `PveCommands Registration`, `net.minecraft.network.RegistryFriendlyByteBuf`, `ClientScreens`, `BattleScreen`, `.sendToServer`, `GateScreen`, `net.minecraft.server.MinecraftServer`, `SetSetting`, `.send`, `net.neoforged.neoforge.network.handling.IPayloadContext`, `net.minecraft.client.gui.screens.Screen`, `org.jetbrains.annotations.Nullable`, `BlockPos`, `list`, `CityManagerScreen`, `Cited Findings`, `net.minecraft.world.level.block.state.BlockState`, `net.minecraft.network.FriendlyByteBuf`?**
-  _High betweenness centrality (0.040) - this node is a cross-community bridge._
-- **Should `net.minecraft.world.level.levelgen.structure.BoundingBox` be split into smaller, more focused modules?**
-  _Cohesion score 0.06336996336996337 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05194358445132439 - nodes in this community are weakly interconnected._
+- **Why does `BaseMap` connect `BaseMap` to `.place`, `Politics`, `Roads`, `CourtView`, `net.minecraft.client.gui.screens.Screen`, `CourtView`, `Grid`, `org.jetbrains.annotations.Nullable`, `.plan`, `WarCouncil`, `.render`, `net.minecraft.world.item.ItemStack`, `net.minecraft.server.MinecraftServer`, `ConquestServer`, `.postChunk`, `MapContext`, `org.jetbrains.annotations.Nullable`, `.onLevelLoad`, `TitleMapTest`, `.generate`, `arraylist`, `.plan`, `Realm`, `RoadLayer`, `GrandStrategyScreen`, `Terrain`, `ClientPolitics`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+- **Should `Politics` be split into smaller, more focused modules?**
+  _Cohesion score 0.0851063829787234 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._
 
-- **What is the exact relationship between `Roads (high, city, town roads; bridges; signposts)` and `Mustering (offensive and ceremonial)`?**
+- **What is the exact relationship between `Mustering (offensive and ceremonial)` and `Roads (high, city, town roads; bridges; signposts)`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **What is the exact relationship between `/pve debug battle simulate` and `Open questions (R1/R2, thresholds, capture rules, resources, off-player battles)`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._

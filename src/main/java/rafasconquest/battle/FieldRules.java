@@ -283,4 +283,37 @@ public final class FieldRules {
     private static double cross(double x1, double z1, double x2, double z2, double px, double pz) {
         return (x2 - x1) * (pz - z1) - (z2 - z1) * (px - x1);
     }
+
+    /**
+     * Which soldiers become real, from those wanted nearest first: each side (0 or 1) gets up to half the cap, and
+     * what one side leaves goes to the other, nearest first, so a player's own ranks can't take every slot from the
+     * enemy in front of them.
+     */
+    public static <T> java.util.List<T> shareLive(java.util.List<T> nearestFirst, java.util.function.ToIntFunction<T> side,
+                                                   java.util.function.ToIntFunction<T> cost, int cap) {
+        java.util.List<T> kept = new java.util.ArrayList<>();
+        java.util.List<T> rest = new java.util.ArrayList<>();
+        int[] used = new int[2];
+        int total = 0;
+        for (T t : nearestFirst) {
+            int s = side.applyAsInt(t);
+            int c = cost.applyAsInt(t);
+            if (used[s] + c <= cap / 2) {
+                used[s] += c;
+                total += c;
+                kept.add(t);
+            } else {
+                rest.add(t);
+            }
+        }
+        for (T t : rest) {
+            int c = cost.applyAsInt(t);
+            if (total + c > cap) {
+                break;
+            }
+            total += c;
+            kept.add(t);
+        }
+        return kept;
+    }
 }

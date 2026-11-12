@@ -86,7 +86,7 @@ public final class DistantArmyRenderer {
         return feet != null && feet.distanceTo(eye) > handover;
     }
 
-    public static void render(PoseStack pose, Camera camera, float partialTick) {
+    public static void render(PoseStack pose, Camera camera, net.minecraft.client.renderer.culling.Frustum frustum, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
@@ -104,11 +104,57 @@ public final class DistantArmyRenderer {
         }
 
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
-        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, null);
+        boolean[] seen = new boolean[formations.size()];
+        int[] light = new int[formations.size()];
+        for (int f = 0; f < seen.length; f++) {
+            FormationSnapshot formation = formations.get(f);
+            seen[f] = inView(frustum, eye, renderBlocks, figures.get(f));
+            // The light where the block stands, for all its figures: each figure's own costs a lookup apiece.
+            light[f] = seen[f] ? lightAt(mc, formation.x(), formation.y(), formation.z()) : 0;
+        }
+        pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
-            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, selected);
+            pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, selected);
         }
+    }
+
+    /** Room about a block's figures' feet for their height, flags and glow, in blocks. */
+    private static final double FIGURE_REACH = 4;
+
+    /**
+     * Whether any of a block's figures can be on screen: the box about them, pulled in as they are drawn
+     * ({@link DistantDepth}), touches the camera's view.
+     */
+    private static boolean inView(net.minecraft.client.renderer.culling.Frustum frustum, Vec3 eye, double renderBlocks,
+                                  List<FigureMotion.Placed> figures) {
+        if (figures.isEmpty()) {
+            return false;
+        }
+        double x0 = Double.MAX_VALUE, y0 = Double.MAX_VALUE, z0 = Double.MAX_VALUE;
+        double x1 = -Double.MAX_VALUE, y1 = -Double.MAX_VALUE, z1 = -Double.MAX_VALUE;
+        for (FigureMotion.Placed p : figures) {
+            x0 = Math.min(x0, p.x());
+            y0 = Math.min(y0, p.y());
+            z0 = Math.min(z0, p.z());
+            x1 = Math.max(x1, p.x());
+            y1 = Math.max(y1, p.y());
+            z1 = Math.max(z1, p.z());
+        }
+        double cx = (x0 + x1) / 2 - eye.x;
+        double cy = (y0 + y1) / 2 - eye.y;
+        double cz = (z0 + z1) / 2 - eye.z;
+        double distance = Math.max(1, Math.sqrt(cx * cx + cy * cy + cz * cz));
+        // Pulled in along the line of sight, shrunk by the same factor: the same on screen, and always short of the
+        // view's far end (figures drawn at their real distance, with the merged depth, may lie past it).
+        double s = DistantDepth.drawDistance(distance, renderBlocks) / distance;
+        double hx = ((x1 - x0) / 2 + FIGURE_REACH) * s;
+        double hy = ((y1 - y0) / 2 + FIGURE_REACH) * s;
+        double hz = ((z1 - z0) / 2 + FIGURE_REACH) * s;
+        double px = eye.x + cx * s;
+        double py = eye.y + cy * s;
+        double pz = eye.z + cz * s;
+        return frustum.isVisible(new net.minecraft.world.phys.AABB(px - hx, py - hy, pz - hz, px + hx, py + hy, pz + hz));
     }
 
     /**
@@ -166,14 +212,15 @@ public final class DistantArmyRenderer {
      * figure as the game's glowing outline does about a real soldier.
      */
     private static void pass(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks,
-                             List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, @javax.annotation.Nullable Set<Integer> halo) {
+                             List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, boolean[] seen, int[] light,
+                             @javax.annotation.Nullable Set<Integer> halo) {
         BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
         figure.tint = halo == null ? -1 : 0xFFFFFF;
         int drawn = 0;
         for (int f = 0; f < formations.size(); f++) {
             FormationSnapshot formation = formations.get(f);
-            if (halo != null && !halo.contains(formation.id())) {
+            if (!seen[f] || halo != null && !halo.contains(formation.id())) {
                 continue;
             }
             for (FigureMotion.Placed sprite : figures.get(f)) {
@@ -187,7 +234,7 @@ public final class DistantArmyRenderer {
                 boolean flatSprite = Math.hypot(dx, dz) > SoldierFigure.SPRITE_PAST;
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
                 if (halo == null) {
-                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, lightAt(mc, sprite.x(), sprite.y(), sprite.z()));
+                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, light[f]);
                 } else {
                     double back = 1 + HALO_BEHIND / Math.max(distance, 1);
                     figure.at((float) (dx * scale * back), (float) ((dy - 0.1) * scale * back), (float) (dz * scale * back),

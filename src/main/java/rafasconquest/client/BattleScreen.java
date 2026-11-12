@@ -1092,6 +1092,12 @@ public final class BattleScreen extends Screen {
         glow();
     }
 
+    /**
+     * More selected than this and none glow (their gold rings still show): every glowing soldier is drawn twice, and
+     * the outline costs a pass over the whole screen.
+     */
+    private static final int GLOW_UP_TO = 60;
+
     /** The selected soldiers, and the player if selected, glow (here only); the rest don't. Kept up each tick: the server's
      * own updates of an entity's flags would put it out. */
     private void glow() {
@@ -1106,15 +1112,16 @@ public final class BattleScreen extends Screen {
         if (playerSelected && minecraft.player != null) {
             now.add(minecraft.player.getId());
         }
+        boolean outline = now.size() <= GLOW_UP_TO;
         for (int id : glowing) {
-            if (!now.contains(id)) {
+            if (!outline || !now.contains(id)) {
                 net.minecraft.world.entity.Entity e = minecraft.level == null ? null : minecraft.level.getEntity(id);
                 if (e != null) {
                     e.setGlowingTag(false);
                 }
             }
         }
-        for (int id : now) {
+        for (int id : outline ? now : Set.<Integer>of()) {
             net.minecraft.world.entity.Entity e = minecraft.level == null ? null : minecraft.level.getEntity(id);
             if (e != null) {
                 e.setGlowingTag(true);
