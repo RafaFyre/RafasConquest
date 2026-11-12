@@ -235,16 +235,17 @@ public final class DistantArmyRenderer {
     private static void pass(Minecraft mc, PoseStack pose, Vec3 eye, float rightX, float rightZ, double renderBlocks,
                              List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, boolean[] seen, int[] light,
                              boolean[] flat, @javax.annotation.Nullable Set<Integer> halo) {
-        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
-        Figure figure = new Figure(buffer, pose.last().pose(), rightX, rightZ);
-        figure.tint = halo == null ? -1 : 0xFFFFFF;
-        int drawn = 0;
+        FigureBatches.begin();
+        boolean glow = halo != null;
         for (int f = 0; f < formations.size(); f++) {
             FormationSnapshot formation = formations.get(f);
-            if (!seen[f] || halo != null && !halo.contains(formation.id())) {
+            if (!seen[f] || glow && !halo.contains(formation.id())) {
                 continue;
             }
             FigureGear gear = DistantArmies.gear(formation.id());
+            int[] palette = SoldierFigure.Palette.of(formation, gear).slots();
+            SoldierFigure.Shape rank = SoldierFigure.Shape.of(formation, gear, false, flat[f]);
+            SoldierFigure.Shape leader = SoldierFigure.Shape.of(formation, gear, true, flat[f]);
             for (FigureMotion.Placed sprite : figures.get(f)) {
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
@@ -253,24 +254,17 @@ public final class DistantArmyRenderer {
                 if (sprite.real() && distance <= handover) {
                     continue; // the client has this soldier, close enough to draw it itself (and glow it)
                 }
-                boolean flatSprite = flat[f];
                 double scale = DistantOcclusion.scale(distance, renderBlocks);
-                if (halo == null) {
-                    figure.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, light[f]);
-                } else {
-                    double back = 1 + HALO_BEHIND / Math.max(distance, 1);
-                    figure.at((float) (dx * scale * back), (float) ((dy - 0.1) * scale * back), (float) (dz * scale * back),
-                            (float) scale * HALO_GROWTH, LightTexture.FULL_BRIGHT);
-                }
-                if (flatSprite) {
-                    draw(figure, formation, gear, sprite.leader());
-                } else {
-                    SoldierFigure.build(formation, gear, sprite.leader(), sprite.fx(), sprite.fz(), figure);
-                }
-                drawn++;
+                double back = glow ? 1 + HALO_BEHIND / Math.max(distance, 1) : 1;
+                // A flat figure faces the camera: its right is the camera's right.
+                float fx = flat[f] ? rightZ : (float) sprite.fx();
+                float fz = flat[f] ? -rightX : (float) sprite.fz();
+                FigureBatches.add(sprite.leader() ? leader : rank, palette, (float) (dx * scale * back),
+                        (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
+                        (float) scale * (glow ? HALO_GROWTH : 1), fx, fz, glow ? LightTexture.FULL_BRIGHT : light[f], glow);
             }
         }
-        finish(mc, buffer, drawn);
+        FigureBatches.draw(pose.last().pose());
     }
 
     /**
@@ -454,42 +448,43 @@ public final class DistantArmyRenderer {
         return (size.width() * 2 + size.height()) / 3 * 64 * Entity.getViewScale();
     }
 
+    /** Takes a flat figure's rectangles: centred {@code right} blocks to its right, from {@code bottom} up {@code height}. */
+    interface Rects {
+        void rect(float right, float bottom, float width, float height, int rgb);
+    }
+
     /**
-     * One figure, built of rectangles side by side so none overlaps another (a shield and a weapon in front). Sizes in
-     * blocks, from the feet up. Coloured as its soldiers' gear ({@link FigureGear}), else the army's colour.
+     * A flat figure of {@code shape}, built of rectangles side by side so none overlaps another (a shield and a weapon in
+     * front). Sizes in blocks, from the feet up. Coloured from {@code p}: its soldiers' gear ({@link FigureGear}), else
+     * the army's colour.
      */
-    private static void draw(Figure f, FormationSnapshot formation, @javax.annotation.Nullable FigureGear gear, boolean leader) {
-        int uniform = formation.rgb();
-        int chest = SoldierFigure.or(gear, FigureGear::chest, uniform);
-        int legs = SoldierFigure.or(gear, FigureGear::legs, SoldierFigure.or(gear, FigureGear::feet, darker(uniform)));
-        int cap = SoldierFigure.or(gear, FigureGear::head, uniform);
-        int mark = formation.mark();
-        switch (formation.kind()) {
-            case CAVALRY, HEAVY_CAVALRY -> {
+    static void flatFigure(Rects f, SoldierFigure.Shape shape, SoldierFigure.Palette p) {
+        switch (shape.body()) {
+            case RIDER -> {
                 f.rect(0, 0, 1.2F, 0.7F, HOOVES);
-                f.rect(0, 0.7F, 1.5F, 0.6F, SoldierFigure.or(gear, FigureGear::horse, uniform)); // the horse, in its barding
-                f.rect(0, 1.3F, 0.5F, 0.4F, legs);
-                f.rect(0, 1.7F, 0.6F, 0.6F, chest);
-                head(f, 2.3F, cap, mark, leader);
-                arms(f, gear, uniform, 0.9F);
+                f.rect(0, 0.7F, 1.5F, 0.6F, p.horse()); // the horse, in its barding
+                f.rect(0, 1.3F, 0.5F, 0.4F, p.legs());
+                f.rect(0, 1.7F, 0.6F, 0.6F, p.chest());
+                head(f, 2.3F, p.cap(), p.mark(), shape.leader());
+                arms(f, shape, p, 0.9F);
             }
             case GENERAL -> {
-                body(f, chest, legs);
+                body(f, p.chest(), p.legs());
                 f.rect(0, 1.45F, 0.45F, 0.25F, SKIN);
-                f.rect(0, 1.7F, 0.55F, 0.3F, SoldierFigure.or(gear, FigureGear::head, GOLD));
+                f.rect(0, 1.7F, 0.55F, 0.3F, p.helm());
                 f.rect(-0.05F, 2.0F, 0.08F, 1.3F, POLE); // the banner on the back, its pole above the helmet
-                f.rect(0.33F, 2.4F, 0.5F, 0.85F, mark);
+                f.rect(0.33F, 2.4F, 0.5F, 0.85F, p.mark());
             }
             case BEARER -> {
-                body(f, chest, legs);
-                head(f, 1.45F, cap, mark, false);
+                body(f, p.chest(), p.legs());
+                head(f, 1.45F, p.cap(), p.mark(), false);
                 f.rect(0.45F, 0.3F, 0.08F, 3.0F, POLE);
-                f.rect(0.78F, 2.3F, 0.55F, 0.95F, mark);
+                f.rect(0.78F, 2.3F, 0.55F, 0.95F, p.mark());
             }
-            default -> {
-                body(f, chest, legs);
-                head(f, 1.45F, cap, mark, leader);
-                arms(f, gear, uniform, 0);
+            case FOOT -> {
+                body(f, p.chest(), p.legs());
+                head(f, 1.45F, p.cap(), p.mark(), shape.leader());
+                arms(f, shape, p, 0);
             }
         }
     }
@@ -498,31 +493,30 @@ public final class DistantArmyRenderer {
      * A flat figure's shield, left, and weapon, right, {@code lift} up for a rider: beside the body, above the horse,
      * not over them, as a figure's rectangles never overlap.
      */
-    private static void arms(Figure f, @javax.annotation.Nullable FigureGear gear, int uniform, float lift) {
-        if (gear == null) {
+    private static void arms(Rects f, SoldierFigure.Shape shape, SoldierFigure.Palette p, float lift) {
+        if (!shape.armed()) {
             return;
         }
-        if (gear.shield()) {
-            f.rect(-0.55F, lift + 0.55F, 0.45F, 0.8F, SoldierFigure.or(gear, FigureGear::off, uniform));
+        if (shape.shield()) {
+            f.rect(-0.55F, lift + 0.55F, 0.45F, 0.8F, p.off());
         }
-        int rgb = SoldierFigure.or(gear, FigureGear::main, POLE);
-        switch (gear.weapon()) {
-            case SWORD -> f.rect(0.42F, lift + 0.85F, 0.08F, 1.0F, rgb);
-            case GREAT -> f.rect(0.42F, lift + 0.7F, 0.1F, 1.9F, rgb);
-            case LONG -> f.rect(0.42F, lift + 0.45F, 0.06F, 2.8F, rgb);
-            case BOW -> f.rect(0.42F, lift + 0.55F, 0.08F, 1.3F, rgb);
+        switch (shape.weapon()) {
+            case SWORD -> f.rect(0.42F, lift + 0.85F, 0.08F, 1.0F, p.main());
+            case GREAT -> f.rect(0.42F, lift + 0.7F, 0.1F, 1.9F, p.main());
+            case LONG -> f.rect(0.42F, lift + 0.45F, 0.06F, 2.8F, p.main());
+            case BOW -> f.rect(0.42F, lift + 0.55F, 0.08F, 1.3F, p.main());
             case NONE -> {
             }
         }
     }
 
-    private static void body(Figure f, int chest, int legs) {
+    private static void body(Rects f, int chest, int legs) {
         f.rect(0, 0, 0.5F, 0.75F, legs);
         f.rect(0, 0.75F, 0.6F, 0.7F, chest);
     }
 
     /** A face and a leather cap; a leader wears the faction banner instead, standing tall on the head. */
-    private static void head(Figure f, float bottom, int cap, int mark, boolean leader) {
+    private static void head(Rects f, float bottom, int cap, int mark, boolean leader) {
         f.rect(0, bottom, 0.45F, 0.3F, SKIN);
         if (leader) {
             f.rect(0, bottom + 0.3F, 0.08F, 0.25F, POLE);
@@ -537,10 +531,10 @@ public final class DistantArmyRenderer {
     }
 
     /**
-     * Writes the figure currently being drawn: as a sprite, rectangles upright and square to the camera; as its 3D
-     * level of detail, boxes shaded like a block's faces.
+     * Writes a figure drawn the old way, a vertex at a time: the player's sprite and the ships. Soldiers go through
+     * {@link FigureBatches}. A sprite is rectangles upright and square to the camera.
      */
-    private static final class Figure implements SoldierFigure.Boxes {
+    private static final class Figure implements Rects {
         private final BufferBuilder buffer;
         private final Matrix4f matrix;
         private final float rightX;
@@ -570,7 +564,8 @@ public final class DistantArmyRenderer {
         }
 
         /** A rectangle centred {@code right} blocks to the figure's right, from {@code bottom} up {@code height}. */
-        void rect(float right, float bottom, float width, float height, int rgb) {
+        @Override
+        public void rect(float right, float bottom, float width, float height, int rgb) {
             float shade = tint < 0 ? SIDE_SHADE : 1F;
             rgb = tint < 0 ? rgb : tint;
             float r = (rgb >> 16 & 255) / 255F * shade;
@@ -584,36 +579,6 @@ public final class DistantArmyRenderer {
             buffer.addVertex(matrix, x + rightX * h, lo, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
             buffer.addVertex(matrix, x + rightX * h, hi, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
             buffer.addVertex(matrix, x + rightX * l, hi, z + rightZ * l).setColor(r, g, b, 1F).setLight(light);
-        }
-
-        private final float[] xs = new float[4];
-        private final float[] zs = new float[4];
-
-        /**
-         * A box from the figure's feet, turned the way the figure faces, its sides shaded by which way they face as
-         * the game shades a block's; no bottom, it's never seen.
-         */
-        @Override
-        public void box(double cx, double cz, double rx, double rz, double fx, double fz, double bottom, double top, int rgb,
-                        SoldierFigure.Stuff stuff) {
-            float lo = y + (float) bottom * scale;
-            float hi = y + (float) top * scale;
-            for (int i = 0; i < 4; i++) { // round the footprint: front left, front right, back right, back left
-                int r = i == 1 || i == 2 ? 1 : -1;
-                int ahead = i < 2 ? 1 : -1;
-                xs[i] = x + (float) (cx + rx * r + fx * ahead) * scale;
-                zs[i] = z + (float) (cz + rz * r + fz * ahead) * scale;
-            }
-            quad(rgb, 1.0F, xs[0], hi, zs[0], xs[1], hi, zs[1], xs[2], hi, zs[2], xs[3], hi, zs[3]); // top
-            for (int i = 0; i < 4; i++) {
-                int j = (i + 1) % 4;
-                float dx = xs[j] - xs[i];
-                float dz = zs[j] - zs[i];
-                float length = dx * dx + dz * dz;
-                // A side running east-west faces north or south (0.8), one running north-south east or west (0.6).
-                float shade = length <= 0 ? 0.7F : 0.6F + 0.2F * dx * dx / length;
-                quad(rgb, shade, xs[i], lo, zs[i], xs[j], lo, zs[j], xs[j], hi, zs[j], xs[i], hi, zs[i]);
-            }
         }
 
         private void quad(int rgb, float shade, float... v) {
