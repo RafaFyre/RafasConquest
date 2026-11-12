@@ -345,6 +345,8 @@ public final class RecruitsBattle {
      * asking the generator is slow, and distant figures need no finer ground than that.
      */
     private final Map<Long, Integer> groundCache = new HashMap<>();
+    /** Chunks whose height the generator is reading in the background. */
+    private final Set<Long> groundAsked = new HashSet<>();
     /** Each block's last height, and how many generator lookups this second has made. */
     private final Map<Integer, Integer> lastGround = new HashMap<>();
     private int groundLookups;
@@ -2009,6 +2011,7 @@ public final class RecruitsBattle {
             battle.trample();
         }
         battle.fadeSome();
+        battle.pitchTents();
         boolean regular = ++battle.snapshotTicks % SNAPSHOT_TICKS == 0;
         if (regular) {
             battle.holdChunks();
@@ -4732,14 +4735,12 @@ public final class RecruitsBattle {
                 if (at == null) {
                     continue;
                 }
-                int soldiers = 0;
-                for (FieldBlock b : army.blocks()) {
-                    if (!army.winged() || b.wing() == wing) {
-                        soldiers += b.started();
-                    }
-                }
-                int tents = Math.max(MIN_TENTS, Math.min(MAX_TENTS, soldiers / SOLDIERS_PER_TENT));
+                int tents = tentsFor(army, wing);
                 loadGround(at);
+                // its tents go up over the next ticks ({@link #pitchTents}): their ground stays held till then
+                for (Point p : WarCamp.ground(at, army.facingX(), army.facingZ(), tents, wing == FieldArmy.CENTRE)) {
+                    groundReady(p);
+                }
                 WarCamp camp = WarCamp.build(level, at, army.facingX(), army.facingZ(), tents, nearestDye(sides[side].uniform),
                         sides[side].banner, wing == FieldArmy.CENTRE);
                 if (wing == FieldArmy.CENTRE) {
@@ -4751,6 +4752,31 @@ public final class RecruitsBattle {
             }
         }
         handCamps();
+    }
+
+    /** How many small tents a wing's camp has: one per {@link #SOLDIERS_PER_TENT} soldiers, within bounds. */
+    private static int tentsFor(FieldArmy army, int wing) {
+        int soldiers = 0;
+        for (FieldBlock b : army.blocks()) {
+            if (!army.winged() || b.wing() == wing) {
+                soldiers += b.started();
+            }
+        }
+        return Math.max(MIN_TENTS, Math.min(MAX_TENTS, soldiers / SOLDIERS_PER_TENT));
+    }
+
+    /** Puts up one more small tent in each camp still pitching. */
+    private void pitchTents() {
+        for (int side = 0; side < 2; side++) {
+            if (camps[side] != null) {
+                camps[side].pitchTents(1);
+            }
+            for (WarCamp camp : wingCamps[side]) {
+                if (camp != null) {
+                    camp.pitchTents(1);
+                }
+            }
+        }
     }
 
     /** Tells the field where each camp stands: its shattered blocks retreat there. */
@@ -5967,7 +5993,9 @@ public final class RecruitsBattle {
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
                 Point at = campAt(army, wing);
-                if (at != null) {
+                if (at != null && !field.afloat(side)) {
+                    ground.addAll(WarCamp.ground(at, army.facingX(), army.facingZ(), tentsFor(army, wing), wing == FieldArmy.CENTRE));
+                } else if (at != null) {
                     ground.add(at);
                 }
             }
@@ -6005,11 +6033,23 @@ public final class RecruitsBattle {
         } else {
             long chunk = ChunkPos.asLong(bx >> 4, bz >> 4);
             Integer known = groundCache.get(chunk);
-            if (known == null && groundLookups < GROUND_LOOKUPS_PER_SECOND) {
+            if (known == null && groundLookups < GROUND_LOOKUPS_PER_SECOND && groundAsked.add(chunk)) {
                 groundLookups++;
-                known = level.getChunkSource().getGenerator().getBaseHeight((bx & ~15) + 8, (bz & ~15) + 8,
-                        Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState());
-                groundCache.put(chunk, known);
+                // Off the server thread, as Terrain's survey reads it: with ReTerraForged, 40 lookups here took 18 ms a tick.
+                int gx = (bx & ~15) + 8;
+                int gz = (bz & ~15) + 8;
+                CompletableFuture.supplyAsync(() -> level.getChunkSource().getGenerator().getBaseHeight(gx, gz,
+                                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState()),
+                        net.minecraft.Util.backgroundExecutor()).whenCompleteAsync((h, e) -> {
+                    groundAsked.remove(chunk);
+                    if (h != null) {
+                        groundCache.put(chunk, h);
+                    }
+                }, level.getServer());
+            }
+            if (known == null) {
+                Double surveyed = terrain == null ? null : terrain.surveyed(x, z);
+                known = surveyed == null ? null : (int) Math.round(surveyed); // till the generator answers
             }
             y = known != null ? known : lastGround.getOrDefault(block.id(), level.getSeaLevel());
         }

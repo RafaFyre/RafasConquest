@@ -80,7 +80,7 @@ public final class ThrownFigures {
     }
 
     private static long key(int id, int index) {
-        return (long) id << 32 | index;
+        return ((long) id << 32 | (index & 0xffffffffL)) * 0x9E3779B97F4A7C15L; // spread, as FigureMotion.key
     }
 
     public static void clear() {

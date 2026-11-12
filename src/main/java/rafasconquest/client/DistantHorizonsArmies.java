@@ -25,8 +25,35 @@ final class DistantHorizonsArmies {
     /** Distant Horizons' projection as of its last frame, sixteen numbers in its own order; null before one. */
     private static volatile float[] projection;
 
-    /** The top of the first block of Distant Horizons' terrain along a ray, or null if it hits none or isn't ready. */
+    /** Runs raycasts off the render thread: one at a time, a daemon so it never keeps the game open. */
+    private static final java.util.concurrent.ExecutorService RAYCASTS = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "RafasConquest DH raycast");
+        t.setDaemon(true);
+        return t;
+    });
+    private static final long RAYCAST_WAIT_MS = 100;
+
+    /**
+     * The top of the first block of Distant Horizons' terrain along a ray, or null if it hits none, isn't ready, or
+     * takes too long. Distant Horizons waits on its loaders, and its loaders wait on the render thread to upload to
+     * the GPU, so waiting for it unbounded on the render thread hangs the game.
+     */
     static net.minecraft.world.phys.Vec3 raycast(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 dir, int reach) {
+        java.util.concurrent.Future<net.minecraft.world.phys.Vec3> hit = RAYCASTS.submit(() -> raycastNow(from, dir, reach));
+        try {
+            return hit.get(RAYCAST_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            hit.cancel(false); // drops it if still queued; a running one finishes once the render thread is free again
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (java.util.concurrent.ExecutionException e) {
+            return null;
+        }
+    }
+
+    private static net.minecraft.world.phys.Vec3 raycastNow(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 dir, int reach) {
         try {
             com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper level = DhApi.Delayed.worldProxy.getSinglePlayerLevel();
             if (level == null || DhApi.Delayed.terrainRepo == null) {

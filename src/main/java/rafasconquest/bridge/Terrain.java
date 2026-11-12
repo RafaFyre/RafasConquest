@@ -64,6 +64,13 @@ final class Terrain implements GroundPlan.Ground {
         return cell(x, z).forest();
     }
 
+    /** The height the survey already read at a spot, without reading anything; null if it has none there. */
+    @Nullable
+    Double surveyed(double x, double z) {
+        Cell c = cells.get(((long) Mth.floor(x / step) << 32) ^ (Mth.floor(z / step) & 0xffffffffL));
+        return c == null ? null : c.height();
+    }
+
     private Cell cell(double x, double z) {
         int cx = Mth.floor(x / step);
         int cz = Mth.floor(z / step);

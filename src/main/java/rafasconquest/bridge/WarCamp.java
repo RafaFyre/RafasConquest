@@ -62,8 +62,17 @@ final class WarCamp {
 
     private final ServerLevel level;
     private final Map<BlockPos, Saved> replaced = new LinkedHashMap<>();
-    /** Just outside each small tent's way in, in the order they were pitched. */
+    /** Just outside each small tent's way in, known from the start though the tents go up a few a tick. */
     private final List<Vec3> tentDoors = new ArrayList<>();
+
+    /** Where a small tent stands, and its column in its row. */
+    private record PlannedTent(BlockPos base, int col) {
+    }
+
+    /** The small tents, in order; {@link #pitchTents} puts them up, {@link #pitched} of them so far. */
+    private final List<PlannedTent> planned = new ArrayList<>();
+    private int pitched;
+    private DyeColor tentColour = DyeColor.WHITE;
     /** The way the camp faces: toward the enemy, and its right. */
     private final Direction front;
     private final Direction right;
@@ -97,8 +106,32 @@ final class WarCamp {
         WarCamp camp = new WarCamp(level, site, front, council);
         camp.easeCommandTent();
         camp.commandTent(colour, banner);
-        camp.tents(tents, colour);
+        camp.planTents(tents, colour);
         return camp;
+    }
+
+    /**
+     * Points spread over all the ground a camp of {@code tents} small tents at {@code at} may touch, a chunk apart, so
+     * it can all be loaded before {@link #build}; else its back rows generate on the server thread.
+     */
+    static List<Point> ground(Point at, double facingX, double facingZ, int tents, boolean council) {
+        Direction front = Direction.getNearest(facingX, 0, facingZ);
+        Direction right = front.getClockWise();
+        int half = council ? GENERAL_HALF : MARSHAL_HALF;
+        int rows = Math.max(1, (tents + TENTS_PER_ROW - 1) / TENTS_PER_ROW);
+        int wide = Math.max(half + EASE_MARGIN + BLEND, TENTS_PER_ROW / 2 * TENT_SPACING + TENT_SPACING / 2 + 2);
+        int back = half + 6 + (rows - 1) * ROW_SPACING + 4;
+        int ahead = half + 8; // guards and banners before the way in
+        List<Point> points = new ArrayList<>();
+        for (int r = -wide; r < wide + 16; r += 16) {
+            for (int f = -back; f < ahead + 16; f += 16) {
+                int rr = Math.min(r, wide);
+                int ff = Math.min(f, ahead);
+                points.add(new Point(at.x() + right.getStepX() * rr + front.getStepX() * ff,
+                        at.z() + right.getStepZ() * rr + front.getStepZ() * ff));
+            }
+        }
+        return points;
     }
 
     /** A point {@code r} to the right and {@code f} toward the enemy of the tent's middle, {@code up} above its floor. */
@@ -230,8 +263,12 @@ final class WarCamp {
         }
     }
 
-    private void tents(int count, DyeColor colour) {
-        BlockState wool = wool(colour);
+    /**
+     * Picks where the small tents go, without building them: only on dry ground near the floor's height. Their patches
+     * don't overlap, so one tent's levelling never changes where another may stand, and each door ends on the floor.
+     */
+    private void planTents(int count, DyeColor colour) {
+        tentColour = colour;
         for (int i = 0; i < count; i++) {
             int row = i / TENTS_PER_ROW;
             int col = i % TENTS_PER_ROW;
@@ -243,37 +280,53 @@ final class WarCamp {
             if (Math.abs(y - middle.getY()) > TENT_RISE || wet(base)) {
                 continue; // no tents in the water, nor up a cliff or down a drop
             }
-            // Its patch levelled to the camp's floor, for the battle.
-            for (int dr = -2; dr <= 2; dr++) {
-                for (int along = -3; along <= 3; along++) {
-                    BlockPos p = base.relative(right, dr).relative(front, along);
-                    ease(p.getX(), p.getZ(), middle.getY(), TENT_CLEAR);
-                }
-            }
-            base = new BlockPos(base.getX(), middle.getY(), base.getZ());
-            // A ridge tent along the line of battle's depth: two sloping sides and the ridge, open at both ends.
-            for (int along = -2; along <= 1; along++) {
-                BlockPos p = base.relative(front, along);
-                set(p.relative(right, -1), wool);
-                set(p.relative(right, 1), wool);
-                set(p, Blocks.AIR.defaultBlockState());
-                set(p.above(), wool);
-                set(p.relative(right, -1).above(), Blocks.AIR.defaultBlockState());
-                set(p.relative(right, 1).above(), Blocks.AIR.defaultBlockState());
-            }
-            // A bed inside, its head to the back, and the way in toward the enemy.
-            Block bed = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(colour.getName() + "_bed"));
-            Direction head = front.getOpposite();
-            set(base, bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.FOOT));
-            set(base.relative(head), bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.HEAD));
+            planned.add(new PlannedTent(base, col));
             BlockPos door = base.relative(front, 2);
-            int dy = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, door.getX(), door.getZ());
-            tentDoors.add(Vec3.atBottomCenterOf(new BlockPos(door.getX(), dy, door.getZ())));
-            if (col % 2 == 1) {
-                BlockPos fire = base.relative(right, TENT_SPACING / 2 + 1).relative(front, 3);
-                int fy = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, fire.getX(), fire.getZ());
-                set(new BlockPos(fire.getX(), fy, fire.getZ()), Blocks.CAMPFIRE.defaultBlockState().setValue(CampfireBlock.LIT, true));
+            tentDoors.add(Vec3.atBottomCenterOf(new BlockPos(door.getX(), middle.getY(), door.getZ())));
+        }
+    }
+
+    /**
+     * Puts up to {@code count} more small tents up, in order; false once all are up. All of a camp's tents in one tick
+     * held the server up for a quarter of a second.
+     */
+    boolean pitchTents(int count) {
+        for (int n = 0; n < count && pitched < planned.size(); n++) {
+            pitchTent(planned.get(pitched++));
+        }
+        return pitched < planned.size();
+    }
+
+    private void pitchTent(PlannedTent tent) {
+        BlockState wool = wool(tentColour);
+        BlockPos base = tent.base();
+        // Its patch levelled to the camp's floor, for the battle.
+        for (int dr = -2; dr <= 2; dr++) {
+            for (int along = -3; along <= 3; along++) {
+                BlockPos p = base.relative(right, dr).relative(front, along);
+                ease(p.getX(), p.getZ(), middle.getY(), TENT_CLEAR);
             }
+        }
+        base = new BlockPos(base.getX(), middle.getY(), base.getZ());
+        // A ridge tent along the line of battle's depth: two sloping sides and the ridge, open at both ends.
+        for (int along = -2; along <= 1; along++) {
+            BlockPos p = base.relative(front, along);
+            set(p.relative(right, -1), wool);
+            set(p.relative(right, 1), wool);
+            set(p, Blocks.AIR.defaultBlockState());
+            set(p.above(), wool);
+            set(p.relative(right, -1).above(), Blocks.AIR.defaultBlockState());
+            set(p.relative(right, 1).above(), Blocks.AIR.defaultBlockState());
+        }
+        // A bed inside, its head to the back, and the way in toward the enemy.
+        Block bed = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(tentColour.getName() + "_bed"));
+        Direction head = front.getOpposite();
+        set(base, bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.FOOT));
+        set(base.relative(head), bed.defaultBlockState().setValue(BedBlock.FACING, head).setValue(BedBlock.PART, BedPart.HEAD));
+        if (tent.col() % 2 == 1) {
+            BlockPos fire = base.relative(right, TENT_SPACING / 2 + 1).relative(front, 3);
+            int fy = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, fire.getX(), fire.getZ());
+            set(new BlockPos(fire.getX(), fy, fire.getZ()), Blocks.CAMPFIRE.defaultBlockState().setValue(CampfireBlock.LIT, true));
         }
     }
 
@@ -404,6 +457,7 @@ final class WarCamp {
 
     /** Puts back everything the camp replaced, the last first. */
     void restore() {
+        pitched = planned.size(); // tents not up yet never go up
         List<Map.Entry<BlockPos, Saved>> entries = new ArrayList<>(replaced.entrySet());
         for (int i = entries.size() - 1; i >= 0; i--) {
             BlockPos pos = entries.get(i).getKey();

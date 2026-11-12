@@ -50,6 +50,10 @@ public final class BattleMap {
     public static final int PORT = 8099;
     private static final int STATE_EVERY_TICKS = 5;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson COMPACT = new Gson();
+    /** The state is kept up only this long after the page last asked for it. */
+    private static final long WATCHED_MILLIS = 2000;
+    private static volatile long askedAt;
 
     @Nullable
     private static HttpServer http;
@@ -66,7 +70,10 @@ public final class BattleMap {
             try {
                 HttpServer created = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), PORT), 0);
                 created.createContext("/", BattleMap::page);
-                created.createContext("/api/state", exchange -> send(exchange, 200, "application/json", state));
+                created.createContext("/api/state", exchange -> {
+                    askedAt = System.currentTimeMillis();
+                    send(exchange, 200, "application/json", state);
+                });
                 created.createContext("/api/formations", exchange -> send(exchange, 200, "application/json", GSON.toJson(formationNames())));
                 created.createContext("/api/action", BattleMap::action);
                 created.start();
@@ -92,8 +99,9 @@ public final class BattleMap {
         while ((edit = pending.poll()) != null) {
             edit.run();
         }
-        if (http != null && ++ticks % STATE_EVERY_TICKS == 0) {
-            state = GSON.toJson(state(RecruitsBattle.current()));
+        // Only while a page is reading it, and not pretty: written for no one, it took 14% of a big battle's server tick.
+        if (http != null && ++ticks % STATE_EVERY_TICKS == 0 && System.currentTimeMillis() - askedAt < WATCHED_MILLIS) {
+            state = COMPACT.toJson(state(RecruitsBattle.current()));
         }
     }
 

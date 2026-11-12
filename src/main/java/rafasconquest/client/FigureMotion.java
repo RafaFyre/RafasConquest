@@ -200,9 +200,9 @@ final class FigureMotion {
             wantX = dx / distance;
             wantZ = dz / distance;
         }
-        double now = Math.atan2(s.fz, s.fx);
-        double turn = Math.atan2(wantZ, wantX) - now;
-        turn = Math.atan2(Math.sin(turn), Math.cos(turn)); // the short way round
+        double now = net.minecraft.util.Mth.atan2(s.fz, s.fx);
+        double turn = net.minecraft.util.Mth.atan2(wantZ, wantX) - now;
+        turn -= Math.floor((turn + Math.PI) / (2 * Math.PI)) * 2 * Math.PI; // the short way round, -pi..pi
         double most = TURN * dt;
         now += Math.max(-most, Math.min(most, turn));
         s.fx = Math.cos(now);
@@ -303,7 +303,9 @@ final class FigureMotion {
     }
 
     private static long key(int id, int index) {
-        return (long) id << 32 | index;
+        // Times an odd number, so still one key each, but spread: a Long hashes as id ^ index, and small ids and
+        // indexes all collided, turning the map's buckets into slow trees (3 ms a frame in a big battle).
+        return ((long) id << 32 | (index & 0xffffffffL)) * 0x9E3779B97F4A7C15L;
     }
 
     static void clear() {
