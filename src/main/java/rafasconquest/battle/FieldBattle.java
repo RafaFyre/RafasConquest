@@ -822,6 +822,22 @@ public final class FieldBattle {
         army.baitLine[wing] = new Point(x / n, z / n);
     }
 
+    /**
+     * A wing whose whole front is its bait keeps a line all the same, where its front would stand ({@link #behindOthers}):
+     * it marches on as a front does until an enemy comes near it or the bait has drawn the enemy in, then holds.
+     */
+    private void advanceBaitLines(FieldArmy army, FieldArmy enemy) {
+        if (seconds < BattlePlan.FORMING_SECONDS) {
+            return;
+        }
+        for (int wing = 0; wing < 3; wing++) {
+            Point line = army.baitLine[wing];
+            if (line != null && !army.baitSprung[wing] && nearestEnemy(enemy, line) > BattlePlan.INFANTRY_ENGAGE) {
+                army.baitLine[wing] = line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
+            }
+        }
+    }
+
     /** Whether a front file is one of its army's baits. */
     private static boolean isBait(FieldArmy army, int file) {
         return file >= 0 && file < army.baitFiles.length && army.baitFiles[file];
@@ -1089,6 +1105,7 @@ public final class FieldBattle {
             calls.add(new Order(army.side, Call.ADVANCE));
         }
         relieve(army);
+        advanceBaitLines(army, enemy);
         // Each file's queue, worked out once for this second's places (a block's place in it).
         java.util.Map<Integer, List<FieldBlock>> queues = new java.util.HashMap<>();
         brace(army, enemy);
@@ -1309,49 +1326,143 @@ public final class FieldBattle {
         return (x / n - at.x()) * army.facingX + (z / n - at.z()) * army.facingZ;
     }
 
+    /**
+     * Front-line relief, unit by unit ({@link BattlePlan#platoons}): a front unit worn down to
+     * {@link BattlePlan#RELIEF_SHARE} of its soldiers, or (in a stacked front) whose front has fought
+     * {@link FieldRules#ROTATE_SECONDS}, cycles out whole: the unit next behind it in its files takes every file it
+     * holds at once, and it goes, front and waiting blocks alike, to the back of its files to rest. Between cycles a
+     * worn front block is relieved by a waiting block of its own unit; if its unit has none left, the unit cycles early.
+     */
     private void relieve(FieldArmy army) {
+        java.util.Map<Integer, List<Integer>> held = new java.util.LinkedHashMap<>();
         for (int file = 0; file < army.front.length; file++) {
-            FieldBlock held = army.front[file];
-            if (held.relief != null && held.relief.alive > 0 && held.relief.duty == Duty.RELIEVING) {
+            held.computeIfAbsent(unitKey(army.front[file]), k -> new ArrayList<>()).add(file);
+        }
+        held.values().forEach(files -> relieveUnit(army, files));
+    }
+
+    /** Relief for the front unit holding {@code files} ({@link #relieve}). */
+    private void relieveUnit(FieldArmy army, List<Integer> files) {
+        List<Integer> free = new ArrayList<>();
+        boolean underWay = false;
+        for (int file : files) {
+            FieldBlock h = army.front[file];
+            if (h.relief != null && h.relief.alive > 0 && h.relief.duty == Duty.RELIEVING) {
+                underWay = true;
                 continue;
             }
-            held.relief = null;
-            if (held.strikeAt != null || held.led) {
-                continue; // a player's block is relieved when its player says
-            }
-            if (isBait(army, file) && unit(army, held, held.pos).isEmpty()) {
+            h.relief = null;
+            h.rotating = false; // a relief that never arrived (routed on its way) leaves it holding, not cycling out
+            if (isBait(army, file) && unit(army, h, h.pos).isEmpty()) {
                 army.baitFiles[file] = false; // the bait's unit is spent here: the file is its line's again
             }
-            boolean worn = BattlePlan.needsRelief(held.alive, held.started());
-            if (!worn) {
-                // The conveyor: after ROTATE_SECONDS of fighting, the block behind takes its place, and it goes to the
-                // back of its file's stack to rest.
-                List<FieldBlock> stack = new ArrayList<>(army.queue(file));
-                stack.removeIf(f -> f.led || holdsBehindBait(army, f));
-                if (army.stackDepth > 1 && held.fightSeconds >= FieldRules.ROTATE_SECONDS && !stack.isEmpty() && held.alive > 0) {
-                    FieldBlock next = stack.get(0);
-                    next.duty = Duty.RELIEVING;
-                    next.file = file;
-                    next.dutySince = seconds;
-                    next.line = held.line;
-                    held.relief = next;
-                    held.rotating = true;
-                }
+            if (h.strikeAt == null && !h.led) {
+                free.add(file); // a player's block is relieved when its player says
+            }
+        }
+        if (underWay || free.isEmpty()) {
+            return;
+        }
+        FieldBlock first = army.front[files.get(0)];
+        int alive = 0;
+        int started = 0;
+        for (FieldBlock b : first.platoon >= 0 && !first.inWedge ? army.platoon(first.platoon) : List.of(first)) {
+            alive += b.alive;
+            started += b.started();
+        }
+        boolean due = army.stackDepth > 1 && free.stream().anyMatch(f -> army.front[f].alive > 0 && army.front[f].fightSeconds >= FieldRules.ROTATE_SECONDS);
+        if ((BattlePlan.needsRelief(alive, started) || due) && cycle(army, free)) {
+            return;
+        }
+        boolean cycled = false;
+        for (int file : free) {
+            FieldBlock h = army.front[file];
+            if (!BattlePlan.needsRelief(h.alive, h.started())) {
                 continue;
             }
-            FieldBlock relief = pickRelief(army, file, held.line);
-            if (relief == null && held.alive == 0) {
-                relief = lastStand(army, held.line);
+            FieldBlock relief = ownRelief(army, h);
+            if (relief == null && !cycled) {
+                cycled = true;
+                if (cycle(army, free)) {
+                    return; // its unit has no fresh block left: it cycles out early
+                }
             }
             if (relief == null) {
-                continue;
+                relief = pickRelief(army, file, h.line);
             }
-            relief.duty = Duty.RELIEVING;
-            relief.file = file;
-            relief.dutySince = seconds;
-            relief.line = held.line;
-            held.relief = relief;
+            if (relief == null && h.alive == 0) {
+                relief = lastStand(army, h.line);
+            }
+            if (relief != null) {
+                sendToRelieve(relief, h, file);
+            }
         }
+    }
+
+    /**
+     * Cycles the front unit holding {@code files} out: the unit next behind it in those files (the first fit waiting
+     * block there of another unit) takes them all at once, its blocks already in a file taking that file, the rest
+     * the nearest left; a file it can't fill takes the next fit block waiting in it. The front blocks rotate out to the
+     * back of their files, and the unit's waiting blocks go to the back of theirs. False if no unit stands behind.
+     */
+    private boolean cycle(FieldArmy army, List<Integer> files) {
+        int out = unitKey(army.front[files.get(0)]);
+        FieldBlock next = null;
+        for (int file : files) {
+            for (FieldBlock q : army.queue(file)) {
+                if (next == null && unitKey(q) != out && canRelieve(army, q)) {
+                    next = q;
+                }
+            }
+        }
+        if (next == null) {
+            return false;
+        }
+        List<FieldBlock> pool = new ArrayList<>(unit(army, next, next.pos));
+        pool.removeIf(b -> b.duty != Duty.LINE || !canRelieve(army, b));
+        for (int file : files) {
+            FieldBlock h = army.front[file];
+            FieldBlock relief = pool.stream().filter(b -> b.file == file).min(Comparator.comparingInt(b -> b.queueTicket))
+                    .or(() -> pool.stream().min(Comparator.comparingDouble(b -> b.line.distanceTo(h.line))))
+                    .or(() -> army.queue(file).stream().filter(q -> unitKey(q) != out && q.duty == Duty.LINE && canRelieve(army, q)).findFirst())
+                    .orElse(null);
+            if (relief != null) {
+                pool.remove(relief);
+                sendToRelieve(relief, h, file);
+                h.rotating = h.alive > 0;
+            }
+        }
+        for (FieldBlock b : army.blocks) {
+            if (b.duty == Duty.LINE && b.alive > 0 && unitKey(b) == out) {
+                army.join(b, b.file); // its waiting blocks fall back to the end of their files with it
+            }
+        }
+        return true;
+    }
+
+    /** Whether a waiting block may go up to relieve: fit, free, and not held back behind a bait. */
+    private static boolean canRelieve(FieldArmy army, FieldBlock b) {
+        return !b.led && b.strikeAt == null && b.task == FieldBlock.Task.NONE && !holdsBehindBait(army, b)
+                && BattlePlan.fitToRelieve(b.alive, b.started());
+    }
+
+    /** A fit waiting block of {@code held}'s own unit to relieve it: one in its file first, else the nearest. */
+    @Nullable
+    private static FieldBlock ownRelief(FieldArmy army, FieldBlock held) {
+        for (FieldBlock q : army.queue(held.file)) {
+            if (sameUnit(q, held) && canRelieve(army, q)) {
+                return q;
+            }
+        }
+        return unit(army, held, held.line).stream().filter(b -> b.duty == Duty.LINE && canRelieve(army, b)).findFirst().orElse(null);
+    }
+
+    private void sendToRelieve(FieldBlock relief, FieldBlock held, int file) {
+        relief.duty = Duty.RELIEVING;
+        relief.file = file;
+        relief.dutySince = seconds;
+        relief.line = held.line;
+        held.relief = relief;
     }
 
     @Nullable
@@ -1380,6 +1491,10 @@ public final class FieldBattle {
 
     private void takeOver(FieldArmy army, FieldBlock relief) {
         FieldBlock relieved = army.front[relief.file];
+        if (relieved.relief != relief) {
+            army.join(relief, relief.file); // the block it was sent for left the front (routed) before it came: it waits
+            return;
+        }
         army.front[relief.file] = relief;
         army.reliefs++;
         relief.duty = Duty.FRONT;
@@ -1390,13 +1505,11 @@ public final class FieldBattle {
         relieved.relief = null;
         relieved.engaged = false;
         if (relieved.rotating && relieved.alive > 0) {
-            // Rotated out: to the back of its file's stack, where it rests until its turn comes round again.
+            // Cycled out with its unit: to the back of its file, where it rests until its unit's turn comes round again.
             relieved.rotating = false;
             relieved.fightSeconds = 0;
-            relieved.duty = Duty.LINE;
-            relieved.file = relief.file;
             relieved.placed = null;
-            army.insertInQueue(relieved, relief.file, army.stackDepth - 2);
+            army.join(relieved, relief.file);
             relief.fightSeconds = 0;
             return;
         }
@@ -2024,8 +2137,9 @@ public final class FieldBattle {
         }
         FieldBlock lured = null;
         for (FieldBlock e : enemy.blocks) {
+            // Drawn in: too far ahead of its own front, or (when that front moves as one) come up to this wing's line.
             if (e.alive > 0 && e.arm.infantry() && e.duty != Duty.FLEEING && !e.charged && e.distanceTo(bait) <= FieldRules.LURE_REACH
-                    && -behindFront(enemy, e.pos) >= FieldRules.TOO_FAR_FORWARD && !struck(army, e)
+                    && (-behindFront(enemy, e.pos) >= FieldRules.TOO_FAR_FORWARD || behindOthers(army, wing, e.pos) >= 0) && !struck(army, e)
                     && (lured == null || e.distanceTo(bait) < lured.distanceTo(bait))) {
                 lured = e;
             }
@@ -2057,7 +2171,7 @@ public final class FieldBattle {
         }
         // Else the wing's nearest infantry unit not fighting: three blocks or more surround the lured unit (each block of
         // it struck on both flanks and the rear), fewer strike its flank.
-        List<FieldBlock> free = freeUnit(army, idleInfantry(army, wing, lured, Double.MAX_VALUE), lured);
+        List<FieldBlock> free = freeUnit(army, idleInfantry(army, wing, lured, Double.MAX_VALUE), lured, false);
         int s = free.isEmpty() ? 0 : sideNearer(lured, free.get(0).pos);
         if (free.size() >= 3) {
             sendUnit(free, lured, s, -s, 0);
@@ -2072,14 +2186,15 @@ public final class FieldBattle {
 
     /**
      * The first unit among {@code idle} blocks' units (in their order) that is free to strike, as its blocks that go,
-     * nearest {@code target} first; empty if none ({@link #goers}).
+     * nearest {@code target} first; empty if none ({@link #goers}). With {@code reserves}, only a unit with no block in
+     * the front.
      */
-    private static List<FieldBlock> freeUnit(FieldArmy army, List<FieldBlock> idle, FieldBlock target) {
+    private static List<FieldBlock> freeUnit(FieldArmy army, List<FieldBlock> idle, FieldBlock target, boolean reserves) {
         java.util.Set<Integer> seen = new java.util.HashSet<>();
         for (FieldBlock b : idle) {
             if (seen.add(unitKey(b))) {
                 List<FieldBlock> goers = goers(army, b, target.pos);
-                if (!goers.isEmpty()) {
+                if (!goers.isEmpty() && !(reserves && goers.stream().anyMatch(g -> g.duty == Duty.FRONT))) {
                     return goers;
                 }
             }
@@ -2145,11 +2260,11 @@ public final class FieldBattle {
     }
 
     /**
-     * Envelopment: once the army is fighting, a front block with no enemy ahead of it (its wing reaches past the end
-     * of the enemy's line) wheels its whole unit, if none of it is fighting, onto the nearest enemy infantry unit beside
-     * it within {@link FieldRules#ENVELOP_REACH} that no unit of ours strikes yet: two blocks on each enemy block, its
-     * flank and its rear. When an enemy block falls its strikers turn on the next of its unit ({@link #strike}), so an
-     * overlapping wing rolls up the enemy's exposed flank.
+     * Envelopment: once the army is fighting, where a front block has no enemy ahead of it (its wing reaches past the
+     * end of the enemy's line), the front holds and the wing's nearest free reserve unit (no block of it in the front)
+     * goes round onto the nearest enemy infantry unit beside it within {@link FieldRules#ENVELOP_REACH} that no unit of
+     * ours strikes yet: two blocks on each enemy block, its flank and its rear. One unit at a time a wing; when an enemy
+     * block falls its strikers turn on the next of its unit ({@link #strike}), so the wing rolls up the exposed flank.
      */
     private void envelop(FieldArmy army, FieldArmy enemy) {
         if (seconds < BattlePlan.FORMING_SECONDS || !army.infantryEngaged()) {
@@ -2157,9 +2272,13 @@ public final class FieldBattle {
         }
         java.util.Set<Integer> struck = struckUnits(army);
         boolean[] wheeling = new boolean[3];
+        boolean[] still = new boolean[3]; // a unit of the wing is round the enemy's flank already: one at a time
+        for (int wing = 0; wing < 3; wing++) {
+            still[wing] = army.enveloping[wing] && struckBy(army, wing);
+        }
         for (FieldBlock b : army.front) {
             if (b.alive == 0 || b.duty != Duty.FRONT || b.contactFoe != null || b.strikeAt != null || b.braced
-                    || b.charged || isBait(army, b.file)) {
+                    || b.charged || isBait(army, b.file) || wheeling[b.wing] || still[b.wing]) {
                 continue;
             }
             List<FieldBlock> beside = new ArrayList<>();
@@ -2183,15 +2302,15 @@ public final class FieldBattle {
             }
             beside.sort(Comparator.comparingDouble(e -> e.pos.distanceTo(b.pos)));
             for (FieldBlock target : beside) {
-                if (struck.add(unitKey(target))) {
-                    // Its whole unit wheels, if none of it is fighting: each enemy block struck in its flank, then its rear.
-                    List<FieldBlock> unit = goers(army, b, target.pos);
-                    if (unit.isEmpty()) {
-                        struck.remove(unitKey(target));
-                        break;
+                if (!struck.contains(unitKey(target))) {
+                    // The front holds; a free unit of the wing's reserves goes round its end: each enemy block struck in
+                    // its flank, then its rear.
+                    List<FieldBlock> unit = freeUnit(army, idleInfantry(army, b.wing, target, Double.MAX_VALUE), target, true);
+                    if (!unit.isEmpty()) {
+                        sendUnit(unit, target, sideNearer(target, b.pos), 0);
+                        struck.add(unitKey(target));
+                        wheeling[b.wing] = true;
                     }
-                    sendUnit(unit, target, sideNearer(target, b.pos), 0);
-                    wheeling[b.wing] = true;
                     break;
                 }
             }
@@ -2242,7 +2361,7 @@ public final class FieldBattle {
                 army.blocks.forEach(consider);
             }
             near.sort(Comparator.comparingDouble(b -> b.pos.distanceTo(c.pos)));
-            List<FieldBlock> hunters = freeUnit(army, near, c);
+            List<FieldBlock> hunters = freeUnit(army, near, c, false);
             if (!hunters.isEmpty()) {
                 int s = sideNearer(c, hunters.get(0).pos);
                 sendUnit(hunters, c, s, -s);

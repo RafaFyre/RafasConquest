@@ -327,6 +327,26 @@ class FieldBattleTest {
     }
 
     @Test
+    void aFrontUnitCyclesOutWholeAndTheUnitBehindTakesItsFiles() {
+        FieldBattle battle = battle(100, 100, 1);
+        FieldArmy army = battle.army(0);
+        FieldBlock[] was = army.front.clone();
+        int cycles = 0;
+        while (!battle.over() && battle.seconds() < 600) {
+            battle.second();
+            for (int f = 0; f < was.length; f++) {
+                FieldBlock now = army.front[f];
+                if (now != was[f] && was[f].alive() > 0 && was[f].duty() == Duty.LINE) {
+                    cycles++;
+                    assertTrue(now.platoon() != was[f].platoon(), "a unit rotated out hands its file to another unit");
+                }
+                was[f] = now;
+            }
+        }
+        assertTrue(cycles > 0, "front units cycle");
+    }
+
+    @Test
     void inTheMorningTheArmiesMarchOutOfCampToTheirPlaces() {
         FieldBattle battle = battle(60, 60, 3);
         battle.formUp(25);
