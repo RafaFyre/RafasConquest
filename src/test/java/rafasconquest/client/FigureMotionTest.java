@@ -81,6 +81,40 @@ class FigureMotionTest {
     }
 
     @Test
+    void aFigureKeepingUpWithAMarchingBlockFacesTheMarch() {
+        FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1); // facing north, its block's front
+        for (int i = 1; i <= 20; i++) { // its place marches east at 2 blocks a second, the figure right on it
+            FigureMotion.move(s, i * 0.1, 0, 0, -1, false, FigureMotion.FOOT_SPEED, 0.05);
+        }
+        assertEquals(1, s.fx, 1e-6, "turned to face the way the block marches");
+    }
+
+    @Test
+    void aFigureAboveTheGroundFallsAndOneBelowStepsUp() {
+        FigureMotion.Ground was = FigureMotion.ground;
+        try {
+            FigureMotion.ground = (x, z, near) -> 60;
+            FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1);
+            assertEquals(60, FigureMotion.settle(s, 64, 0.05), 1e-9, "first seen: on the ground");
+            s.y = 70;
+            double y1 = 70 - FigureMotion.settle(s, 64, 0.05);
+            double y2 = 70 - FigureMotion.settle(s, 64, 0.05);
+            assertTrue(y1 > 0 && y2 > 2 * y1, "falls, gathering speed: " + y1 + ", " + y2);
+            for (int i = 0; i < 40; i++) {
+                FigureMotion.settle(s, 64, 0.05);
+            }
+            assertEquals(60, s.y, 1e-9, "lands on the ground");
+            FigureMotion.ground = (x, z, near) -> 62;
+            assertEquals(62, FigureMotion.settle(s, 64, 0.05), 1e-9, "steps up at once");
+            FigureMotion.ground = (x, z, near) -> Double.NaN;
+            FigureMotion.State far = new FigureMotion.State(0, 0, 0, -1);
+            assertEquals(64, FigureMotion.settle(far, 64, 0.05), 1e-9, "no ground known: the block's height");
+        } finally {
+            FigureMotion.ground = was;
+        }
+    }
+
+    @Test
     void aBlockThatAboutFacesTurnsWhereItStands() {
         FormationSnapshot north = block(1, 0xFF0000, 0, 0, 0, -1, false);
         List<FigureMotion.Placed> before = FigureMotion.step(List.of(north), id -> null, 1000).get(0);

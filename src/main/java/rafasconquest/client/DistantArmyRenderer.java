@@ -499,6 +499,34 @@ public final class DistantArmyRenderer {
         RenderSystem.enableCull();
     }
 
+    static {
+        FigureMotion.ground = DistantArmyRenderer::ground;
+    }
+
+    /**
+     * The ground a figure stands on at ({@code x}, {@code z}): the top that blocks motion, under any leaves; NaN where
+     * the client lacks the chunk (out on Distant Horizons' terrain).
+     * shortcut: no ground beyond the game's own chunks, figures there keep their block's height; read DH heights if they float.
+     */
+    private static double ground(double x, double z, double near) {
+        Minecraft mc = Minecraft.getInstance();
+        int bx = net.minecraft.util.Mth.floor(x);
+        int bz = net.minecraft.util.Mth.floor(z);
+        if (mc.level == null || !mc.level.hasChunk(bx >> 4, bz >> 4)) {
+            return Double.NaN;
+        }
+        // MOTION_BLOCKING: the no-leaves map is server-only, so step down through any canopy ourselves.
+        int y = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, bx, bz);
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(bx, y - 1, bz);
+        for (int i = 0; i < 32 && y > mc.level.getMinBuildHeight(); i++, y--, at.setY(y - 1)) {
+            net.minecraft.world.level.block.state.BlockState below = mc.level.getBlockState(at);
+            if (below.blocksMotion() && !below.is(net.minecraft.tags.BlockTags.LEAVES)) {
+                break;
+            }
+        }
+        return y;
+    }
+
     /**
      * The light a figure stands in, as the game lights a mob there: the sky and block light at its head height. Out
      * past the chunks the client has, it is open sky.

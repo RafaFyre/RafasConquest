@@ -42,6 +42,19 @@ final class FigureMotion {
     /** How far a figure in melee sways about its place as the fight surges. */
     static final double SWAY = 0.45;
     private static final long FORGET_MILLIS = 5000;
+    /** How fast a figure off the ground falls, blocks a second squared: the game's mob gravity (0.08 a tick, squared ticks). */
+    static final double GRAVITY = 32;
+    /** Faster than this, a place has jumped (dealt out again), not walked: no way to face. */
+    private static final double PLACE_JUMP = 2 * HORSE_SPEED;
+
+    /** The ground's height at a column, near height {@code near}; NaN where unknown (the client lacks the chunk). */
+    @FunctionalInterface
+    interface Ground {
+        double at(double x, double z, double near);
+    }
+
+    /** Set by the renderer to the client's world; none in tests. */
+    static Ground ground = (x, z, near) -> Double.NaN;
 
     /**
      * Where to draw a figure and which way it faces, a unit vector; {@code swing} and {@code amount} are its legs' walk
@@ -54,6 +67,12 @@ final class FigureMotion {
     static final class State {
         double x;
         double z;
+        /** Height, and falling speed (blocks a second, down positive); NaN height until first placed. */
+        double y = Double.NaN;
+        double fall;
+        /** Its place last frame, to see which way the place itself goes (a marching block); NaN at first. */
+        double px = Double.NaN;
+        double pz = Double.NaN;
         double fx;
         double fz;
         /** Its walk cycle, as {@link Placed}'s. */
@@ -168,10 +187,30 @@ final class FigureMotion {
                 move(state, tx, tz, faceX, faceZ, s.real(), horse ? HORSE_SPEED : FOOT_SPEED, dt);
             }
             state.seen = now;
-            placed.add(new Placed(state.x, s.y() + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real(),
+            double y = s.real() ? s.y() : settle(state, s.y(), dt);
+            placed.add(new Placed(state.x, y + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real(),
                     (float) state.swing, (float) state.amount));
         }
         return placed;
+    }
+
+    /**
+     * A figure's height on the ground under it: it steps straight up onto higher ground and falls, gathering speed, to
+     * lower; where the ground is unknown it stands at its block's height ({@code near}).
+     */
+    static double settle(State s, double near, double dt) {
+        double floor = ground.at(s.x, s.z, near);
+        if (Double.isNaN(floor)) {
+            floor = near;
+        }
+        if (Double.isNaN(s.y) || s.y <= floor) {
+            s.y = floor;
+            s.fall = 0;
+        } else {
+            s.fall += GRAVITY * dt;
+            s.y = Math.max(floor, s.y - s.fall * dt);
+        }
+        return s.y;
     }
 
     /**
@@ -189,6 +228,12 @@ final class FigureMotion {
         double dx = tx - s.x;
         double dz = tz - s.z;
         double distance = Math.hypot(dx, dz);
+        // Which way the place itself goes: a marching block's soldiers face the march, as Total War's do.
+        double placeX = Double.isNaN(s.px) ? 0 : tx - s.px;
+        double placeZ = Double.isNaN(s.pz) ? 0 : tz - s.pz;
+        double placeSpeed = dt > 0 ? Math.hypot(placeX, placeZ) / dt : 0;
+        s.px = tx;
+        s.pz = tz;
         if (distance > SNAP) {
             s.x = tx;
             s.z = tz;
@@ -212,6 +257,9 @@ final class FigureMotion {
         if (dt > 0 && step / dt > MOVING && distance > SHUFFLE) {
             wantX = dx / distance;
             wantZ = dz / distance;
+        } else if (placeSpeed > MOVING && placeSpeed < PLACE_JUMP) {
+            wantX = placeX / (placeSpeed * dt);
+            wantZ = placeZ / (placeSpeed * dt);
         }
         double now = net.minecraft.util.Mth.atan2(s.fz, s.fx);
         double turn = net.minecraft.util.Mth.atan2(wantZ, wantX) - now;
