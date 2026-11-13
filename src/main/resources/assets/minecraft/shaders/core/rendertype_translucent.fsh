@@ -111,13 +111,13 @@ float swellDetail(vec2 q, mat4 pa, mat4 pb, mat4 pc, float cover, out vec2 slope
 // rafasconquest.client.WaterSwell.foamGlsl()
 float whitecap(vec4 at, mat4 pa, mat4 pb, mat4 pc, float tall, vec3 foamAt, sampler3D foam, out float shade) {
     shade = 0.0;
-    vec2 cover = fwidth(at.xy); // before any branch, as derivatives need
+    vec2 pixel = fwidth(at.xy); // before any branch, as derivatives need
     if (at.w < 0.99) {
         return 0.0;
     }
     vec2 slope;
     vec2 moved;
-    float h = swellDetail(at.xy, pa, pb, pc, max(cover.x, cover.y), slope, moved) * tall * at.z;
+    float h = swellDetail(at.xy, pa, pb, pc, max(pixel.x, pixel.y), slope, moved) * tall * at.z;
     float lean = tall / 13.0 * at.z;
     vec3 n = normalize(vec3(slope.x * lean, 0.6, slope.y * lean));
     shade = mix(n.x * 0.5 + 0.5, 0.0, pow(n.y, 4.0)) * 0.3;
