@@ -167,10 +167,12 @@ public final class Swell {
 
     /**
      * A ship floating on the swell as Physics Mod floats boats, ticked once a game tick: its waterline chases the sea
-     * under its middle on a spring that lifts hard (0.241 a tick, then ×0.6) and lets it fall slowly (0.041, ×0.95),
-     * gentler within half a block; it rolls and pitches toward the sea's slope one block either side and fore and aft,
-     * on damped springs, never past {@link #MAX_ROLL} or {@link #MAX_PITCH}, and hangs on its last swing while it rides
-     * more than 0.075 above the water.
+     * under its hull (the mean of its middle, bow, stern and both sides) on a spring that lifts hard (0.241 a tick, then
+     * ×0.6) and lets it fall slowly (0.041, ×0.95), gentler within half a block; it rolls toward the sea's slope from
+     * side to side and pitches toward it from bow to stern, on damped springs, never past {@link #MAX_ROLL} or
+     * {@link #MAX_PITCH}, and hangs on its last swing while it rides more than 0.075 above the water. Read over its
+     * whole hull, as Empire: Total War floats ships on buoyancy points along it, a long ship rides out waves shorter
+     * than itself that toss a small one.
      */
     public static final class Ride {
         private double offset;
@@ -182,10 +184,17 @@ public final class Swell {
         private double dirX;
         private double dirZ = 1;
 
-        public void tick(double x, double z, double dirX, double dirZ, long time, SeaCalm calmness) {
+        /** {@code halfLength} and {@code halfBeam}: half the hull's length and width, in blocks (at least 1 each). */
+        public void tick(double x, double z, double dirX, double dirZ, double halfLength, double halfBeam, long time, SeaCalm calmness) {
             this.dirX = dirX;
             this.dirZ = dirZ;
-            double target = height(x, z, time, calmness);
+            double hl = Math.max(1, halfLength);
+            double hb = Math.max(1, halfBeam);
+            double left = height(x + dirZ * hb, z - dirX * hb, time, calmness);
+            double right = height(x - dirZ * hb, z + dirX * hb, time, calmness);
+            double ahead = height(x + dirX * hl, z + dirZ * hl, time, calmness);
+            double behind = height(x - dirX * hl, z - dirZ * hl, time, calmness);
+            double target = (height(x, z, time, calmness) + left + right + ahead + behind) / 5;
             double off = Math.abs(target - offset);
             double damping = Math.min(1, off / 0.5);
             if (target >= offset) {
@@ -195,12 +204,8 @@ public final class Swell {
             }
             boolean airborne = offset - target > 0.075;
             offset += rise;
-            double left = height(x + dirZ, z - dirX, time, calmness);
-            double right = height(x - dirZ, z + dirX, time, calmness);
-            double ahead = height(x + dirX, z + dirZ, time, calmness);
-            double behind = height(x - dirX, z - dirZ, time, calmness);
-            double rollTo = clamp(Math.atan2(right - left, 2), MAX_ROLL);
-            double pitchTo = clamp(Math.atan2(behind - ahead, 2), MAX_PITCH);
+            double rollTo = clamp(Math.atan2(right - left, 2 * hb), MAX_ROLL);
+            double pitchTo = clamp(Math.atan2(behind - ahead, 2 * hl), MAX_PITCH);
             if (airborne) {
                 rollSpeed *= 0.95;
                 pitchSpeed *= 0.95;

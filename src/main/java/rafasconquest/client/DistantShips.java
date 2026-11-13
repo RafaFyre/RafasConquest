@@ -144,7 +144,7 @@ final class DistantShips {
                 break;
             }
         }
-        Swell.Ride ride = ride(key, x, z, yaw);
+        Swell.Ride ride = ride(key, x, z, yaw, size);
         return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], ride.offset())
                 : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset());
     }
@@ -161,7 +161,7 @@ final class DistantShips {
     private static final int SETTLE_TICKS = 40;
 
     // shortcut: ticks once a game tick, so the bob steps at 20 a second; interpolate with partialTick if it shows up close.
-    private static Swell.Ride ride(Object key, double x, double z, double yaw) {
+    private static Swell.Ride ride(Object key, double x, double z, double yaw, SeaLanes.Size size) {
         Minecraft mc = Minecraft.getInstance();
         Riding r = RIDES.computeIfAbsent(key, k -> new Riding());
         r.seen = true;
@@ -170,7 +170,7 @@ final class DistantShips {
         double dirZ = Math.cos(yaw);
         var calm = Sea.calm(mc.level);
         for (long t = Math.max(r.tick, now - SETTLE_TICKS) + 1; t <= now; t++) {
-            r.ride.tick(x, z, dirX, dirZ, t, calm);
+            r.ride.tick(x, z, dirX, dirZ, size.length / 2.0, size.width / 2.0, t, calm);
         }
         r.tick = now;
         return r.ride;

@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794539909.598694,
-    "seen": 1794539953.278864,
-    "ast_hash": "494056e28e6ccfa5c16f5323fa18790e",
+    "mtime": 1794541388.884004,
+    "seen": 1794541422.4292595,
+    "ast_hash": "3551b875b037e58d937ca276a6e55dc9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -2286,15 +2286,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableShips.java": {
-    "mtime": 1794026482.134646,
-    "seen": 1794026741.604844,
-    "ast_hash": "be0c71cc05a2b5ca95bedf2b691cb7cc",
+    "mtime": 1794541692.5616548,
+    "seen": 1794541737.6118011,
+    "ast_hash": "a84838697494ced89be7d03aec9d2121",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1794539888.4908974,
-    "seen": 1794539953.2788725,
-    "ast_hash": "54ec9cb4953db81dd03d89216086f4de",
+    "mtime": 1794541692.8846588,
+    "seen": 1794541737.611857,
+    "ast_hash": "414c7862bd4a7fbf6188d56ebf1c91e1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -2364,9 +2364,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/BattleShips.java": {
-    "mtime": 1794534989.5734239,
-    "seen": 1794535234.716234,
-    "ast_hash": "a65ce9fe71cb1a5c454b5e864caf58dc",
+    "mtime": 1794541692.6544056,
+    "seen": 1794541737.6117857,
+    "ast_hash": "3a7b6fa66c06da71e1332df3d4ca9670",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {
@@ -2568,21 +2568,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Swell.java": {
-    "mtime": 1794539852.2849796,
-    "seen": 1794539953.2790005,
-    "ast_hash": "ef373648ddfbce8ef4cb2a2134f3ecb5",
+    "mtime": 1794541658.760533,
+    "seen": 1794541737.6119866,
+    "ast_hash": "44d4608fd7ae87f6359da7ab306f495f",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SwellTest.java": {
-    "mtime": 1794539638.0516722,
-    "seen": 1794539691.659203,
-    "ast_hash": "9d71002ce401c3d29b77e3a767eb2a0c",
+    "mtime": 1794541693.096619,
+    "seen": 1794541737.6124527,
+    "ast_hash": "2585c083f6e9c06439bf51db15eabf7f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/WaterSwell.java": {
-    "mtime": 1794026453.5686743,
-    "seen": 1794026741.6049206,
-    "ast_hash": "78495f05307ce1704b973f7a48538a9e",
+    "mtime": 1794540401.6525197,
+    "seen": 1794541048.2630672,
+    "ast_hash": "d043e4126cc0d48a6d8139515774ed37",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/SodiumShaderInterfaceMixin.java": {
@@ -2604,9 +2604,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest.mixins.json": {
-    "mtime": 1794427816.9718175,
-    "seen": 1794427906.034576,
-    "ast_hash": "aee6c76cf219543a77fb3482aeadb8e8",
+    "mtime": 1794540158.438949,
+    "seen": 1794540213.03182,
+    "ast_hash": "431879fe2f4fdc38271fce6eb545234f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/RecruitsArrowCleanerMixin.java": {
@@ -2622,9 +2622,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaCalm.java": {
-    "mtime": 1794026348.7791247,
-    "seen": 1794026741.6049738,
-    "ast_hash": "4978df7db613013583b53face3fff3ad",
+    "mtime": 1794540986.0470097,
+    "seen": 1794541048.2631512,
+    "ast_hash": "455906e0f10295bbbe0b5e7a27219175",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/SeaFoamTest.java": {
@@ -3459,6 +3459,18 @@
     "mtime": 1794537293.0808759,
     "seen": 1794539691.6591692,
     "ast_hash": "3007c0352a99d628365cbd3bdb910b4d",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/DhShaderLoaderMixin.java": {
+    "mtime": 1794540158.3765311,
+    "seen": 1794540213.0314798,
+    "ast_hash": "6c73a7efe37f727a8cd3bbabbaa5d9b7",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/DhTerrainShaderMixin.java": {
+    "mtime": 1794540158.404461,
+    "seen": 1794540213.0314815,
+    "ast_hash": "76f92610a6660cd3f319b1a0a9e1ec2f",
     "semantic_hash": ""
   }
 }

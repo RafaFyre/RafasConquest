@@ -244,7 +244,7 @@ final class BattleShips {
         // Floats on the swell: up and down with it, pulled back to it, and rolling and pitching with it. Grappled ships
         // ride it as one: each on the water under the middle of all those lashed together.
         double[] on = grappledMiddle(h, sailing);
-        Swell.Ride ride = SableShips.ride(sub, on[0], on[1], me.dirX(), me.dirZ(), time);
+        Swell.Ride ride = SableShips.ride(sub, on[0], on[1], me.dirX(), me.dirZ(), me.halfLength(), me.halfBeam(), time);
         double waterline = ride.rise() + (y + ride.offset() - pose.position().y()) * PULL;
         if (h.lashed().stream().anyMatch(sailing::containsKey)) {
             // Grappled: it lies still alongside, or bow in, as it is.

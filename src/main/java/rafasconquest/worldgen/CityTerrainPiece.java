@@ -106,7 +106,8 @@ public class CityTerrainPiece extends StructurePiece {
         int[][] carveTo = new int[sides][segments];
         for (int i = 0; i < sides * segments; i++) {
             edges[i / segments][i % segments] = i < encoded.length()
-                    ? CityTerrain.Edge.values()[encoded.charAt(i) - '0'] : CityTerrain.Edge.CARVE;
+                    // Older saves may hold '2' (the removed valley edge): it fell away, so it is a fill now.
+                    ? CityTerrain.Edge.values()[Math.min(encoded.charAt(i) - '0', CityTerrain.Edge.FILL.ordinal())] : CityTerrain.Edge.CARVE;
             carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
         return new CityTerrain.Plan(tag.getInt(prefix + "plateY"), edges, carveTo, cells, outset, size, run);

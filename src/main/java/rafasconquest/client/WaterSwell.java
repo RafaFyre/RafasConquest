@@ -85,6 +85,46 @@ public final class WaterSwell {
     }
 
     /**
+     * Distant Horizons' terrain shader as loaded, with the sea's slope light and foam laid on its water tops (DH's water
+     * material, 12, facing up, at sea level). Shading only: DH merges water into big quads, so nothing is lifted, and
+     * the calm is read per fragment (open sea past the calm texture). The swell fades out as a pixel covers more than a
+     * few blocks, so the far sea doesn't shimmer. Uniforms come from {@link #upload}, as for Sodium.
+     */
+    public static String patchDh(String path, String source) {
+        boolean vertex = path.endsWith("terrain/gl/vert.vert");
+        if (!vertex && !path.endsWith("terrain/gl/frag.frag")) {
+            return source;
+        }
+        String anchor = vertex ? "gl_Position = uCombinedMatrix" : "float viewDist = length(vertexWorldPos);";
+        int at = source.indexOf(anchor);
+        int main = source.indexOf("void main()");
+        if (at < 0 || main < 0) {
+            RafasConquest.LOGGER.warn("[swell] Distant Horizons' terrain shader has changed; its sea is drawn plain");
+            return source;
+        }
+        if (vertex) {
+            String head = "uniform float u_SwellSurface;\nout vec4 v_SwellAt;\nout vec3 v_SwellLight;\n\n";
+            String body = "v_SwellAt = vec4(0.0);\n    v_SwellLight = vec3(0.0);\n"
+                    + "    if (irisData.x == 12u && irisData.y == 1u && abs(vPosition.y + uModelOffset.y - u_SwellSurface) < 0.6) {\n"
+                    + "        v_SwellAt = vec4(vPosition.xz + uModelOffset.xz, 1.0, 1.0);\n"
+                    + "        v_SwellLight = texture(uLightMap, vec2(skyLight, blockLight)).xyz;\n    }\n    ";
+            return source.substring(0, main) + head + source.substring(main, at) + body + source.substring(at);
+        }
+        String head = "uniform mat4 u_SwellPhaseA;\nuniform mat4 u_SwellPhaseB;\nuniform mat4 u_SwellPhaseC;\nuniform float u_SwellTall;\n"
+                + "uniform vec3 u_SwellCalmAt;\nuniform sampler2D u_SwellCalm;\nuniform vec3 u_SwellFoamAt;\nuniform sampler3D u_SwellFoam;\n"
+                + "in vec4 v_SwellAt;\nin vec3 v_SwellLight;\n\n" + Swell.glsl() + "\n\n" + foamGlsl() + "\n\n";
+        String body = "vec4 swellAt = v_SwellAt;\n"
+                + "    vec2 swellCover = fwidth(swellAt.xy);\n"
+                + "    if (swellAt.w > 0.99) {\n"
+                + "        vec2 c = (swellAt.xy - u_SwellCalmAt.xy) * u_SwellCalmAt.z;\n"
+                + "        float calm = all(greaterThanEqual(c, vec2(0.0))) && all(lessThanEqual(c, vec2(1.0))) ? texture(u_SwellCalm, c).r : 1.0;\n"
+                + "        swellAt.z = calm * (1.0 - smoothstep(2.0, 8.0, max(swellCover.x, swellCover.y)));\n"
+                + "        if (swellAt.z < 0.01) {\n            swellAt.w = 0.0; // faded out: skip the 48 waves\n        }\n    }\n    "
+                + foamMix("fragColor", "u_", "swellAt", "v_SwellLight") + "\n    ";
+        return source.substring(0, main) + head + source.substring(main, at) + body + source.substring(at);
+    }
+
+    /**
      * The GLSL adding the foam and the slope's light to a fragment's colour, lit by the light at it (as Physics Mod's
      * ocean does), and making the sea's surface less see-through than Minecraft's water (most on open sea, a little less
      * by the shore): the same in both shaders, {@code u} the uniforms' prefix.

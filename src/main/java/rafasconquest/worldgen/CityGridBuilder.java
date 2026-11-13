@@ -153,8 +153,8 @@ public final class CityGridBuilder {
                 counts[e.ordinal()]++;
             }
         }
-        RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} carve / {} fill / {} valley, in {} ms",
-                site.x(), site.z(), plan.plateY(), counts[0], counts[1], counts[2], (System.nanoTime() - start) / 1_000_000);
+        RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} carve / {} fill, in {} ms",
+                site.x(), site.z(), plan.plateY(), counts[0], counts[1],(System.nanoTime() - start) / 1_000_000);
         return plan;
     }
 

@@ -72,10 +72,13 @@ public final class SeaCalm {
 
     /** One column's wave strength: the calm reaching it from anywhere within {@link #REACH}. */
     public double column(int x, int z) {
-        long key = ((long) x << 32) | (z & 0xffffffffL);
+        long key = key(x, z);
         double[] known = strengths.get(key);
         if (known != null && !stale((long) known[1])) {
             return known[0];
+        }
+        if (depths.depth(x, z) == UNKNOWN) {
+            return strength(REACH - DEEP); // not loaded here: open sea, without sweeping thousands of unseen columns
         }
         guessed = false;
         int most = 0;
@@ -129,6 +132,11 @@ public final class SeaCalm {
         return out;
     }
 
+    /** One key per (x, z), times an odd number so it stays one each but spreads: a Long hashes as x ^ z, which collides. */
+    private static long key(int x, int z) {
+        return ((long) x << 32 | (z & 0xffffffffL)) * 0x9E3779B97F4A7C15L;
+    }
+
     /** Wave strength from a column's calm: Physics Mod's 255 - (calm + 1) × 8, out of 255. */
     private static double strength(int calm) {
         return Math.max(0, 255 - (calm + 1) * 8) / 255.0;
@@ -136,10 +144,14 @@ public final class SeaCalm {
 
     /** A column's own calm, before it spreads: {@link #REACH} on land, 33 less its depth in water (down to 1). */
     private int own(int x, int z) {
-        long key = ((long) (x >> 4) << 32) | ((z >> 4) & 0xffffffffL);
+        long key = key(x >> 4, z >> 4);
         byte[] chunk = chunks.get(key);
         Long when = made.get(key);
         if (chunk == null || when == null || stale(when)) {
+            if (depths.depth(x & ~15, z & ~15) == UNKNOWN) { // a whole chunk is seen or not
+                guessed = true;
+                return REACH - DEEP;
+            }
             chunk = new byte[256];
             boolean seen = true;
             for (int i = 0; i < 256; i++) {

@@ -376,6 +376,11 @@ public final class DistantArmyRenderer {
             }
             double distance = Math.hypot(flat, dy);
             float scale = (float) DistantOcclusion.scale(distance, renderBlocks);
+            if (ship.real()) {
+                // The real one is still drawn here, but Distant Horizons fades it to holes, and its depth hid this copy:
+                // drawn 4 blocks nearer and as much smaller, it looks the same and covers it.
+                scale *= (float) Math.max(0.5, (distance - REAL_SHIP_PULL) / distance);
+            }
             float x = (float) dx * scale;
             float y = (float) dy * scale;
             float z = (float) dz * scale;
@@ -390,6 +395,9 @@ public final class DistantArmyRenderer {
         }
         FigureBatches.draw(pose.last().pose());
     }
+
+    /** How many blocks nearer the camera a real ship's copy is drawn, so it covers the real one's depth. */
+    private static final double REAL_SHIP_PULL = 4;
 
     /** Ships take their colours from their blocks, not a palette. */
     private static final int[] NO_PALETTE = new int[8];

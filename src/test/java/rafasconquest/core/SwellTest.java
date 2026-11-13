@@ -18,7 +18,7 @@ class SwellTest {
         double steepest = 0;
         int n = 2000;
         for (long t = 0; t < n; t++) {
-            ride.tick(300.5, -120.25, 0.6, 0.8, t, OPEN_SEA);
+            ride.tick(300.5, -120.25, 0.6, 0.8, 1, 1, t, OPEN_SEA);
             if (t >= 100) { // settled
                 off += Math.abs(ride.offset() - Swell.height(300.5, -120.25, t, OPEN_SEA)) / (n - 100);
                 steepest = Math.max(steepest, Math.hypot(ride.slope()[0], ride.slope()[1]));
@@ -27,6 +27,35 @@ class SwellTest {
         assertTrue(off < 0.5, "waterline off the sea by " + off);
         double most = Math.hypot(Math.tan(Swell.Ride.MAX_ROLL), Math.tan(Swell.Ride.MAX_PITCH));
         assertTrue(steepest > 0.01 && steepest <= most + 1e-9, "steepest slope " + steepest);
+    }
+
+    @Test
+    void aBigShipRidesSteadierThanASmallOne() {
+        // The same sea under a 41-long ship and an 11-long one: the big one heaves, rolls and pitches less.
+        double[] small = motion(5.5, 2.5);
+        double[] big = motion(20.5, 6.5);
+        for (int i = 0; i < 3; i++) {
+            assertTrue(big[i] < small[i], "motion " + i + ": big " + big[i] + " vs small " + small[i]);
+        }
+    }
+
+    /** How much a ship of this size moves, settled: spread of its waterline, mean |roll slope|, mean |pitch slope|. */
+    private static double[] motion(double halfLength, double halfBeam) {
+        Swell.Ride ride = new Swell.Ride();
+        double sum = 0, sq = 0, roll = 0, pitch = 0;
+        int n = 0;
+        for (long t = 0; t < 4000; t++) {
+            ride.tick(-512.5, 77.25, 0.6, 0.8, halfLength, halfBeam, t, OPEN_SEA);
+            if (t >= 100) {
+                sum += ride.offset();
+                sq += ride.offset() * ride.offset();
+                roll += Math.abs(ride.port());
+                pitch += Math.abs(ride.fore());
+                n++;
+            }
+        }
+        double mean = sum / n;
+        return new double[] {Math.sqrt(sq / n - mean * mean), roll / n, pitch / n};
     }
 
     @Test
@@ -107,7 +136,7 @@ class SwellTest {
             assertEquals(0, Swell.height(10, 20, 300, OPEN_SEA));
             Swell.Ride ride = new Swell.Ride();
             for (long t = 0; t < 50; t++) {
-                ride.tick(10, 20, 1, 0, t, OPEN_SEA);
+                ride.tick(10, 20, 1, 0, 20, 6, t, OPEN_SEA);
             }
             assertEquals(0, ride.offset());
             assertEquals(0, ride.slope()[0], 1e-12);

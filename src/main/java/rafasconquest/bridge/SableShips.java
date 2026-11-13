@@ -154,9 +154,9 @@ final class SableShips {
     /**
      * A ship's float on the swell ({@link Swell.Ride}), ticked on to now at its middle, heading as it does: once a tick.
      */
-    static Swell.Ride ride(ServerSubLevel sub, double x, double z, double dirX, double dirZ, long time) {
+    static Swell.Ride ride(ServerSubLevel sub, double x, double z, double dirX, double dirZ, double halfLength, double halfBeam, long time) {
         Swell.Ride ride = rides.computeIfAbsent(sub, s -> new Swell.Ride());
-        ride.tick(x, z, dirX, dirZ, time, Sea.calm(sub.getLevel()));
+        ride.tick(x, z, dirX, dirZ, halfLength, halfBeam, time, Sea.calm(sub.getLevel()));
         return ride;
     }
 
@@ -183,7 +183,7 @@ final class SableShips {
         }
         Pose3dc pose = sub.logicalPose();
         CompoundTag tag = sub.getUserDataTag();
-        Swell.Ride ride = ride(sub, ship.x(), ship.z(), ship.dirX(), ship.dirZ(), time);
+        Swell.Ride ride = ride(sub, ship.x(), ship.z(), ship.dirX(), ship.dirZ(), ship.size().length / 2.0, ship.size().width / 2.0, time);
         Vector3d target = new Vector3d(ship.x(), tag.getDouble("y") + ride.offset(), ship.z());
         Quaterniond heading = new Quaterniond().rotationY(ship.yaw());
         Vector3d off = target.sub(pose.position(), new Vector3d());

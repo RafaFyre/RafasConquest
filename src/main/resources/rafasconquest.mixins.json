@@ -12,6 +12,8 @@
   ],
   "client": [
     "ClientChunkWindowMixin",
+    "DhShaderLoaderMixin",
+    "DhTerrainShaderMixin",
     "SodiumShaderInterfaceMixin",
     "SodiumShaderLoaderMixin"
   ],
