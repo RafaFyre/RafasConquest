@@ -2121,8 +2121,8 @@ public final class RecruitsBattle {
         }
     }
 
-    /** A soldier sent aboard starts this far above the sea, to drop onto the deck. */
-    private static final int DECK_DROP = 3;
+    /** A soldier sent aboard starts this far above the sea, to drop onto the deck (the keel sits a block under it). */
+    private static final int DECK_DROP = rafasconquest.style.ShipHulls.DECK + 2;
     /** A ship that has put its soldiers ashore stays moored where it landed this long, in battle seconds, then goes. */
     private static final int MOORED_SECONDS = 30;
 
@@ -2217,6 +2217,7 @@ public final class RecruitsBattle {
             if (level.getGameTime() % DECK_TICKS == 0) {
                 keepDeck(l);
             }
+            climb(l);
             if (l.block.lashed().stream().anyMatch(live::containsKey)) {
                 board(l);
             }
@@ -2330,9 +2331,13 @@ public final class RecruitsBattle {
             Point spot = deckSpot(l.block, i);
             if (!s.isInWater()) {
                 overboard.remove(s.getId());
-            } else if (now - overboard.computeIfAbsent(s.getId(), k -> now) >= CLIMB_TICKS) {
-                s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z());
-                overboard.remove(s.getId());
+            } else if (now - overboard.computeIfAbsent(s.getId(), k -> now) >= CLIMB_TICKS && !climbing.containsKey(s.getId())) {
+                if (seenReal(s)) {
+                    climbing.put(s.getId(), now); // swims to its ship's side and climbs it ({@link #climb})
+                } else {
+                    s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z()); // a sprite to everyone: no climb to see
+                    overboard.remove(s.getId());
+                }
             }
             if (!boarding) {
                 // Each to their own place on deck, the same one they were put aboard at. (Recruits' lineFormation spaces
@@ -2345,6 +2350,67 @@ public final class RecruitsBattle {
         }
     }
 
+    /** Soldiers climbing back aboard their own ship, by entity id, with the tick they started. */
+    private final Map<Integer, Long> climbing = new HashMap<>();
+    /** A climber still not aboard after this many ticks is put on deck. */
+    private static final int CLIMB_GIVE_UP = 400;
+    /** How fast a climber goes up the hull, blocks a tick (a ladder's pace is 0.2). */
+    private static final double CLIMB_SPEED = 0.2;
+
+    // shortcut: a player within the soldier's tracking range sees it real; the client's handover can be nearer (DH fade), upgrade if teleports show.
+    private boolean seenReal(AbstractRecruitEntity s) {
+        double range = s.getType().clientTrackingRange() * 16.0;
+        return level.getNearestPlayer(s, range) != null;
+    }
+
+    /**
+     * Every tick, a soldier who went overboard ({@link #keepDeck}) swims to the nearest side of its own ship and climbs
+     * up it onto the deck; aboard (out of the water, on its feet) it is done.
+     */
+    private void climb(Live l) {
+        double[] ship = SableLink.shipAt(l.block.shipId());
+        long now = level.getGameTime();
+        for (int i = 0; i < l.soldiers.length; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            Long since = s == null ? null : climbing.get(s.getId());
+            if (since == null) {
+                continue;
+            }
+            if (!s.isAlive() || ship == null || now - since > CLIMB_GIVE_UP) {
+                if (s.isAlive()) {
+                    Point spot = deckSpot(l.block, i);
+                    s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z());
+                }
+                climbing.remove(s.getId());
+                overboard.remove(s.getId());
+                continue;
+            }
+            if (!s.isInWater() && s.onGround() && s.getY() > level.getSeaLevel() + 1) {
+                climbing.remove(s.getId()); // aboard
+                overboard.remove(s.getId());
+                continue;
+            }
+            // In the ship's frame: along its heading, and across to its left.
+            rafasconquest.core.SeaLanes.Size hull = field.holder(l.block).hull();
+            double ox = s.getX() - ship[0];
+            double oz = s.getZ() - ship[1];
+            double along = Math.max(-(hull.length / 2.0 - 1), Math.min(hull.length / 2.0 - 1, ox * ship[2] + oz * ship[3]));
+            double across = (-ox * ship[3] + oz * ship[2]) >= 0 ? hull.width / 2.0 : -hull.width / 2.0;
+            double railX = ship[0] + along * ship[2] - across * ship[3];
+            double railZ = ship[1] + along * ship[3] + across * ship[2];
+            double inX = (ship[0] + along * ship[2]) - railX;
+            double inZ = (ship[1] + along * ship[3]) - railZ;
+            double in = Math.hypot(inX, inZ);
+            if (Math.hypot(s.getX() - railX, s.getZ() - railZ) > 1.5 && !s.horizontalCollision) {
+                s.getMoveControl().setWantedPosition(railX, s.getY(), railZ, 1.0); // swim to the side
+                continue;
+            }
+            // At the side: up the hull, pressed against it, and over the rail onto the deck.
+            s.setDeltaMovement(inX / in * 0.1, CLIMB_SPEED, inZ / in * 0.1);
+            s.hurtMarked = true;
+        }
+    }
+
     /**
      * Boarding: each soldier of a grappled ship who has someone to fight walks straight at them, over the rails and
      * across onto the enemy's deck. Every tick, since ships' decks aren't the world's blocks and paths can't be found
@@ -2353,7 +2419,7 @@ public final class RecruitsBattle {
     private void board(Live l) {
         for (AbstractRecruitEntity s : l.living()) {
             LivingEntity target = s.getTarget();
-            if (commanded.contains(s.getId()) || target == null || !target.isAlive() || s.distanceTo(target) < 1.5) {
+            if (commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || target == null || !target.isAlive() || s.distanceTo(target) < 1.5) {
                 continue;
             }
             s.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), 1.1);

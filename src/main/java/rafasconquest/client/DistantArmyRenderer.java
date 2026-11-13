@@ -363,7 +363,6 @@ public final class DistantArmyRenderer {
         Vec3 eye = camera.getPosition();
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
-        double fade = DistantHorizonsLink.fadeStart(partialTick);
         double dy = DistantShips.keel() - eye.y;
         int lit = FigureBatches.lightColour(LightTexture.FULL_SKY);
         FigureBatches.begin();
@@ -371,7 +370,7 @@ public final class DistantArmyRenderer {
             double dx = ship.x() - eye.x;
             double dz = ship.z() - eye.z;
             double flat = Math.hypot(dx, dz);
-            if (ship.shownReal(flat, fade)) {
+            if (ship.shownReal(flat)) {
                 continue; // Sable draws it
             }
             double distance = Math.hypot(flat, dy);

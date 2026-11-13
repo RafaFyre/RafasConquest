@@ -21,10 +21,9 @@ import java.util.Map;
  * Going away from the camera, each is first the real Sable ship the server sails, then a level of detail, then a sprite:
  * <ul>
  * <li>near, the real ship, drawn by Sable;</li>
- * <li>from just short of where Distant Horizons starts fading the world into its own terrain (or wherever the client
- * has no real ship), out to {@link #SPRITE_PAST}, its 3D level of detail: a box for each block, laid over the world
- * every frame like a soldier's figure, right where the real ship is and turned as it is, so the real one fades into it
- * (with nothing under it, it would fade into the sea and look like a ghost);</li>
+ * <li>from {@link #REAL_WITHIN} (or wherever the client has no real ship), out to {@link #SPRITE_PAST}, its 3D level of
+ * detail: a box for each block, laid over the world every frame like a soldier's figure, right where the real ship is
+ * and turned as it is;</li>
  * <li>past that, a flat sprite.</li>
  * </ul>
  * Both are drawn by {@link DistantArmyRenderer#renderShips}, instanced like the soldiers.
@@ -33,8 +32,8 @@ final class DistantShips {
     static final double SPRITE_PAST = 2000;
     /** A real ship this close to where a ship should be, centre to centre, is that ship. */
     private static final double OWN_SHIP = 16;
-    /** A real ship's boxes start this much short of the fade, so the fade never shows the sea through its far end. */
-    private static final double FADE_MARGIN = 16;
+    /** Within this many blocks (flat) a ship the client has is always the real Sable ship, drawn in full. */
+    static final double REAL_WITHIN = 900;
     /** Whether battle ships have been drawn yet this session (logged once, so a test can tell they are). */
     private static boolean announced;
 
@@ -59,12 +58,9 @@ final class DistantShips {
                     : ShipHulls.battle(size, battle.cargo(), DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
         }
 
-        /**
-         * Whether Sable's real ship shows for itself, {@code flat} blocks from the camera: the client has it, and it is
-         * short of where Distant Horizons starts fading the world ({@code fadeStart}, 0 if it isn't).
-         */
-        boolean shownReal(double flat, double fadeStart) {
-            return real && (fadeStart <= 0 || flat < fadeStart - FADE_MARGIN);
+        /** Whether Sable's real ship shows for itself, {@code flat} blocks from the camera: the client has it, within {@link #REAL_WITHIN}. */
+        boolean shownReal(double flat) {
+            return real && flat < REAL_WITHIN;
         }
     }
 

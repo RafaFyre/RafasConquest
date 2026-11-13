@@ -28,7 +28,7 @@ public final class ShipHulls {
     }
 
     /** The plain hull's deck height above its keel; soldiers stand a block above it. */
-    public static final int DECK = 1;
+    public static final int DECK = 4;
 
     private static final Map<StructureTemplate, List<Part>> READ = new WeakHashMap<>();
     private static final Map<SeaLanes.Size, List<Part>> PLAIN = new java.util.EnumMap<>(SeaLanes.Size.class);
@@ -97,7 +97,7 @@ public final class ShipHulls {
     private static final Map<BattleKind, List<Part>> BATTLE = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static List<Part> buildBattle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
-        int middle = (DECK + 4 + 2 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
+        int middle = (DECK + 4 + DECK + 1 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
         List<Part> parts = new ArrayList<>();
         for (Part p : PLAIN.get(size)) {
             parts.add(p.state().is(Blocks.WHITE_WOOL) ? new Part(p.x(), p.y(), p.z(), wool(p.y() == middle ? stripe : sail)) : p);
@@ -120,7 +120,7 @@ public final class ShipHulls {
     }
 
     /**
-     * A plain flat-topped boat: a keel, a flat deck over it narrowing to bow and stern, a rail one block high round the
+     * A plain flat-topped boat, six blocks tall: a keel, planked sides up to a flat deck narrowing to bow and stern, a rail one block high round the
      * deck's edge, and one mast with a sail stepped near the stern, clear of the deck's middle where soldiers stand.
      */
     private static List<Part> plain(int length, int width) {
@@ -138,12 +138,15 @@ public final class ShipHulls {
                 parts.add(new Part(x, 0, z, keel));
                 parts.add(new Part(x, DECK, z, deck));
                 if (Math.abs(x) == w || end == 0) {
+                    for (int y = 1; y < DECK; y++) {
+                        parts.add(new Part(x, y, z, keel)); // the hull's planked side, keel to deck
+                    }
                     parts.add(new Part(x, DECK + 1, z, keel));
                 }
             }
         }
         int stern = -half + 2;
-        int top = 3 + length / 2;
+        int top = DECK + 2 + length / 2;
         for (int y = DECK + 1; y <= top; y++) {
             parts.add(new Part(0, y, stern, mast));
         }
