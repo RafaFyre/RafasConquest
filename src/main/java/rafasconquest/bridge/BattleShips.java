@@ -55,18 +55,30 @@ final class BattleShips {
     private BattleShips() {
     }
 
-    static List<SableLink.Ram> tick(ServerLevel level, List<SableLink.Helm> helms) {
+    /** The battle a ship was built for: its ships saved by Sable on quitting load back later with the same formation ids. */
+    private static final String BATTLE = RafasConquest.MOD_ID + ":battle_run";
+
+    static List<SableLink.Ram> tick(ServerLevel level, String battle, List<SableLink.Helm> helms) {
         ServerSubLevelContainer container = SubLevelContainer.getContainer(level);
         if (container == null) {
             return List.of();
         }
         // Every tick, every battle ship there is, and never two for one formation: a second one, however it came about,
-        // would sit in the first, unsteered and never taken away, so it goes at once.
+        // would sit in the first, unsteered and never taken away, so it goes at once. So does one of another battle.
         ships.values().removeIf(ServerSubLevel::isRemoved);
         List<ServerSubLevel> twice = new ArrayList<>();
+        int stale = 0;
         for (ServerSubLevel sub : container.getAllSubLevels()) {
             CompoundTag tag = sub.getUserDataTag();
             if (tag != null && tag.contains(TAG) && !sub.isRemoved()) {
+                if (!battle.equals(tag.getString(BATTLE))) {
+                    if (ships.get(tag.getString(TAG)) == sub) {
+                        ships.remove(tag.getString(TAG));
+                    }
+                    container.removeSubLevel(sub, SubLevelRemovalReason.REMOVED);
+                    stale++;
+                    continue;
+                }
                 ServerSubLevel tracked = ships.putIfAbsent(tag.getString(TAG), sub);
                 if (tracked != null && tracked != sub) {
                     twice.add(sub);
@@ -78,6 +90,9 @@ final class BattleShips {
         }
         if (!twice.isEmpty()) {
             RafasConquest.LOGGER.warn("[battle] took away {} ships built twice for one formation", twice.size());
+        }
+        if (stale > 0 && !battle.isEmpty()) {
+            RafasConquest.LOGGER.info("[battle] took away {} ships left from another battle", stale);
         }
         Set<String> wanted = new HashSet<>();
         Map<Integer, SableLink.Helm> sailing = new HashMap<>();
@@ -105,7 +120,7 @@ final class BattleShips {
         // Built only where it would lie clear of every other ship: else, next second.
         Map<Integer, Ramming.Hull> sailingHulls = new HashMap<>(hulls);
         for (SableLink.Helm h : unbuilt) {
-            if (clearAt(h, h.x(), h.z()) && build(level, h)) {
+            if (clearAt(h, h.x(), h.z()) && build(level, battle, h)) {
                 hulls.put(h.id(), footprint(h, h.x(), h.z())); // so none built after it this tick lies on it
             }
         }
@@ -160,7 +175,7 @@ final class BattleShips {
     }
 
     /** Builds formation {@code h}'s ship where its formation is; false if it couldn't be built there yet. */
-    private static boolean build(ServerLevel level, SableLink.Helm h) {
+    private static boolean build(ServerLevel level, String battle, SableLink.Helm h) {
         double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
         SeaLanes.Ship hull = new SeaLanes.Ship(key(h), h.x(), h.z(), h.faceX() / length, h.faceZ() / length, 0, 0, true,
                 size(h), "", "");
@@ -169,6 +184,9 @@ final class BattleShips {
         if (sub == null) {
             return false;
         }
+        CompoundTag tag = sub.getUserDataTag().copy();
+        tag.putString(BATTLE, battle);
+        sub.setUserDataTag(tag);
         ships.put(key(h), sub);
         RigidBodyHandle body = RigidBodyHandle.of(sub);
         if (body != null && body.isValid()) {

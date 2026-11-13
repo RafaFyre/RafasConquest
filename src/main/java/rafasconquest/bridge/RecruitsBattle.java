@@ -256,6 +256,8 @@ public final class RecruitsBattle {
 
     @Nullable
     private static RecruitsBattle current;
+    /** This battle's own, so ships of an earlier one that Sable loads back aren't taken for its own. */
+    private final String shipRun = UUID.randomUUID().toString();
     /** A battle's ground is being surveyed, before it begins. */
     private static boolean preparing;
     private static final Calibration SESSION_CALIBRATION = new Calibration();
@@ -1218,6 +1220,9 @@ public final class RecruitsBattle {
             for (FieldBlock block : field.army(side).blocks()) {
                 if (block.alive() == 0 || block.afloat() && block.ship() == FieldBlock.ShipKind.CAMP) {
                     continue; // a camp ship's riders are below with the horses and stores: nobody on deck
+                }
+                if (block.afloat() && SableLink.available() && SableLink.shipAt(block.shipId()) == null) {
+                    continue; // no deck under them yet (or any more): numbers until their ship sails, not drowned on the sea floor
                 }
                 double near = Double.MAX_VALUE;
                 for (Point w : watchers) {
@@ -2182,7 +2187,7 @@ public final class RecruitsBattle {
                         flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()));
             }
         }
-        for (SableLink.Ram ram : SableLink.sailBattle(level, helms)) {
+        for (SableLink.Ram ram : SableLink.sailBattle(level, shipRun, helms)) {
             FieldBlock rammer = byId.get(ram.rammer());
             FieldBlock struck = byId.get(ram.struck());
             if (rammer == null || struck == null) {

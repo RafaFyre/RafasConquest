@@ -50,7 +50,7 @@ public final class SableLink {
         try {
             SableShips.tick(level);
             if (!RecruitsBattle.running() && level.getGameTime() % 100 == 0) {
-                BattleShips.tick(level, List.of()); // a battle's ships left from a stopped battle, or a crash, are taken away
+                BattleShips.tick(level, "", List.of()); // a battle's ships left from a stopped battle, or a crash, are taken away
             }
         } catch (LinkageError e) {
             enabled = false;
@@ -62,12 +62,12 @@ public final class SableLink {
      * Each tick of a battle: a ship for each of these, sailing as it says; every other battle ship is taken away. Returns
      * the rams this tick between ships not yet grappled.
      */
-    public static List<Ram> sailBattle(ServerLevel level, List<Helm> helms) {
+    public static List<Ram> sailBattle(ServerLevel level, String battle, List<Helm> helms) {
         if (!enabled) {
             return List.of();
         }
         try {
-            return BattleShips.tick(level, helms);
+            return BattleShips.tick(level, battle, helms);
         } catch (LinkageError e) {
             enabled = false;
             RafasConquest.LOGGER.warn("Sable found, but its API doesn't match; no real ships will sail", e);
