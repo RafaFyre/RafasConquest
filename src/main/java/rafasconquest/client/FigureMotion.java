@@ -43,8 +43,11 @@ final class FigureMotion {
     static final double SWAY = 0.45;
     private static final long FORGET_MILLIS = 5000;
 
-    /** Where to draw a figure and which way it faces, a unit vector. */
-    record Placed(double x, double y, double z, double fx, double fz, boolean leader, boolean real) {
+    /**
+     * Where to draw a figure and which way it faces, a unit vector; {@code swing} and {@code amount} are its legs' walk
+     * cycle as the game keeps a mob's ({@code WalkAnimationState}'s position and speed).
+     */
+    record Placed(double x, double y, double z, double fx, double fz, boolean leader, boolean real, float swing, float amount) {
     }
 
     /** One figure's own position (flat) and heading. */
@@ -53,6 +56,9 @@ final class FigureMotion {
         double z;
         double fx;
         double fz;
+        /** Its walk cycle, as {@link Placed}'s. */
+        double swing;
+        double amount;
         long seen;
 
         State(double x, double z, double fx, double fz) {
@@ -162,7 +168,8 @@ final class FigureMotion {
                 move(state, tx, tz, faceX, faceZ, s.real(), horse ? HORSE_SPEED : FOOT_SPEED, dt);
             }
             state.seen = now;
-            placed.add(new Placed(state.x, s.y() + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real()));
+            placed.add(new Placed(state.x, s.y() + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real(),
+                    (float) state.swing, (float) state.amount));
         }
         return placed;
     }
@@ -187,9 +194,15 @@ final class FigureMotion {
             s.z = tz;
             s.fx = faceX;
             s.fz = faceZ;
+            s.amount = 0;
             return;
         }
         double step = Math.min(distance, (real ? REAL_SPEEDUP : 1) * speed * dt * Math.max(1, distance / CATCH_UP));
+        if (dt > 0) { // as the game's walk animation: eases 0.4 a tick toward 4 times the blocks a tick walked, at most 1
+            double target = Math.min(step / dt / 20 * 4, 1);
+            s.amount += (target - s.amount) * (1 - Math.pow(0.6, dt * 20));
+            s.swing += s.amount * 20 * dt;
+        }
         if (distance > 1e-9) {
             s.x += dx / distance * step;
             s.z += dz / distance * step;

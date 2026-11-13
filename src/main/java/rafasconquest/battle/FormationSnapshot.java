@@ -22,10 +22,44 @@ import java.util.List;
  *                  really stands
  * @param leaderId  the leader's entity id, or -1 once the leader has fallen
  * @param ship      its ship, at sea (the client draws it in the distance, as the real one is built); null ashore
+ * @param engine    the siege engine it works or carries (the client draws it in the distance); null if none
  */
 public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive, double x, double y, double z,
                                 double facingX, double facingZ, double halfWidth, double halfDepth, boolean fighting,
-                                boolean leader, int[] soldierIds, int leaderId, @Nullable Ship ship) {
+                                boolean leader, int[] soldierIds, int leaderId, @Nullable Ship ship, @Nullable Engine engine) {
+    public FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive, double x, double y, double z,
+                             double facingX, double facingZ, double halfWidth, double halfDepth, boolean fighting,
+                             boolean leader, int[] soldierIds, int leaderId, @Nullable Ship ship) {
+        this(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship, null);
+    }
+
+    /** {@link Engine#kind} of a ladder: after every {@link Machine}'s ordinal. */
+    public static final int LADDER = Machine.values().length;
+
+    /**
+     * A formation's siege engine: a {@link Machine}'s ordinal or {@link #LADDER}. A tower, ram or ladder stands where it
+     * says ({@code x}, {@code y}, {@code z}), facing ({@code facingX}, {@code facingZ}), {@code up} once against the wall
+     * (or the gate); NaN {@code x} for engines that stand among their crew, one under every {@link Machine#crew}-th.
+     */
+    public record Engine(int kind, double x, double y, double z, double facingX, double facingZ, boolean up) {
+        /** Whether it stands among its crew rather than where it says. */
+        public boolean withCrew() {
+            return Double.isNaN(x);
+        }
+
+        /** Partway from {@code from} to this ({@code t} from 0 to 1); its kind and state are this one's. */
+        Engine from(@Nullable Engine from, double t) {
+            if (from == null || from.kind != kind || withCrew() || from.withCrew()) {
+                return this;
+            }
+            return new Engine(kind, lerp(from.x, x, t), lerp(from.y, y, t), lerp(from.z, z, t), facingX, facingZ, up);
+        }
+    }
+
+    /** This formation with {@code engine} as its siege engine. */
+    public FormationSnapshot withEngine(@Nullable Engine engine) {
+        return new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship, engine);
+    }
     /**
      * A formation's ship at sea, as its real one is built ({@link rafasconquest.style.ShipHulls#battle}): its sail's and
      * its stripe's dye colours (DyeColor ids), and whether it is a supply ship, stores on deck and nobody showing.
@@ -39,7 +73,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
     }
 
     public enum Kind {
-        LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, GENERAL, BEARER;
+        LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES, GENERAL, BEARER;
 
         /** The kind drawn for a block of {@code arm}: the same name. */
         public static Kind of(BattlePlan.Arm arm) {
@@ -191,7 +225,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
 
     /** This formation, its middle moved to ({@code x}, {@code y}, {@code z}). */
     public FormationSnapshot movedTo(double x, double y, double z) {
-        return new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship);
+        return new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship, engine);
     }
 
     /** Partway from {@code from} to this snapshot of the same formation ({@code t} from 0 to 1). */
@@ -207,7 +241,8 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
             fz /= length;
         }
         return new FormationSnapshot(id, kind, rgb, mark, alive, lerp(from.x, x, t), lerp(from.y, y, t), lerp(from.z, z, t),
-                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader, soldierIds, leaderId, ship);
+                fx, fz, lerp(from.halfWidth, halfWidth, t), lerp(from.halfDepth, halfDepth, t), fighting, leader, soldierIds, leaderId, ship,
+                engine == null ? null : engine.from(from.engine, t));
     }
 
     private static double lerp(double a, double b, double t) {

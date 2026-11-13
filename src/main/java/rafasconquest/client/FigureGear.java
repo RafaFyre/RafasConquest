@@ -19,7 +19,7 @@ import java.util.Map;
  * hand and whether they bear a shield. The colours are those of the items' own textures, so a figure matches the real
  * soldier whatever the kit (vanilla or Epic Knights), dyed leather in its dye and a banner shield in its banner's colour.
  */
-record FigureGear(int head, int chest, int legs, int feet, int main, int off, int horse, Weapon weapon, boolean shield) {
+record FigureGear(int head, int chest, int legs, int feet, int main, int off, int horse, Weapon weapon, boolean shield, int[] raw) {
     enum Weapon { NONE, SWORD, GREAT, LONG, BOW }
 
     /** Each item's texture, averaged. Client thread only; let go on leaving the world. */
@@ -40,7 +40,19 @@ record FigureGear(int head, int chest, int legs, int feet, int main, int off, in
         Item main = item(gear[8]);
         Item off = item(gear[10]);
         return new FigureGear(colour(gear, 0), colour(gear, 1), colour(gear, 2), colour(gear, 3), colour(gear, 4),
-                colour(gear, 5), colour(gear, 6), weapon(main), off != null && shield(off));
+                colour(gear, 5), colour(gear, 6), weapon(main), off != null && shield(off), gear);
+    }
+
+    /** What is worn or held in a slot (0 head … 6 horse, as sent), or null. */
+    @Nullable
+    Item worn(int slot) {
+        return item(raw[slot * 2]);
+    }
+
+    /** A slot's dye as the game dyes leather, or -1 for none (a banner shield's colour isn't one). */
+    int dye(int slot) {
+        int tint = raw[slot * 2 + 1];
+        return tint < 0 || (tint & REPLACES) != 0 ? -1 : tint & 0xFFFFFF;
     }
 
     static void clear() {
@@ -107,7 +119,7 @@ record FigureGear(int head, int chest, int legs, int feet, int main, int off, in
         }
         String name = BuiltInRegistries.ITEM.getKey(item).getPath();
         if (name.contains("pike") || name.contains("lance") || name.contains("halberd") || name.contains("spear")
-                || name.contains("glaive") || name.contains("partisan")) {
+                || name.contains("glaive") || name.contains("partisan") || name.contains("musket")) {
             return Weapon.LONG;
         }
         if (name.contains("zweihander") || name.contains("claymore") || name.contains("great")) {

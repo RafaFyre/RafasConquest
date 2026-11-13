@@ -13,6 +13,8 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.Siege;
 import rafasconquest.content.GateBlockEntity;
+import rafasconquest.map.BaseMap;
+import rafasconquest.worldgen.ConquestRuntime;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,8 +41,15 @@ public final class SiegeSurvey {
     /** The four sides, by the way out from them: north, east, south, west. */
     private static final Direction[] SIDES = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 
-    /** One side's wall: its outer face's distance from the middle, thickness, walkway height, the length of wall found. */
-    public record Wall(Direction side, int face, int thickness, int walkY, int length, List<BlockPos> climbs) {
+    /** A wall's own tower juts at least this far out past its face, or rises at least this far over its merlons. */
+    private static final int TOWER_JUT = 2;
+    private static final int TOWER_RISE = 4;
+
+    /**
+     * One side's wall: its outer face's distance from the middle, thickness, walkway height, the length of wall found,
+     * and its own towers, each from end to end along it (in the survey's steps across the side, as {@link #wall} reads).
+     */
+    public record Wall(Direction side, int face, int thickness, int walkY, int length, List<BlockPos> climbs, List<int[]> towers) {
     }
 
     /**
@@ -57,13 +66,29 @@ public final class SiegeSurvey {
             return walls.stream().filter(w -> w.side() == attacked).findFirst().map(Wall::walkY).orElse(0);
         }
 
+        /** The walkway of the wall nearest ({@code x}, {@code z}): walls are manned all round. */
+        public int walkYAt(double x, double z) {
+            double[] in = {z - plan.minZ(), plan.maxX() - x, plan.maxZ() - z, x - plan.minX()}; // north, east, south, west, as walls
+            int best = 0;
+            for (int i = 1; i < in.length; i++) {
+                best = Math.abs(in[i]) < Math.abs(in[best]) ? i : best;
+            }
+            return walls.get(best).walkY();
+        }
+
+        /** The walkway of the wall the way out ({@code outX}, {@code outZ}) leads from; the attacked wall's if none such. */
+        public int walkY(double outX, double outZ) {
+            return walls.stream().filter(w -> w.side().getStepX() == Math.round(outX) && w.side().getStepZ() == Math.round(outZ))
+                    .findFirst().map(Wall::walkY).orElse(walkY());
+        }
+
         /** The survey, as lines for the caller: the defender's part, then the attacker's. */
         public List<String> report(String name) {
             List<String> lines = new ArrayList<>();
             lines.add("Survey of " + name + ", for the defender:");
             for (Wall w : walls) {
-                lines.add(String.format(Locale.ROOT, "  %s wall: %d long, %d thick, walkway at y %d; %d stairs/ladders up inside",
-                        w.side().getName(), w.length(), w.thickness(), w.walkY(), w.climbs().size()));
+                lines.add(String.format(Locale.ROOT, "  %s wall: %d long, %d thick, walkway at y %d, %d towers; %d stairs/ladders up inside",
+                        w.side().getName(), w.length(), w.thickness(), w.walkY(), w.towers().size(), w.climbs().size()));
             }
             lines.add("  Gate Blocks: " + (gates.isEmpty() ? "none" : gates.stream()
                     .map(p -> p.getX() + " " + p.getY() + " " + p.getZ()).toList()));
@@ -72,8 +97,10 @@ public final class SiegeSurvey {
                 lines.add(String.format(Locale.ROOT, "  %s: roughness %.1f, %d%% water%s", l.side().getName(), l.roughness(),
                         Math.round(l.wet() * 100), l.water() ? " (large body of water: not attacked)" : ""));
             }
-            lines.add("  Attack from the " + attacked.getName() + " with " + plan.engines().stream()
-                    .map(e -> e.name().toLowerCase(Locale.ROOT)).toList());
+            lines.add("  Main attack from the " + attacked.getName() + " with " + plan.engines().stream()
+                    .map(e -> e.name().toLowerCase(Locale.ROOT)).toList() + "; the walls surrounded"
+                    + (plan.barred().isEmpty() ? "" : ", save the " + plan.barred().stream()
+                    .map(o -> Direction.fromDelta((int) o.x(), 0, (int) o.z()).getName()).toList()));
             return lines;
         }
     }
@@ -97,8 +124,12 @@ public final class SiegeSurvey {
         for (int s = 0; s < SIDES.length; s++) {
             land.add(land(level, x, z, walls.get(s).face(), SIDES[s]));
         }
-        Direction attacked = attackSide(land, port, nobleSide(x, z));
+        Direction noble = nobleSide(x, z);
+        Direction attacked = attackSide(land, port, noble);
         Wall front = walls.get(Arrays.asList(SIDES).indexOf(attacked));
+        // The army surrounds the walls, save those it can't come at: water before them, the port, the noble district.
+        List<Point> barred = land.stream().filter(l -> l.side() != attacked && rank(l, port, noble) > 0)
+                .map(l -> new Point(l.side().getStepX(), l.side().getStepZ())).toList();
         int thickness = Math.max(1, (int) Math.round(walls.stream().filter(w -> w.length() > 0).mapToInt(Wall::thickness).average().orElse(1)));
         List<Siege.Gate> gates = new ArrayList<>();
         for (BlockPos g : new ArrayList<>(gateBlocks)) {
@@ -109,10 +140,20 @@ public final class SiegeSurvey {
                 gateBlocks.remove(g); // no doors set: no gate to fight for
             }
         }
+        // Every wall's own towers, end to end on its face, for siege towers to keep clear of.
+        List<Siege.WallTower> towers = new ArrayList<>();
+        for (Wall w : walls) {
+            int ax = w.side().getStepX();
+            int az = w.side().getStepZ();
+            for (int[] t : w.towers()) {
+                towers.add(new Siege.WallTower(new Point(x + ax * w.face() - az * t[0] + 0.5, z + az * w.face() + ax * t[0] + 0.5),
+                        new Point(x + ax * w.face() - az * t[1] + 0.5, z + az * w.face() + ax * t[1] + 0.5)));
+            }
+        }
         // The box of the walls' outer faces, block edges; a wall not found is taken to be a block's front long.
         Siege.Plan plan = new Siege.Plan(x - walls.get(3).face(), z - walls.get(0).face(), x + walls.get(1).face() + 1,
                 z + walls.get(2).face() + 1, thickness, Math.max(rafasconquest.battle.BattlePlan.BLOCK_PITCH, front.length()),
-                attacked.getStepX(), attacked.getStepZ(), gates, hall != null ? hall : new Point(x + 0.5, z + 0.5), engines);
+                attacked.getStepX(), attacked.getStepZ(), gates, hall != null ? hall : new Point(x + 0.5, z + 0.5), engines, towers, barred);
         return new Result(plan, walls, gateBlocks, land, attacked);
     }
 
@@ -129,6 +170,8 @@ public final class SiegeSurvey {
         List<Integer> faces = new ArrayList<>();
         List<Integer> thicknesses = new ArrayList<>();
         List<Integer> walks = new ArrayList<>();
+        List<Integer> tops = new ArrayList<>();
+        List<Integer> along = new ArrayList<>();
         List<BlockPos> climbs = new ArrayList<>();
         int found = 0;
         for (int u = -half + 2; u <= half - 2; u += 2) {
@@ -143,15 +186,18 @@ public final class SiegeSurvey {
             if (face == Integer.MIN_VALUE) {
                 continue;
             }
-            int walk = height(level, x + ax * (face - 1) + rx * u, z + az * (face - 1) + rz * u);
+            int top = height(level, x + ax * (face - 1) + rx * u, z + az * (face - 1) + rz * u);
+            int walk = stand(level, x + ax * (face - 1) + rx * u, z + az * (face - 1) + rz * u); // under its roof, if it has one
             int t = 0;
-            while (t < 16 && height(level, x + ax * (face - t) + rx * u, z + az * (face - t) + rz * u) >= walk - 1) {
+            while (t < 16 && height(level, x + ax * (face - t) + rx * u, z + az * (face - t) + rz * u) >= top - 1) {
                 t++;
             }
             found++;
             faces.add(face);
             thicknesses.add(t);
             walks.add(walk);
+            tops.add(top);
+            along.add(u);
             // Stairs and ladders just inside the wall's inner face, or in its thickness, climbing onto it.
             for (int d = face; d >= face - t - 2; d--) {
                 int cx = x + ax * d + rx * u;
@@ -168,8 +214,26 @@ public final class SiegeSurvey {
                 }
             }
         }
+        // The wall's own towers: where it juts out past its face, or rises well over its merlons; runs of such readings.
+        List<int[]> towers = new ArrayList<>();
+        if (!faces.isEmpty()) {
+            int face = median(faces);
+            int top = median(tops);
+            for (int i = 0; i < along.size(); i++) {
+                if (faces.get(i) - face < TOWER_JUT && tops.get(i) - top < TOWER_RISE) {
+                    continue;
+                }
+                int u = along.get(i);
+                int[] last = towers.isEmpty() ? null : towers.get(towers.size() - 1);
+                if (last != null && u - last[1] <= 3) {
+                    last[1] = u + 1;
+                } else {
+                    towers.add(new int[]{u - 1, u + 1});
+                }
+            }
+        }
         return new Wall(out, faces.isEmpty() ? half : median(faces), thicknesses.isEmpty() ? 1 : median(thicknesses),
-                walks.isEmpty() ? height(level, x, z) : median(walks), found * 2, climbs);
+                walks.isEmpty() ? height(level, x, z) : median(walks), found * 2, climbs, towers);
     }
 
     /** The land outside a side, out to {@link #LAND_TO}: how much it rises and falls, and how much of it is water. */
@@ -193,9 +257,13 @@ public final class SiegeSurvey {
             for (int d = face + LAND_FROM; d <= face + LAND_TO; d += LAND_STEP) {
                 int px = x + ax * d + rx * u;
                 int pz = z + az * d + rz * u;
-                int h = height(level, px, pz);
+                // Unloaded land from the world map: loading it here generated hundreds of chunks on the server thread (40 s).
+                // shortcut: map ground is per-pixel, so unloaded sides read smoother than loaded ones; fine for picking a side.
+                BaseMap map = level.hasChunk(px >> 4, pz >> 4) ? null : ConquestRuntime.map();
+                int i = map == null ? -1 : map.pixelAt(px, pz);
+                int h = i >= 0 ? map.ground()[i] : height(level, px, pz);
                 samples++;
-                if (!level.getFluidState(new BlockPos(px, h - 1, pz)).isEmpty()) {
+                if (i >= 0 ? map.wet()[i] : !level.getFluidState(new BlockPos(px, h - 1, pz)).isEmpty()) {
                     wet++;
                     widest = Math.max(widest, ++run);
                 } else {
@@ -320,6 +388,44 @@ public final class SiegeSurvey {
         }
         int[] at = rafasconquest.core.Barracks.of(best).recruiter();
         return new Point(at[0] + 0.5, at[1] + 0.5);
+    }
+
+    /** A roof stands at most this far above the floor under it. */
+    private static final int ROOF_GAP = 5;
+
+    /**
+     * Where a soldier stands at ({@code x}, {@code z}): on the highest floor under a roof (solid underfoot, two blocks
+     * clear above, the roof at most {@link #ROOF_GAP} up), else on top. shortcut: a room just under an open walkway
+     * reads as a roofed floor; walls built so would need their walkway marked.
+     */
+    public static int stand(ServerLevel level, int x, int z) {
+        int top = height(level, x, z);
+        for (int y = top - 2; y >= top - ROOF_GAP; y--) {
+            if (standable(level, x, y, z)) {
+                return y;
+            }
+        }
+        return top;
+    }
+
+    /** The standable height nearest {@code near} at ({@code x}, {@code z}), within 3 up or down; else {@link #stand}. */
+    public static int standNear(ServerLevel level, int x, int z, int near) {
+        height(level, x, z); // loads the chunk
+        for (int d = 0; d <= 3; d++) {
+            for (int y : new int[]{near + d, near - d}) {
+                if (standable(level, x, y, z)) {
+                    return y;
+                }
+            }
+        }
+        return stand(level, x, z);
+    }
+
+    private static boolean standable(ServerLevel level, int x, int y, int z) {
+        BlockPos feet = new BlockPos(x, y, z);
+        return !level.getBlockState(feet.below()).getCollisionShape(level, feet.below()).isEmpty()
+                && level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
+                && level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty();
     }
 
     private static int height(ServerLevel level, int x, int z) {

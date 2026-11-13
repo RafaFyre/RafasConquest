@@ -51,7 +51,7 @@ public final class BattleScreen extends Screen {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, x - scale, feet - 2 * scale, x + scale, feet, scale, 0.0625F, mouseX, mouseY, entity);
     }
 
-    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV"};
+    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV", "MUSKETS", "ENGINES"};
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
     private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};
@@ -329,7 +329,7 @@ public final class BattleScreen extends Screen {
     }
 
     private Vec3 onGround(double x, double z) {
-        return new Vec3(x, minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(x), Mth.floor(z)) + 1, z);
+        return new Vec3(x, minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z)) + 1, z);
     }
 
     /**

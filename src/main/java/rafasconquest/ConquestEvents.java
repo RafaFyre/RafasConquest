@@ -124,6 +124,7 @@ public final class ConquestEvents {
             }
             rafasconquest.core.Swell.weather(level.getRainLevel(1), level.getThunderLevel(1));
             rafasconquest.bridge.SableLink.tick(level);
+            rafasconquest.bridge.RecruitsBattle.sweep(level);
             rafasconquest.worldgen.CityGates.tick(level);
         }
     }

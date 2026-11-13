@@ -119,6 +119,22 @@ public final class ClientEvents {
             }));
         }
         event.getDispatcher().register(command);
+
+        // /pvefigures [normal|red|no_lightmap|no_shader_colour|white]: which part of the figures' colour turns them black.
+        var figures = net.minecraft.commands.Commands.literal("pvefigures").executes(c -> {
+            c.getSource().sendSuccess(() -> Component.literal("Figure colour test: " + FigureBatches.debug.name().toLowerCase()), false);
+            return 1;
+        });
+        for (FigureBatches.Debug debug : FigureBatches.Debug.values()) {
+            figures.then(net.minecraft.commands.Commands.literal(debug.name().toLowerCase()).executes(c -> {
+                FigureBatches.debug = debug;
+                FigureBatches.dump = true;
+                c.getSource().sendSuccess(() -> Component.literal("Figure colour test: " + debug.name().toLowerCase()
+                        + " (each block's colour, light and textures logged as [figures])"), false);
+                return 1;
+            }));
+        }
+        event.getDispatcher().register(figures);
     }
 
     /** The sound of the battle as a whole: hoofbeats and the din of the front. */

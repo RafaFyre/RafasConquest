@@ -25,12 +25,12 @@ class CityTerrainTest {
     }
 
     @Test
-    void easingStartsTwiceTheCitySizePastTheWall() {
+    void easingStartsThirtyBlocksPastTheWall() {
         int outset = 12;
         for (int cells : new int[]{4, 9}) {
             CityLayout.Site site = new CityLayout.Site(5000, -3000, false, cells);
             CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> 80, SEA, outset);
-            int lastFlat = -outset - 2 * cells;
+            int lastFlat = -outset - 30;
             assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, lastFlat).kind(), cells + ": flat out to the margin");
             assertEquals(CityTerrain.Kind.SLOPE, CityTerrain.column(plan, MID, lastFlat - 1).kind(), cells + ": easing starts past it");
             assertEquals(CityTerrain.Kind.NONE, CityTerrain.column(plan, MID, lastFlat - CityTerrain.SLOPE_REACH - 1).kind(),

@@ -33,6 +33,12 @@ public class CityDistrictStructure extends Structure {
                 }));
     }
 
+    /** No per-start biome check, as {@link CityStructure#findValidGenerationPoint}. */
+    @Override
+    public Optional<GenerationStub> findValidGenerationPoint(GenerationContext ctx) {
+        return findGenerationPoint(ctx);
+    }
+
     @Override
     public StructureType<?> type() {
         return ConquestWorldgen.CITY_DISTRICT_STRUCTURE.get();

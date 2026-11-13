@@ -92,6 +92,14 @@ public final class FieldBattle {
         if (begun() || type != BattleType.SIEGE) {
             throw new IllegalStateException("a siege is laid out before it begins");
         }
+        // The attackers come at one wall: one body before it (as wide as it and as much again either side, so it isn't
+        // endlessly deep), not a field army's three wings spread far past it, each with its own camp.
+        FieldArmy a = armies[0];
+        int files = Math.max(BattlePlan.MAX_FRONT, (int) (3 * plan.wallLength() / BattlePlan.pitch(BattlePlan.FILE_WIDTH)));
+        armies[0] = deploy(0, firstBlocks, a.origin, a.facingX, a.facingZ, a.plan, levyFront(a.plan, random), byUnits, files);
+        if (trains.containsKey(0)) {
+            equip(0, trains.get(0));
+        }
         siege = new Siege(plan);
         siege.deploy(armies[0], armies[1]);
     }
@@ -123,12 +131,31 @@ public final class FieldBattle {
                 if (!b.afloat || b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER) {
                     continue;
                 }
-                b.ship = b.arm == Arm.ARCHERS ? FieldBlock.ShipKind.ARCHERS
-                        : b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses on a fighting deck: they sail with the stores
+                b.ship = b.arm == Arm.ENGINES || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
+                        : b.arm.shoots() ? FieldBlock.ShipKind.ARCHERS
                         : b.arm.shielded() ? FieldBlock.ShipKind.SWORDSMEN
                         : swordsmen++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
             }
             spreadShips(army);
+        }
+    }
+
+    /**
+     * Gives an army's siege train its engines, once its battle's type is set and before it begins: its general picks a
+     * kind for each unit from those {@code allowed} ({@link Machine#allowed}; side 1 defends a siege or an amphibious
+     * assault). With none allowed (at sea) the crews have nothing to shoot and fight as light troops.
+     */
+    public void equip(int side, List<Machine> allowed) {
+        if (begun()) {
+            throw new IllegalStateException("the battle has begun");
+        }
+        trains.put(side, allowed);
+        java.util.Map<Integer, Machine> byUnit = new java.util.HashMap<>();
+        for (FieldBlock b : armies[side].blocks) {
+            if (b.arm == Arm.ENGINES) {
+                b.machine = allowed.isEmpty() ? null : byUnit.computeIfAbsent(b.platoon, p -> allowed.get(random.nextInt(allowed.size())));
+                b.arrows = b.machine == null || !b.machine.shoots() ? 0 : b.machine.perBlock() * Machine.SHOTS_EACH;
+            }
         }
     }
 
@@ -620,11 +647,18 @@ public final class FieldBattle {
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         // Over UNIT_TACTICS_OVER soldiers the generals move their armies unit by unit (platoons); below it, block by block.
-        boolean byUnits = (firstBlocks + secondBlocks) * BattlePlan.SOLDIERS_PER_FORMATION > FieldRules.UNIT_TACTICS_OVER;
+        byUnits = (firstBlocks + secondBlocks) * BattlePlan.SOLDIERS_PER_FORMATION > FieldRules.UNIT_TACTICS_OVER;
+        this.firstBlocks = firstBlocks;
         armies = new FieldArmy[]{
-                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random), byUnits),
-                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random), byUnits)};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random), byUnits, 0),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random), byUnits, 0)};
     }
+
+    /** Whether the generals move their armies unit by unit; and the attacker's blocks, for a siege's redeployment. */
+    private final boolean byUnits;
+    private final int firstBlocks;
+    /** Each side's siege train's engines to pick from ({@link #equip}), kept for a redeployment. */
+    private final java.util.Map<Integer, List<Machine>> trains = new java.util.HashMap<>();
 
     /**
      * Whether a general puts the levies up front, to be crushed and draw the enemy on, rather than behind the heavy
@@ -650,7 +684,7 @@ public final class FieldBattle {
     }
 
     private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan, boolean levyFront,
-                                    boolean byUnits) {
+                                    boolean byUnits, int maxFiles) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
         army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
@@ -658,7 +692,7 @@ public final class FieldBattle {
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront, maxFiles);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
         army.baitFiles = new boolean[files];
@@ -985,7 +1019,7 @@ public final class FieldBattle {
      */
     public Point enemyDirection(FieldBlock block) {
         FieldArmy army = armies[block.side];
-        FieldBlock foe = hunted(block.contactFoe) ? block.contactFoe : hunted(block.prey) ? block.prey : nearestBlock(block, armies[1 - block.side], null);
+        FieldBlock foe = hunted(block.contactFoe) ? block.contactFoe : hunted(block.prey) ? block.prey : nearestBlock(block, armies[1 - block.side], false);
         if (foe == null) {
             return new Point(army.facingX, army.facingZ);
         }
@@ -1260,7 +1294,7 @@ public final class FieldBattle {
                 block.engaged = false;
                 double stepX = army.facingX;
                 double stepZ = army.facingZ;
-                FieldBlock foe = nearestBlock(block, enemy, null);
+                FieldBlock foe = nearestBlock(block, enemy, false);
                 if (foe != null) {
                     double dx = foe.pos.x() - block.line.x();
                     double dz = foe.pos.z() - block.line.z();
@@ -1563,7 +1597,7 @@ public final class FieldBattle {
         }
         // Cavalry acts on its own wing's fighting, not the whole army's.
         boolean fighting = cavalry ? army.wingEngaged(block.wing) : engaged;
-        BattlePlan.Order order = BattlePlan.order(block.arm, seconds, nearest(block, cavalry ? block.pos : block.line, enemy), fighting);
+        BattlePlan.Order order = BattlePlan.order(block.arm, seconds, nearest(block, cavalry ? block.pos : block.line, enemy), fighting, block.standOff());
         if (cavalry && order != BattlePlan.Order.CHARGE && seconds >= BattlePlan.FORMING_SECONDS
                 && army.plan.has(Strategy.PRECISION_STRIKES)) {
             FieldBlock exposed = mostExposed(enemy, block.pos, FieldRules.WING_REACH);
@@ -1578,7 +1612,7 @@ public final class FieldBattle {
         }
         switch (order) {
             case MARCH -> {
-                if (block.arm != Arm.ARCHERS || behindFront(army, block.line) - BattlePlan.MARCH_STEP >= BattlePlan.archerBack(army.stackFiles(), army.stackDepth)) {
+                if (!block.arm.shoots() || behindFront(army, block.line) - BattlePlan.MARCH_STEP >= BattlePlan.archerBack(army.stackFiles(), army.stackDepth)) {
                     block.line = block.line.plus(army.facingX * BattlePlan.MARCH_STEP, army.facingZ * BattlePlan.MARCH_STEP);
                 }
             }
@@ -2042,7 +2076,7 @@ public final class FieldBattle {
                 best = f;
             }
         }
-        return best != null ? best : nearestBlock(tip, enemy, null);
+        return best != null ? best : nearestBlock(tip, enemy, false);
     }
 
     /** Moves the charging wedge on: each rider's line is its place behind the tip, the tip at the target (or the flank). */
@@ -2546,7 +2580,7 @@ public final class FieldBattle {
         }
         b.approaching = false;
         if (b.ledCharge) {
-            if (b.ledTarget != null && b.ledTarget.alive > 0 && b.arm == Arm.ARCHERS) {
+            if (b.ledTarget != null && b.ledTarget.alive > 0 && b.arm.shoots()) {
                 loose(b, b.ledTarget);
                 return;
             }
@@ -2802,6 +2836,10 @@ public final class FieldBattle {
 
     @Nullable
     private Point campOf(FieldBlock block) {
+        Point own = siege == null ? null : siege.campOf(block); // a besieger's: its own wall's force's camp
+        if (own != null) {
+            return own;
+        }
         int wing = block.wing();
         Point camp = wing >= 0 && wing < 3 ? camps[block.side][wing] : null;
         return camp != null ? camp : camps[block.side][FieldArmy.CENTRE];
@@ -2867,7 +2905,8 @@ public final class FieldBattle {
         block.facingX = army.facingX;
         block.facingZ = army.facingZ;
         Point camp = block.shattered() ? campOf(block) : null;
-        block.line = camp != null ? camp
+        Point away = siege == null ? null : siege.away(block, FieldRules.ROUT_RUN); // a besieger runs out from its own wall
+        block.line = camp != null ? camp : away != null ? away
                 : BattlePlan.place(army.frontCentre(), army.facingX, army.facingZ, block.homeRight, army.rearBack + FieldRules.ROUT_RUN);
     }
 
@@ -2898,7 +2937,7 @@ public final class FieldBattle {
         FieldBlock best = null;
         int bestScore = 0;
         for (FieldBlock e : enemy.blocks) {
-            if (e.pos.distanceTo(from) > reach || e.alive == 0 || e.duty == Duty.FLEEING || e.duty == Duty.BEARER || e.duty == Duty.GENERAL || !e.arm.infantry() && e.arm != Arm.ARCHERS) {
+            if (e.pos.distanceTo(from) > reach || e.alive == 0 || e.duty == Duty.FLEEING || e.duty == Duty.BEARER || e.duty == Duty.GENERAL || !e.arm.infantry() && !e.arm.shoots()) {
                 continue;
             }
             int score = 0;
@@ -3014,15 +3053,15 @@ public final class FieldBattle {
         if (enemy.grid != null) {
             return enemy.grid.nearest(block.pos, block.halfWidth(), b -> true, block::distanceTo, reach);
         }
-        FieldBlock e = nearestBlock(block, enemy, null);
+        FieldBlock e = nearestBlock(block, enemy, false);
         return e != null && block.distanceTo(e) <= reach ? e : null;
     }
 
     @Nullable
-    private static FieldBlock nearestBlock(FieldBlock block, FieldArmy enemy, @Nullable Arm prefer) {
+    private static FieldBlock nearestBlock(FieldBlock block, FieldArmy enemy, boolean shooters) {
         if (enemy.grid != null) {
-            if (prefer != null) {
-                FieldBlock e = enemy.grid.nearest(block.pos, block.halfWidth(), b -> b.arm == prefer && b.duty == Duty.SUPPORT, block::distanceTo);
+            if (shooters) {
+                FieldBlock e = enemy.grid.nearest(block.pos, block.halfWidth(), b -> b.arm.shoots() && b.duty == Duty.SUPPORT, block::distanceTo);
                 if (e != null) {
                     return e;
                 }
@@ -3031,9 +3070,9 @@ public final class FieldBattle {
         }
         FieldBlock best = null;
         double bestDistance = Double.MAX_VALUE;
-        if (prefer != null) {
+        if (shooters) {
             for (FieldBlock e : enemy.blocks) {
-                if (e.alive > 0 && e.arm == prefer && e.duty == Duty.SUPPORT && closeEnough(block, block.pos, e, bestDistance)) {
+                if (e.alive > 0 && e.arm.shoots() && e.duty == Duty.SUPPORT && closeEnough(block, block.pos, e, bestDistance)) {
                     double d = block.distanceTo(e);
                     if (d < bestDistance) {
                         bestDistance = d;
@@ -3130,7 +3169,7 @@ public final class FieldBattle {
             Point target = block.line;
             if (block.charged && block.duty != Duty.FLEEING && block != army.commander) {
                 FieldBlock prey = hunted(block.prey) ? block.prey
-                        : nearestBlock(block, enemy, block.arm.mounted() ? Arm.ARCHERS : null);
+                        : nearestBlock(block, enemy, block.arm.mounted());
                 if (prey == null) {
                     continue;
                 }
@@ -3160,7 +3199,8 @@ public final class FieldBattle {
             if (pursuing && block.duty == Duty.FLEEING) {
                 step *= FieldRules.FLEE_SPEED; // running for their lives, gear thrown down
             }
-            block.pos = distance <= step ? target : block.pos.plus(dx / distance * step, dz / distance * step);
+            Point next = distance <= step ? target : block.pos.plus(dx / distance * step, dz / distance * step);
+            block.pos = siege == null ? next : siege.fence(block, next);
         }
     }
 
@@ -3234,7 +3274,7 @@ public final class FieldBattle {
                 }
                 block.contactSeconds = 0;
                 block.contactFoe = null;
-                if (block.arm == Arm.ARCHERS && block.arrows > 0) {
+                if (block.arm.shoots() && block.arrows > 0) {
                     shoot(army, block, enemy, targets, damages);
                 }
             }
@@ -3299,14 +3339,22 @@ public final class FieldBattle {
      * generalship applies, an archer ship shoots what its captain marks ({@link #mark}).
      */
     private void shoot(FieldArmy army, FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
+        Machine machine = archers.machine;
+        double reach = machine != null ? machine.reach : FieldRules.ARCHER_RANGE;
+        if (siege != null && siege.batters(archers)) {
+            int shots = Math.min(archers.arrows, engineShots(archers));
+            archers.arrows -= shots;
+            siege.batter(archers, shots * machine.batter); // the wall first, then the men
+            return;
+        }
         FieldBlock led = archers.ledCharge ? archers.ledTarget : null; // a player's target comes first, once in range
-        FieldBlock foe = led != null && led.alive > 0 && archers.pos.distanceTo(led.pos) <= FieldRules.ARCHER_RANGE ? led
+        FieldBlock foe = led != null && led.alive > 0 && archers.pos.distanceTo(led.pos) <= reach ? led
                 : type == BattleType.OCEAN
-                ? (archers.prey != null && archers.prey.alive > 0 && archers.pos.distanceTo(archers.prey.pos) <= FieldRules.ARCHER_RANGE ? archers.prey : null)
-                : army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, archers.pos, FieldRules.ARCHER_RANGE) : null;
+                ? (archers.prey != null && archers.prey.alive > 0 && archers.pos.distanceTo(archers.prey.pos) <= reach ? archers.prey : null)
+                : army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, archers.pos, reach) : null;
         if (foe == null) {
             FieldBlock[] nearest = {null};
-            double[] best = {FieldRules.ARCHER_RANGE};
+            double[] best = {reach};
             java.util.function.Consumer<FieldBlock> consider = e -> {
                 if (e.alive > 0) {
                     double d = Math.hypot(e.pos.x() - archers.pos.x(), e.pos.z() - archers.pos.z());
@@ -3317,7 +3365,7 @@ public final class FieldBattle {
                 }
             };
             if (enemy.grid != null) {
-                enemy.grid.within(archers.pos, FieldRules.ARCHER_RANGE, consider);
+                enemy.grid.within(archers.pos, reach, consider);
             } else {
                 enemy.blocks.forEach(consider);
             }
@@ -3326,14 +3374,23 @@ public final class FieldBattle {
         if (foe == null) {
             return;
         }
-        int shots = (int) Math.min(archers.arrows, Math.ceil(archers.alive * FieldRules.ARROWS_PER_SECOND));
+        int shots = (int) Math.min(archers.arrows, machine != null ? engineShots(archers)
+                : Math.ceil(archers.alive * (archers.arm == Arm.MUSKETEERS ? FieldRules.SHOTS_PER_SECOND : FieldRules.ARROWS_PER_SECOND)));
         archers.arrows -= shots;
         if (shots > 0) {
             volleys.add(new Volley(archers, foe, shots));
         }
         targets.add(foe);
-        damages.add(shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm)
+        damages.add((machine != null ? shots * machine.damage * foe.arm.takes() // no shield stops shot or stone
+                : archers.arm == Arm.MUSKETEERS ? shots * FieldRules.shotDamage(foe.arm)
+                : shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm))
                 * (siege == null ? 1 : siege.arrowFactor(foe)));
+    }
+
+    /** A train block's shots this second: each engine still crewed shoots once a reload, rounded at random. */
+    private int engineShots(FieldBlock b) {
+        double expected = Math.ceil((double) b.alive / b.machine.crew) / b.machine.reload;
+        return (int) expected + (random.nextDouble() < expected % 1 ? 1 : 0);
     }
 
     /** Where an attack from {@code attacker} falls on {@code defender}. */
@@ -3414,6 +3471,11 @@ public final class FieldBattle {
         for (FieldArmy army : armies) {
             for (FieldBlock b : army.blocks) {
                 stand(b);
+                Point camp = siege == null ? null : siege.away(b, back[army.side]); // a besieger's, out from its own wall
+                if (camp != null) {
+                    b.line = camp;
+                    continue;
+                }
                 b.line = b.deployed.plus(-army.facingX * back[army.side], -army.facingZ * back[army.side]);
                 b.facingX = army.facingX;
                 b.facingZ = army.facingZ;
@@ -3432,7 +3494,8 @@ public final class FieldBattle {
                 continue; // the defenders spent the night on and behind their walls
             }
             for (FieldBlock b : army.blocks) {
-                b.pos = b.line.plus(-army.facingX * back, -army.facingZ * back);
+                Point camp = siege == null ? null : siege.away(b, back); // a besieger's, out from its own wall
+                b.pos = camp != null ? camp : b.line.plus(-army.facingX * back, -army.facingZ * back);
             }
         }
     }
@@ -3492,7 +3555,7 @@ public final class FieldBattle {
             if (b.alive == 0 || b.duty == Duty.BEARER || b.duty == Duty.GENERAL || b.duty == Duty.GUARD) {
                 continue;
             }
-            FieldBlock prey = nearestBlock(b, loser, null);
+            FieldBlock prey = nearestBlock(b, loser, false);
             if (prey != null) {
                 b.line = prey.pos;
                 face(b, prey.pos);

@@ -6,6 +6,7 @@ import rafasconquest.battle.BattlePlan.Point;
 import rafasconquest.battle.FieldBlock.Duty;
 import rafasconquest.battle.FieldRules.Side;
 
+import java.util.List;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,8 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldBattleTest {
+    /** A land battle, any siege train (Siegeworks loaded) given its field engines as the game gives them. */
     private static FieldBattle battle(int aBlocks, int bBlocks, long seed) {
-        return new FieldBattle(aBlocks, bBlocks, new Point(0, 0), 1, 0, seed);
+        FieldBattle battle = new FieldBattle(aBlocks, bBlocks, new Point(0, 0), 1, 0, seed);
+        for (int side = 0; side < 2; side++) {
+            battle.equip(side, Machine.allowed(rafasconquest.core.WorldFeatures.ages().first(), null, BattleType.LAND, false));
+        }
+        return battle;
     }
 
     @Test
@@ -411,6 +417,53 @@ class FieldBattleTest {
         }
         assertTrue(shotIt, "the archers shot their target");
         assertEquals(target, foot.strikeAt(), "the foot charged it");
+    }
+
+    @Test
+    void musketeersShootSlowlyFromTheArchersPlace() {
+        BattlePlan.muskets = true;
+        rafasconquest.core.WorldFeatures.set(true, true, new rafasconquest.core.Age.Range(rafasconquest.core.Age.GUNPOWDER, rafasconquest.core.Age.STEAM));
+        try {
+            FieldBattle battle = battle(100, 100, 5);
+            FieldBlock musketeers = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.MUSKETEERS).findFirst().orElseThrow();
+            int carried = musketeers.arrows;
+            assertEquals(musketeers.alive() * FieldRules.CARTRIDGES_EACH, carried);
+            for (int i = 0; i < 300 && musketeers.arrows == carried && battle.outcome() == null; i++) {
+                battle.second();
+            }
+            assertTrue(musketeers.arrows < carried, "the musketeers fired");
+            int before = musketeers.arrows;
+            battle.second();
+            assertTrue(before - musketeers.arrows <= Math.ceil(musketeers.alive() * FieldRules.SHOTS_PER_SECOND), "a fifth of them a second");
+        } finally {
+            BattlePlan.muskets = false;
+            rafasconquest.core.WorldFeatures.set(true, true, rafasconquest.core.Age.Range.DEFAULT);
+        }
+    }
+
+    @Test
+    void theSiegeTrainShootsFromBeyondBowRangeOneUnitOneKind() {
+        BattlePlan.siegeworks = true;
+        try {
+            FieldBattle battle = battle(200, 200, 5);
+            battle.equip(0, List.of(Machine.TREBUCHET, Machine.ONAGER));
+            List<FieldBlock> train = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.ENGINES).toList();
+            assertEquals(10, train.size());
+            for (FieldBlock b : train) {
+                assertNotNull(b.machine());
+                assertEquals(b.machine().perBlock() * Machine.SHOTS_EACH, b.arrows);
+                assertTrue(train.stream().filter(o -> o.platoon() == b.platoon()).allMatch(o -> o.machine() == b.machine()), "a unit works one kind");
+            }
+            boolean farShot = false;
+            for (int i = 0; i < 300 && !farShot && battle.outcome() == null; i++) {
+                battle.second();
+                farShot = battle.volleys().stream().anyMatch(v -> v.archers().arm() == Arm.ENGINES
+                        && v.archers().pos().distanceTo(v.target().pos()) > FieldRules.ARCHER_RANGE);
+            }
+            assertTrue(farShot, "an engine hit something out of bow range");
+        } finally {
+            BattlePlan.siegeworks = false;
+        }
     }
 
     @Test

@@ -286,6 +286,8 @@ public final class RecruitsBattle {
     private final WarCamp[] camps = new WarCamp[2];
     /** Each winged army's camps behind its left and right wings (by {@link FieldArmy#LEFT}, {@link FieldArmy#RIGHT}). */
     private final WarCamp[][] wingCamps = new WarCamp[2][3];
+    /** A besieging army's camps behind its forces at the walls other than the main attack's, by their place in its fronts. */
+    private final Map<Integer, WarCamp> frontCamps = new HashMap<>();
     /** How many tents of each camp are taken by enlisted players. */
     private final Map<WarCamp, Integer> tentsTaken = new HashMap<>();
     /** The land the battle is fought on, as read for deploying. */
@@ -327,6 +329,8 @@ public final class RecruitsBattle {
     private final DiplomacyStatus[] oldRelations = new DiplomacyStatus[2];
     /** Every soldier and horse of the battle, so their deaths drop nothing. */
     private final Set<UUID> ours = new HashSet<>();
+    /** The Siegeworks engines standing in the battle, by the id of the soldier who works each. */
+    private final Map<Integer, Entity> machines = new HashMap<>();
     /** Every real soldier's block, by entity id, for the damage rules ({@link #adjustDamage}). */
     private final Map<Integer, Live> byEntity = new HashMap<>();
     /** When each side's general last sounded the horn. */
@@ -543,6 +547,13 @@ public final class RecruitsBattle {
         this.prediction = prediction;
     }
 
+    /** Every few seconds while no battle runs: siege engines a stopped battle (or a crash) left behind are taken away. */
+    public static void sweep(ServerLevel level) {
+        if (!running() && level.getGameTime() % 100 == 0) {
+            SiegeWorks.sweep(level);
+        }
+    }
+
     public static boolean running() {
         return current != null && !current.over;
     }
@@ -656,6 +667,7 @@ public final class RecruitsBattle {
         FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
                 : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
         field.setType(type);
+        equipTrains(field, sides, survey == null ? null : survey.plan().engines());
         if (survey != null) {
             field.besiege(survey.plan());
         }
@@ -715,7 +727,7 @@ public final class RecruitsBattle {
         battle.terrain = terrain;
         if (survey != null && field.siege() != null) {
             battle.survey = survey;
-            battle.works = new SiegeWorks(level, field.siege(), survey.gates(), survey.walkY(), survey.plan().outX(), survey.plan().outZ());
+            battle.works = new SiegeWorks(level, field.siege(), survey);
         }
         RafasConquest.LOGGER.info("[battle] deployed to the ground; {} blocks hide in ambush, {} of {} stand wet by the survey",
                 hidden, GroundPlan.wetBlocks(field, terrain), blocksA + blocksB);
@@ -967,6 +979,8 @@ public final class RecruitsBattle {
         for (Live l : battle.live.values()) {
             removed += battle.discard(l);
         }
+        battle.machines.values().forEach(Entity::discard); // any whose crew fell
+        battle.machines.clear();
         battle.live.clear();
         battle.clearSnapshots();
         battle.dismissEnlisted();
@@ -1084,6 +1098,9 @@ public final class RecruitsBattle {
         if (role == Role.SOLDIER || role == Role.LEADER) {
             kitFor(soldier, side, block.afloat() && block.arm().mounted() ? Arm.SKIRMISHERS : block.arm(), role);
         }
+        if (block.machine() != null && block.machine().ridden() && i % block.machine().crew == 0 && !block.afloat()) {
+            work(soldier, block.machine(), yaw);
+        }
         if (block.afloat()) {
             Point spot = deckSpot(block, i);
             soldier.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z()); // onto its ship's deck, not the sea floor
@@ -1102,6 +1119,49 @@ public final class RecruitsBattle {
         byEntity.put(soldier.getId(), l);
     }
 
+    /**
+     * Each side's siege train gets the engines its age, homeland and battle allow ({@link rafasconquest.battle.Machine#allowed}),
+     * towers and rams only if the siege's {@code strategems} (null: any) include them.
+     */
+    private static void equipTrains(FieldBattle field, Side[] sides, @Nullable java.util.Set<rafasconquest.battle.Siege.Engine> strategems) {
+        for (int s = 0; s < 2; s++) {
+            List<rafasconquest.battle.Machine> allowed = new ArrayList<>(rafasconquest.battle.Machine.allowed(rafasconquest.core.WorldFeatures.ages().first(),
+                    rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), sides[s].faction().id()), field.type(), s == 1));
+            if (strategems != null) {
+                allowed.removeIf(m -> m == rafasconquest.battle.Machine.SIEGE_TOWER && !strategems.contains(rafasconquest.battle.Siege.Engine.TOWERS)
+                        || m == rafasconquest.battle.Machine.BATTERING_RAM && !strategems.contains(rafasconquest.battle.Siege.Engine.RAMS));
+            }
+            field.equip(s, allowed);
+        }
+    }
+
+    /**
+     * A siege train soldier sets up their engine where they stand, its ammunition in their pack, and works it: riding it,
+     * Siegeworks' own crew AI aims, loads and fires at their target. The rest of its crew stand by as its soldiers.
+     * shortcut: targets are Recruits' own pick (its nearest enemy); a fire zone on the numbers' target would use the
+     * engine's full reach.
+     */
+    private void work(AbstractRecruitEntity soldier, rafasconquest.battle.Machine machine, float yaw) {
+        Entity engine = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                .getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(rafasconquest.battle.Machine.MOD, machine.id))
+                .map(t -> t.create(level)).orElse(null);
+        if (engine == null) {
+            return; // Siegeworks is gone, or renamed it
+        }
+        engine.moveTo(soldier.getX(), soldier.getY(), soldier.getZ(), yaw, 0);
+        engine.addTag(SiegeWorks.TAG); // swept up if a crash leaves it
+        level.addFreshEntity(engine);
+        machines.put(soldier.getId(), engine);
+        for (java.util.Map.Entry<String, Integer> ammo : machine.ammo()) {
+            Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(ammo.getKey()));
+            for (int left = ammo.getValue(); left > 0 && item != Items.AIR; left -= item.getDefaultMaxStackSize()) {
+                soldier.getInventory().addItem(new ItemStack(item, Math.min(left, item.getDefaultMaxStackSize())));
+            }
+        }
+        soldier.setShouldRanged(true);
+        soldier.startRiding(engine);
+    }
+
     /** Soldier i goes back to numbers (its health already read back), leaving with its horse. */
     private void makeNumbers(Live l, int i) {
         AbstractRecruitEntity e = l.soldiers[i];
@@ -1117,6 +1177,10 @@ public final class RecruitsBattle {
         }
         backBanners.remove(e.getId());
         byEntity.remove(e.getId());
+        Entity machine = machines.remove(e.getId());
+        if (machine != null) {
+            machine.discard();
+        }
         commanded.remove(e.getId());
         if (!e.isRemoved()) {
             e.discard();
@@ -1273,6 +1337,8 @@ public final class RecruitsBattle {
             case LEVY, SKIRMISHERS, ZWEIHANDLERS -> ModEntityTypes.RECRUIT.get();
             case HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
             case ARCHERS -> ModEntityTypes.BOWMAN.get();
+            case MUSKETEERS -> ModEntityTypes.CROSSBOWMAN.get();
+            case ENGINES -> ModEntityTypes.SIEGE_ENGINEER.get();
             case CAVALRY, HEAVY_CAVALRY -> ModEntityTypes.HORSEMAN.get();
         };
     }
@@ -1359,9 +1425,19 @@ public final class RecruitsBattle {
         }
         BlockPos feet = p == null ? BlockPos.ZERO : ground(p);
         soldier.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, yaw, 0);
-        soldier.finalizeSpawn(level, level.getCurrentDifficultyAt(feet), MobSpawnType.EVENT, null);
+        if (soldier instanceof com.talhanation.recruits.entities.SiegeEngineerEntity engineer) {
+            // Recruits 1.15.2's engineer finalizeSpawn casts its RecruitPathNavigation to GroundPathNavigation and
+            // crashes the server; this is the rest of what it does.
+            engineer.setRandomSpawnBonus();
+            engineer.initSpawn();
+        } else {
+            soldier.finalizeSpawn(level, level.getCurrentDifficultyAt(feet), MobSpawnType.EVENT, null);
+        }
         if (soldier instanceof BowmanEntity) {
             soldier.getInventory().addItem(new ItemStack(Items.ARROW, 64));
+        } else if (soldier instanceof com.talhanation.recruits.entities.CrossBowmanEntity) {
+            ItemStack cartridges = rafasconquest.gear.Armoury.cartridges(FieldRules.CARTRIDGES_EACH);
+            soldier.getInventory().addItem(cartridges != null ? cartridges : new ItemStack(Items.ARROW, 64));
         }
         dress(soldier, side, role);
         soldier.setPersistenceRequired();
@@ -1436,6 +1512,15 @@ public final class RecruitsBattle {
             }
             case ARCHERS -> {
             }
+            case MUSKETEERS -> {
+                equip(soldier, EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)); // over the dyed leather
+                ItemStack musket = rafasconquest.gear.Armoury.musket();
+                if (musket != null) {
+                    hand(soldier, musket.getItem(), ItemStack.EMPTY);
+                }
+            }
+            case ENGINES -> {
+            }
         }
         wear(soldier, side, switch (arm) {
             case LEVY -> rafasconquest.gear.Armoury.Kit.LEVY;
@@ -1443,6 +1528,8 @@ public final class RecruitsBattle {
             case SKIRMISHERS -> rafasconquest.gear.Armoury.Kit.SKIRMISHER;
             case ZWEIHANDLERS -> rafasconquest.gear.Armoury.Kit.ZWEIHANDLER;
             case ARCHERS -> rafasconquest.gear.Armoury.Kit.ARCHER;
+            case MUSKETEERS -> rafasconquest.gear.Armoury.Kit.MUSKETEER;
+            case ENGINES -> rafasconquest.gear.Armoury.Kit.ARCHER; // crews in the archers' gambesons, their own tools in hand
             case CAVALRY -> rafasconquest.gear.Armoury.Kit.CAVALRY;
             case HEAVY_CAVALRY -> rafasconquest.gear.Armoury.Kit.HEAVY_CAVALRY;
         });
@@ -1524,7 +1611,10 @@ public final class RecruitsBattle {
     private BlockPos ground(Point p) {
         int x = Mth.floor(p.x());
         int z = Mth.floor(p.z());
-        return new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+        if (survey != null && field != null && field.siege() != null && field.siege().region(p) == rafasconquest.battle.Siege.Region.WALL) {
+            return new BlockPos(x, SiegeSurvey.standNear(level, x, z, survey.walkYAt(p.x(), p.z())), z); // on its wall's walkway, under its roof
+        }
+        return new BlockPos(x, SiegeSurvey.stand(level, x, z), z);
     }
 
     // ---- orders, passed on to real soldiers ----
@@ -1555,7 +1645,7 @@ public final class RecruitsBattle {
                     boarders.addAll(f.living());
                 }
             }
-            boolean shooting = boarders.isEmpty() && block.arm() == Arm.ARCHERS && mayFight(block.side());
+            boolean shooting = boarders.isEmpty() && block.arm().shoots() && mayFight(block.side());
             List<AbstractRecruitEntity> marked = shooting ? preyOf(block, List.of()) : List.of();
             List<AbstractRecruitEntity> anyone = shooting ? enemiesOf(block.side(), false) : List.of();
             for (AbstractRecruitEntity s : living) {
@@ -1867,7 +1957,7 @@ public final class RecruitsBattle {
             if (l.block.side() != side && l.block.duty() != Duty.BEARER) {
                 List<AbstractRecruitEntity> living = l.living();
                 all.addAll(living);
-                if (l.block.arm() == Arm.ARCHERS && l.block.duty() == Duty.SUPPORT) {
+                if (l.block.arm().shoots() && l.block.duty() == Duty.SUPPORT) {
                     archers.addAll(living);
                 }
             }
@@ -2963,7 +3053,7 @@ public final class RecruitsBattle {
         FieldBlock block = l.block;
         boolean archers = false;
         for (FieldBlock enemy : field.army(1 - block.side()).blocks()) {
-            if (enemy.arm() == Arm.ARCHERS && enemy.alive() > 0 && enemy.pos().distanceTo(block.pos()) < ARROW_REACH) {
+            if (enemy.arm().shoots() && enemy.alive() > 0 && enemy.pos().distanceTo(block.pos()) < ARROW_REACH) {
                 archers = true;
                 break;
             }
@@ -3517,7 +3607,7 @@ public final class RecruitsBattle {
                     List<AbstractRecruitEntity> foes = enemiesOf(u.block.side(), true);
                     FieldBlock target = u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null;
                     // Archers loose at the target rather than charging it: they walk only until it is within bow range.
-                    boolean bow = u.block.arm() == Arm.ARCHERS;
+                    boolean bow = u.block.arm().shoots();
                     double bowReach = FieldRules.ARCHER_RANGE * FieldBattle.LOOSE_AT;
                     for (AbstractRecruitEntity s : soldiers) {
                         LivingEntity aimed = s.getTarget();
@@ -4728,6 +4818,10 @@ public final class RecruitsBattle {
             if (side == 1 && works != null) {
                 continue; // a besieged garrison sleeps in its own walls
             }
+            if (works != null) {
+                buildSiegeCamps();
+                continue;
+            }
             FieldArmy army = field.army(side);
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
@@ -4754,6 +4848,40 @@ public final class RecruitsBattle {
         handCamps();
     }
 
+    /**
+     * A besieging army camps behind each of its forces at the walls ({@link rafasconquest.battle.Siege.Front}), facing
+     * its wall: the main attack's camp holds the command tent.
+     */
+    private void buildSiegeCamps() {
+        List<rafasconquest.battle.Siege.Front> fronts = field.siege().fronts();
+        for (int i = 0; i < fronts.size(); i++) {
+            rafasconquest.battle.Siege.Front f = fronts.get(i);
+            Point at = f.campSpot(CAMP_GAP);
+            if (at == null) {
+                continue;
+            }
+            int tents = tentsFor(f);
+            boolean command = i == 0;
+            loadGround(at);
+            for (Point p : WarCamp.ground(at, -f.outX(), -f.outZ(), tents, command)) {
+                groundReady(p);
+            }
+            WarCamp camp = WarCamp.build(level, at, -f.outX(), -f.outZ(), tents, nearestDye(sides[0].uniform), sides[0].banner, command);
+            if (command) {
+                camps[0] = camp;
+            } else {
+                frontCamps.put(i, camp);
+            }
+            spawnGuards(0, camp);
+        }
+    }
+
+    /** How many small tents a besieging force's camp has, as {@link #tentsFor(FieldArmy, int)}. */
+    private static int tentsFor(rafasconquest.battle.Siege.Front f) {
+        int soldiers = f.blocks().stream().mapToInt(FieldBlock::started).sum();
+        return Math.max(MIN_TENTS, Math.min(MAX_TENTS, soldiers / SOLDIERS_PER_TENT));
+    }
+
     /** How many small tents a wing's camp has: one per {@link #SOLDIERS_PER_TENT} soldiers, within bounds. */
     private static int tentsFor(FieldArmy army, int wing) {
         int soldiers = 0;
@@ -4777,6 +4905,9 @@ public final class RecruitsBattle {
                 }
             }
         }
+        for (WarCamp camp : frontCamps.values()) {
+            camp.pitchTents(1);
+        }
     }
 
     /** Tells the field where each camp stands: its shattered blocks retreat there. */
@@ -4787,6 +4918,17 @@ public final class RecruitsBattle {
                 if (camp != null) {
                     Vec3 at = camp.entrance();
                     field.setCamp(side, wing, new Point(at.x, at.z));
+                }
+            }
+        }
+        if (field.siege() != null) {
+            // Each besieging force falls back to its own camp.
+            List<rafasconquest.battle.Siege.Front> fronts = field.siege().fronts();
+            for (int i = 0; i < fronts.size(); i++) {
+                WarCamp camp = i == 0 ? camps[0] : frontCamps.get(i);
+                if (camp != null) {
+                    Vec3 at = camp.entrance();
+                    fronts.get(i).setCamp(new Point(at.x, at.z));
                 }
             }
         }
@@ -5143,7 +5285,7 @@ public final class RecruitsBattle {
             if (fights(b)) {
                 all += b.alive();
                 cavalry += b.arm().mounted() ? b.alive() : 0;
-                archers += b.arm() == Arm.ARCHERS ? b.alive() : 0;
+                archers += b.arm().shoots() ? b.alive() : 0;
             }
         }
         List<String> lines = new ArrayList<>();
@@ -5171,7 +5313,7 @@ public final class RecruitsBattle {
     private static String thinWing(FieldArmy enemy) {
         int[] wing = new int[3];
         for (FieldBlock b : enemy.blocks()) {
-            if (fights(b) && !b.arm().mounted() && b.arm() != Arm.ARCHERS) {
+            if (fights(b) && !b.arm().mounted() && !b.arm().shoots()) {
                 wing[b.wing()] += b.alive();
             }
         }
@@ -5547,6 +5689,7 @@ public final class RecruitsBattle {
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
                 level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
         field.setType(type); // a sea battle stays at sea the next day
+        equipTrains(field, sides, survey == null ? null : survey.plan().engines());
         handCamps(); // the camps stand where they were; a night there mends the shattered
         if (works != null && survey != null) {
             field.besiege(survey.plan()); // the strategems are brought out again, the walls manned afresh
@@ -5691,6 +5834,10 @@ public final class RecruitsBattle {
                 wingCamps[side][wing] = null;
             }
         }
+        if (side == 0) {
+            frontCamps.values().forEach(WarCamp::restore);
+            frontCamps.clear();
+        }
     }
 
     /** Each tick: a few of a fading army's soldiers vanish in a puff, with their horses. */
@@ -5767,6 +5914,7 @@ public final class RecruitsBattle {
             if (best <= FieldRules.HOLDING_REACH) {
                 strike(strikers, foe, melee(l.block.arm()),
                         soldiers.size() * FieldRules.meleeFactor(sideOf(enemy, foe, centre), foe.block.arm()));
+            // shortcut: musket hits are left out (no Striker for shot), so calibrate with armies of no musketeers until one is added.
             } else if (l.block.arm() == Arm.ARCHERS && arrows(soldiers) > 0) {
                 Live shot = null;
                 double nearest = FieldRules.ARCHER_RANGE;
@@ -5819,7 +5967,7 @@ public final class RecruitsBattle {
         return switch (arm) {
             case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> Calibration.Striker.INFANTRY;
             case CAVALRY, HEAVY_CAVALRY -> Calibration.Striker.CAVALRY;
-            case ARCHERS -> Calibration.Striker.ARCHER_MELEE;
+            case ARCHERS, MUSKETEERS, ENGINES -> Calibration.Striker.ARCHER_MELEE;
         };
     }
 
@@ -5872,6 +6020,7 @@ public final class RecruitsBattle {
         long leftB = 0;
         for (int i = 0; i < runs; i++) {
             FieldBattle battle = new FieldBattle(aBlocks, bBlocks, centre, axisX, axisZ, i, sides[0].general.plan(), sides[1].general.plan());
+            equipTrains(battle, sides, null);
             FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
             wins[outcome == null || outcome.winner() < 0 ? 2 : outcome.winner()]++;
             seconds += battle.seconds();
@@ -5990,6 +6139,16 @@ public final class RecruitsBattle {
         List<Point> ground = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
+            if (side == 0 && field.siege() != null) {
+                // A besieging army's camps, one behind each of its forces at the walls.
+                for (rafasconquest.battle.Siege.Front f : field.siege().fronts()) {
+                    Point at = f.campSpot(CAMP_GAP);
+                    if (at != null) {
+                        ground.addAll(WarCamp.ground(at, -f.outX(), -f.outZ(), tentsFor(f), f.main()));
+                    }
+                }
+                continue;
+            }
             int[] wings = army.winged() ? new int[]{FieldArmy.CENTRE, FieldArmy.LEFT, FieldArmy.RIGHT} : new int[]{FieldArmy.CENTRE};
             for (int wing : wings) {
                 Point at = campAt(army, wing);
@@ -6070,6 +6229,15 @@ public final class RecruitsBattle {
             groundLookups = 0;
         }
         List<FormationSnapshot> all = new ArrayList<>();
+        Map<FieldBlock, rafasconquest.battle.Siege.Work> carried = new HashMap<>();
+        if (field.siege() != null) {
+            for (rafasconquest.battle.Siege.Work w : field.siege().works()) {
+                FieldBlock carrier = w.carrier();
+                if (carrier != null) {
+                    carried.put(carrier, w);
+                }
+            }
+        }
         for (int side = 0; side < 2; side++) {
             if (faded[side]) {
                 continue;
@@ -6087,7 +6255,8 @@ public final class RecruitsBattle {
                 Live l = live.get(block);
                 List<AbstractRecruitEntity> living = l == null ? List.of() : l.living();
                 if (!living.isEmpty()) {
-                    all.add(liveSnapshot(block, kind, s, face, l, living, shipOf(block)));
+                    FormationSnapshot snap = liveSnapshot(block, kind, s, face, l, living, shipOf(block));
+                    all.add(snap.withEngine(engineOf(block, carried.get(block), snap)));
                     continue;
                 }
                 boolean lone = block.started() == 1;
@@ -6103,13 +6272,50 @@ public final class RecruitsBattle {
                     continue;
                 }
                 Point middle = BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), 0, lone ? 0 : BattlePlan.SPACING);
-                all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
+                FormationSnapshot snap = new FormationSnapshot(block.id(), kind, s.uniform, s.mark, block.alive(), middle.x(),
                         groundY(block, middle.x(), middle.z()), middle.z(), face[0], face[1],
                         lone ? 0 : block.halfWidth(), lone ? 0 : BattlePlan.SPACING, block.fighting(),
-                        block.captainAlive(), new int[0], -1, null));
+                        block.captainAlive(), new int[0], -1, null);
+                all.add(snap.withEngine(engineOf(block, carried.get(block), snap)));
             }
         }
         return all;
+    }
+
+    /**
+     * The siege engine a block works or carries, for the client to draw past where the real ones are seen: the tower it
+     * pushes, the ram or ladder it carries (or has stood against the wall or the gate), or its train's engines, among its
+     * crew. Null for a block with none.
+     */
+    @Nullable
+    private FormationSnapshot.Engine engineOf(FieldBlock block, @Nullable rafasconquest.battle.Siege.Work work, FormationSnapshot snap) {
+        if (work != null && survey != null) {
+            double inX = -work.outX(); // facing its own wall
+            double inZ = -work.outZ();
+            boolean up = work.state() != rafasconquest.battle.Siege.State.CARRIED;
+            switch (work.kind()) {
+                case TOWERS -> {
+                    Point at = work.at();
+                    return new FormationSnapshot.Engine(rafasconquest.battle.Machine.SIEGE_TOWER.ordinal(), at.x(), snap.y(), at.z(), inX, inZ, up);
+                }
+                case RAMS -> {
+                    // Carried round the walls the way its crew walks; at the gate, facing in through it.
+                    rafasconquest.battle.Siege.Gate gate = field.siege().gates().get(work.gate()).gate();
+                    Point at = up ? work.foot() : new Point(snap.x(), snap.z());
+                    return new FormationSnapshot.Engine(rafasconquest.battle.Machine.BATTERING_RAM.ordinal(), at.x(), snap.y(), at.z(),
+                            up ? -gate.outX() : snap.facingX(), up ? -gate.outZ() : snap.facingZ(), up);
+                }
+                case LADDERS -> {
+                    // On its carriers' shoulders, along the way they face; once up, stood against the wall.
+                    Point at = up ? work.foot() : new Point(snap.x(), snap.z());
+                    double y = up ? groundY(block, at.x(), at.z()) : snap.y();
+                    return new FormationSnapshot.Engine(FormationSnapshot.LADDER, at.x(), y, at.z(),
+                            up ? inX : snap.facingX(), up ? inZ : snap.facingZ(), up);
+                }
+            }
+        }
+        rafasconquest.battle.Machine m = block.machine();
+        return m == null ? null : new FormationSnapshot.Engine(m.ordinal(), Double.NaN, snap.y(), Double.NaN, snap.facingX(), snap.facingZ(), false);
     }
 
     /** Less than this far since the last snapshot (a second) and cavalry is standing, not riding. */

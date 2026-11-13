@@ -1,14 +1,16 @@
 package rafasconquest.client;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
+import net.neoforged.fml.util.ObfuscationReflectionHelper;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.ARBInstancedArrays;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -36,7 +38,7 @@ final class FigureBatches {
     /** A model's corner: where it is (right, up, forward), how it is shaded (side's facing right and forward, or a set shade), its colour. */
     static final int VERTEX_INTS = 7;
     private static final int VERTEX_BYTES = VERTEX_INTS * 4;
-    /** A soldier's record: x y z scale, facing x z, light, flags, 8 colours. */
+    /** A soldier's record: x y z scale, facing x z, light colour ({@link #lightColour}), flags, 8 colours. */
     private static final int INSTANCE_BYTES = 64;
     private static final int GLOW = 1;
     /** A flat figure is shaded like the side of a block, as its rectangles always face the camera. */
@@ -137,6 +139,18 @@ final class FigureBatches {
     /** False once the graphics card is found unable (no instancing, or the shader didn't build): figures then aren't drawn. */
     private static boolean usable = true;
     private static boolean divisorArb;
+    private static int debugUniform;
+
+    /**
+     * {@code /pvefigures}: one part of every figure's colour swapped for a fixed one, to find which part turns them
+     * black. RED: all red; NO_LIGHTMAP: full light; NO_SHADER_COLOUR: the game's shader colour as white; WHITE: no
+     * texture, tint or palette. Both figure shaders read it.
+     */
+    enum Debug { NORMAL, RED, NO_LIGHTMAP, NO_SHADER_COLOUR, WHITE }
+
+    static Debug debug = Debug.NORMAL;
+    /** Set by {@code /pvefigures}: the next frame logs what each block's figures are coloured from. */
+    static boolean dump;
 
     /** Starts a frame's (or a glow pass's) soldiers. */
     static void begin() {
@@ -147,7 +161,7 @@ final class FigureBatches {
 
     /**
      * One soldier of {@code shape}: its feet ({@code x}, {@code y}, {@code z}) from the camera, drawn {@code scale} times
-     * its size, facing ({@code fx}, {@code fz}) (a flat figure: square to the camera), in {@code light}; {@code glow}: all
+     * its size, facing ({@code fx}, {@code fz}) (a flat figure: square to the camera), in {@code light} (a {@link #lightColour}); {@code glow}: all
      * white, for a selected figure's outline.
      */
     static void add(SoldierFigure.Shape shape, int[] palette, float x, float y, float z, float scale, float fx, float fz, int light,
@@ -189,14 +203,9 @@ final class FigureBatches {
         if (!any) {
             return;
         }
-        Minecraft mc = Minecraft.getInstance();
         int oldProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         int oldVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int oldBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
-        mc.gameRenderer.lightTexture().turnOnLightLayer();
-        RenderSystem.activeTexture(GL13.GL_TEXTURE2);
-        RenderSystem.bindTexture(RenderSystem.getShaderTexture(2));
-        RenderSystem.activeTexture(GL13.GL_TEXTURE0);
         RenderSystem.enableDepthTest();
         RenderSystem.disableCull();
         GlStateManager._glUseProgram(program);
@@ -208,6 +217,7 @@ final class FigureBatches {
         }
         float[] colour = RenderSystem.getShaderColor();
         GL20.glUniform4f(modulator, colour[0], colour[1], colour[2], colour[3]);
+        GL20.glUniform1i(debugUniform, debug.ordinal());
         for (Batch b : BATCHES.values()) {
             if (b.count == 0) {
                 continue;
@@ -223,13 +233,38 @@ final class FigureBatches {
         GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, oldBuffer);
         BufferUploader.invalidate();
         RenderSystem.enableCull();
-        mc.gameRenderer.lightTexture().turnOffLightLayer();
+    }
+
+    private static final java.lang.reflect.Field LIGHT_PIXELS = lightPixels();
+
+    @javax.annotation.Nullable
+    private static java.lang.reflect.Field lightPixels() {
+        try {
+            return ObfuscationReflectionHelper.findField(LightTexture.class, "lightPixels");
+        } catch (RuntimeException e) {
+            RafasConquest.LOGGER.error("[figures] can't read the lightmap: figures drawn unlit", e);
+            return null;
+        }
+    }
+
+    /**
+     * The colour (ABGR) the game's lightmap gives {@code packed} light this frame: the pixel an entity's shader fetches,
+     * read from the lightmap's own image. The figures don't sample its texture: what other mods' drawing leaves bound
+     * and set there made them read black at noon.
+     */
+    static int lightColour(int packed) {
+        try {
+            NativeImage pixels = (NativeImage) LIGHT_PIXELS.get(Minecraft.getInstance().gameRenderer.lightTexture());
+            return pixels.getPixelRGBA(LightTexture.block(packed), LightTexture.sky(packed));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return -1; // white: unlit beats black
+        }
     }
 
     // ---- the graphics card's side ----
 
     /** Builds the shader and the soldiers' buffer on first use; false (for good) if this graphics card can't. */
-    private static boolean ready() {
+    static boolean ready() {
         if (program >= 0) {
             return true;
         }
@@ -261,10 +296,7 @@ final class FigureBatches {
         }
         mvp = GL20.glGetUniformLocation(p, "Mvp");
         modulator = GL20.glGetUniformLocation(p, "ColorModulator");
-        int oldProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        GlStateManager._glUseProgram(p);
-        GL20.glUniform1i(GL20.glGetUniformLocation(p, "Sampler2"), 2);
-        GlStateManager._glUseProgram(oldProgram);
+        debugUniform = GL20.glGetUniformLocation(p, "Debug");
         instanceBuffer = GlStateManager._glGenBuffers();
         program = p;
         RafasConquest.LOGGER.info("[figures] drawing battle figures instanced");
@@ -277,7 +309,7 @@ final class FigureBatches {
         return false;
     }
 
-    private static int shader(int type, String source) {
+    static int shader(int type, String source) {
         int s = GL20.glCreateShader(type);
         GL20.glShaderSource(s, source);
         GL20.glCompileShader(s);
@@ -318,13 +350,13 @@ final class FigureBatches {
         return new Batch(vao, corners.length / VERTEX_INTS);
     }
 
-    private static void floats(int index, int size, int stride, long offset, boolean perSoldier) {
+    static void floats(int index, int size, int stride, long offset, boolean perSoldier) {
         GL20.glEnableVertexAttribArray(index);
         GL20.glVertexAttribPointer(index, size, GL11.GL_FLOAT, false, stride, offset);
         divisor(index, perSoldier);
     }
 
-    private static void ints(int index, int size, int stride, long offset, boolean perSoldier) {
+    static void ints(int index, int size, int stride, long offset, boolean perSoldier) {
         GL20.glEnableVertexAttribArray(index);
         GL30.glVertexAttribIPointer(index, size, GL11.GL_UNSIGNED_INT, stride, offset);
         divisor(index, perSoldier);
@@ -350,8 +382,8 @@ final class FigureBatches {
             in uvec4 PalA;
             in uvec4 PalB;
             uniform mat4 Mvp;
-            uniform sampler2D Sampler2;
             uniform vec4 ColorModulator;
+            uniform int Debug;
             out vec4 vertexColor;
 
             vec3 rgb(uint c) {
@@ -373,13 +405,15 @@ final class FigureBatches {
                     vec2 n = right * Shade.x + forward * Shade.y; // the side's facing, east and south
                     shade = 0.6 + 0.2 * n.y * n.y;
                 }
-                vec3 colour = rgb(c) * shade;
+                vec3 colour = (Debug == 4 ? vec3(1.0) : rgb(c)) * shade;
                 if ((Flags & 1u) != 0u) {
                     colour = vec3(1.0);
                 }
-                vec2 uv = vec2(float(Light & 0xFFFFu), float(Light >> 16));
-                vec4 light = texture(Sampler2, clamp(uv / 256.0, vec2(0.5 / 16.0), vec2(15.5 / 16.0)));
-                vertexColor = vec4(colour, 1.0) * light * ColorModulator;
+                vec4 light = Debug == 2 ? vec4(1.0) : vec4(float(Light & 255u), float((Light >> 8) & 255u), float((Light >> 16) & 255u), 255.0) / 255.0;
+                vertexColor = vec4(colour, 1.0) * light * (Debug == 3 ? vec4(1.0) : ColorModulator);
+                if (Debug == 1) {
+                    vertexColor = vec4(1.0, 0.0, 0.0, 1.0);
+                }
             }
             """;
 

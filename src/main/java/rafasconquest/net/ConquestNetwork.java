@@ -1033,12 +1033,22 @@ public final class ConquestNetwork {
                 buf.writeFloat((float) f.halfWidth());
                 buf.writeFloat((float) f.halfDepth());
                 FormationSnapshot.Ship ship = f.ship();
-                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0) | (ship != null && ship.cargo() ? 8 : 0));
+                FormationSnapshot.Engine engine = f.engine();
+                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0) | (ship != null && ship.cargo() ? 8 : 0)
+                        | (engine != null ? 16 : 0) | (engine != null && engine.up() ? 32 : 0));
                 buf.writeVarIntArray(f.soldierIds());
                 buf.writeVarInt(f.leaderId() + 1);
                 if (ship != null) {
                     buf.writeByte(ship.sail());
                     buf.writeByte(ship.stripe());
+                }
+                if (engine != null) {
+                    buf.writeByte(engine.kind());
+                    buf.writeDouble(engine.x());
+                    buf.writeFloat((float) engine.y());
+                    buf.writeDouble(engine.z());
+                    buf.writeFloat((float) engine.facingX());
+                    buf.writeFloat((float) engine.facingZ());
                 }
             }
         }
@@ -1066,8 +1076,13 @@ public final class ConquestNetwork {
                 double halfWidth = buf.readFloat();
                 double halfDepth = buf.readFloat();
                 int flags = buf.readByte();
+                int[] soldierIds = buf.readVarIntArray();
+                int leaderId = buf.readVarInt() - 1;
+                FormationSnapshot.Ship ship = readShip(buf, flags);
+                FormationSnapshot.Engine engine = (flags & 16) == 0 ? null : new FormationSnapshot.Engine(buf.readByte(), buf.readDouble(),
+                        buf.readFloat(), buf.readDouble(), buf.readFloat(), buf.readFloat(), (flags & 32) != 0);
                 formations.add(new FormationSnapshot(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth,
-                        (flags & 1) != 0, (flags & 2) != 0, buf.readVarIntArray(), buf.readVarInt() - 1, readShip(buf, flags)));
+                        (flags & 1) != 0, (flags & 2) != 0, soldierIds, leaderId, ship, engine));
             }
             int[][] kits = new int[buf.readVarInt()][];
             for (int k = 0; k < kits.length; k++) {

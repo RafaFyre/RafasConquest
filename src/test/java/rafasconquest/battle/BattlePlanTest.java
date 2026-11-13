@@ -105,6 +105,57 @@ class BattlePlanTest {
     }
 
     @Test
+    void aSiegeTrainOfAFifthOfATenthComesOnTopAndStandsWithTheShooters() {
+        BattlePlan.siegeworks = true;
+        try {
+            List<Slot> slots = BattlePlan.deployment(100);
+            assertEquals(105, slots.size(), "5% on top");
+            assertEquals(20, slots.stream().filter(s -> s.arm() == Arm.ARCHERS).count(), "the other shares don't change");
+            assertTrue(slots.stream().filter(s -> s.arm() == Arm.ENGINES).allMatch(s -> s.band() == BattlePlan.BAND_ARCHERS));
+            assertEquals(5, slots.stream().filter(s -> s.arm() == Arm.ENGINES).count());
+        } finally {
+            BattlePlan.siegeworks = false;
+        }
+    }
+
+    @Test
+    void eachBattleBringsTheEnginesItsAgeLandAndKindAllow() {
+        rafasconquest.core.Age steel = rafasconquest.core.Age.STEEL;
+        rafasconquest.core.Age gunpowder = rafasconquest.core.Age.GUNPOWDER;
+        rafasconquest.people.Homeland plains = rafasconquest.people.Homeland.PLAINS;
+        assertEquals(List.of(Machine.ARCBALLISTA, Machine.ONAGER), Machine.allowed(steel, plains, BattleType.LAND, false));
+        assertEquals(List.of(Machine.CULVERIN, Machine.SERPENTINE, Machine.ARCBALLISTA, Machine.ONAGER),
+                Machine.allowed(gunpowder, plains, BattleType.LAND, false));
+        assertTrue(Machine.allowed(gunpowder, rafasconquest.people.Homeland.JUNGLE, BattleType.LAND, false).contains(Machine.HWACHA), "the hwacha is the Jungle's");
+        assertEquals(List.of(Machine.ONAGER, Machine.TREBUCHET, Machine.BATTERING_RAM, Machine.SIEGE_TOWER, Machine.MANTLET),
+                Machine.allowed(steel, plains, BattleType.SIEGE, false));
+        assertEquals(List.of(Machine.TOWER_CROSSBOW), Machine.allowed(steel, plains, BattleType.SIEGE, true));
+        assertTrue(Machine.allowed(gunpowder, plains, BattleType.OCEAN, false).isEmpty(), "none at sea");
+        assertEquals(4, Machine.CULVERIN.perBlock());
+        assertEquals(1, Machine.TREBUCHET.perBlock());
+    }
+
+    @Test
+    void inTheAgeOfGunpowderMusketeersTakeATenthFromTheLevyAndTheArchers() {
+        BattlePlan.muskets = true;
+        try {
+            assertTrue(BattlePlan.deployment(100).stream().noneMatch(s -> s.arm() == Arm.MUSKETEERS), "not in the Age of Steel");
+            rafasconquest.core.WorldFeatures.set(true, true, new rafasconquest.core.Age.Range(rafasconquest.core.Age.GUNPOWDER, rafasconquest.core.Age.STEAM));
+            List<Slot> slots = BattlePlan.deployment(100);
+            java.util.Map<Arm, Long> by = slots.stream().collect(java.util.stream.Collectors.groupingBy(Slot::arm, java.util.stream.Collectors.counting()));
+            assertEquals(java.util.Map.of(Arm.LEVY, 25L, Arm.HEAVY_INFANTRY, 20L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L,
+                    Arm.ARCHERS, 15L, Arm.MUSKETEERS, 10L, Arm.CAVALRY, 10L, Arm.HEAVY_CAVALRY, 5L), by);
+            assertTrue(slots.stream().filter(s -> s.arm() == Arm.MUSKETEERS).allMatch(s -> s.band() == BattlePlan.BAND_ARCHERS), "they stand with the archers");
+            assertEquals(BattlePlan.Order.HOLD, BattlePlan.order(Arm.MUSKETEERS, 10, BattlePlan.ARCHER_RANGE, true));
+            assertTrue(FieldRules.SHOTS_PER_SECOND * FieldRules.shotDamage(Arm.HEAVY_INFANTRY) > FieldRules.ARROWS_PER_SECOND * FieldRules.ARROW_DAMAGE
+                    * FieldRules.arrowFactor(FieldRules.Side.FRONT, Arm.HEAVY_INFANTRY), "shot goes through the shield wall that stops arrows");
+        } finally {
+            BattlePlan.muskets = false;
+            rafasconquest.core.WorldFeatures.set(true, true, rafasconquest.core.Age.Range.DEFAULT);
+        }
+    }
+
+    @Test
     void aHundredStrongArmyStandsThreeBlocksWide() {
         List<Slot> slots = BattlePlan.deployment(5);
         assertEquals(3, slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count());

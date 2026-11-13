@@ -28,6 +28,13 @@ public class RafasConquest {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(ConquestGameRules::register);
+        // Vanilla fills each rotation's table on first use, unguarded: two worldgen threads racing it get a null and
+        // drop a whole city cell (JigsawBlock.rotate NPE). Fill them all once, here, on one thread.
+        for (com.mojang.math.OctahedralGroup g : com.mojang.math.OctahedralGroup.values()) {
+            g.rotate(net.minecraft.core.Direction.UP);
+        }
         rafasconquest.battle.BattlePlan.zweihandlers = rafasconquest.gear.Armoury.available(); // they need Epic Knights' swords
+        rafasconquest.battle.BattlePlan.muskets = net.neoforged.fml.ModList.get().isLoaded("musketmod"); // Recruits' crossbowmen fire its muskets
+        rafasconquest.battle.BattlePlan.siegeworks = net.neoforged.fml.ModList.get().isLoaded("siegeworks"); // the siege train's engines
     }
 }

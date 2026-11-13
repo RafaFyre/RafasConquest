@@ -30,7 +30,7 @@ public final class Armoury {
     /** Who a kit is for. */
     public enum Kit {
         /** Battle blocks by kind: {@link rafasconquest.battle.BattlePlan.Arm}. */
-        LEVY, HEAVY_INFANTRY, SKIRMISHER, ZWEIHANDLER, ARCHER, CAVALRY, HEAVY_CAVALRY,
+        LEVY, HEAVY_INFANTRY, SKIRMISHER, ZWEIHANDLER, ARCHER, CAVALRY, HEAVY_CAVALRY, MUSKETEER,
         CAPTAIN, GENERAL, GUARD, ARCHER_GUARD,
         RULER, GREAT_NOBLE, NOBLE, SWORD_SAINT, SWORD_KING, SWORD_GOD
     }
@@ -412,6 +412,21 @@ public final class Armoury {
         return available() ? stack("steel_concavehalberd", -1) : null;
     }
 
+    /** Musket Mod's bayonet musket and {@code n} paper cartridges; nulls without the mod. */
+    @Nullable
+    public static ItemStack musket() {
+        return stack("musketmod:musket_with_bayonet", -1);
+    }
+
+    @Nullable
+    public static ItemStack cartridges(int n) {
+        ItemStack s = stack("musketmod:cartridge", -1);
+        if (s != null) {
+            s.setCount(Math.min(n, s.getMaxStackSize()));
+        }
+        return s;
+    }
+
     /** Whether Epic Knights is installed. */
     public static boolean available() {
         return ModList.get() != null && ModList.get().isLoaded(MOD);
@@ -447,6 +462,12 @@ public final class Armoury {
             case ARCHER -> {
                 wear(slots, null, body("gambeson_chestplate", null, "gambeson_boots"), colour, banner);
                 slots.remove(EquipmentSlot.MAINHAND); // keeps its bow
+            }
+            case MUSKETEER -> {
+                // A gambeson under a kettle hat; keeps its bayonet musket.
+                wear(slots, "kettlehat", body("gambeson_chestplate", null, "gambeson_boots"), colour, banner);
+                slots.remove(EquipmentSlot.MAINHAND);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
             }
             case HEAVY_CAVALRY -> {
                 // The frog-mouthed jousting harness and a lance (the battle gives half of them steel halberds).

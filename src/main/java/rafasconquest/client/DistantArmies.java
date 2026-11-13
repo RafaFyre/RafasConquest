@@ -144,5 +144,6 @@ public final class DistantArmies {
         soldiers = new HashSet<>();
         gear = new HashMap<>();
         FigureGear.clear();
+        RecruitFigures.clear();
     }
 }

@@ -130,7 +130,11 @@ public final class BattlePlan {
         ARCHERS(1, 1, 1, 1),
         CAVALRY(1, 1, 1, 1),
         /** Diamond or frogmouth plate, lances: hits harder and takes less, a little slower. */
-        HEAVY_CAVALRY(1.3, 0.7, 0.9, 1.3);
+        HEAVY_CAVALRY(1.3, 0.7, 0.9, 1.3),
+        /** Gambesons and bayonet muskets (Musket Mod, Gunpowder age): slow, hard volleys that shields don't stop; soft. */
+        MUSKETEERS(1.3, 1.2, 1, 0.9),
+        /** The siege train: crews working Siegeworks engines ({@link Machine}), each block its own kind. */
+        ENGINES(1, 1, 0.8, 1);
 
         private final double hits;
         private final double takes;
@@ -174,6 +178,11 @@ public final class BattlePlan {
             return this == CAVALRY || this == HEAVY_CAVALRY;
         }
 
+        /** Shoots from behind the front: archers, musketeers and the siege train. */
+        public boolean shoots() {
+            return this == ARCHERS || this == MUSKETEERS || this == ENGINES;
+        }
+
         /** Bears shields: takes less from the front ({@link FieldRules#SHIELD_MELEE}, {@link FieldRules#SHIELD_ARROWS}). */
         public boolean shielded() {
             return this == HEAVY_INFANTRY;
@@ -183,7 +192,33 @@ public final class BattlePlan {
     /** Whether Epic Knights is there to arm zweihandlers; without it their share is skirmishers. Set at startup. */
     public static boolean zweihandlers = true; // shortcut: one global for the game, since every battle shares the mods
 
-    /** Of every army, by headcount: levy, heavy infantry, skirmishers, zweihandlers (the infantry), archers, cavalry, heavy cavalry. */
+    /** Whether Musket Mod is installed (Recruits' crossbowmen fire its muskets). Set at startup. */
+    public static boolean muskets = false;
+
+    /**
+     * Whether armies field musketeers: Musket Mod is there and the world's nations are in the Age of Gunpowder or later.
+     * shortcut: every nation is in the world's first age until nations research their own (tech tree stage 3); then
+     * this becomes per army.
+     */
+    public static boolean musketeers() {
+        return muskets && rafasconquest.core.WorldFeatures.ages().first().compareTo(rafasconquest.core.Age.GUNPOWDER) >= 0;
+    }
+
+    /** Whether Siegeworks is installed. Set at startup. */
+    public static boolean siegeworks = false;
+
+    /** Whether armies bring a siege train: Siegeworks is there and the world is in the Age of Steel or later (the same shortcut). */
+    public static boolean engines() {
+        return siegeworks && rafasconquest.core.WorldFeatures.ages().first().compareTo(rafasconquest.core.Age.STEEL) >= 0;
+    }
+
+    /** The siege train's crews, on top of the army: this share of its headcount. */
+    static final double TRAIN_SHARE = 0.05;
+
+    /**
+     * Of every army, by headcount: levy, heavy infantry, skirmishers, zweihandlers (the infantry), archers, cavalry, heavy
+     * cavalry. With musketeers, they take {@link #MUSKETEER_SHARE}: half from the levy, half from the archers.
+     */
     static final double LEVY_SHARE = 0.30;
     static final double HEAVY_SHARE = 0.20;
     static final double SKIRMISHER_SHARE = 0.10;
@@ -191,8 +226,17 @@ public final class BattlePlan {
     static final double ARCHER_SHARE = 0.20;
     static final double CAVALRY_SHARE = 0.10;
     static final double HEAVY_CAVALRY_SHARE = 0.05;
-    private static final double[] FOOT_SHARES = {LEVY_SHARE, HEAVY_SHARE, SKIRMISHER_SHARE, ZWEIHANDLER_SHARE};
+    static final double MUSKETEER_SHARE = 0.10;
     private static final double[] HORSE_SHARES = {CAVALRY_SHARE, HEAVY_CAVALRY_SHARE};
+
+    private static double[] footShares(boolean musketeers) {
+        return new double[]{LEVY_SHARE - (musketeers ? MUSKETEER_SHARE / 2 : 0), HEAVY_SHARE, SKIRMISHER_SHARE, ZWEIHANDLER_SHARE};
+    }
+
+    /** The shooters: archers, musketeers, then the siege train. */
+    private static double[] shotShares(boolean musketeers, boolean engines) {
+        return new double[]{ARCHER_SHARE - (musketeers ? MUSKETEER_SHARE / 2 : 0), musketeers ? MUSKETEER_SHARE : 0, engines ? TRAIN_SHARE : 0};
+    }
 
     /**
      * Deals {@code totals[k]} blocks of each kind out to the wings, each wing taking {@code capacity[w]} in all: each
@@ -395,7 +439,16 @@ public final class BattlePlan {
      * enemy on) or behind the heavy infantry, supporting it. A Great Shield's front is all heavy infantry.
      */
     public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront) {
-        int archers = Math.round(blocks * (float) ARCHER_SHARE);
+        return deployment(blocks, greatShield, wingShares, levyFront, 0);
+    }
+
+    /**
+     * The same, its front at most {@code maxFiles} files wide (0: as wide as its size allows) and then one body, without
+     * wings: a siege's attackers, before the one wall they storm, rather than spread across a field.
+     */
+    public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles) {
+        boolean musketeers = musketeers();
+        int archers = Math.round(blocks * (float) (ARCHER_SHARE + (musketeers ? MUSKETEER_SHARE / 2 : 0))); // archers and musketeers
         int cavalry = Math.round(blocks * (float) (CAVALRY_SHARE + HEAVY_CAVALRY_SHARE));
         int infantry = blocks - archers - cavalry;
         while (infantry < 1) {
@@ -406,20 +459,23 @@ public final class BattlePlan {
             }
             infantry++;
         }
+        boolean engines = engines();
+        archers += engines ? Math.round(blocks * (float) TRAIN_SHARE) : 0; // the siege train, on top, stands with them
         int soldiers = blocks * SOLDIERS_PER_FORMATION;
-        boolean winged = soldiers > WINGS_OVER && infantry >= 3;
+        boolean winged = maxFiles == 0 && soldiers > WINGS_OVER && infantry >= 3;
         double[] shares = winged ? wingShares : new double[]{0, 1, 0};
         int[] wingInfantry = share(infantry, shares, winged ? 1 : 0);
         int[] wingArchers = share(archers, shares, 0);
         int[] wingCavalry = share(cavalry, shares, 0);
         // Each kind shared out army-wide first, so the army holds its exact shares, then dealt out to the wings.
-        int[][] wingFoot = deal(share(infantry, FOOT_SHARES, 0), wingInfantry);
+        int[][] wingFoot = deal(share(infantry, footShares(musketeers), 0), wingInfantry);
+        int[][] wingShot = deal(share(archers, shotShares(musketeers, engines), 0), wingArchers);
         int[][] wingHorse = deal(share(cavalry, HORSE_SHARES, 0), wingCavalry);
         int stackFiles = stackFiles(blocks, greatShield);
         int depth = stackDepth(blocks, greatShield);
         int files = greatShield ? SHIELD_FILES : FILE_WIDTH;
         double pitch = pitch(files);
-        double frontCap = maxFront(soldiers);
+        double frontCap = maxFiles > 0 ? Math.min(maxFront(soldiers), maxFiles) : maxFront(soldiers);
 
         // Each wing laid out around its own middle, in order left, centre, right; files numbered left to right.
         List<List<Slot>> wings = new ArrayList<>();
@@ -429,7 +485,7 @@ public final class BattlePlan {
             List<Slot> slots = new ArrayList<>();
             if (wingInfantry[wing] + wingArchers[wing] + wingCavalry[wing] > 0) {
                 int cap = Math.max(1, (int) Math.round(frontCap * (winged ? shares[wing] : 1)));
-                widths[wing] = layoutWing(slots, wing, firstFile, foot(wingFoot[wing], levyFront), wingArchers[wing],
+                widths[wing] = layoutWing(slots, wing, firstFile, foot(wingFoot[wing], levyFront), wingArchers[wing], wingShot[wing][1], wingShot[wing][2],
                         wingCavalry[wing], wingHorse[wing][1], greatShield, stackFiles, depth, files, pitch, cap);
                 firstFile += (int) slots.stream().filter(s -> s.line() == 0).count();
             }
@@ -459,7 +515,7 @@ public final class BattlePlan {
      * Lays out one wing (or a small army) around its own middle: front, archers, reserves, cavalry. Its front files
      * are numbered from {@code firstFile}. Returns how wide it stands.
      */
-    private static double layoutWing(List<Slot> slots, int wing, int firstFile, List<Arm> foot, int archers, int cavalry, int heavyCavalry,
+    private static double layoutWing(List<Slot> slots, int wing, int firstFile, List<Arm> foot, int archers, int musketeers, int engines, int cavalry, int heavyCavalry,
                                      boolean greatShield, int stackFiles, int depth, int files, double pitch, int frontCap) {
         int infantry = foot.size();
         int next = 0; // the next of foot to take its place, front rank first
@@ -494,7 +550,8 @@ public final class BattlePlan {
         double frontRear = frontRows == 0 ? 0 : fileBack(frontRows - 1, stackFiles) + blockDepth;
         double widest = width * pitch;
 
-        // Archers: in rows right behind the front, which covers them (more rows if the front can't widen enough).
+        // Archers (then the musketeers, then the siege train): in rows right behind the front, which covers them (more rows
+        // if the front can't widen enough).
         if (width > 0) {
             archersPerRow = Math.max(1, Math.min(archersPerRow, (int) (width * pitch / BLOCK_PITCH)));
         }
@@ -503,7 +560,7 @@ public final class BattlePlan {
         for (int i = 0; i < archers; i++) {
             int row = i / archersPerRow;
             int inRow = Math.min(archersPerRow, archers - row * archersPerRow);
-            slots.add(new Slot(Arm.ARCHERS, across(i % archersPerRow, inRow, BLOCK_PITCH), archersBack + row * ARCHER_ROW, -1, i,
+            slots.add(new Slot(i < archers - musketeers - engines ? Arm.ARCHERS : i < archers - engines ? Arm.MUSKETEERS : Arm.ENGINES, across(i % archersPerRow, inRow, BLOCK_PITCH), archersBack + row * ARCHER_ROW, -1, i,
                     FILE_WIDTH, wing, BAND_ARCHERS));
         }
         widest = Math.max(widest, Math.min(archers, archersPerRow) * BLOCK_PITCH);
@@ -603,7 +660,7 @@ public final class BattlePlan {
     }
 
     /**
-     * A wing's infantry, {@code n} blocks of each kind in {@link #FOOT_SHARES}' order, in the order they take their
+     * A wing's infantry, {@code n} blocks of each kind in {@link #footShares}' order, in the order they take their
      * places from the front rank back: the levies first if they go up front, else the heavy infantry, the levies
      * behind it; then the skirmishers and the zweihandlers (skirmishers too without Epic Knights).
      */
@@ -732,15 +789,20 @@ public final class BattlePlan {
     /**
      * The general's order for a block in the front line, or archers or cavalry that haven't charged yet.
      * {@code nearestEnemy} is the distance from the formation's line to the nearest enemy soldier;
-     * {@code infantryEngaged} is whether any of its own army's front line is fighting.
+     * {@code infantryEngaged} is whether any of its own army's front line is fighting. Shooters close to bow range.
      */
     public static Order order(Arm arm, int secondsElapsed, double nearestEnemy, boolean infantryEngaged) {
+        return order(arm, secondsElapsed, nearestEnemy, infantryEngaged, ARCHER_RANGE);
+    }
+
+    /** The same, its shooters closing to {@code reach} ({@link FieldBlock#standOff}). */
+    public static Order order(Arm arm, int secondsElapsed, double nearestEnemy, boolean infantryEngaged, double reach) {
         if (secondsElapsed < FORMING_SECONDS) {
             return Order.HOLD;
         }
         return switch (arm) {
             case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
-            case ARCHERS -> nearestEnemy <= ARCHER_RANGE ? Order.HOLD : Order.MARCH;
+            case ARCHERS, MUSKETEERS, ENGINES -> nearestEnemy <= reach ? Order.HOLD : Order.MARCH;
             case CAVALRY, HEAVY_CAVALRY -> {
                 if (nearestEnemy <= CAVALRY_THREAT) {
                     yield Order.CHARGE;

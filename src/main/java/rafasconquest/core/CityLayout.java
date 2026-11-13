@@ -544,7 +544,7 @@ public final class CityLayout {
         int minX = chunkX << 4;
         int minZ = chunkZ << 4;
         // shortcut: assumes no style's wall stands more than ~130 blocks out past the square.
-        int r = MAX_HALF_EXTENT + 128 + Math.max(CityTerrain.SLOPE_REACH + NobleAnnex.MAX_REACH, HarbourCut.REACH + HarbourCut.WHARF);
+        int r = MAX_HALF_EXTENT + 128 + CityTerrain.BOX_MARGIN + Math.max(CityTerrain.SLOPE_REACH + NobleAnnex.MAX_REACH, HarbourCut.REACH + HarbourCut.WHARF);
         List<SlopeTile> found = new ArrayList<>();
         for (Site city : allSitesInBox(seed, s, minX - r, minZ - r, minX + 15 + r, minZ + 15 + r)) {
             for (SlopeTile t : slopeTiles(city)) {

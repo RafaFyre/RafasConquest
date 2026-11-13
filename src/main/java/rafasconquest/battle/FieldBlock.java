@@ -81,8 +81,11 @@ public final class FieldBlock {
     boolean engaged;
     /** Broken formation to chase and fight (cavalry that charged, a warrior general who went in). */
     boolean charged;
-    /** Arrows left, all its archers together. */
+    /** Arrows left, all its archers together (cartridges, for musketeers; shots, for engines). */
     int arrows;
+    /** The engine a siege train block works ({@link FieldBattle#equip}); null for any other. */
+    @Nullable
+    Machine machine;
     /** Seconds in a row it has been fighting hand to hand (a cavalry charge tells only at first). */
     int contactSeconds;
     /** Damage taken but not yet dealt out as whole hits. */
@@ -227,7 +230,7 @@ public final class FieldBlock {
         this.facingZ = facingZ;
         this.duty = duty;
         this.homeDuty = duty;
-        this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : 0;
+        this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : arm == Arm.MUSKETEERS ? soldiers * FieldRules.CARTRIDGES_EACH : 0;
     }
 
     /** What a player's unit does in a battle ({@link FieldBattle#assign}). */
@@ -420,6 +423,16 @@ public final class FieldBlock {
 
     public Arm arm() {
         return arm;
+    }
+
+    @Nullable
+    public Machine machine() {
+        return machine;
+    }
+
+    /** How near shooters close before they stand and shoot: archers' halt ({@link BattlePlan#ARCHER_RANGE}), an engine as far within its reach. */
+    public double standOff() {
+        return BattlePlan.ARCHER_RANGE * (machine != null ? machine.reach / FieldRules.ARCHER_RANGE : 1);
     }
 
     public Duty duty() {

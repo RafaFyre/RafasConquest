@@ -36,6 +36,16 @@ public class CityStructure extends Structure {
                 }));
     }
 
+    /**
+     * No per-start biome check: the city's biomes are the whole overworld and {@link CityVariant#forSite} decides for
+     * every cell at once. A terrain mod's own veto there (ReTerraForged's cell_test drops starts on rivers and in
+     * mountains) would drop single cells and leave half a city. Its districts and slope tiles skip it the same way.
+     */
+    @Override
+    public Optional<GenerationStub> findValidGenerationPoint(GenerationContext ctx) {
+        return findGenerationPoint(ctx);
+    }
+
     @Override
     public StructureType<?> type() {
         return ConquestWorldgen.CITY_STRUCTURE.get();

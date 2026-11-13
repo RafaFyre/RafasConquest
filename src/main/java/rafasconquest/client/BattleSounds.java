@@ -42,6 +42,8 @@ public final class BattleSounds {
     private static final double GALLOP = 4;
     /** A sound at volume v carries 16 v blocks. */
     private static final float MAX_VOLUME = 8;
+    /** In the strategy view sounds carry this many times as far, up to the camera and across the field. */
+    private static final float STRATEGY_REACH = 2;
     /** The clips (assets/rafasconquest/sounds.json); played on the client only, so never registered. */
     private static final SoundEvent CHARGE = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.charge"));
     private static final SoundEvent DIN = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.din"));
@@ -75,8 +77,8 @@ public final class BattleSounds {
 
         DinSound(Source s, double x, double z, float pitch) {
             super(DIN, SoundSource.NEUTRAL, RANDOM);
-            this.loudness = s.volume();
-            this.volume = s.volume();
+            this.loudness = loudness(s);
+            this.volume = loudness;
             this.pitch = pitch;
             this.x = x;
             this.y = s.y();
@@ -120,8 +122,8 @@ public final class BattleSounds {
         ChargeSound(Source s, float pitch) {
             super(CHARGE, SoundSource.NEUTRAL, RANDOM);
             this.formation = (int) s.key();
-            this.loudness = s.volume();
-            this.volume = s.volume();
+            this.loudness = loudness(s);
+            this.volume = loudness;
             this.pitch = pitch;
             this.offsetX = (RANDOM.nextDouble() * 2 - 1) * s.spread();
             this.offsetZ = (RANDOM.nextDouble() * 2 - 1) * s.spread();
@@ -147,6 +149,11 @@ public final class BattleSounds {
     }
 
     private BattleSounds() {
+    }
+
+    /** A clip's volume; every source is at least 2, so the game plays it at full gain and the volume only sets its reach. */
+    private static float loudness(Source s) {
+        return Minecraft.getInstance().screen instanceof BattleScreen ? s.volume() * STRATEGY_REACH : s.volume();
     }
 
     /** Each client tick: once a second works out where the sounds come from, every tick plays some of them. */

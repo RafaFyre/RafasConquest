@@ -24,24 +24,21 @@ import java.util.List;
  * Coordinates here are city-local, as in {@link CityLayout}: (0, 0) is the city square's north-west corner.
  */
 public final class CityTerrain {
-    /** How far past the wall the box reaches, and so where the easing starts, for a city {@code cells} districts a side. */
-    public static int margin(int cells) {
-        return 2 * cells;
-    }
-
-    /** A 3 × 3 city's margin. */
-    public static final int BOX_MARGIN = 2 * CityLayout.CELLS_PER_SIDE;
+    /** How far past the wall the box reaches: a flat zone outside the walls, where the easing starts. */
+    public static final int BOX_MARGIN = 30;
+    /** An outside noble district's platform keeps a narrow margin, so its easing starts at its walls. */
+    static final int PLATFORM_MARGIN = 2;
     /** Lowest and highest local coordinate inside the box, on both axes. The wall stands out past the city square. */
     public static final int BOX_MIN = -CityLayout.WALL_OUTSET - BOX_MARGIN;
     public static final int BOX_MAX = CityLayout.SIZE - 1 + CityLayout.WALL_OUTSET + BOX_MARGIN;
     /** How far the carve and fill may run past the box. */
     public static final int SLOPE_REACH = 84;
     /**
-     * How far past the box an edge cell lays the slope itself. An edge cell's structure start sits 86 blocks from the
-     * box edge, and Minecraft only places pieces within about 128 blocks of a start, so the slope beyond this is laid
-     * by {@link #slopeTiles slope tiles}, each its own structure start.
+     * How far past the box an edge cell lays the slope itself. An edge cell's structure start sits about 110 blocks
+     * from the box edge, and Minecraft only places pieces within about 128 blocks of a start, so the slope beyond this
+     * is laid by {@link #slopeTiles slope tiles}, each its own structure start.
      */
-    public static final int CELL_REACH = 42;
+    public static final int CELL_REACH = 18;
     /** Longest side of a slope tile: with its start at its middle, every column is well within the engine's reach. */
     static final int SLOPE_TILE = 96;
     public static final int EDGE_SEGMENT = 32;
@@ -99,11 +96,15 @@ public final class CityTerrain {
         }
 
         public int boxMin() {
-            return CityTerrain.boxMin(cells, outset);
+            return -outset - margin();
         }
 
         public int boxMax() {
-            return size - 1 + outset + margin(cells);
+            return size - 1 + outset + margin();
+        }
+
+        private int margin() {
+            return run < 0 ? PLATFORM_MARGIN : BOX_MARGIN;
         }
 
         /** The stretches along each side. */
@@ -148,11 +149,11 @@ public final class CityTerrain {
     }
 
     public static int boxMin(int cells, int outset) {
-        return -outset - margin(cells);
+        return -outset - BOX_MARGIN;
     }
 
     public static int boxMax(int cells, int outset) {
-        return size(cells) - 1 + outset + margin(cells);
+        return size(cells) - 1 + outset + BOX_MARGIN;
     }
 
     public static int segments(int cells) {
@@ -324,10 +325,14 @@ public final class CityTerrain {
             return column(platform, px, pz);
         }
         Column c = column(city, lx, lz);
+        Column p = column(platform, px, pz);
+        // The platform's easing runs on over the city's flat zone where it stands above it, not cut off into a cliff.
+        if (c.kind() == Kind.PLATE && p.kind() == Kind.SLOPE && p.low() > c.low()) {
+            return new Column(Kind.SLOPE, p.low(), p.low(), true, true);
+        }
         if (c.kind() != Kind.SLOPE && c.kind() != Kind.NONE) {
             return c;
         }
-        Column p = column(platform, px, pz);
         if (p.kind() == Kind.NONE) {
             return c;
         }

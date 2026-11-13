@@ -51,6 +51,15 @@ public final class FieldRules {
     public static final double ARROW_DAMAGE = 0.19;
     /** Arrows each archer carries (Recruits bowmen in battle get a stack). */
     public static final int ARROWS_EACH = 64;
+    /**
+     * Musketeers shoot as far as archers, but each only every five seconds or so (Recruits' crossbowmen load a musket
+     * for 3 s and wait 2 s), each ball (Musket Mod: 16 against a bow's ~6) doing this much, times their {@link Arm#hits}.
+     * Shields don't stop it.
+     */
+    public static final double SHOTS_PER_SECOND = 0.2;
+    public static final double SHOT_DAMAGE = 0.5;
+    /** Paper cartridges each musketeer carries (a stack). */
+    public static final int CARTRIDGES_EACH = 64;
 
     /**
      * Cavalry momentum, 0 to 1: gathered riding (full after {@link #RUN_UP} blocks), spent cutting into the enemy. A
@@ -248,6 +257,11 @@ public final class FieldRules {
     /** How much of a volley of arrows tells, for where it falls and on whom. */
     public static double arrowFactor(Side side, Arm defender) {
         return defender.takes() * (side == Side.FRONT && defender.shielded() ? SHIELD_ARROWS : 1);
+    }
+
+    /** How much a musket ball does, for whom it hits: no shield stops it. */
+    public static double shotDamage(Arm defender) {
+        return SHOT_DAMAGE * Arm.MUSKETEERS.hits() * defender.takes();
     }
 
     /**

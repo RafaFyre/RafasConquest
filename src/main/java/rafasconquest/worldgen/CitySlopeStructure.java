@@ -95,6 +95,12 @@ public class CitySlopeStructure extends Structure {
         }
     }
 
+    /** No per-start biome check, as {@link CityStructure#findValidGenerationPoint}: a dropped tile leaves a hill against the wall. */
+    @Override
+    public Optional<GenerationStub> findValidGenerationPoint(GenerationContext ctx) {
+        return findGenerationPoint(ctx);
+    }
+
     @Override
     public StructureType<?> type() {
         return ConquestWorldgen.CITY_SLOPE_STRUCTURE.get();

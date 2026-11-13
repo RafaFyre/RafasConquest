@@ -127,7 +127,7 @@ public final class GroundPlan {
             }
         }
         List<List<FieldBlock>> order = new ArrayList<>(platoons.values());
-        order.sort(Comparator.comparingInt((List<FieldBlock> p) -> front(p) ? 0 : p.get(0).arm == Arm.ARCHERS ? 1 : 2)
+        order.sort(Comparator.comparingInt((List<FieldBlock> p) -> front(p) ? 0 : p.get(0).arm.shoots() ? 1 : 2)
                 .thenComparingDouble(p -> p.stream().mapToDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.line).z())
                         .min().orElse(0)));
         for (List<FieldBlock> p : order) {
@@ -144,7 +144,7 @@ public final class GroundPlan {
                     sz += shift.z() / p.size();
                 }
             }
-            double reach = front(p) || p.get(0).arm == Arm.ARCHERS ? REACH : REACH_BEHIND; // archers go further for high ground
+            double reach = front(p) || p.get(0).arm.shoots() ? REACH : REACH_BEHIND; // archers go further for high ground
             Point shift = best(army, p, new Point(sx, sz), reach, ref, taken, ground);
             for (FieldBlock b : p) {
                 Point at = b.line.plus(shift.x(), shift.z());
@@ -219,7 +219,7 @@ public final class GroundPlan {
                         dry = false;
                         break;
                     }
-                    double weight = b.arm == Arm.ARCHERS ? ARCHER_HEIGHT : b.arm.mounted() ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
+                    double weight = b.arm.shoots() ? ARCHER_HEIGHT : b.arm.mounted() ? CAVALRY_HEIGHT : INFANTRY_HEIGHT;
                     score += weight * (ground.height(p.x(), p.z()) - ref) - COHESION * p.distanceTo(b.line);
                     for (Point t : taken) {
                         if (t.distanceTo(p) < CLEARANCE) {

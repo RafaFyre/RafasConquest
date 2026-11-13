@@ -32,6 +32,22 @@ class BattleSnapshotGearTest {
         assertEquals(0, buf.readableBytes());
     }
 
+    @Test
+    void siegeEnginesComeBackWhereTheyStandOrAmongTheirCrew() {
+        FormationSnapshot.Engine tower = new FormationSnapshot.Engine(rafasconquest.battle.Machine.SIEGE_TOWER.ordinal(), 12.5, 70, -8.25, -1, 0, true);
+        FormationSnapshot.Engine onagers = new FormationSnapshot.Engine(rafasconquest.battle.Machine.ONAGER.ordinal(), Double.NaN, 64, Double.NaN, 0, -1, false);
+        List<FormationSnapshot> formations = List.of(block(1).withEngine(tower), block(2).withEngine(onagers), block(3));
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        new ConquestNetwork.BattleSnapshot(formations, Map.of()).write(buf);
+        List<FormationSnapshot> back = ConquestNetwork.BattleSnapshot.read(buf).formations();
+        assertEquals(tower, back.get(0).engine());
+        assertEquals(onagers.kind(), back.get(1).engine().kind());
+        org.junit.jupiter.api.Assertions.assertTrue(back.get(1).engine().withCrew(), "the onagers stand among their crew");
+        assertEquals(null, back.get(2).engine());
+        assertEquals(101, back.get(0).leaderId(), "what follows the engine still reads right");
+        assertEquals(0, buf.readableBytes());
+    }
+
     private static FormationSnapshot block(int id) {
         return new FormationSnapshot(id, FormationSnapshot.Kind.LEVY, 0x3C44AA, 0xFFFFFF, 20, 10.5, 64, -3.25, 0, -1, 4, 2,
                 false, true, new int[]{100 + id, -1}, 100 + id, null);

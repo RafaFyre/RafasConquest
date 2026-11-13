@@ -71,6 +71,15 @@ repositories {
     exclusiveContent {
         forRepository {
             maven {
+                name = 'CurseMaven'
+                url = 'https://cursemaven.com'
+            }
+        }
+        filter { includeGroup 'curse.maven' }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
                 name = 'FirstDark'
                 url = 'https://maven.firstdark.dev/snapshots'
             }
@@ -89,6 +98,11 @@ dependencies {
     runtimeOnly "maven.modrinth:epic-knights-antique-legacy:${antique_legacy_version}"
     runtimeOnly "maven.modrinth:architectury-api:${architectury_version}"
     runtimeOnly "maven.modrinth:cloth-config:${cloth_config_version}"
+    runtimeOnly "maven.modrinth:musket-mod:${musket_version}"
+    // Siegeworks (CurseForge only): the siege train's engines, worked by Recruits' siege engineers. Needs Axiomata and GeckoLib.
+    runtimeOnly "curse.maven:siegeworks-1713906:${siegeworks_file}"
+    runtimeOnly "curse.maven:axiomata-1713796:${axiomata_file}"
+    runtimeOnly "maven.modrinth:geckolib:${geckolib_version}"
     // Sable is also compiled against, to sail real ships on the sea lanes; only bridge/SableShips touches it, and only
     // when it is installed. Its pose and box types are in a companion jar nested inside it.
     implementation "maven.modrinth:sable:${sable_version}"

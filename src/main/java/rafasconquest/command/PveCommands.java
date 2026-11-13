@@ -421,8 +421,10 @@ public final class PveCommands {
         List<Faction> nearest = server.data().factions().stream()
                 .sorted(Comparator.comparingDouble(f -> f.origin().getCenter().distanceToSqr(castle.x(), f.origin().getY() + 0.5, castle.z())))
                 .toList();
-        Faction a = attacker == null ? (nearest.isEmpty() ? null : nearest.get(0)) : byName(server, attacker);
-        Faction d = defender == null ? (nearest.size() < 2 ? null : nearest.get(1)) : byName(server, defender);
+        // The place's own holder defends it (else the second nearest); the nearest other faction attacks.
+        Faction holder = server.data().faction(server.precomputer().holderAt(castle.x(), castle.z()));
+        Faction d = defender != null ? byName(server, defender) : holder != null ? holder : nearest.size() < 2 ? null : nearest.get(1);
+        Faction a = attacker != null ? byName(server, attacker) : nearest.stream().filter(f -> f != d).findFirst().orElse(null);
         if (a == null || d == null || a == d) {
             throw NO_FACTION.create();
         }
@@ -523,6 +525,10 @@ public final class PveCommands {
         long start = System.nanoTime();
         FieldBattle battle = new FieldBattle(BattlePlan.blocks(firstSoldiers), BattlePlan.blocks(secondSoldiers),
                 new BattlePlan.Point(0, 0), 1, 0, random.nextLong(), generalA.plan(), generalB.plan());
+        for (Faction f : new Faction[]{a, b}) { // each siege train its field engines, as a real battle gives them
+            battle.equip(f == a ? 0 : 1, rafasconquest.battle.Machine.allowed(rafasconquest.core.WorldFeatures.ages().first(),
+                    rafasconquest.gear.Armoury.homeland(rafasconquest.worldgen.ConquestRuntime.map(), f.id()), rafasconquest.battle.BattleType.LAND, false));
+        }
         FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
         long millis = (System.nanoTime() - start) / 1_000_000;
         FieldArmy armyA = battle.army(0);

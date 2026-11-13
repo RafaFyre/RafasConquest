@@ -109,15 +109,34 @@ public final class DistantArmyRenderer {
         boolean[] flat = new boolean[formations.size()];
         for (int f = 0; f < seen.length; f++) {
             FormationSnapshot formation = formations.get(f);
-            seen[f] = inView(frustum, eye, renderBlocks, figures.get(f));
+            seen[f] = inView(frustum, eye, renderBlocks, figures.get(f), formation.engine() == null ? FIGURE_REACH : ENGINE_REACH);
             // The light where the block stands, for all its figures: each figure's own costs a lookup apiece.
             light[f] = seen[f] ? lightAt(mc, formation.x(), formation.y(), formation.z()) : 0;
             flat[f] = flat(formation, eye);
+        }
+        if (FigureBatches.dump) {
+            FigureBatches.dump = false;
+            dump(formations, seen, light, flat);
         }
         pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
         if (!selected.isEmpty()) {
             pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, selected);
+        }
+    }
+
+    /** For {@code /pvefigures}: what each block on screen is coloured from this frame, to the log. */
+    private static void dump(List<FormationSnapshot> formations, boolean[] seen, int[] light, boolean[] flat) {
+        float[] c = RenderSystem.getShaderColor();
+        rafasconquest.RafasConquest.LOGGER.info("[figures] test {}: shader colour {} {} {} {}", FigureBatches.debug, c[0], c[1], c[2], c[3]);
+        for (int f = 0; f < formations.size(); f++) {
+            FormationSnapshot s = formations.get(f);
+            if (seen[f]) {
+                rafasconquest.RafasConquest.LOGGER.info("[figures] block {} {} colour {} light block {} sky {} (lightmap ABGR {}), {}{}", s.id(), s.kind(),
+                        String.format("%06X", s.rgb()), light[f] >> 4 & 15, light[f] >> 20 & 15,
+                        String.format("%08X", FigureBatches.lightColour(light[f])), flat[f] ? "flat" : "3D",
+                        RecruitFigures.draws(s, flat[f]) ? ", " + RecruitFigures.describe(s) : "");
+            }
         }
     }
 
@@ -142,13 +161,15 @@ public final class DistantArmyRenderer {
 
     /** Room about a block's figures' feet for their height, flags and glow, in blocks. */
     private static final double FIGURE_REACH = 4;
+    /** The same about a block with a siege engine: a tower stands well ahead of its crew, and tall. */
+    private static final double ENGINE_REACH = 18;
 
     /**
      * Whether any of a block's figures can be on screen: the box about them, pulled in as they are drawn
      * ({@link DistantDepth}), touches the camera's view.
      */
     private static boolean inView(net.minecraft.client.renderer.culling.Frustum frustum, Vec3 eye, double renderBlocks,
-                                  List<FigureMotion.Placed> figures) {
+                                  List<FigureMotion.Placed> figures, double reach) {
         if (figures.isEmpty()) {
             return false;
         }
@@ -169,9 +190,9 @@ public final class DistantArmyRenderer {
         // Pulled in along the line of sight, shrunk by the same factor: the same on screen, and always short of the
         // view's far end (figures drawn at their real distance, with the merged depth, may lie past it).
         double s = DistantDepth.drawDistance(distance, renderBlocks) / distance;
-        double hx = ((x1 - x0) / 2 + FIGURE_REACH) * s;
-        double hy = ((y1 - y0) / 2 + FIGURE_REACH) * s;
-        double hz = ((z1 - z0) / 2 + FIGURE_REACH) * s;
+        double hx = ((x1 - x0) / 2 + reach) * s;
+        double hy = ((y1 - y0) / 2 + reach) * s;
+        double hz = ((z1 - z0) / 2 + reach) * s;
         double px = eye.x + cx * s;
         double py = eye.y + cy * s;
         double pz = eye.z + cz * s;
@@ -236,6 +257,7 @@ public final class DistantArmyRenderer {
                              List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, boolean[] seen, int[] light,
                              boolean[] flat, @javax.annotation.Nullable Set<Integer> halo) {
         FigureBatches.begin();
+        RecruitFigures.begin();
         boolean glow = halo != null;
         for (int f = 0; f < formations.size(); f++) {
             FormationSnapshot formation = formations.get(f);
@@ -246,7 +268,13 @@ public final class DistantArmyRenderer {
             int[] palette = SoldierFigure.Palette.of(formation, gear).slots();
             SoldierFigure.Shape rank = SoldierFigure.Shape.of(formation, gear, false, flat[f]);
             SoldierFigure.Shape leader = SoldierFigure.Shape.of(formation, gear, true, flat[f]);
-            for (FigureMotion.Placed sprite : figures.get(f)) {
+            // Foot soldiers near enough for 3D look as the real recruits do; their leader keeps its banner figure.
+            boolean recruits = RecruitFigures.draws(formation, flat[f]) && RecruitFigures.block(formation, gear);
+            int flags = recruits ? RecruitFigures.flags(formation) | (glow ? RecruitFigures.GLOW : 0) : 0;
+            int lit = FigureBatches.lightColour(glow ? LightTexture.FULL_BRIGHT : light[f]);
+            List<FigureMotion.Placed> placed = figures.get(f);
+            for (int i = 0; i < placed.size(); i++) {
+                FigureMotion.Placed sprite = placed.get(i);
                 double dx = sprite.x() - eye.x;
                 double dy = sprite.y() - eye.y;
                 double dz = sprite.z() - eye.z;
@@ -259,12 +287,64 @@ public final class DistantArmyRenderer {
                 // A flat figure faces the camera: its right is the camera's right.
                 float fx = flat[f] ? rightZ : (float) sprite.fx();
                 float fz = flat[f] ? -rightX : (float) sprite.fz();
+                if (recruits && !sprite.leader()) {
+                    RecruitFigures.add((float) (dx * scale * back), (float) ((glow ? dy - 0.1 : dy) * scale * back),
+                            (float) (dz * scale * back), (float) scale * (glow ? HALO_GROWTH : 1), fx, fz, sprite.swing(),
+                            sprite.amount(), lit, flags,
+                            Math.floorMod(formation.id() * 31 + i * 17, 100) / 100F);
+                    continue;
+                }
                 FigureBatches.add(sprite.leader() ? leader : rank, palette, (float) (dx * scale * back),
                         (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
-                        (float) scale * (glow ? HALO_GROWTH : 1), fx, fz, glow ? LightTexture.FULL_BRIGHT : light[f], glow);
+                        (float) scale * (glow ? HALO_GROWTH : 1), fx, fz, lit, glow);
+            }
+            if (formation.engine() != null) {
+                engines(mc, formation, formation.engine(), placed, palette, eye, renderBlocks, lit, glow);
             }
         }
         FigureBatches.draw(pose.last().pose());
+        RecruitFigures.draw(pose.last().pose(), glow);
+    }
+
+    /**
+     * A formation's siege engine, drawn in the same instanced batches as the figures: a tower, ram or ladder where it
+     * stands; a train's engines under every crew-th of its soldiers, as the real ones are set up. Not where the game
+     * draws the real one.
+     */
+    private static void engines(Minecraft mc, FormationSnapshot formation, FormationSnapshot.Engine engine, List<FigureMotion.Placed> placed,
+                                int[] palette, Vec3 eye, double renderBlocks, int lit, boolean glow) {
+        SoldierFigure.Shape shape = SoldierFigure.Shape.engine(engine.kind(), engine.up());
+        float size = SoldierFigure.engineSize(engine.kind());
+        if (!engine.withCrew()) {
+            engine(mc, shape, palette, engine.x(), engine.y(), engine.z(), engine.facingX(), engine.facingZ(), size, eye, renderBlocks, lit, glow);
+            return;
+        }
+        int crew = engine.kind() == FormationSnapshot.LADDER ? placed.size() : rafasconquest.battle.Machine.values()[engine.kind()].crew;
+        for (int i = 0; i < placed.size(); i += Math.max(1, crew)) {
+            FigureMotion.Placed p = placed.get(i);
+            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, eye, renderBlocks, lit, glow);
+        }
+    }
+
+    private static void engine(Minecraft mc, SoldierFigure.Shape shape, int[] palette, double x, double y, double z, double fx, double fz,
+                               float size, Vec3 eye, double renderBlocks, int lit, boolean glow) {
+        double dx = x - eye.x;
+        double dy = y - eye.y;
+        double dz = z - eye.z;
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance <= handover && realEngineNear(mc, x, y, z)) {
+            return; // the game draws the real one
+        }
+        double scale = DistantOcclusion.scale(distance, renderBlocks);
+        double back = glow ? 1 + HALO_BEHIND / Math.max(distance, 1) : 1;
+        FigureBatches.add(shape, palette, (float) (dx * scale * back), (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
+                (float) scale * size * (glow ? HALO_GROWTH : 1), (float) fx, (float) fz, lit, glow);
+    }
+
+    /** Whether the client has a real Siegeworks engine about this spot (a tower stands up to its height over it). */
+    private static boolean realEngineNear(Minecraft mc, double x, double y, double z) {
+        return mc.level != null && !mc.level.getEntities((Entity) null, new net.minecraft.world.phys.AABB(x - 4, y - 4, z - 4, x + 4, y + 16, z + 4),
+                e -> rafasconquest.battle.Machine.MOD.equals(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getNamespace())).isEmpty();
     }
 
     /**
@@ -428,7 +508,12 @@ public final class DistantArmyRenderer {
         if (mc.level == null || !mc.level.hasChunkAt(head)) {
             return LightTexture.FULL_SKY;
         }
-        return LevelRenderer.getLightColor(mc.level, head);
+        // Not under the ground: a block's middle on a slope can sit below it, and solid ground has no light (black figures).
+        // MOTION_BLOCKING: the no-leaves map is server-only, empty on the client, so it never lifted anything.
+        int surface = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, head.getX(), head.getZ());
+        int packed = LevelRenderer.getLightColor(mc.level, head.getY() < surface ? head.atY(surface) : head);
+        // At or above the surface is open sky: chunks at the edge of those loaded can have no sky light yet (sky 0).
+        return mc.level.dimensionType().hasSkyLight() ? packed | LightTexture.FULL_SKY : packed;
     }
 
     /**

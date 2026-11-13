@@ -58,6 +58,21 @@ class FigureMotionTest {
     }
 
     @Test
+    void aWalkingFigureSwingsItsLegsAndStillsWhenItStands() {
+        FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1);
+        for (int i = 0; i < 20; i++) { // a second's walk after a place that keeps 3 blocks ahead (no hurrying)
+            FigureMotion.move(s, s.x + 3, 0, 0, -1, false, FigureMotion.FOOT_SPEED, 0.05);
+        }
+        assertEquals(Math.min(FigureMotion.FOOT_SPEED / 5, 1), s.amount, 0.02, "a walking pace's stride");
+        assertTrue(s.swing > 10, "the cycle runs on: " + s.swing);
+        double there = s.x + 3;
+        for (int i = 0; i < 400; i++) { // there, and standing
+            FigureMotion.move(s, there, 0, 0, -1, false, FigureMotion.FOOT_SPEED, 0.05);
+        }
+        assertEquals(0, s.amount, 0.01, "legs still");
+    }
+
+    @Test
     void aFigureShufflingAShortWaySidestepsFacingTheFront() {
         FigureMotion.State s = new FigureMotion.State(0, 0, 0, -1); // facing north
         FigureMotion.move(s, 2, 0, 0, -1, false, FigureMotion.FOOT_SPEED, 0.1); // its place is 2 blocks east
