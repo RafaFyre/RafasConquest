@@ -187,7 +187,8 @@ final class FigureMotion {
                 move(state, tx, tz, faceX, faceZ, s.real(), horse ? HORSE_SPEED : FOOT_SPEED, dt);
             }
             state.seen = now;
-            double y = s.real() ? s.y() : settle(state, s.y(), dt);
+            // Aboard, the deck height comes from the server: the ground under a ship is the seabed (Sable decks aren't in the heightmap).
+            double y = s.real() || f.afloat() ? s.y() : settle(state, s.y(), dt);
             placed.add(new Placed(state.x, y + (thrown == null ? 0 : thrown[1]), state.z, state.fx, state.fz, slot.leader(), s.real(),
                     (float) state.swing, (float) state.amount));
         }
