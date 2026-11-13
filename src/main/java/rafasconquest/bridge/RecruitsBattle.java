@@ -158,8 +158,6 @@ public final class RecruitsBattle {
     private static final double GROUND_AHEAD = 32;
     /** A formation afloat within this of a player sails a real ship; wherever a client has none, it draws a stand-in. */
     public static final double SHIPS_WITHIN = NUMBERS_BEYOND + BLOCK_REACH;
-    /** Ranks stand this many soldiers' spacings apart, front to back. */
-    private static final double SLOT_DEPTH = 1.75;
     /**
      * Battles up to this many blocks (both sides) are also fought through as numbers at the start, for comparing; a
      * bigger one would hold the server up for seconds.
@@ -1025,22 +1023,11 @@ public final class RecruitsBattle {
      * captain stands in the middle of the back rank, as the figures draw it, and whoever's place that was takes theirs.
      */
     private static double slotRight(FieldBlock block, int i) {
-        int files = Math.max(1, block.files());
-        return block.started() == 1 ? 0 : (place(block, i) % files - (files - 1) / 2.0) * BattlePlan.SPACING;
+        return block.slotRight(i);
     }
 
     private static double slotBack(FieldBlock block, int i) {
-        return (place(block, i) / Math.max(1, block.files())) * BattlePlan.SPACING * SLOT_DEPTH;
-    }
-
-    /** Where soldier i stands in its block's ranks, counting along each rank from the front. */
-    private static int place(FieldBlock block, int i) {
-        int captain = block.captain();
-        if (captain < 0) {
-            return i;
-        }
-        int back = BattlePlan.captainPlace(block.started(), Math.max(1, block.files()));
-        return i == captain ? back : i == back ? captain : i;
+        return block.slotBack(i);
     }
 
     /** Where soldier i stands in the ranks of a block whose front rank's centre is at {@code front}. */
@@ -2088,6 +2075,10 @@ public final class RecruitsBattle {
             battle.switchLive();
             battle.switchNanos += System.nanoTime() - t;
         }
+        // A watched battle: its soldiers who are only numbers walk and touch as bodies, which decide who fights whom.
+        long b = System.nanoTime();
+        battle.field.bodiesTick();
+        battle.fieldNanos += System.nanoTime() - b;
         battle.sail();
         if (battle.works != null) {
             battle.works.tick();

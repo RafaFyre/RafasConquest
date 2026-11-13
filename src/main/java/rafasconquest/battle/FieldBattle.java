@@ -1249,6 +1249,9 @@ public final class FieldBattle {
             return;
         }
         seconds++;
+        if (bodies != null) {
+            placeFromBodies();
+        }
         index();
         if (type == BattleType.OCEAN) {
             captains(); // at sea the ships' captains decide everything: none of the land's generalship applies
@@ -3413,6 +3416,12 @@ public final class FieldBattle {
                 if (foe != null && siege != null && !siege.reaches(block, foe)) {
                     foe = null; // a wall between them: archers shoot instead
                 }
+                int swung = -1;
+                if (block.body != null && (foe == null || foe.body != null)) {
+                    // Bodies decide: it fights whom its soldiers struck this second, with as many as struck.
+                    swung = swung(block);
+                    foe = swung > 0 ? bodyFoe : null;
+                }
                 if (foe != null) {
                     block.contactSeconds++;
                     if (block.duty == Duty.FRONT) {
@@ -3425,7 +3434,7 @@ public final class FieldBattle {
                         default -> {
                         }
                     }
-                    double fighters = block.champion ? rates.warriorFightsAs() : block.alive;
+                    double fighters = block.champion ? rates.warriorFightsAs() : swung >= 0 ? swung : block.alive;
                     if (block.live && foe.live && (type == BattleType.OCEAN || !block.afloat && !foe.afloat)) {
                         // Real soldiers on both sides: Recruits fights it out between them. Those of the block still
                         // only numbers fight on as numbers.
@@ -3471,8 +3480,159 @@ public final class FieldBattle {
             }
             if (target.live) {
                 target.liveDamage += damage; // dealt to the real soldiers by the live battle
-            } else if (target.takeDamage(damage, random) > 0) {
+            } else if ((target.body != null ? target.takeDamage(damage, random, struckWeights(target)) : target.takeDamage(damage, random)) > 0) {
                 lastFall = seconds;
+            }
+        }
+        if (bodies != null) {
+            bodies.clearCounts();
+        }
+    }
+
+    // ---- bodies: every soldier of a watched battle as a body (Bodies), Total War style ----
+
+    /** The bodies of a watched battle's soldiers, or null: a battle nobody watches is fought as numbers alone. */
+    @Nullable
+    private Bodies bodies;
+    /** Each body's block (by body index); bodies are never reused. */
+    private final List<FieldBlock> bodyBlock = new ArrayList<>();
+    private double originX;
+    private double originZ;
+    /** The enemy block most of a block's soldiers struck, as {@link #swung} last worked out. */
+    @Nullable
+    private FieldBlock bodyFoe;
+
+    /**
+     * One game tick of a watched battle: every soldier on land who is only numbers walks as a body to its place in its
+     * block's ranks, pushing and being pushed, and swings at any enemy in reach. Real soldiers keep their own Recruits
+     * AI and have no body. The first call starts the bodies; sieges and battles at sea stay numbers.
+     * shortcut: runs on the server thread (3 ms a step for 10,000 soldiers in BodiesTest); move to a worker if it shows in profiles.
+     */
+    public void bodiesTick() {
+        if (bodies == null) {
+            if (siege != null || type == BattleType.OCEAN) {
+                return;
+            }
+            bodies = new Bodies();
+            bodies.lethal(false); // health is kept here, per block: bodies only say who reached whom
+            Point o = armies[0].blocks.isEmpty() ? new Point(0, 0) : armies[0].blocks.get(0).pos;
+            originX = o.x();
+            originZ = o.z();
+        }
+        for (FieldArmy army : armies) {
+            for (FieldBlock block : army.blocks) {
+                embody(block);
+            }
+        }
+        bodies.step();
+    }
+
+    /** Gives each of a block's living soldiers on land who is only numbers a body, and its goal: its place in the ranks. */
+    private void embody(FieldBlock block) {
+        if (block.alive == 0 || block.live || block.afloat) {
+            if (block.body != null) {
+                for (int b : block.body) {
+                    if (b >= 0) {
+                        bodies.remove(b);
+                    }
+                }
+                block.body = null;
+            }
+            return;
+        }
+        if (block.body == null) {
+            block.body = new int[block.health.length];
+            java.util.Arrays.fill(block.body, -1);
+        }
+        Bodies.Kind kind = block.arm.mounted() ? Bodies.Kind.HORSE : Bodies.Kind.FOOT;
+        float fx = (float) block.facingX;
+        float fz = (float) block.facingZ;
+        for (int i = 0; i < block.health.length; i++) {
+            int b = block.body[i];
+            if (block.health[i] <= 0) {
+                if (b >= 0) {
+                    bodies.remove(b);
+                    block.body[i] = -1;
+                }
+                continue;
+            }
+            Point slot = BattlePlan.place(block.pos, block.facingX, block.facingZ, block.slotRight(i), block.slotBack(i));
+            float x = (float) (slot.x() - originX);
+            float z = (float) (slot.z() - originZ);
+            if (b < 0) {
+                block.body[i] = bodies.add(block.side, kind, x, z, fx, fz);
+                bodyBlock.add(block);
+            } else {
+                bodies.goal(b, x, z, fx, fz);
+            }
+        }
+    }
+
+    /**
+     * How many of a block's soldiers swung this second; {@link #bodyFoe} becomes the enemy block most of them went for.
+     */
+    private int swung(FieldBlock block) {
+        int swung = 0;
+        bodyFoe = null;
+        java.util.Map<FieldBlock, Integer> foes = new java.util.HashMap<>();
+        for (int b : block.body) {
+            if (b < 0 || bodies.swings(b) == 0) {
+                continue;
+            }
+            swung++;
+            int t = bodies.target(b);
+            if (t >= 0) {
+                foes.merge(bodyBlock.get(t), 1, Integer::sum);
+            }
+        }
+        int most = 0;
+        for (var e : foes.entrySet()) {
+            if (e.getValue() > most && e.getKey().alive > 0) {
+                most = e.getValue();
+                bodyFoe = e.getKey();
+            }
+        }
+        return bodyFoe == null ? 0 : swung;
+    }
+
+    /** How many blows each of a block's soldiers took this second, for dealing its damage to those reached. */
+    private int[] struckWeights(FieldBlock block) {
+        int[] w = new int[block.health.length];
+        for (int i = 0; i < w.length; i++) {
+            w[i] = block.body[i] >= 0 ? bodies.struck(block.body[i]) : 0;
+        }
+        return w;
+    }
+
+    /**
+     * Where each block with bodies is: where its soldiers stand, so a block pushed back is back, and one held up is
+     * held. Its position is its front rank's middle, so that is the middle of its soldiers moved by their mean place.
+     */
+    private void placeFromBodies() {
+        for (FieldArmy army : armies) {
+            for (FieldBlock block : army.blocks) {
+                if (block.body == null) {
+                    continue;
+                }
+                double x = 0;
+                double z = 0;
+                double right = 0;
+                double back = 0;
+                int n = 0;
+                for (int i = 0; i < block.body.length; i++) {
+                    int b = block.body[i];
+                    if (b >= 0 && bodies.alive(b)) {
+                        x += bodies.x(b);
+                        z += bodies.z(b);
+                        right += block.slotRight(i);
+                        back += block.slotBack(i);
+                        n++;
+                    }
+                }
+                if (n > 0) {
+                    Point middle = new Point(x / n + originX, z / n + originZ);
+                    block.pos = BattlePlan.place(middle, block.facingX, block.facingZ, -right / n, -back / n);
+                }
             }
         }
     }
