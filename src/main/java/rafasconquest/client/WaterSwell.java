@@ -55,8 +55,19 @@ public final class WaterSwell {
     /** Foam boils through its noise and back every this many seconds. */
     static final int FOAM_TIME = 360;
 
+    /** The hull mask's unit, past the foam's. */
+    private static final int HULL_UNIT = 15;
+    /** The hull mask's side, in blocks round the camera: past the swell lifted in Minecraft's own (not DH's) water. */
+    static final int HULL_SIZE = 256;
+
     private static int texture = -1;
     private static int foam = -1;
+    private static int hull = -1;
+    private static final byte[] HULL_CELLS = new byte[HULL_SIZE * HULL_SIZE];
+    private static ByteBuffer hullBuffer;
+    /** The hull mask's corner, in blocks, as uploaded this frame. */
+    private static int hullX;
+    private static int hullZ;
     private static int originX;
     private static int originZ;
     private static long madeAt = Long.MIN_VALUE;
@@ -80,10 +91,11 @@ public final class WaterSwell {
         String head = "uniform mat4 u_SwellPhaseA;\nuniform mat4 u_SwellPhaseB;\nuniform mat4 u_SwellPhaseC;\nuniform float u_SwellTall;\n" + (vertex
                 ? "uniform float u_SwellSurface;\nuniform vec3 u_SwellCalmAt;\nuniform sampler2D u_SwellCalm;\nout vec4 v_SwellAt;\nout vec3 v_SwellLight;\n\n"
                 + Swell.glsl()
-                : "uniform vec3 u_SwellFoamAt;\nuniform sampler3D u_SwellFoam;\nin vec4 v_SwellAt;\nin vec3 v_SwellLight;\n\n" + Swell.glsl() + "\n\n" + foamGlsl()) + "\n\n";
+                : "uniform vec3 u_SwellFoamAt;\nuniform sampler3D u_SwellFoam;\nuniform vec3 u_SwellHullAt;\nuniform sampler2D u_SwellHull;\n"
+                + "in vec4 v_SwellAt;\nin vec3 v_SwellLight;\n\n" + Swell.glsl() + "\n\n" + foamGlsl()) + "\n\n";
         if (!vertex) {
             return source.substring(0, main) + head + source.substring(main, at)
-                    + foamMix("color", "u_", "v_SwellAt", "v_SwellLight") + "\n    " + source.substring(at);
+                    + foamMix("color", "u_", "v_SwellAt", "v_SwellLight") + "\n    " + hullCut("u_", "v_SwellAt") + "\n    " + source.substring(at);
         }
         String lift = "\n    " + lift("position", "u_", "v_SwellAt") + "\n    v_SwellLight = texture(u_LightTex, _vert_tex_light_coord).rgb;";
         int end = at + after.length();
@@ -140,6 +152,18 @@ public final class WaterSwell {
                 + "    if (" + at + ".w > 0.99) {\n"
                 + "        " + color + ".a = max(" + color + ".a, mix(0.8, 0.92, " + at + ".z));\n    }\n"
                 + "    " + color + " = clamp(" + color + " + vec4(" + light + ", 1.0) * (swellFoam + swellShade), 0.0, 1.0);";
+    }
+
+    /**
+     * The GLSL leaving out the sea's lifted surface over a Sable ship's hull ({@code u} the uniforms' prefix, {@code at}
+     * from {@link #lift}), so a crest taller than the hull rides doesn't wash over it; the mask is from {@link #hulls}.
+     */
+    public static String hullCut(String u, String at) {
+        return "if (" + at + ".w > 0.99) {\n"
+                + "        vec2 swellHull = floor(" + at + ".xy - " + u + "SwellHullAt.xy);\n"
+                + "        if (all(greaterThanEqual(swellHull, vec2(0.0))) && all(lessThan(swellHull, vec2(" + HULL_SIZE + ".0)))"
+                + " && texelFetch(" + u + "SwellHull, ivec2(swellHull), 0).r > 0.5) {\n"
+                + "            discard;\n        }\n    }";
     }
 
     /**
@@ -218,6 +242,7 @@ public final class WaterSwell {
         Swell.weather(level.getRainLevel(partial), level.getThunderLevel(partial));
         calmTexture(level);
         bindFoam();
+        hulls(level, partial);
         float[] p = phases(level);
         shader.safeGetUniform("SwellPhaseA").set(new Matrix4f().set(p, 0));
         shader.safeGetUniform("SwellPhaseB").set(new Matrix4f().set(p, 16));
@@ -228,7 +253,48 @@ public final class WaterSwell {
         shader.safeGetUniform("SwellCalmAt").set(at[0], at[1], at[2]);
         float[] foamAt = foamAt(level);
         shader.safeGetUniform("SwellFoamAt").set(foamAt[0], foamAt[1], foamAt[2]);
+        float[] hullAt = hullAt();
+        shader.safeGetUniform("SwellHullAt").set(hullAt[0], hullAt[1], 0f);
         shader.setSampler("SwellCalm", texture);
+    }
+
+    /**
+     * Makes the hull mask afresh for this frame: {@link #HULL_SIZE}² blocks round the camera, 1 over each Sable ship's
+     * hull as drawn now, bound on its own unit for both Minecraft's and Sodium's water.
+     */
+    private static void hulls(ClientLevel level, float partial) {
+        Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        hullX = (int) Math.floor(cam.x) - HULL_SIZE / 2;
+        hullZ = (int) Math.floor(cam.z) - HULL_SIZE / 2;
+        Arrays.fill(HULL_CELLS, (byte) 0);
+        SableSeen.hulls(level, partial, hullX, hullZ, HULL_SIZE, level.getSeaLevel() - 1 + SURFACE, HULL_CELLS);
+        if (hullBuffer == null) {
+            hullBuffer = MemoryUtil.memAlloc(HULL_CELLS.length);
+        }
+        hullBuffer.clear();
+        hullBuffer.put(HULL_CELLS).flip();
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + HULL_UNIT);
+        boolean made = hull < 0;
+        if (made) {
+            hull = GL11.glGenTextures();
+        }
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, hull);
+        GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
+        if (made) {
+            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R8, HULL_SIZE, HULL_SIZE, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, hullBuffer);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+        } else {
+            GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, HULL_SIZE, HULL_SIZE, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, hullBuffer);
+        }
+        GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4);
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0);
+    }
+
+    /** The hull mask's corner off the camera (x, z). */
+    private static float[] hullAt() {
+        Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        return new float[] {(float) (hullX - cam.x), (float) (hullZ - cam.z)};
     }
 
     /** The same, sent to Sodium's terrain shader just bound. */
@@ -251,8 +317,15 @@ public final class WaterSwell {
         GL20.glUniform3f(GL20.glGetUniformLocation(program, "u_SwellFoamAt"), foamAt[0], foamAt[1], foamAt[2]);
         GL20.glUniform1i(GL20.glGetUniformLocation(program, "u_SwellCalm"), SODIUM_UNIT);
         GL20.glUniform1i(GL20.glGetUniformLocation(program, "u_SwellFoam"), FOAM_UNIT);
+        float[] hullAt = hullAt();
+        GL20.glUniform3f(GL20.glGetUniformLocation(program, "u_SwellHullAt"), hullAt[0], hullAt[1], 0f);
+        GL20.glUniform1i(GL20.glGetUniformLocation(program, "u_SwellHull"), HULL_UNIT);
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + SODIUM_UNIT);
         GlStateManager._bindTexture(texture);
+        if (hull >= 0) {
+            GlStateManager._activeTexture(GL13.GL_TEXTURE0 + HULL_UNIT);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, hull);
+        }
         GlStateManager._activeTexture(GL13.GL_TEXTURE0);
         bindFoam();
     }

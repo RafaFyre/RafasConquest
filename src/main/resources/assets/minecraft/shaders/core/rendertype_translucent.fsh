@@ -17,6 +17,9 @@ uniform mat4 SwellPhaseC;
 uniform float SwellTall;
 uniform vec3 SwellFoamAt;
 uniform sampler3D SwellFoam;
+// where the hull mask's corner is off the camera, and the mask: 1 over a Sable ship's hull (WaterSwell.hulls)
+uniform vec3 SwellHullAt;
+uniform sampler2D SwellHull;
 
 in float vertexDistance;
 in vec4 vertexColor;
@@ -145,5 +148,12 @@ void main() {
         color.a = max(color.a, mix(0.8, 0.92, swellAt.z));
     }
     color = clamp(color + vec4(swellLight, 1.0) * (swellFoam + swellShade), 0.0, 1.0);
+    // rafasconquest.client.WaterSwell.hullCut("", "swellAt")
+    if (swellAt.w > 0.99) {
+        vec2 swellHull = floor(swellAt.xy - SwellHullAt.xy);
+        if (all(greaterThanEqual(swellHull, vec2(0.0))) && all(lessThan(swellHull, vec2(256.0))) && texelFetch(SwellHull, ivec2(swellHull), 0).r > 0.5) {
+            discard;
+        }
+    }
     fragColor = linear_fog(color, vertexDistance, FogStart, FogEnd, FogColor);
 }

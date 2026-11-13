@@ -22,6 +22,8 @@
         { "name": "SwellSurface", "type": "float", "count": 1, "values": [ -10000.0 ] },
         { "name": "SwellCalmAt", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.001953125 ] },
         { "name": "SwellFoamAt", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
-        { "name": "SwellFoam", "type": "int", "count": 1, "values": [ 14 ] }
+        { "name": "SwellFoam", "type": "int", "count": 1, "values": [ 14 ] },
+        { "name": "SwellHullAt", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+        { "name": "SwellHull", "type": "int", "count": 1, "values": [ 15 ] }
     ]
 }
