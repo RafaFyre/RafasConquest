@@ -4,6 +4,7 @@ import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.api.physics.handle.RigidBodyHandle;
 import dev.ryanhcode.sable.api.sublevel.ServerSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.api.sublevel.ticket.SubLevelLoadingTicketType;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
@@ -68,11 +69,16 @@ final class SableShips {
         boolean look = time % 20 == 0;
         if (look) {
             live.clear();
+            List<ServerSubLevel> twice = new ArrayList<>();
             for (ServerSubLevel sub : container.getAllSubLevels()) {
                 CompoundTag tag = sub.getUserDataTag();
-                if (tag != null && tag.contains(TAG) && !sub.isRemoved()) {
-                    live.put(tag.getString(TAG), sub);
+                if (tag != null && tag.contains(TAG) && !sub.isRemoved() && live.putIfAbsent(tag.getString(TAG), sub) != null) {
+                    twice.add(sub); // a second ship for one lane ship (Sable brought back one we'd rebuilt) sits unsteered for ever
                 }
+            }
+            twice.forEach(sub -> container.removeSubLevel(sub, SubLevelRemovalReason.REMOVED));
+            if (!twice.isEmpty()) {
+                RafasConquest.LOGGER.warn("[ships] took away {} lane ships built twice", twice.size());
             }
         }
         double range = level.getServer().getPlayerList().getViewDistance() * 16.0;
@@ -109,6 +115,8 @@ final class SableShips {
     private static void build(ServerLevel level, SeaLanes.Ship ship) {
         ServerSubLevel sub = assemble(level, ship, TAG, ShipHulls.of(ship));
         if (sub != null) {
+            // Else Sable unloads it when it touches a chunk not fully loaded, we build it again, and Sable brings the old one back.
+            SubLevelContainer.getContainer(level).addForceLoadTicket(sub, SubLevelLoadingTicketType.COMMAND_FORCED, net.minecraft.util.Unit.INSTANCE);
             live.put(ship.id(), sub);
             steer(sub, ship, level.getGameTime());
         }
