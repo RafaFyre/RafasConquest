@@ -45,12 +45,55 @@ public final class Siege {
     static final double TOWER_PACE = 0.4;
     /** A tower's crew pushing it is behind it, from the walls' arrows: they take this share. */
     static final double TOWER_SHIELDS = 0.3;
-    /** A tower rolls at half a walk. Its front is half its length out from its centre. */
+    /** A tower rolls at half a walk, unless the real towers' own speed is known ({@link #towerSpeed(double)}). */
     static final double TOWER_SPEED = FieldRules.FOOT_SPEED / 2;
+    /** Its front is half its length out from its centre. */
     public static final double TOWER_HALF_LENGTH = 5;
-    /** It stops this far short of the wall and lets its ramp down across the gap; its centre is then TOWER_OUT out. */
+    /**
+     * Where it stops when nothing better is known: this far short of the wall, its centre then TOWER_OUT out. A real
+     * tower picks its own stand-off for its ramp ({@link #rampStandOff}).
+     */
     public static final double TOWER_GAP = 3;
     public static final double TOWER_OUT = TOWER_HALF_LENGTH + TOWER_GAP;
+    /**
+     * A Siegeworks tower's ramp, from its collision shapes: hinged this far before the tower's centre and this high
+     * over its base, this long, and swinging down at most this far below level.
+     */
+    public static final double RAMP_HINGE_OUT = 4.1875;
+    public static final double RAMP_HINGE_UP = 10;
+    public static final double RAMP_LENGTH = 9.5625;
+    static final double RAMP_MAX_DROP = Math.toRadians(30);
+    /** Its tip comes down at least this far in past the wall's outer edge, onto the walkway. */
+    static final double RAMP_LAND = 2;
+    /** Stand-offs a tower weighs, this far apart. */
+    static final double RAMP_STEP = 0.5;
+
+    /**
+     * How far out from the wall's face a tower's centre should stop for its ramp to come down as near level as it can:
+     * the ramp, swinging down, rests on the wall's edge at {@code walkY}, so its slope is the rise or fall from its hinge
+     * over the run to the edge, and the further out it stands the flatter it lies, as far as it still reaches onto the
+     * walkway. Among equally flat stand-offs (level ground and a walkway at the hinge's height) it keeps
+     * {@link #TOWER_OUT}. {@code groundAt} is the ground's height under the tower's centre that far out. With no
+     * stand-off reaching, it goes as close as it can.
+     */
+    public static double rampStandOff(double walkY, java.util.function.DoubleUnaryOperator groundAt) {
+        double best = TOWER_HALF_LENGTH;
+        double bestTilt = Double.MAX_VALUE;
+        for (double out = TOWER_HALF_LENGTH; out <= RAMP_HINGE_OUT + RAMP_LENGTH; out += RAMP_STEP) {
+            double rise = walkY - (groundAt.applyAsDouble(out) + RAMP_HINGE_UP);
+            double run = out - RAMP_HINGE_OUT;
+            double tilt = Math.atan2(rise, run);
+            if (Math.hypot(run, rise) > RAMP_LENGTH - RAMP_LAND || tilt < -RAMP_MAX_DROP) {
+                continue; // it would not reach onto the walkway, or swing down that far
+            }
+            tilt = Math.abs(tilt);
+            if (tilt < bestTilt - 1e-9 || tilt < bestTilt + 1e-9 && Math.abs(out - TOWER_OUT) < Math.abs(best - TOWER_OUT)) {
+                best = out;
+                bestTilt = tilt;
+            }
+        }
+        return best;
+    }
     /** Its crew pushes from this far behind its centre: just behind the ladders up its back. */
     public static final double TOWER_BEHIND = 6.5;
     /** Door hit points a ram takes off a gate each second, for each soldier on it. */
@@ -240,7 +283,9 @@ public final class Siege {
     public static final class Work {
         final Engine kind;
         /** Where it stands against the wall (outside), where its climbers make for on the walkway, and its gate (rams). */
-        final Point foot;
+        Point foot;
+        /** A tower's stand-off: how far out from the wall's face its centre stops. */
+        double out = TOWER_OUT;
         final Point top;
         final int gate;
         final List<Point> route = new ArrayList<>();
@@ -277,6 +322,16 @@ public final class Siege {
 
         public Point foot() {
             return foot;
+        }
+
+        public double out() {
+            return out;
+        }
+
+        /** A tower stops {@code out} from the wall's face instead, where its ramp comes down best. */
+        public void standOff(double out) {
+            foot = foot.plus(outX() * (out - this.out), outZ() * (out - this.out));
+            this.out = out;
         }
 
         public Point top() {
@@ -375,6 +430,8 @@ public final class Siege {
     private final Point wallMid;
     private final List<GateState> gates = new ArrayList<>();
     private final List<Work> works = new ArrayList<>();
+    /** How fast its towers roll, blocks a second: the real towers' own speed when Siegeworks says. */
+    private double towerSpeed = TOWER_SPEED;
     private final List<Post> posts = new ArrayList<>();
     /** Defenders waiting inside, and where each waits. */
     private final List<FieldBlock> reserves = new ArrayList<>();
@@ -1127,8 +1184,8 @@ public final class Siege {
                         // Rolled straight at the wall while its crew is behind it pushing; it stops against the wall.
                         double left = w.at.distanceTo(w.foot);
                         if (carrier.pos.distanceTo(behind(w, 0)) <= AT * 2) {
-                            w.at = left <= TOWER_SPEED ? w.foot
-                                    : w.at.plus((w.foot.x() - w.at.x()) / left * TOWER_SPEED, (w.foot.z() - w.at.z()) / left * TOWER_SPEED);
+                            w.at = left <= towerSpeed ? w.foot
+                                    : w.at.plus((w.foot.x() - w.at.x()) / left * towerSpeed, (w.foot.z() - w.at.z()) / left * towerSpeed);
                         }
                         arrived = w.at == w.foot;
                     } else if (carrier.pos.distanceTo(next) <= AT && w.leg < w.route.size()) {
@@ -1385,7 +1442,7 @@ public final class Siege {
         }
         Work w = b.side == 0 && b.arm != Arm.ENGINES ? workOf(b) : null;
         if (w != null && w.kind != Engine.RAMS && w.state == State.UP
-                && (b.pos.distanceTo(w.foot) <= (w.kind == Engine.TOWERS ? TOWER_OUT : 1.5) + AT || b.pos.distanceTo(w.top) <= AT * 2)) {
+                && (b.pos.distanceTo(w.foot) <= (w.kind == Engine.TOWERS ? w.out : 1.5) + AT || b.pos.distanceTo(w.top) <= AT * 2)) {
             return to;
         }
         return b.pos;
@@ -1550,6 +1607,11 @@ public final class Siege {
 
     public List<Work> works() {
         return works;
+    }
+
+    /** Towers roll at {@code blocksPerSecond}, the real towers' own speed. */
+    public void towerSpeed(double blocksPerSecond) {
+        towerSpeed = blocksPerSecond;
     }
 
     public List<GateState> gates() {

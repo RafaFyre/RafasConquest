@@ -187,7 +187,18 @@ public final class SiegeSurvey {
                 continue;
             }
             int top = height(level, x + ax * (face - 1) + rx * u, z + az * (face - 1) + rz * u);
-            int walk = stand(level, x + ax * (face - 1) + rx * u, z + az * (face - 1) + rz * u); // under its roof, if it has one
+            // Under its roof, if it has one: stepping in past a parapet that stands solid up to the roof, which has no
+            // floor to stand on, so its reading would be the roof's top.
+            int walk = top; // an open walkway: on top
+            for (int in = 1; in <= WALK_PROBE; in++) {
+                int cx = x + ax * (face - in) + rx * u;
+                int cz = z + az * (face - in) + rz * u;
+                int floor = stand(level, cx, cz);
+                if (floor < height(level, cx, cz)) {
+                    walk = floor;
+                    break;
+                }
+            }
             int t = 0;
             while (t < 16 && height(level, x + ax * (face - t) + rx * u, z + az * (face - t) + rz * u) >= top - 1) {
                 t++;
@@ -392,6 +403,8 @@ public final class SiegeSurvey {
 
     /** A roof stands at most this far above the floor under it. */
     private static final int ROOF_GAP = 5;
+    /** How many blocks in from a wall's outer face to look for the floor under its roof. */
+    private static final int WALK_PROBE = 4;
 
     /**
      * Where a soldier stands at ({@code x}, {@code z}): on the highest floor under a roof (solid underfoot, two blocks

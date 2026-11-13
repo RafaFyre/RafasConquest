@@ -163,6 +163,22 @@ class SiegeTest {
     }
 
     @Test
+    void towersStandWhereTheirRampComesDownFlattest() {
+        // Walkway level with the ramp's hinge: flat anywhere, so the usual 3-block gap.
+        assertEquals(Siege.TOWER_OUT, Siege.rampStandOff(70 + Siege.RAMP_HINGE_UP, out -> 70), 1e-9);
+        // Walkway 3 below the hinge: as far out as the ramp still reaches onto it, where it lies flattest.
+        double out = Siege.rampStandOff(67 + Siege.RAMP_HINGE_UP, d -> 70);
+        double run = out - Siege.RAMP_HINGE_OUT;
+        assertTrue(out > Siege.TOWER_OUT, "stayed at " + out);
+        assertTrue(Math.hypot(run, 3) <= Siege.RAMP_LENGTH - Siege.RAMP_LAND, "out of reach at " + out);
+        assertTrue(Math.hypot(run + Siege.RAMP_STEP, 3) > Siege.RAMP_LENGTH - Siege.RAMP_LAND, "could stand further out than " + out);
+        // Ground rising toward the wall: the spot where the hinge meets the walkway is level, so it stops there.
+        assertEquals(7, Siege.rampStandOff(80 + Siege.RAMP_HINGE_UP, d -> d <= 7 ? 80 : 70), 1e-9);
+        // A walkway far over the ramp's reach: as close as it can get.
+        assertEquals(Siege.TOWER_HALF_LENGTH, Siege.rampStandOff(200, d -> 70), 1e-9);
+    }
+
+    @Test
     void oneRamToAGateAndAtMostFourTowersToAWall() {
         FieldBattle battle = siege(600, 40, 8, EnumSet.of(Siege.Engine.TOWERS, Siege.Engine.RAMS));
         List<Siege.Work> works = battle.siege().works();

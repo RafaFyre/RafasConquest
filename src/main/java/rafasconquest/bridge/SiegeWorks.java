@@ -96,6 +96,30 @@ final class SiegeWorks {
         this.siege = siege;
         this.gateBlocks = survey.gates();
         this.survey = survey;
+        matchTowerSpeed();
+    }
+
+    /** The numbers roll their towers as fast as Siegeworks' own do, when it says how fast. */
+    private void matchTowerSpeed() {
+        double speed = towerSpeed();
+        if (speed > 0) {
+            siege.towerSpeed(speed);
+        }
+    }
+
+    /** A Siegeworks tower's speed driven by its crew, blocks a second, from Siegeworks' config; 0 if unknown. */
+    private static double towerSpeed() {
+        try {
+            var type = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, "siege_tower")).orElse(null);
+            if (type == null) {
+                return 0;
+            }
+            Object perTick = Class.forName("me.mss1r.siegeworks.config.SiegeworksServerConfig")
+                    .getMethod("getMovementSpeed", net.minecraft.world.entity.EntityType.class, boolean.class).invoke(null, type, false);
+            return (Double) perTick * 20;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return 0;
+        }
     }
 
     /** The way out from the wall a work is brought against, in whole blocks: its ladder or tower faces the other way. */
@@ -127,6 +151,7 @@ final class SiegeWorks {
     void rebind(Siege next) {
         clear();
         siege = next;
+        matchTowerSpeed();
     }
 
     /** The chunks the gates stand in, kept loaded through the battle so the real gates are always there to fight for. */
@@ -206,7 +231,7 @@ final class SiegeWorks {
     /** Where a climber up {@code w} (its foot {@code foot}) steps onto the walkway: over its top, toward the inside. */
     private Vec3 landing(Siege.Work w, BlockPos foot) {
         // A tower's ladders are up its back: across it first, to land as far in as off a ladder.
-        double in = 2 + (w.kind() == Siege.Engine.TOWERS ? Siege.TOWER_OUT + TOWER_CLIMB : 0);
+        double in = 2 + (w.kind() == Siege.Engine.TOWERS ? w.out() + TOWER_CLIMB : 0);
         return new Vec3(foot.getX() + 0.5 - ox(w) * in, walkY(w), foot.getZ() + 0.5 - oz(w) * in);
     }
 
@@ -282,6 +307,7 @@ final class SiegeWorks {
         Point[] last = rolling.get(w);
         if (e != null && last == null) {
             e.teleportTo(at.x(), ground, at.z()); // just made: on the ground where the numbers have it
+            standOff(w);
         }
         // The real tower rolls itself, Siegeworks' own way, while its crew pushes (the numbers move it), and on to the
         // wall if the numbers got there first; it is only put where the numbers are if it sticks short of them.
@@ -313,6 +339,24 @@ final class SiegeWorks {
         if (docked && boarding()) {
             board(w, e, soldiers);
         }
+    }
+
+    /**
+     * The tower decides where it stops, reading the ground it would stand on: where its ramp comes down onto its wall as
+     * near level as it can ({@link Siege#rampStandOff}).
+     */
+    private void standOff(Siege.Work w) {
+        double ox = w.outX();
+        double oz = w.outZ();
+        // The wall's face, straight in from where it was to stop.
+        double faceX = w.foot().x() - ox * w.out();
+        double faceZ = w.foot().z() - oz * w.out();
+        w.standOff(Siege.rampStandOff(walkY(w), out -> {
+            int x = net.minecraft.util.Mth.floor(faceX + ox * out);
+            int z = net.minecraft.util.Mth.floor(faceZ + oz * out);
+            // Through the chunk, which loads it: an unloaded one reads as the world's floor.
+            return level.getChunk(x >> 4, z >> 4).getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
+        }));
     }
 
     /** A tower's climbers this close to it are sent to board it; one not aboard after this long is sent again. */
