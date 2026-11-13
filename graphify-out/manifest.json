@@ -2568,9 +2568,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Swell.java": {
-    "mtime": 1794541658.760533,
-    "seen": 1794541737.6119866,
-    "ast_hash": "44d4608fd7ae87f6359da7ab306f495f",
+    "mtime": 1794542493.7697685,
+    "seen": 1794542595.8442245,
+    "ast_hash": "d77a64aced82cadba8aa5bcfb3e5bc40",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SwellTest.java": {
@@ -2580,9 +2580,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/WaterSwell.java": {
-    "mtime": 1794540401.6525197,
-    "seen": 1794541048.2630672,
-    "ast_hash": "d043e4126cc0d48a6d8139515774ed37",
+    "mtime": 1794542493.8380878,
+    "seen": 1794542595.8441334,
+    "ast_hash": "b0c9b66b8c61fd0f6b3d3c071fe68436",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/SodiumShaderInterfaceMixin.java": {
@@ -2616,15 +2616,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/Sea.java": {
-    "mtime": 1794025380.2983942,
-    "seen": 1794025497.4737554,
-    "ast_hash": "1dfd9924d793b63642b1cb5c73f26db0",
+    "mtime": 1794542455.45812,
+    "seen": 1794542595.8440402,
+    "ast_hash": "d38744df09cff97d96e0dcc613b42adb",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaCalm.java": {
-    "mtime": 1794540986.0470097,
-    "seen": 1794541048.2631512,
-    "ast_hash": "455906e0f10295bbbe0b5e7a27219175",
+    "mtime": 1794542441.701266,
+    "seen": 1794542595.8442159,
+    "ast_hash": "c7ee0fe3fe3961e3e9f7f069ced08632",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/SeaFoamTest.java": {
@@ -3006,9 +3006,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureMotion.java": {
-    "mtime": 1794531878.2909942,
-    "seen": 1794531934.872077,
-    "ast_hash": "c48fb5e0391d15fab6b7bad68b2e937d",
+    "mtime": 1794542386.7732327,
+    "seen": 1794542417.5309107,
+    "ast_hash": "ec91fd870bca00609801a725fd258ceb",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/FigureMotionTest.java": {
@@ -3471,6 +3471,12 @@
     "mtime": 1794540158.404461,
     "seen": 1794540213.0314815,
     "ast_hash": "76f92610a6660cd3f319b1a0a9e1ec2f",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/core/SeaCalmTest.java": {
+    "mtime": 1794542547.8404527,
+    "seen": 1794542595.8446805,
+    "ast_hash": "6a95729f9b0ec6d387165d1c15f2c6ec",
     "semantic_hash": ""
   }
 }

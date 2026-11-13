@@ -25,6 +25,11 @@ public final class Sea {
         return calms.computeIfAbsent(level, l -> new SeaCalm((x, z) -> depth(l, x, z))).at(level.getGameTime());
     }
 
+    /** A sea calm of the level's own, not shared: for one other thread to work out on its own (it keeps no locks). */
+    public static SeaCalm unshared(Level level) {
+        return new SeaCalm((x, z) -> depth(level, x, z));
+    }
+
     private static int depth(Level level, int x, int z) {
         int surface = level.getSeaLevel() - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, surface + 1, z);

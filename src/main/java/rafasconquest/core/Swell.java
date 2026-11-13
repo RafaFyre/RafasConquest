@@ -138,8 +138,9 @@ public final class Swell {
     /**
      * {@link #heightOff} and its shading as GLSL, the phases coming in three mat4s (16 waves each, column by column):
      * {@code float swell(vec2 q, mat4 pa, mat4 pb, mat4 pc)} gives the shape q blocks off the camera (times the sea's
-     * height gives blocks); {@code float swellDetail(vec2 q, mat4 pa, mat4 pb, mat4 pc, out vec2 slope, out vec2 moved)}
-     * gives it over all {@link #DETAIL} waves, with the way the water slopes and where the waves pushed the point to.
+     * height gives blocks); {@code float swellDetail(vec2 q, mat4 pa, mat4 pb, mat4 pc, float cover, out vec2 slope, out vec2 moved)}
+     * gives it over the {@link #DETAIL} waves a pixel covering {@code cover} blocks can show, with the way the water
+     * slopes and where the waves pushed the point to.
      */
     public static String glsl() {
         StringBuilder s = new StringBuilder("float swell(vec2 q, mat4 pa, mat4 pb, mat4 pc) {\n    float h = 0.0;\n    float x;\n    float s;\n");
@@ -149,12 +150,15 @@ public final class Swell {
                     KX[i], KZ[i], phase(i), WEIGHT[i], PUSH_X[i], PUSH_Z[i]));
         }
         s.append(String.format(Locale.ROOT, "    return h / %.8f - 0.5;\n}\n\n", WEIGHTS));
-        s.append("float swellDetail(vec2 q, mat4 pa, mat4 pb, mat4 pc, out vec2 slope, out vec2 moved) {\n"
-                + "    float h = 0.0;\n    vec2 d = vec2(0.0);\n    float x;\n    float s;\n    float c;\n");
+        s.append("float swellDetail(vec2 q, mat4 pa, mat4 pb, mat4 pc, float cover, out vec2 slope, out vec2 moved) {\n"
+                + "    float h = 0.0;\n    vec2 d = vec2(0.0);\n    float x;\n    float s;\n    float c;\n    float f;\n"
+                + "    float r = 0.5 / max(cover, 0.0001);\n");
         for (int i = 0; i < DETAIL; i++) {
+            // a wave shorter than 4 pixels fades out, and one under 2 (it would only shimmer) isn't worked out at all
+            double half = Math.PI / Math.hypot(KX[i], KZ[i]);
             s.append(String.format(Locale.ROOT,
-                    "    x = dot(q, vec2(%.8f, %.8f)) + %s; s = exp(sin(x) - 1.0); c = s * cos(x); h += %.8f * s; d += vec2(%.8f, %.8f) * c; q -= vec2(%.8f, %.8f) * c;\n",
-                    KX[i], KZ[i], phase(i), WEIGHT[i], SLOPE_X[i], SLOPE_Z[i], PUSH_X[i], PUSH_Z[i]));
+                    "    if (r > %.8f) { f = min(%.8f * r - 1.0, 1.0); x = dot(q, vec2(%.8f, %.8f)) + %s; s = exp(sin(x) - 1.0) * f; c = s * cos(x); h += %.8f * s; d += vec2(%.8f, %.8f) * c; q -= vec2(%.8f, %.8f) * c; }\n",
+                    1 / (2 * half), 2 * half, KX[i], KZ[i], phase(i), WEIGHT[i], SLOPE_X[i], SLOPE_Z[i], PUSH_X[i], PUSH_Z[i]));
         }
         return s.append(String.format(Locale.ROOT, "    moved = q;\n    slope = -d / %.8f;\n    return h / %.8f - 0.5;\n}",
                 Math.pow(DETAIL_WEIGHTS, 0.25), DETAIL_WEIGHTS)).toString();

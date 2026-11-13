@@ -17,8 +17,12 @@ import rafasconquest.RafasConquest;
 import rafasconquest.bridge.Sea;
 import rafasconquest.core.Swell;
 
+import net.minecraft.Util;
+import rafasconquest.core.SeaCalm;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Draws the {@link Swell} on the sea as Physics Mod draws its ocean: Minecraft's translucent terrain shader (overridden in
@@ -165,12 +169,13 @@ public final class WaterSwell {
         return """
                 float whitecap(vec4 at, mat4 pa, mat4 pb, mat4 pc, float tall, vec3 foamAt, sampler3D foam, out float shade) {
                     shade = 0.0;
+                    vec2 cover = fwidth(at.xy); // before any branch, as derivatives need
                     if (at.w < 0.99) {
                         return 0.0;
                     }
                     vec2 slope;
                     vec2 moved;
-                    float h = swellDetail(at.xy, pa, pb, pc, slope, moved) * tall * at.z;
+                    float h = swellDetail(at.xy, pa, pb, pc, max(cover.x, cover.y), slope, moved) * tall * at.z;
                     float lean = tall / 13.0 * at.z;
                     vec3 n = normalize(vec3(slope.x * lean, 0.6, slope.y * lean));
                     shade = mix(n.x * 0.5 + 0.5, 0.0, pow(n.y, 4.0)) * 0.3;
@@ -364,21 +369,65 @@ public final class WaterSwell {
         return Math.sqrt(best);
     }
 
-    /** Makes the calm texture again when the camera has gone an eighth of it off its middle, or it is half a minute old. */
+    /**
+     * Makes the calm texture again when the camera has gone an eighth of it off its middle, or it is half a minute old:
+     * worked out on a background thread (it reads a thousand chunks' water), and sent to the card once done. Until the
+     * first is done the sea lies flat.
+     */
     private static void calmTexture(ClientLevel level) {
+        if (texture < 0) {
+            texture = GlStateManager._genTexture(); // bound before it has texels: reads as calm, so a flat sea
+        }
+        if (making != null) {
+            if (!making.isDone()) {
+                return;
+            }
+            Made made = making.getNow(null);
+            making = null;
+            if (made != null && made.level == level) {
+                upload(made);
+            }
+        }
         Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         int x0 = (((int) Math.floor(cam.x)) >> 4 << 4) - SIZE / 2;
         int z0 = (((int) Math.floor(cam.z)) >> 4 << 4) - SIZE / 2;
         long now = level.getGameTime();
-        if (texture >= 0 && Math.abs(x0 - originX) < SIZE / 8 && Math.abs(z0 - originZ) < SIZE / 8 && Math.abs(now - madeAt) < 600) {
+        if (madeAt != Long.MIN_VALUE && Math.abs(x0 - originX) < SIZE / 8 && Math.abs(z0 - originZ) < SIZE / 8 && Math.abs(now - madeAt) < 600) {
             return;
         }
-        byte[] strengths = Sea.calm(level).square(x0, z0, SIZE);
+        if (workerLevel != level) {
+            workerLevel = level;
+            worker = Sea.unshared(level);
+        }
+        SeaCalm calm = worker;
+        madeAt = now; // not asked again till this one is done and old
+        originX = x0;
+        originZ = z0;
+        making = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new Made(level, x0, z0, calm.at(now).square(x0, z0, SIZE));
+            } catch (RuntimeException e) { // a chunk changed under the read: tried again in half a minute
+                RafasConquest.LOGGER.debug("[swell] calm texture read failed", e);
+                return null;
+            }
+        }, Util.backgroundExecutor());
+    }
+
+    private record Made(ClientLevel level, int x0, int z0, byte[] strengths) {
+    }
+
+    private static CompletableFuture<Made> making;
+    /** The calm the background thread works with: only ever one job at a time touches it. */
+    private static SeaCalm worker;
+    private static ClientLevel workerLevel;
+    /** The texture's corner as uploaded (originX/Z are where the job in hand reads). */
+    private static int textureX;
+    private static int textureZ;
+
+    private static void upload(Made made) {
+        byte[] strengths = made.strengths;
         ByteBuffer buffer = MemoryUtil.memAlloc(strengths.length);
         buffer.put(strengths).flip();
-        if (texture < 0) {
-            texture = GlStateManager._genTexture();
-        }
         GlStateManager._bindTexture(texture);
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R8, SIZE, SIZE, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, buffer);
@@ -388,15 +437,14 @@ public final class WaterSwell {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
         MemoryUtil.memFree(buffer);
-        originX = x0;
-        originZ = z0;
-        madeAt = now;
+        textureX = made.x0;
+        textureZ = made.z0;
     }
 
     /** The calm texture's corner off the camera (x, z), and one over its side, for the shaders. */
     private static float[] calmAt() {
         Vec3 cam = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        return new float[] {(float) (originX - cam.x), (float) (originZ - cam.z), 1f / SIZE};
+        return new float[] {(float) (textureX - cam.x), (float) (textureZ - cam.z), 1f / SIZE};
     }
 
     private static float[] phases(ClientLevel level) {

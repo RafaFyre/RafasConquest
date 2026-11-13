@@ -32,7 +32,7 @@ public final class SeaCalm {
     private final Depths depths;
     private final Map<Long, byte[]> chunks = new HashMap<>();
     private final Map<Long, Long> made = new HashMap<>();
-    private final Map<Long, double[]> strengths = new HashMap<>(); // column -> {strength, when}
+    private final Map<Long, Strengths> strengths = new HashMap<>(); // chunk -> its columns' strengths
     private long now;
     private long swept;
     /** Some column read since this was last cleared couldn't be seen, so what was worked out from it isn't remembered. */
@@ -48,7 +48,7 @@ public final class SeaCalm {
         if (Math.abs(now - swept) > STALE) {
             swept = now;
             made.entrySet().removeIf(e -> stale(e.getValue()) && chunks.remove(e.getKey()) != null);
-            strengths.values().removeIf(s -> stale((long) s[1]));
+            strengths.values().removeIf(s -> stale(s.when()));
         }
         return this;
     }
@@ -70,29 +70,28 @@ public final class SeaCalm {
         return a * (1 - tz) + b * tz;
     }
 
-    /** One column's wave strength: the calm reaching it from anywhere within {@link #REACH}. */
+    /**
+     * One column's wave strength: the calm reaching it from anywhere within {@link #REACH}. Worked out a chunk at a time
+     * by {@link #square}, which sweeps the chunk's surroundings once instead of a diamond of columns per column.
+     */
     public double column(int x, int z) {
-        long key = key(x, z);
-        double[] known = strengths.get(key);
-        if (known != null && !stale((long) known[1])) {
-            return known[0];
-        }
-        if (depths.depth(x, z) == UNKNOWN) {
-            return strength(REACH - DEEP); // not loaded here: open sea, without sweeping thousands of unseen columns
-        }
-        guessed = false;
-        int most = 0;
-        for (int dx = -REACH; dx <= REACH; dx++) {
-            int left = REACH - Math.abs(dx);
-            for (int dz = -left; dz <= left; dz++) {
-                most = Math.max(most, own(x + dx, z + dz) - Math.abs(dx) - Math.abs(dz));
+        long key = key(x >> 4, z >> 4);
+        Strengths known = strengths.get(key);
+        if (known == null || stale(known.when())) {
+            if (depths.depth(x, z) == UNKNOWN) {
+                return strength(REACH - DEEP); // not loaded here: open sea, without sweeping thousands of unseen columns
+            }
+            guessed = false;
+            known = new Strengths(square(x & ~15, z & ~15, 16), now);
+            if (!guessed) {
+                strengths.put(key, known);
             }
         }
-        double strength = strength(most);
-        if (!guessed) {
-            strengths.put(key, new double[] {strength, now});
-        }
-        return strength;
+        return (known.bytes()[(z & 15) * 16 + (x & 15)] & 0xff) / 255.0; // exact: strengths are whole 255ths
+    }
+
+    /** A chunk's columns' wave strengths (out of 255, row by row along x), and when they were worked out. */
+    private record Strengths(byte[] bytes, long when) {
     }
 
     /**
