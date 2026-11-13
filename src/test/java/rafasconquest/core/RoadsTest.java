@@ -55,6 +55,21 @@ class RoadsTest {
     }
 
     @Test
+    void noRoadCrossesTheSea() {
+        int n = SIZE * SIZE;
+        int[] ground = new int[n];
+        java.util.Arrays.fill(ground, 70);
+        for (int pz = 0; pz < SIZE; pz++) {
+            for (int px = 76; px <= 84; px++) {
+                ground[pz * SIZE + px] = 40; // a strait below sea level, though no ocean biome marks it
+            }
+        }
+        Roads.Land strait = new Roads.Land(0, 0, BPP, SIZE, SIZE, ground, new boolean[n], new boolean[n], new byte[n], 63);
+        Roads.Plan plan = Roads.plan(strait, List.of(new Roads.Link(Roads.Grade.HIGH, WEST, EAST)), List.of(), List.of(WEST, EAST));
+        assertTrue(plan.roads().isEmpty(), "a road crosses the sea");
+    }
+
+    @Test
     void aRoadNeverLeavesAPortByItsHarbour() {
         Roads.Place port = new Roads.Place("Westford", 600, 1280, 160, 2, CityLayout.Side.EAST.ordinal());
         int[] start = Roads.gate(port, EAST);

@@ -102,7 +102,6 @@ public final class Roads {
     /** How far a road runs straight out from a city's gate before turning toward where it goes. */
     static final int GATE_STUB = 48;
     private static final double WATER_COST = 25;
-    private static final double SEA_COST = 300;
     private static final double CITY_COST = 200;
     private static final double JUNGLE_COST = 3;
     private static final double MOUNTAIN_COST = 6;
@@ -311,8 +310,11 @@ public final class Roads {
             stamp = new int[n];
             for (int i = 0; i < n; i++) {
                 double c = 1;
-                if (land.sea()[i]) {
-                    c += SEA_COST;
+                // Sea is never crossed (ships do that). Under ReTerraForged the ocean biomes don't follow the coast, so
+                // ground below sea level that isn't a river counts as sea too.
+                if (land.sea()[i] || (!land.wet()[i] && land.ground()[i] < land.seaLevel() - 1)) {
+                    cost[i] = Double.POSITIVE_INFINITY;
+                    continue;
                 } else if (land.wet()[i]) {
                     c += WATER_COST;
                 }
@@ -406,6 +408,9 @@ public final class Roads {
                             continue;
                         }
                         int next = nz * w + nx;
+                        if (cost[next] == Double.POSITIVE_INFINITY && next != goal) {
+                            continue;
+                        }
                         double ng = g + (dx != 0 && dz != 0 ? SQRT2 : 1)
                                 * (cost[next] + Math.abs(ground[next] - ground[at]) * CLIMB_COST)
                                 * (laid[next] > 0 ? REUSE : 1);
