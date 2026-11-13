@@ -40,7 +40,17 @@ final class FigureBatches {
     private static final int VERTEX_BYTES = VERTEX_INTS * 4;
     /** A soldier's record: x y z scale, facing x z, light colour ({@link #lightColour}), flags, 8 colours. */
     private static final int INSTANCE_BYTES = 64;
-    private static final int GLOW = 1;
+    static final int GLOW = 1;
+    /** A ship on the swell: its palette slots carry its tilt and lift instead of colours (it has its blocks' own). */
+    static final int SHIP = 2;
+
+    /**
+     * A ship's palette slots for {@link #SHIP}: its deck's rise per block toward the bow and toward port, and its lift in
+     * blocks, as fixed-point ints (the shader's GLSL 150 can't read float bits).
+     */
+    static int[] shipPalette(double fore, double port, double lift) {
+        return new int[]{(int) Math.round(fore * 100_000), (int) Math.round(port * 100_000), (int) Math.round(lift * 1000), 0, 0, 0, 0, 0};
+    }
     /** A flat figure is shaded like the side of a block, as its rectangles always face the camera. */
     static final float FLAT_SHADE = 0.8F;
 
@@ -171,12 +181,15 @@ final class FigureBatches {
      */
     static void add(SoldierFigure.Shape shape, int[] palette, float x, float y, float z, float scale, float fx, float fz, int light,
                     boolean glow) {
-        add(shape, null, palette, x, y, z, scale, fx, fz, light, glow);
+        add(shape, null, palette, x, y, z, scale, fx, fz, light, glow ? GLOW : 0);
     }
 
-    /** One of a model other than a soldier's, known by {@code key} (equal keys share a model); {@code model} bakes it the first time. */
+    /**
+     * One of a model other than a soldier's, known by {@code key} (equal keys share a model); {@code model} bakes it the
+     * first time. {@code flags}: {@link #GLOW}, or {@link #SHIP} with {@code palette} from {@link #shipPalette}.
+     */
     static void add(Object key, @javax.annotation.Nullable java.util.function.Supplier<int[]> model, int[] palette, float x, float y,
-                    float z, float scale, float fx, float fz, int light, boolean glow) {
+                    float z, float scale, float fx, float fz, int light, int flags) {
         if (!usable) {
             return;
         }
@@ -195,7 +208,7 @@ final class FigureBatches {
         ByteBuffer i = b.instances;
         int at = b.count * INSTANCE_BYTES;
         i.putFloat(at, x).putFloat(at + 4, y).putFloat(at + 8, z).putFloat(at + 12, scale);
-        i.putFloat(at + 16, fx).putFloat(at + 20, fz).putInt(at + 24, light).putInt(at + 28, glow ? GLOW : 0);
+        i.putFloat(at + 16, fx).putFloat(at + 20, fz).putInt(at + 24, light).putInt(at + 28, flags);
         for (int s = 0; s < 8; s++) {
             i.putInt(at + 32 + s * 4, palette[s]);
         }
@@ -404,7 +417,11 @@ final class FigureBatches {
                 vec2 forward = Facing;
                 vec2 right = vec2(-forward.y, forward.x);
                 vec2 across = right * Local.x + forward * Local.z;
-                gl_Position = Mvp * vec4(PosScale.xyz + vec3(across.x, Local.y, across.y) * PosScale.w, 1.0);
+                float up = Local.y;
+                if ((Flags & 2u) != 0u) { // a ship: deck sheared along the swell's slope (a few degrees at most), lifted on it
+                    up += Local.z * float(int(PalA.x)) / 100000.0 - Local.x * float(int(PalA.y)) / 100000.0 + float(int(PalA.z)) / 1000.0;
+                }
+                gl_Position = Mvp * vec4(PosScale.xyz + vec3(across.x, up, across.y) * PosScale.w, 1.0);
                 uint c = Colour;
                 if ((c & 0x1000000u) != 0u) {
                     int slot = int(c & 7u);

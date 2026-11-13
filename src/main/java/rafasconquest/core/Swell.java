@@ -232,9 +232,17 @@ public final class Swell {
 
         /** The slope (rise per block along x, then z) its deck lies along: pitched bow to stern, rolled side to side. */
         public double[] slope() {
-            double fore = -Math.tan(pitch); // rise per block toward the bow
-            double port = -Math.tan(roll); // rise per block toward the left
-            return new double[] {fore * dirX + port * dirZ, fore * dirZ - port * dirX};
+            return new double[] {fore() * dirX + port() * dirZ, fore() * dirZ - port() * dirX};
+        }
+
+        /** Its deck's rise per block toward the bow. */
+        public double fore() {
+            return -Math.tan(pitch);
+        }
+
+        /** Its deck's rise per block toward port (its left). */
+        public double port() {
+            return -Math.tan(roll);
         }
     }
 }

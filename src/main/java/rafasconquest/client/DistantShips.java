@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.DyeColor;
 import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.FormationSnapshot;
+import rafasconquest.bridge.Sea;
+import rafasconquest.core.Swell;
 import rafasconquest.client.map.ClientMapCache;
 import rafasconquest.core.SeaLanes;
 import rafasconquest.map.BaseMap;
@@ -42,10 +44,11 @@ final class DistantShips {
     /**
      * A ship to draw: the middle of its hull, its heading (a turn about the up axis taking +z to its bow), its size, and
      * whether the client has the real ship there (and so where it really is). A sea lane's ship has its {@code lane}; a
-     * battle's, its formation's {@code battle} ship.
+     * battle's, its formation's {@code battle} ship. It floats as the real one does: its deck rising {@code fore} a block
+     * toward the bow and {@code port} toward its left, its waterline {@code lift} off the still sea.
      */
     record Far(double x, double z, double yaw, SeaLanes.Size size, boolean real, @Nullable SeaLanes.Ship lane,
-               @Nullable FormationSnapshot.Ship battle) {
+               @Nullable FormationSnapshot.Ship battle, double fore, double port, double lift) {
         boolean warship() {
             return lane == null || lane.warship();
         }
@@ -100,20 +103,22 @@ final class DistantShips {
         }
         List<double[]> real = SableSeen.ships(mc.level);
         List<Far> ships = new ArrayList<>();
+        RIDES.values().forEach(r -> r.seen = false);
         for (SeaLanes.Ship s : lanes(partialTick)) {
-            ships.add(far(real, s.x(), s.z(), s.yaw(), s.size(), s, null));
+            ships.add(far(real, s.id(), s.x(), s.z(), s.yaw(), s.size(), s, null));
         }
         int battle = 0;
         int battleReal = 0;
         for (FormationSnapshot f : DistantArmies.now()) {
             if (f.ship() != null && f.ship().hull() >= 0) { // one hull to a ship, drawn by the block sailing it
                 SeaLanes.Size size = SeaLanes.Size.values()[f.ship().hull()];
-                Far ship = far(real, f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()), size, null, f.ship());
+                Far ship = far(real, f.id(), f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()), size, null, f.ship());
                 ships.add(ship);
                 battle++;
                 battleReal += ship.real() ? 1 : 0;
             }
         }
+        RIDES.values().removeIf(r -> !r.seen);
         if (!announced && battle > 0) {
             announced = true;
             rafasconquest.RafasConquest.LOGGER.info("Drawing a battle's {} ships beyond the real ones ({} of them real on this client, {} Sable ships in all)",
@@ -122,15 +127,53 @@ final class DistantShips {
         return ships;
     }
 
-    /** A ship that should be at (x, z): where the client's real one is, if it has one there; else where it should be. */
-    private static Far far(List<double[]> real, double x, double z, double yaw, SeaLanes.Size size, @Nullable SeaLanes.Ship lane,
-                           @Nullable FormationSnapshot.Ship battle) {
+    /**
+     * A ship that should be at (x, z): where the client's real one is and lying as it lies, if it has one there; else
+     * where it should be, riding the swell as the server rides the real ones ({@link Swell.Ride}). {@code key} names it
+     * from frame to frame (a lane ship's id, a battle formation's).
+     */
+    private static Far far(List<double[]> real, Object key, double x, double z, double yaw, SeaLanes.Size size,
+                           @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
+        double[] own = null;
         for (double[] r : real) {
             if (Math.hypot(r[0] - x, r[1] - z) <= OWN_SHIP) {
-                return new Far(r[0], r[1], r[2], size, true, lane, battle);
+                own = r;
+                x = r[0];
+                z = r[1];
+                yaw = r[2];
+                break;
             }
         }
-        return new Far(x, z, yaw, size, false, lane, battle);
+        Swell.Ride ride = ride(key, x, z, yaw);
+        return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], ride.offset())
+                : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset());
+    }
+
+    /** A far ship's float on the swell, and the game tick it was last ticked to. Client thread only. */
+    private static final class Riding {
+        final Swell.Ride ride = new Swell.Ride();
+        long tick = Long.MIN_VALUE / 2;
+        boolean seen;
+    }
+
+    private static final Map<Object, Riding> RIDES = new HashMap<>();
+    /** A ship first seen floats this many ticks before it is drawn, enough for its springs to settle. */
+    private static final int SETTLE_TICKS = 40;
+
+    // shortcut: ticks once a game tick, so the bob steps at 20 a second; interpolate with partialTick if it shows up close.
+    private static Swell.Ride ride(Object key, double x, double z, double yaw) {
+        Minecraft mc = Minecraft.getInstance();
+        Riding r = RIDES.computeIfAbsent(key, k -> new Riding());
+        r.seen = true;
+        long now = mc.level.getGameTime();
+        double dirX = Math.sin(yaw);
+        double dirZ = Math.cos(yaw);
+        var calm = Sea.calm(mc.level);
+        for (long t = Math.max(r.tick, now - SETTLE_TICKS) + 1; t <= now; t++) {
+            r.ride.tick(x, z, dirX, dirZ, t, calm);
+        }
+        r.tick = now;
+        return r.ride;
     }
 
     /** Where a ship's keel sits: a block down in the water, as the server holds the real ones. */

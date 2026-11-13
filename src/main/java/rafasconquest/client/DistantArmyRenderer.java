@@ -381,11 +381,11 @@ public final class DistantArmyRenderer {
             float z = (float) dz * scale;
             if (flat <= DistantShips.SPRITE_PAST) {
                 List<ShipHulls.Part> parts = ship.parts(); // keyed by its parts: a lane's list is rebuilt every few seconds
-                FigureBatches.add(parts, () -> hullModel(parts), NO_PALETTE, x, y, z, scale,
-                        (float) Math.sin(ship.yaw()), (float) Math.cos(ship.yaw()), lit, false);
-            } else {
+                FigureBatches.add(parts, () -> hullModel(parts), FigureBatches.shipPalette(ship.fore(), ship.port(), ship.lift()),
+                        x, y, z, scale, (float) Math.sin(ship.yaw()), (float) Math.cos(ship.yaw()), lit, FigureBatches.SHIP);
+            } else { // too far for its tilt or bob to show
                 ShipSprite sprite = new ShipSprite(ship.size().length, ship.warship());
-                FigureBatches.add(sprite, sprite::model, NO_PALETTE, x, y, z, scale, rightZ, -rightX, lit, false);
+                FigureBatches.add(sprite, sprite::model, NO_PALETTE, x, y, z, scale, rightZ, -rightX, lit, 0);
             }
         }
         FigureBatches.draw(pose.last().pose());

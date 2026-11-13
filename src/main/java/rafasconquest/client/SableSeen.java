@@ -24,8 +24,9 @@ final class SableSeen {
     }
 
     /**
-     * Where each Sable sub-level the client has is and which way it points: {x, z, yaw}, the yaw a turn about the up
-     * axis taking +z to its bow (as {@code Quaterniond.rotationY} turns); none without Sable.
+     * Where each Sable sub-level the client has is and how it lies: {x, z, yaw, fore, port}, the yaw a turn about the up
+     * axis taking +z to its bow (as {@code Quaterniond.rotationY} turns), fore and port its deck's rise per block toward
+     * the bow and toward its +x side; none without Sable.
      */
     static List<double[]> ships(ClientLevel level) {
         if (broken || !SableLink.available()) {
@@ -41,9 +42,11 @@ final class SableSeen {
                 if (!sub.isRemoved()) {
                     Pose3dc pose = sub.logicalPose();
                     Vector3d bow = new Quaterniond(pose.orientation()).transform(new Vector3d(0, 0, 1));
+                    Vector3d port = new Quaterniond(pose.orientation()).transform(new Vector3d(1, 0, 0));
                     // The middle of its blocks, not its pose's position (the point it turns about, its centre of mass).
                     Vector3d middle = sub.boundingBox().center();
-                    ships.add(new double[]{middle.x, middle.z, Math.atan2(bow.x, bow.z)});
+                    ships.add(new double[]{middle.x, middle.z, Math.atan2(bow.x, bow.z),
+                            bow.y / Math.max(1e-6, Math.hypot(bow.x, bow.z)), port.y / Math.max(1e-6, Math.hypot(port.x, port.z))});
                 }
             }
             return ships;

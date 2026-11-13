@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794539621.32871,
-    "seen": 1794539691.6586194,
-    "ast_hash": "c06d11445eb8a8ab4b593c544abdd7da",
+    "mtime": 1794539909.598694,
+    "seen": 1794539953.278864,
+    "ast_hash": "494056e28e6ccfa5c16f5323fa18790e",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1794539621.4343908,
-    "seen": 1794539691.6586275,
-    "ast_hash": "e4d56d29767905493d306ebb254326e5",
+    "mtime": 1794539888.4908974,
+    "seen": 1794539953.2788725,
+    "ast_hash": "54ec9cb4953db81dd03d89216086f4de",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -2436,9 +2436,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SableSeen.java": {
-    "mtime": 1793946619.9435399,
-    "seen": 1793946755.8676388,
-    "ast_hash": "f4de8ad02b2dc2153d7f5795d153dc62",
+    "mtime": 1794539859.7015028,
+    "seen": 1794539953.2789004,
+    "ast_hash": "a59119aad81df8bba40cc6d23030b387",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SoldierFigure.java": {
@@ -2568,9 +2568,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Swell.java": {
-    "mtime": 1794539646.16615,
-    "seen": 1794539691.658755,
-    "ast_hash": "dddf8ed116f379791e18578bd2aed7cc",
+    "mtime": 1794539852.2849796,
+    "seen": 1794539953.2790005,
+    "ast_hash": "ef373648ddfbce8ef4cb2a2134f3ecb5",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SwellTest.java": {
@@ -3210,9 +3210,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureBatches.java": {
-    "mtime": 1794539590.5158787,
-    "seen": 1794539691.6586308,
-    "ast_hash": "f1b82ca0c466ea5558199f2bcb01677c",
+    "mtime": 1794539909.5273764,
+    "seen": 1794539953.2788754,
+    "ast_hash": "0d56a635bfe36a3c975392022f97528d",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/bridge/WarCampTest.java": {
