@@ -6426,7 +6426,7 @@ public final class RecruitsBattle {
                     Point at = block == field.holder(block) ? block.pos()
                             : BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), section.x(), section.z());
                     all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, shown, at.x(),
-                            level.getSeaLevel() + 1, at.z(), block.facingX(), block.facingZ(), // feet on the deck
+                            level.getSeaLevel() + rafasconquest.style.ShipHulls.DECK, at.z(), block.facingX(), block.facingZ(), // feet on the deck: keel a block under the sea, deck DECK + 1 over it
                             lone ? 0 : FieldBattle.DECK_FILES * FieldBattle.DECK_SPACING / 2, lone ? 0 : ranks * FieldBattle.DECK_SPACING / 2,
                             block.fighting(), block.captainAlive(), new int[0], -1, shipOf(block)));
                     continue;
