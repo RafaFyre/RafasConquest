@@ -20,6 +20,7 @@ public class RafasConquest {
         ConquestWorldgen.register(modBus);
         ConquestContent.register(modBus);
         rafasconquest.npc.ConquestEntities.register(modBus);
+        rafasconquest.content.GrappleHooks.register(modBus);
         modBus.addListener(ConquestNetwork::register);
         modBus.addListener(this::commonSetup);
         container.registerConfig(ModConfig.Type.COMMON, ConquestConfig.SPEC);

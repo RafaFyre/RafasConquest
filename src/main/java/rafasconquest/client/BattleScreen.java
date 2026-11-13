@@ -961,6 +961,11 @@ public final class BattleScreen extends Screen {
                     && Math.hypot(f.x() - at.x, f.z() - at.z) <= rafasconquest.bridge.RecruitsBattle.ATTACK_PICK) {
                 return true;
             }
+            if (rafasconquest.battle.FieldBattle.sideOf(f.id()) != side && f.ship() != null && f.ship().hull() >= 0
+                    && rafasconquest.battle.FieldBattle.onHull(new rafasconquest.battle.BattlePlan.Point(at.x, at.z), new rafasconquest.battle.BattlePlan.Point(f.x(), f.z()),
+                    f.facingX(), f.facingZ(), rafasconquest.core.SeaLanes.Size.values()[f.ship().hull()])) {
+                return true; // on an enemy ship's hull: sending a ship there boards it
+            }
         }
         return false;
     }

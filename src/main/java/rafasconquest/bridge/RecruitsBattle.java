@@ -85,6 +85,7 @@ import java.util.function.Consumer;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2169,6 +2170,7 @@ public final class RecruitsBattle {
                 Point to = moored ? landed.at() : real ? field.makingFor(block) : block.pos();
                 Set<Integer> lashed = new HashSet<>();
                 block.lashed().forEach(o -> lashed.add(o.shipId()));
+                Set<Integer> hooked = block.hookedTo() == null ? Set.of() : Set.of(block.hookedTo().shipId());
                 byId.put(block.shipId(), block);
                 FactionBanner flag = FactionBanner.of(sides[side].faction.id());
                 // There, it lies as its captain wants (a real formation's), or as its numbers do (one still only numbers).
@@ -2176,7 +2178,7 @@ public final class RecruitsBattle {
                 double faceZ = real ? block.settleZ() : block.facingZ();
                 helms.add(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(),
-                        block.ship() == FieldBlock.ShipKind.CAMP, lashed, flag.base(),
+                        block.ship() == FieldBlock.ShipKind.CAMP, lashed, hooked, flag.base(),
                         flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()));
             }
         }
@@ -2212,6 +2214,70 @@ public final class RecruitsBattle {
             }
             if (l.block.lashed().stream().anyMatch(live::containsKey)) {
                 board(l);
+            }
+        }
+        throwHooks();
+    }
+
+    /** Each boarding ship's grapple hooks, by its ship's id, while its lines are out. */
+    private final Map<Integer, List<rafasconquest.content.GrappleHook>> hooks = new HashMap<>();
+    /** How many of a boarding ship's crew throw a hook. */
+    private static final int THROWERS = 6;
+
+    /**
+     * A real ship whose captain has its crew grapple an enemy's real ship ({@link FieldBlock#hookedTo}): the soldiers
+     * aboard nearest the enemy throw grapple hooks onto its rail, each where it lies abreast of them, once; the lines
+     * stay out while they haul and once the ships are grappled, and come in when the ship lets go.
+     */
+    private void throwHooks() {
+        Set<Integer> out = new HashSet<>();
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock block : field.army(side).blocks()) {
+                FieldBlock target = block.hookedTo();
+                if (block.alive() == 0 || block != field.holder(block) || target == null) {
+                    continue;
+                }
+                double[] theirs = SableLink.shipAt(target.shipId());
+                if (theirs == null || SableLink.shipAt(block.shipId()) == null) {
+                    continue;
+                }
+                List<AbstractRecruitEntity> crew = new ArrayList<>();
+                for (FieldBlock aboard : field.crew(block)) {
+                    Live l = live.get(aboard);
+                    if (l != null) {
+                        crew.addAll(l.living());
+                    }
+                }
+                if (crew.isEmpty()) {
+                    continue;
+                }
+                out.add(block.shipId());
+                List<rafasconquest.content.GrappleHook> thrown = hooks.computeIfAbsent(block.shipId(), k -> new ArrayList<>());
+                thrown.removeIf(Entity::isRemoved);
+                if (!thrown.isEmpty()) {
+                    continue; // thrown already: the lines are out
+                }
+                crew.sort(Comparator.comparingDouble(s -> Math.hypot(s.getX() - theirs[0], s.getZ() - theirs[1])));
+                double reach = target.hull().length / 2.0 - 3;
+                double rail = target.hull().width / 2.0 - 1;
+                for (AbstractRecruitEntity s : crew.subList(0, Math.min(THROWERS, crew.size()))) {
+                    // Onto the rail facing them, abreast of where they stand.
+                    double ox = s.getX() - theirs[0];
+                    double oz = s.getZ() - theirs[1];
+                    double along = Math.max(-reach, Math.min(reach, ox * theirs[2] + oz * theirs[3]));
+                    double across = (-ox * theirs[3] + oz * theirs[2]) >= 0 ? rail : -rail;
+                    rafasconquest.content.GrappleHook hook = new rafasconquest.content.GrappleHook(level, s, target.shipId(), along, across);
+                    level.addFreshEntity(hook);
+                    s.swing(net.minecraft.world.InteractionHand.MAIN_HAND); // the throw
+                    thrown.add(hook);
+                }
+            }
+        }
+        for (Iterator<Map.Entry<Integer, List<rafasconquest.content.GrappleHook>>> it = hooks.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Integer, List<rafasconquest.content.GrappleHook>> e = it.next();
+            if (!out.contains(e.getKey())) {
+                e.getValue().forEach(Entity::discard); // let go: the lines come in
+                it.remove();
             }
         }
     }
@@ -3936,12 +4002,21 @@ public final class RecruitsBattle {
         return soldiers;
     }
 
-    /** The living enemy block whose middle is nearest a place, if one is within {@link #ATTACK_PICK}. */
+    /**
+     * The living enemy block whose middle is nearest a place, if one is within {@link #ATTACK_PICK}; at sea, the enemy
+     * ship whose hull the place is on (sending a ship there boards it).
+     */
     @Nullable
     private FieldBlock enemyBlockAt(int side, Vec3 place) {
         FieldBlock best = null;
         double bestD = ATTACK_PICK;
         Point at = new Point(place.x, place.z);
+        for (FieldBlock b : field.army(1 - side).blocks()) {
+            if (b.alive() > 0 && b.afloat() && b == field.holder(b)
+                    && FieldBattle.onHull(at, b.pos(), b.facingX(), b.facingZ(), b.hull())) {
+                return b;
+            }
+        }
         for (FieldBlock b : field.army(1 - side).blocks()) {
             double d = b.pos().distanceTo(at);
             if (b.alive() > 0 && d <= bestD) {

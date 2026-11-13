@@ -118,6 +118,9 @@ public final class FieldBlock {
     int shipId;
     int berth;
     rafasconquest.core.SeaLanes.Size hull = rafasconquest.core.SeaLanes.Size.LARGE;
+    /** At sea, the enemy ship its crew's grapple hooks are in, hauling the two together (and holding them, grappled); held by its ship's block. */
+    @Nullable
+    FieldBlock hookedTo;
     /** At sea, the enemy ships grappled to its own: their soldiers may board each other's decks. */
     final java.util.List<FieldBlock> lashed = new java.util.ArrayList<>();
     /**
@@ -322,6 +325,11 @@ public final class FieldBlock {
     /** The ship it rides at sea, shared by its unit's blocks ({@link FieldBattle#crew}). */
     public int shipId() {
         return shipId;
+    }
+
+    @Nullable
+    public FieldBlock hookedTo() {
+        return hookedTo;
     }
 
     public int berth() {

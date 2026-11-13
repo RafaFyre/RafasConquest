@@ -17,11 +17,13 @@ public final class SableLink {
      * A battle ship's orders this tick: formation {@code id}'s ship (of {@code side}) sails for (toX, toZ) at up to
      * {@code speed} blocks a second, bow along its course (or along (faceX, faceZ) once there). {@code hull}: its size (the
      * general's a size up, a unit's the biggest); {@code cargo}: one of the fleet's camp, stores on deck; {@code lashed}: the formations whose
-     * ships it is grappled to, which it keeps alongside; {@code sail}, {@code stripe}: its side's banner dyes (base, first
+     * ships it is grappled to, which it keeps alongside; {@code hooked}: those its grapple lines are in, which haul it
+     * toward its place alongside them; {@code sail}, {@code stripe}: its side's banner dyes (base, first
      * mark), which its sail is woven in.
      */
     public record Helm(int id, int side, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed,
-                       rafasconquest.core.SeaLanes.Size hull, boolean cargo, java.util.Set<Integer> lashed, int sail, int stripe) {
+                       rafasconquest.core.SeaLanes.Size hull, boolean cargo, java.util.Set<Integer> lashed, java.util.Set<Integer> hooked,
+                       int sail, int stripe) {
     }
 
     /**
@@ -139,7 +141,7 @@ public final class SableLink {
         }
     }
 
-    /** Where formation {@code id}'s battle ship is and which way its bow points: {x, z, dirX, dirZ}; null with none sailing. */
+    /** Where formation {@code id}'s battle ship is, which way its bow points and its deck's height: {x, z, dirX, dirZ, deckY}; null with none sailing. */
     @org.jetbrains.annotations.Nullable
     public static double[] shipAt(int id) {
         if (!enabled) {

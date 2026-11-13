@@ -701,10 +701,10 @@ class FieldBattleTest {
             battle.second();
             for (java.util.Map.Entry<FieldBlock, Point> e : last.entrySet()) {
                 FieldBlock b = e.getKey();
-                assertTrue(b.pos().distanceTo(e.getValue()) <= FieldBattle.shipSpeed(b) + FieldBattle.SHIP_SHOVE + 1e-6,
+                assertTrue(b.pos().distanceTo(e.getValue()) <= FieldBattle.shipSpeed(b) + FieldBattle.SHIP_SHOVE + (battle.holder(b).hookedTo() != null ? FieldBattle.HAUL_SPEED : 0) + 1e-6,
                         "a " + b.ship() + " ship (" + b.duty() + ", charged " + b.charged() + ", grappled " + b.lashed().size()
                                 + ") moved " + b.pos().distanceTo(e.getValue()) + " in second " + battle.seconds()
-                                + ": faster than its ship sails, shoved clear of its own");
+                                + ": faster than its ship sails, shoved clear of its own and hauled by its hooks");
                 assertTrue(!b.inMelee() || !b.lashed().isEmpty() || b.alive() == 0, "hand to hand at sea without grappling");
                 grappled |= !b.lashed().isEmpty();
                 rammed |= b.ship() == FieldBlock.ShipKind.SHOCK && !b.lashed().isEmpty();
@@ -802,6 +802,46 @@ class FieldBattleTest {
                 + " (" + ship.duty() + " at second " + battle.seconds() + ")");
         assertTrue(ship.lashed().isEmpty(), "went boarding instead");
         assertEquals(ship.pos(), last.pos(), "the ship left a block behind");
+    }
+
+    @Test
+    void boardingShipsHookFromReachAndGrappleOnlyHullToHull() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.setType(BattleType.OCEAN);
+        java.util.Set<FieldBlock> hooked = new java.util.HashSet<>();
+        boolean grappled = false;
+        for (int s = 0; s < 300 && !battle.over(); s++) {
+            java.util.Map<FieldBlock, Boolean> wasLashed = new java.util.HashMap<>();
+            for (int side = 0; side < 2; side++) {
+                for (FieldBlock b : battle.army(side).blocks()) {
+                    wasLashed.put(b, !b.lashed().isEmpty());
+                }
+            }
+            battle.second();
+            for (int side = 0; side < 2; side++) {
+                for (FieldBlock b : battle.army(side).blocks()) {
+                    if (b.alive() == 0 || battle.holder(b) != b || b.ship() != FieldBlock.ShipKind.SWORDSMEN) {
+                        continue;
+                    }
+                    FieldBlock e = b.hookedTo();
+                    if (e != null && hooked.add(b) && b.lashed().isEmpty()) {
+                        assertTrue(Ramming.overlap(hull(b), hull(e), FieldBattle.GRAPPLE_RANGE / 2 + 0.01),
+                                "hooks thrown from out of reach at second " + battle.seconds());
+                    }
+                    if (!wasLashed.get(b) && e != null && b.lashed().contains(battle.holder(e)) && battle.holder(e).ship() != FieldBlock.ShipKind.SHOCK) {
+                        grappled = true;
+                        assertTrue(FieldBattle.touching(b, battle.holder(e)) || FieldBattle.touching(battle.holder(e), b),
+                                "grappled before the hulls touched at second " + battle.seconds());
+                    }
+                }
+            }
+        }
+        assertTrue(!hooked.isEmpty(), "no hooks thrown");
+        assertTrue(grappled, "no ship hauled alongside and grappled");
+    }
+
+    private static Ramming.Hull hull(FieldBlock b) {
+        return new Ramming.Hull(b.pos().x(), b.pos().z(), b.facingX(), b.facingZ(), b.hull().length / 2.0, b.hull().width / 2.0, 0, 0);
     }
 
     @Test
@@ -922,7 +962,7 @@ class FieldBattleTest {
         b.pos = a.pos;
         b.facingX = a.facingX;
         b.facingZ = a.facingZ;
-        for (int s = 0; s < 6; s++) {
+        for (int s = 0; s < 12; s++) {
             battle.second();
         }
         // Clear, hull to hull (a unit's ship 13 wide), whichever way they now lie to each other.

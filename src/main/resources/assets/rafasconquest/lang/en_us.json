@@ -53,6 +53,8 @@
   "entity.rafasconquest.townsperson": "Townsperson",
   "entity.rafasconquest.recruiter": "Recruiter",
   "item.rafasconquest.world_map": "World Map",
+  "item.rafasconquest.grapple_hook": "Grapple Hook",
+  "entity.rafasconquest.grapple_hook": "Grapple Hook",
   "block.rafasconquest.quest_board": "Quest Board",
   "block.rafasconquest.grand_strategy": "Grand Strategy Table",
   "block.rafasconquest.strategy_board": "Strategy Board",

@@ -49,6 +49,8 @@ final class BattleShips {
     private static final Map<Integer, Ramming.Hull> hulls = new HashMap<>();
     /** Each formation's side this tick, by formation id. */
     private static final Map<Integer, Integer> sides = new HashMap<>();
+    /** Each ship's deck height this tick (where its soldiers stand), by formation id. */
+    private static final Map<Integer, Double> decks = new HashMap<>();
 
     private BattleShips() {
     }
@@ -80,6 +82,7 @@ final class BattleShips {
         Set<String> wanted = new HashSet<>();
         Map<Integer, SableLink.Helm> sailing = new HashMap<>();
         hulls.clear();
+        decks.clear();
         sides.clear();
         List<SableLink.Helm> unbuilt = new ArrayList<>();
         for (SableLink.Helm h : helms) {
@@ -92,6 +95,7 @@ final class BattleShips {
                 }
             } else {
                 hulls.put(h.id(), hull(sub, h)); // where it lies, steered or not, so none is built on it
+                decks.put(h.id(), middle(sub).y + ShipHulls.DECK + 1);
                 RigidBodyHandle body = RigidBodyHandle.of(sub);
                 if (body != null && body.isValid()) {
                     sailing.put(h.id(), h);
@@ -109,7 +113,7 @@ final class BattleShips {
         List<SableLink.Ram> rams = new ArrayList<>();
         for (SableLink.Helm a : sailing.values()) {
             for (SableLink.Helm b : sailing.values()) {
-                if (a.side() == b.side() || a.lashed().contains(b.id())) {
+                if (a.side() == b.side() || a.lashed().contains(b.id()) || a.hooked().contains(b.id()) || b.hooked().contains(a.id())) {
                     continue;
                 }
                 double closing = Ramming.closing(hulls.get(a.id()), hulls.get(b.id()));
@@ -133,11 +137,11 @@ final class BattleShips {
         return rams;
     }
 
-    /** Where formation {@code id}'s ship is and which way its bow points: {x, z, dirX, dirZ}; null with no ship sailing. */
+    /** Where formation {@code id}'s ship is, which way its bow points and its deck's height: {x, z, dirX, dirZ, deckY}; null with no ship sailing. */
     @org.jetbrains.annotations.Nullable
     static double[] where(int id) {
         Ramming.Hull h = hulls.get(id);
-        return h == null ? null : new double[]{h.x(), h.z(), h.dirX(), h.dirZ()};
+        return h == null ? null : new double[]{h.x(), h.z(), h.dirX(), h.dirZ(), decks.getOrDefault(id, Double.NaN)};
     }
 
     private static String key(SableLink.Helm h) {
@@ -237,8 +241,10 @@ final class BattleShips {
         Vector3d spin = body.getAngularVelocity(new Vector3d());
         Ramming.Hull me = hulls.get(h.id());
         double heading = Math.atan2(me.dirX(), me.dirZ());
-        // Floats on the swell: up and down with it, pulled back to it, and rolling and pitching with it.
-        Swell.Ride ride = SableShips.ride(sub, me.x(), me.z(), me.dirX(), me.dirZ(), time);
+        // Floats on the swell: up and down with it, pulled back to it, and rolling and pitching with it. Grappled ships
+        // ride it as one: each on the water under the middle of all those lashed together.
+        double[] on = grappledMiddle(h, sailing);
+        Swell.Ride ride = SableShips.ride(sub, on[0], on[1], me.dirX(), me.dirZ(), time);
         double waterline = ride.rise() + (y + ride.offset() - pose.position().y()) * PULL;
         if (h.lashed().stream().anyMatch(sailing::containsKey)) {
             // Grappled: it lies still alongside, or bow in, as it is.
@@ -276,7 +282,37 @@ final class BattleShips {
         pace = Math.max(-h.speed() / 2, Math.min(h.speed(), pace));
         double turn = Math.max(-FieldBattle.TURN_RATE, Math.min(FieldBattle.TURN_RATE, off)) / SableShips.TURN;
         Vector3d want = new Vector3d(me.dirX() * pace, waterline, me.dirZ() * pace);
+        if (h.hooked().stream().anyMatch(sailing::containsKey) && d > 1e-6) {
+            // Its grapple lines haul it toward its place alongside, any way they pull, sideways too.
+            double haul = Math.min(FieldBattle.HAUL_SPEED, d * PULL);
+            want.add(dx / d * haul, 0, dz / d * haul);
+        }
         body.addLinearAndAngularVelocity(want.sub(velocity), SableShips.spinToward(pose, heading + turn, spin, ride.slope()));
+    }
+
+    /**
+     * Where ship {@code h} rides the swell: under its own middle, or, grappled, under the middle of every ship lashed
+     * to it and to those (so they heave, roll and pitch as one).
+     */
+    private static double[] grappledMiddle(SableLink.Helm h, Map<Integer, SableLink.Helm> sailing) {
+        Set<Integer> group = new HashSet<>(Set.of(h.id()));
+        List<SableLink.Helm> todo = new ArrayList<>(List.of(h));
+        while (!todo.isEmpty()) {
+            for (int id : todo.remove(todo.size() - 1).lashed()) {
+                SableLink.Helm o = sailing.get(id);
+                if (o != null && group.add(id)) {
+                    todo.add(o);
+                }
+            }
+        }
+        double x = 0;
+        double z = 0;
+        for (int id : group) {
+            Ramming.Hull hull = hulls.get(id);
+            x += hull.x();
+            z += hull.z();
+        }
+        return new double[]{x / group.size(), z / group.size()};
     }
 
     /** An angle brought to between -pi and pi. */

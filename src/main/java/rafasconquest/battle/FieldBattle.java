@@ -295,6 +295,12 @@ public final class FieldBattle {
     public static final double CAMP_ASTERN = 80;
 
     /**
+     * A fleet's line stands this far behind its army's front, half a unit's ship, so the two fleets' bows start as far apart as
+     * the armies' fronts would (well out of grapple-hook reach).
+     */
+    public static final double FLEET_BACK = rafasconquest.core.SeaLanes.Size.XXLARGE.length / 2.0;
+
+    /**
      * A fleet deploys in one line abreast across its army's front, {@link #FLEET_SPACING} apart, its ships in the order
      * they stood from left to right; the camp's supply ships keep well back, in a line of their own
      * {@link #CAMP_ASTERN} behind it.
@@ -303,8 +309,8 @@ public final class FieldBattle {
         List<FieldBlock> fleet = army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
                 .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
                 .toList();
-        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), 0);
-        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), CAMP_ASTERN);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + CAMP_ASTERN);
     }
 
     /** Ships in one line abreast, centred on the army's front, {@code back} behind it. */
@@ -356,12 +362,41 @@ public final class FieldBattle {
     static final double RAM_RUN = 6;
     /** Shock ships hold back this many seconds after the battle begins, whatever chance they see. */
     static final int SHOCK_WAIT = 20;
-    /** A boarding ship this close to its place alongside its enemy has come alongside, and grapples. */
-    static final double BOARD_ARRIVED = 3;
+    /** A boarding ship's crew throw their grapple hooks once its hull is this close to its enemy's; every throw holds. */
+    public static final double GRAPPLE_RANGE = 20;
+    /** Hooked, the lines haul a ship that is only numbers this many blocks a second toward its place alongside, sideways too. */
+    public static final double HAUL_SPEED = 2;
+    /** Hulls closer than this, side to side, touch: the ships grapple and the crews board. */
+    public static final double TOUCH_GAP = 1;
 
-    /** A boarding ship lays itself alongside its enemy this far off, centre to centre: two half beams and a step between. */
+    /** A boarding ship lays itself alongside its enemy this far off, centre to centre: two half beams and half a block between. */
     static double boardAbeam(FieldBlock b, FieldBlock e) {
-        return (b.hull.width + e.hull.width) / 2.0 + 1;
+        return (b.hull.width + e.hull.width) / 2.0 + TOUCH_GAP / 2;
+    }
+
+    /** Whether {@code at} is on (or within a couple of blocks of) a ship's hull lying at {@code centre}, bow along (fx, fz). */
+    public static boolean onHull(Point at, Point centre, double fx, double fz, rafasconquest.core.SeaLanes.Size hull) {
+        double ox = at.x() - centre.x();
+        double oz = at.z() - centre.z();
+        return Math.abs(ox * fx + oz * fz) <= hull.length / 2.0 + 2 && Math.abs(-ox * fz + oz * fx) <= hull.width / 2.0 + 2;
+    }
+
+    /** A hooked ship that is only numbers is hauled toward its place alongside, any way the lines pull it. */
+    private static void haul(FieldBlock b) {
+        double d = b.pos.distanceTo(b.line);
+        double step = Math.min(d, HAUL_SPEED);
+        if (d > 1e-9) {
+            b.pos = b.pos.plus((b.line.x() - b.pos.x()) / d * step, (b.line.z() - b.pos.z()) / d * step);
+        }
+    }
+
+    /** Whether {@code b}'s hull lies alongside {@code e}'s, less than {@link #TOUCH_GAP} off its side. */
+    static boolean touching(FieldBlock b, FieldBlock e) {
+        double ox = b.pos.x() - e.pos.x();
+        double oz = b.pos.z() - e.pos.z();
+        double along = Math.abs(ox * e.facingX + oz * e.facingZ);
+        double across = Math.abs(-ox * e.facingZ + oz * e.facingX);
+        return along <= e.hull.length / 2.0 && across - (b.hull.width + e.hull.width) / 2.0 < TOUCH_GAP;
     }
 
     /** A rammer's middle is this far out from the side of the ship it rammed, its bow against it: half a beam and half a length. */
@@ -422,6 +457,13 @@ public final class FieldBattle {
             }
             List<FieldBlock> engaged = seconds < SHOCK_WAIT ? List.of()
                     : enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && !e.lashed.isEmpty() && e == holder(e)).toList();
+            // Ours the enemy's grapple hooks are in: the lines hold them while they haul.
+            java.util.Set<FieldBlock> held = new java.util.HashSet<>();
+            for (FieldBlock e : enemy.blocks) {
+                if (e.hookedTo != null && e.alive > 0 && e.lashed.isEmpty()) {
+                    held.add(holder(e.hookedTo));
+                }
+            }
             List<FieldBlock> order = new ArrayList<>(armies[side].blocks);
             order.sort(Comparator.comparingInt(b -> b.ship == FieldBlock.ShipKind.SHOCK ? 0 : 1));
             for (FieldBlock b : order) {
@@ -430,6 +472,15 @@ public final class FieldBattle {
                 if (!b.afloat || b.alive == 0 || b.duty == Duty.FLEEING || b.duty == Duty.ROUTED
                         || b.duty == Duty.RALLYING || b != holder(b)) {
                     continue; // the rest aboard go where their ship does (syncCrews)
+                }
+                FieldBlock hooked = b.hookedTo;
+                if (b.lashed.isEmpty()) {
+                    b.hookedTo = null; // its lines stay out while they haul (below), and once grappled
+                }
+                if (held.contains(b) && b.lashed.isEmpty()) {
+                    b.charged = false;
+                    b.line = b.pos; // hooked by an enemy: held where it lies while their lines haul them in
+                    continue;
                 }
                 if (b.led) {
                     if (!b.ledCharge) {
@@ -484,8 +535,14 @@ public final class FieldBattle {
                         double same = b.facingX * e.facingX + b.facingZ * e.facingZ < 0 ? -1 : 1;
                         b.settleX = same * e.facingX;
                         b.settleZ = same * e.facingZ;
-                        if (b.pos.distanceTo(b.line) <= BOARD_ARRIVED) {
-                            lash(b, e); // alongside: grapnels over, and they board
+                        if (hooked == e || Ramming.overlap(footprint(b), footprint(e), GRAPPLE_RANGE / 2)) {
+                            b.hookedTo = e; // in reach: grapple hooks over, and the lines haul the two together
+                            if (!b.live) {
+                                haul(b); // a real ship is hauled on the water (BattleShips)
+                            }
+                            if (touching(b, e)) {
+                                lash(b, e); // hull to hull: they board
+                            }
                         }
                     }
                     case SHOCK -> {
