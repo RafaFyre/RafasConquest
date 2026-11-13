@@ -25,7 +25,8 @@ class SwellTest {
             }
         }
         assertTrue(off < 0.5, "waterline off the sea by " + off);
-        assertTrue(steepest > 0.01 && steepest < 2, "steepest slope " + steepest);
+        double most = Math.hypot(Math.tan(Swell.Ride.MAX_ROLL), Math.tan(Swell.Ride.MAX_PITCH));
+        assertTrue(steepest > 0.01 && steepest <= most + 1e-9, "steepest slope " + steepest);
     }
 
     @Test

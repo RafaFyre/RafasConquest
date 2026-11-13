@@ -25,7 +25,7 @@ import java.util.Map;
  * (with nothing under it, it would fade into the sea and look like a ghost);</li>
  * <li>past that, a flat sprite.</li>
  * </ul>
- * Both are drawn by {@link DistantArmyRenderer#renderShips}.
+ * Both are drawn by {@link DistantArmyRenderer#renderShips}, instanced like the soldiers.
  */
 final class DistantShips {
     static final double SPRITE_PAST = 2000;

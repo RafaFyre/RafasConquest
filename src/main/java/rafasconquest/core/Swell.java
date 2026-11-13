@@ -169,7 +169,8 @@ public final class Swell {
      * A ship floating on the swell as Physics Mod floats boats, ticked once a game tick: its waterline chases the sea
      * under its middle on a spring that lifts hard (0.241 a tick, then ×0.6) and lets it fall slowly (0.041, ×0.95),
      * gentler within half a block; it rolls and pitches toward the sea's slope one block either side and fore and aft,
-     * on damped springs, and hangs on its last swing while it rides more than 0.075 above the water.
+     * on damped springs, never past {@link #MAX_ROLL} or {@link #MAX_PITCH}, and hangs on its last swing while it rides
+     * more than 0.075 above the water.
      */
     public static final class Ride {
         private double offset;
@@ -198,19 +199,25 @@ public final class Swell {
             double right = height(x - dirZ, z + dirX, time, calmness);
             double ahead = height(x + dirX, z + dirZ, time, calmness);
             double behind = height(x - dirX, z - dirZ, time, calmness);
-            double rollTo = Math.atan2(right - left, 2);
-            double pitchTo = Math.atan2(behind - ahead, 2);
-            double rollHold = 1 - Math.pow(Math.min(1, Math.abs(roll) / Math.toRadians(130)), 3);
-            double pitchHold = 1 - Math.pow(Math.min(1, Math.abs(pitch) / Math.toRadians(130)), 3);
+            double rollTo = clamp(Math.atan2(right - left, 2), MAX_ROLL);
+            double pitchTo = clamp(Math.atan2(behind - ahead, 2), MAX_PITCH);
             if (airborne) {
-                rollSpeed *= 0.95 * rollHold;
-                pitchSpeed *= 0.95 * pitchHold;
+                rollSpeed *= 0.95;
+                pitchSpeed *= 0.95;
             } else {
-                rollSpeed = (rollSpeed + (rollTo - roll) * 0.2) * 0.6 * rollHold;
-                pitchSpeed = (pitchSpeed + (pitchTo - pitch) * 0.2) * 0.6 * pitchHold;
+                rollSpeed = (rollSpeed + (rollTo - roll) * 0.2) * 0.6;
+                pitchSpeed = (pitchSpeed + (pitchTo - pitch) * 0.2) * 0.6;
             }
-            roll += rollSpeed;
-            pitch += pitchSpeed;
+            roll = clamp(roll + rollSpeed, MAX_ROLL);
+            pitch = clamp(pitch + pitchSpeed, MAX_PITCH);
+        }
+
+        /** The sea lists a ship at most this far to port or starboard, and pitches it at most this far bow or stern down. */
+        static final double MAX_ROLL = Math.toRadians(5);
+        static final double MAX_PITCH = Math.toRadians(2);
+
+        private static double clamp(double angle, double max) {
+            return Math.max(-max, Math.min(max, angle));
         }
 
         /** How far its waterline stands off the still line, in blocks. */

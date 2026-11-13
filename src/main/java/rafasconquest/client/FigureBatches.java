@@ -57,11 +57,11 @@ final class FigureBatches {
         } else {
             SoldierFigure.build(shape, SoldierFigure.Palette.SLOTS, out);
         }
-        return java.util.Arrays.copyOf(out.ints, out.size);
+        return out.model();
     }
 
     /** Collects a model: boxes (3D figures) and rectangles (flat ones) into triangles. */
-    private static final class Corners implements SoldierFigure.Boxes, DistantArmyRenderer.Rects {
+    static final class Corners implements SoldierFigure.Boxes, DistantArmyRenderer.Rects {
         int[] ints = new int[VERTEX_INTS * 64];
         int size;
 
@@ -93,7 +93,7 @@ final class FigureBatches {
         }
 
         /** Two triangles; {@code shade} > 0 is the face's own shade, else it is shaded by which way ({@code nr}, {@code nf}) it faces. */
-        private void quad(int rgb, float nr, float nf, float shade, float... v) {
+        void quad(int rgb, float nr, float nf, float shade, float... v) {
             for (int corner : new int[]{0, 1, 2, 0, 2, 3}) {
                 if (size + VERTEX_INTS > ints.length) {
                     ints = java.util.Arrays.copyOf(ints, ints.length * 2);
@@ -106,6 +106,10 @@ final class FigureBatches {
                 ints[size++] = Float.floatToRawIntBits(shade);
                 ints[size++] = rgb;
             }
+        }
+
+        int[] model() {
+            return java.util.Arrays.copyOf(ints, size);
         }
     }
 
@@ -131,7 +135,8 @@ final class FigureBatches {
         }
     }
 
-    private static final Map<SoldierFigure.Shape, Batch> BATCHES = new LinkedHashMap<>();
+    /** By model: a soldier's {@link SoldierFigure.Shape}, or the key another model (a ship's) was added under. */
+    private static final Map<Object, Batch> BATCHES = new LinkedHashMap<>();
     private static int program = -1;
     private static int instanceBuffer;
     private static int mvp;
@@ -166,16 +171,22 @@ final class FigureBatches {
      */
     static void add(SoldierFigure.Shape shape, int[] palette, float x, float y, float z, float scale, float fx, float fz, int light,
                     boolean glow) {
+        add(shape, null, palette, x, y, z, scale, fx, fz, light, glow);
+    }
+
+    /** One of a model other than a soldier's, known by {@code key} (equal keys share a model); {@code model} bakes it the first time. */
+    static void add(Object key, @javax.annotation.Nullable java.util.function.Supplier<int[]> model, int[] palette, float x, float y,
+                    float z, float scale, float fx, float fz, int light, boolean glow) {
         if (!usable) {
             return;
         }
-        Batch b = BATCHES.get(shape);
+        Batch b = BATCHES.get(key);
         if (b == null) {
             if (!ready()) {
                 return;
             }
-            b = upload(shape);
-            BATCHES.put(shape, b);
+            b = upload(model == null ? bake((SoldierFigure.Shape) key) : model.get());
+            BATCHES.put(key, b);
         }
         if ((b.count + 1) * INSTANCE_BYTES > b.instances.capacity()) {
             b.instances = MemoryUtil.memRealloc(b.instances, b.instances.capacity() * 2);
@@ -321,9 +332,8 @@ final class FigureBatches {
         return s;
     }
 
-    /** A shape's model, up on the graphics card for good, with its vertex array reading the soldiers' buffer. */
-    private static Batch upload(SoldierFigure.Shape shape) {
-        int[] corners = bake(shape);
+    /** A model, up on the graphics card for good, with its vertex array reading the soldiers' buffer. */
+    private static Batch upload(int[] corners) {
         int oldVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int oldBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
         int vao = GlStateManager._glGenVertexArrays();

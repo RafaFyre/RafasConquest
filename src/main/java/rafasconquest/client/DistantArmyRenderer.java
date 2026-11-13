@@ -27,7 +27,6 @@ import net.minecraft.world.level.EmptyBlockGetter;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -350,6 +349,7 @@ public final class DistantArmyRenderer {
     /**
      * Ships beyond the real ones ({@link DistantShips}): out to {@link DistantShips#SPRITE_PAST} a box for each block of
      * the hull, turned to its heading; past that a flat ship turned to face the camera, a hull under a mast and sail.
+     * Both are models drawn instanced by {@link FigureBatches}, as the soldiers are.
      */
     public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
         List<DistantShips.Far> ships = DistantShips.all(partialTick);
@@ -361,11 +361,12 @@ public final class DistantArmyRenderer {
         Minecraft mc = Minecraft.getInstance();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
-        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
-        Figure f = new Figure(buffer, pose.last().pose(), (float) (-left.x() / length), (float) (-left.z() / length));
+        float rightX = (float) (-left.x() / length);
+        float rightZ = (float) (-left.z() / length);
         double fade = DistantHorizonsLink.fadeStart(partialTick);
         double dy = DistantShips.keel() - eye.y;
-        int drawn = 0;
+        int lit = FigureBatches.lightColour(LightTexture.FULL_SKY);
+        FigureBatches.begin();
         for (DistantShips.Far ship : ships) {
             double dx = ship.x() - eye.x;
             double dz = ship.z() - eye.z;
@@ -374,106 +375,78 @@ public final class DistantArmyRenderer {
                 continue; // Sable draws it
             }
             double distance = Math.hypot(flat, dy);
-            double scale = DistantOcclusion.scale(distance, renderBlocks);
-            f.at((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale, LightTexture.FULL_SKY);
-            drawn++;
+            float scale = (float) DistantOcclusion.scale(distance, renderBlocks);
+            float x = (float) dx * scale;
+            float y = (float) dy * scale;
+            float z = (float) dz * scale;
             if (flat <= DistantShips.SPRITE_PAST) {
-                shipBoxes(f, ship);
-                continue;
+                List<ShipHulls.Part> parts = ship.parts(); // keyed by its parts: a lane's list is rebuilt every few seconds
+                FigureBatches.add(parts, () -> hullModel(parts), NO_PALETTE, x, y, z, scale,
+                        (float) Math.sin(ship.yaw()), (float) Math.cos(ship.yaw()), lit, false);
+            } else {
+                ShipSprite sprite = new ShipSprite(ship.size().length, ship.warship());
+                FigureBatches.add(sprite, sprite::model, NO_PALETTE, x, y, z, scale, rightZ, -rightX, lit, false);
             }
-            float hull = ship.size().length;
+        }
+        FigureBatches.draw(pose.last().pose());
+    }
+
+    /** Ships take their colours from their blocks, not a palette. */
+    private static final int[] NO_PALETTE = new int[8];
+
+    /** A far ship's flat model, one per hull length and kind. */
+    private record ShipSprite(int hull, boolean warship) {
+        int[] model() {
+            FigureBatches.Corners f = new FigureBatches.Corners();
             f.rect(0, 0, hull, 3, HULL);
-            f.rect(0, 3, 0.6F, hull / 2 + 1, POLE);
-            f.rect(0, 4.5F, hull * 0.55F, hull / 2 - 2, SAIL);
-            if (ship.warship()) {
-                f.rect(1.2F, hull / 2 + 2.5F, 2.4F, 1, PENNANT);
+            f.rect(0, 3, 0.6F, hull / 2F + 1, POLE);
+            f.rect(0, 4.5F, hull * 0.55F, hull / 2F - 2, SAIL);
+            if (warship) {
+                f.rect(1.2F, hull / 2F + 2.5F, 2.4F, 1, PENNANT);
             }
-        }
-        finish(mc, buffer, drawn);
-    }
-
-    /**
-     * A ship's 3D level of detail: a block for each block of its hull in the block's map colour, turned with the ship.
-     * Its shape is worked out once per hull ({@link Hull}); each frame only turns, scales and places its faces.
-     */
-    private static void shipBoxes(Figure f, DistantShips.Far ship) {
-        Hull hull = HULLS.computeIfAbsent(ship.parts(), Hull::of);
-        float cos = (float) Math.cos(ship.yaw());
-        float sin = (float) Math.sin(ship.yaw());
-        float[] c = hull.corners;
-        float[] v = new float[12];
-        for (int face = 0; face < hull.rgb.length; face++) {
-            int at = face * 12;
-            for (int i = 0; i < 12; i += 3) {
-                v[i] = f.x + (c[at + i] * cos + c[at + i + 2] * sin) * f.scale;
-                v[i + 1] = f.y + c[at + i + 1] * f.scale;
-                v[i + 2] = f.z + (-c[at + i] * sin + c[at + i + 2] * cos) * f.scale;
-            }
-            f.quad(hull.rgb[face], hull.shade[face], v);
+            return f.model();
         }
     }
 
-    /** Each hull's shape, by the hull list {@link ShipHulls} hands out (the same list for the same hull). Render thread only. */
-    private static final Map<List<ShipHulls.Part>, Hull> HULLS = new IdentityHashMap<>();
-
     /**
-     * A hull's faces open to the air, in its own frame (x across, z to the bow): four corners each, its colour and shade.
-     * No bottoms: they're under water. Each face is a hair inside its block, so where the real ship still shows, it wins
-     * and nothing flickers.
+     * A ship's 3D level of detail: its hull's faces open to the air, in the block's map colour, in its own frame (z to
+     * the bow). No bottoms: they're under water. Each face is a hair inside its block, so where the real ship still
+     * shows, it wins and nothing flickers.
      */
-    private record Hull(float[] corners, int[] rgb, float[] shade) {
-        static Hull of(List<ShipHulls.Part> parts) {
-            Set<Long> solid = new HashSet<>();
-            for (ShipHulls.Part p : parts) {
-                if (colour(p) != 0) {
-                    solid.add(cell(p.x(), p.y(), p.z()));
-                }
+    private static int[] hullModel(List<ShipHulls.Part> parts) {
+        Set<Long> solid = new HashSet<>();
+        for (ShipHulls.Part p : parts) {
+            if (colour(p) != 0) {
+                solid.add(cell(p.x(), p.y(), p.z()));
             }
-            List<float[]> corners = new ArrayList<>();
-            List<Integer> rgbs = new ArrayList<>();
-            List<Float> shades = new ArrayList<>();
-            float in = 0.48F;
-            for (ShipHulls.Part p : parts) {
-                int rgb = colour(p);
-                if (rgb == 0) {
-                    continue; // glass and the like
-                }
-                int x = p.x();
-                int y = p.y();
-                int z = p.z();
-                List<float[]> faces = new ArrayList<>();
-                List<Float> faceShades = new ArrayList<>();
-                if (!solid.contains(cell(x, y + 1, z))) {
-                    float t = y + 2 * in;
-                    faces.add(new float[]{x - 0.5F, t, z - 0.5F, x + 0.5F, t, z - 0.5F, x + 0.5F, t, z + 0.5F, x - 0.5F, t, z + 0.5F});
-                    faceShades.add(1.0F);
-                }
-                for (int side = -1; side <= 1; side += 2) {
-                    if (!solid.contains(cell(x + side, y, z))) {
-                        float s = x + side * in;
-                        faces.add(new float[]{s, y, z - 0.5F, s, y, z + 0.5F, s, y + 1, z + 0.5F, s, y + 1, z - 0.5F});
-                        faceShades.add(0.6F);
-                    }
-                    if (!solid.contains(cell(x, y, z + side))) {
-                        float s = z + side * in;
-                        faces.add(new float[]{x - 0.5F, y, s, x + 0.5F, y, s, x + 0.5F, y + 1, s, x - 0.5F, y + 1, s});
-                        faceShades.add(0.8F);
-                    }
-                }
-                corners.addAll(faces);
-                shades.addAll(faceShades);
-                faces.forEach(unused -> rgbs.add(rgb));
-            }
-            float[] flat = new float[corners.size() * 12];
-            int[] rgb = new int[corners.size()];
-            float[] shade = new float[corners.size()];
-            for (int i = 0; i < rgb.length; i++) {
-                System.arraycopy(corners.get(i), 0, flat, i * 12, 12);
-                rgb[i] = rgbs.get(i);
-                shade[i] = shades.get(i);
-            }
-            return new Hull(flat, rgb, shade);
         }
+        FigureBatches.Corners out = new FigureBatches.Corners();
+        float in = 0.48F;
+        for (ShipHulls.Part p : parts) {
+            int rgb = colour(p);
+            if (rgb == 0) {
+                continue; // glass and the like
+            }
+            // The figure shader's right is the ship's -x (port and starboard would swap otherwise).
+            float x = -p.x();
+            int y = p.y();
+            int z = p.z();
+            if (!solid.contains(cell(p.x(), y + 1, z))) {
+                float t = y + 2 * in;
+                out.quad(rgb, 0, 0, 1.0F, x - 0.5F, t, z - 0.5F, x + 0.5F, t, z - 0.5F, x + 0.5F, t, z + 0.5F, x - 0.5F, t, z + 0.5F);
+            }
+            for (int side = -1; side <= 1; side += 2) {
+                if (!solid.contains(cell(p.x() + side, y, z))) {
+                    float s = x - side * in;
+                    out.quad(rgb, 0, 0, 0.6F, s, y, z - 0.5F, s, y, z + 0.5F, s, y + 1, z + 0.5F, s, y + 1, z - 0.5F);
+                }
+                if (!solid.contains(cell(p.x(), y, z + side))) {
+                    float s = z + side * in;
+                    out.quad(rgb, 0, 0, 0.8F, x - 0.5F, y, s, x + 0.5F, y, s, x + 0.5F, y + 1, s, x - 0.5F, y + 1, s);
+                }
+            }
+        }
+        return out.model();
     }
 
     private static int colour(ShipHulls.Part p) {
@@ -692,19 +665,6 @@ public final class DistantArmyRenderer {
             buffer.addVertex(matrix, x + rightX * h, lo, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
             buffer.addVertex(matrix, x + rightX * h, hi, z + rightZ * h).setColor(r, g, b, 1F).setLight(light);
             buffer.addVertex(matrix, x + rightX * l, hi, z + rightZ * l).setColor(r, g, b, 1F).setLight(light);
-        }
-
-        private void quad(int rgb, float shade, float... v) {
-            if (tint >= 0) {
-                rgb = tint;
-                shade = 1F;
-            }
-            float r = (rgb >> 16 & 255) / 255F * shade;
-            float g = (rgb >> 8 & 255) / 255F * shade;
-            float b = (rgb & 255) / 255F * shade;
-            for (int i = 0; i < 12; i += 3) {
-                buffer.addVertex(matrix, v[i], v[i + 1], v[i + 2]).setColor(r, g, b, 1F).setLight(light);
-            }
         }
     }
 }
