@@ -992,7 +992,7 @@ class FieldBattleTest {
         b.pos = a.pos;
         b.facingX = a.facingX;
         b.facingZ = a.facingZ;
-        for (int s = 0; s < 12; s++) {
+        for (int s = 0; s < 16; s++) {
             battle.second();
         }
         // Clear, hull to hull (a unit's ship 13 wide), whichever way they now lie to each other.

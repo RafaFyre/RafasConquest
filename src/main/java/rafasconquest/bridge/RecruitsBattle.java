@@ -661,9 +661,14 @@ public final class RecruitsBattle {
         int blocksB = BattlePlan.blocks(secondSoldiers);
         long seed = level.random.nextLong();
         FieldBattle laidOut = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
-        // Moved over the land, by the world map, so no part of an army is cut off by a river or the sea.
+        // Moved over the land, by the world map, so no part of an army is cut off by a river or the sea; a sea battle
+        // the other way round, over open water so no ship of either fleet lies on land.
         BaseMap map = ConquestRuntime.map();
-        Point shift = map == null || type != BattleType.LAND ? new Point(0, 0) : BattleSite.shift(siteParts(laidOut), mapWater(map));
+        if (type == BattleType.OCEAN) {
+            laidOut.setType(type); // the fleets' lines, not the armies' ranks, are what must lie clear
+        }
+        Point shift = map == null || (type != BattleType.LAND && type != BattleType.OCEAN) ? new Point(0, 0)
+                : BattleSite.shift(siteParts(laidOut), type == BattleType.OCEAN ? mapLand(map) : mapWater(map));
         Point site = centre.plus(shift.x(), shift.z());
         FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
                 : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
@@ -676,7 +681,7 @@ public final class RecruitsBattle {
             field.addHarbourFleet(harbourShips);
         }
         if (field != laidOut) {
-            RafasConquest.LOGGER.info("[battle] moved {} blocks ({}, {}) so no army is cut off by water",
+            RafasConquest.LOGGER.info("[battle] moved {} blocks ({}, {}) so no army is cut off by water (at sea: by land)",
                     Math.round(Math.hypot(shift.x(), shift.z())), Math.round(shift.x()), Math.round(shift.z()));
         }
         Terrain terrain = new Terrain(level, Terrain.stepFor(firstSoldiers + secondSoldiers));
@@ -4962,6 +4967,26 @@ public final class RecruitsBattle {
             public boolean wet(int cellX, int cellZ) {
                 int i = map.pixelAt(cellX * bpp + bpp / 2.0, cellZ * bpp + bpp / 2.0);
                 return i < 0 || map.wet()[i];
+            }
+        };
+    }
+
+    /**
+     * The world map's land, as {@link BattleSite} sees water, for a sea battle's site: rivers count as land (only the
+     * sea is in no province), and so does off the map.
+     */
+    private static BattleSite.Water mapLand(BaseMap map) {
+        int bpp = map.blocksPerPixel();
+        return new BattleSite.Water() {
+            @Override
+            public int cell() {
+                return bpp;
+            }
+
+            @Override
+            public boolean wet(int cellX, int cellZ) {
+                int i = map.pixelAt(cellX * bpp + bpp / 2.0, cellZ * bpp + bpp / 2.0);
+                return i < 0 || !map.wet()[i] || map.provinces()[i] != rafasconquest.core.ProvinceMap.WATER;
             }
         };
     }

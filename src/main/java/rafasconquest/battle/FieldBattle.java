@@ -158,7 +158,7 @@ public final class FieldBattle {
                 }
                 crews.put(crew.get(0).id, crew);
             }
-            spreadShips(army);
+            spreadShips(army, type == BattleType.OCEAN ? FLEETS_APART / 2 : 0);
         }
         syncCrews(); // everyone aboard where their ship now lies
     }
@@ -300,17 +300,20 @@ public final class FieldBattle {
      */
     public static final double FLEET_BACK = rafasconquest.core.SeaLanes.Size.XXLARGE.length / 2.0;
 
+    /** In a sea battle the two fleets start this much further apart than the armies' fronts would. */
+    public static final double FLEETS_APART = 100;
+
     /**
      * A fleet deploys in one line abreast across its army's front, {@link #FLEET_SPACING} apart, its ships in the order
-     * they stood from left to right; the camp's supply ships keep well back, in a line of their own
-     * {@link #CAMP_ASTERN} behind it.
+     * they stood from left to right, {@code extra} further back than {@link #FLEET_BACK}; the camp's supply ships keep
+     * well back, in a line of their own {@link #CAMP_ASTERN} behind it.
      */
-    private static void spreadShips(FieldArmy army) {
+    private static void spreadShips(FieldArmy army, double extra) {
         List<FieldBlock> fleet = army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
                 .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
                 .toList();
-        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK);
-        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + CAMP_ASTERN);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + extra);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + extra + CAMP_ASTERN);
     }
 
     /** Ships in one line abreast, centred on the army's front, {@code back} behind it. */
