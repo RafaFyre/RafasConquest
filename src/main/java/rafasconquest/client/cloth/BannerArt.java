@@ -41,15 +41,24 @@ public final class BannerArt {
     /** Pole and bar boxes in flag units (the flag hangs 2 units below the model's origin). */
     private static final double[] POLE = {-1 / 16.0 - E, 2 - 30 / 16.0, -1 / 16.0 - E, 1 / 16.0 + E, 2 + 12 / 16.0, 1 / 16.0 + E};
     private static final double[] BAR = {-10 / 16.0 - E, -E, -1 / 16.0 - E, 10 / 16.0 + E, 2 / 16.0 + E, 1 / 16.0 + E};
-    /** Physics Mod's banner: 93% of the speed kept a step. */
-    public static final ClothRenderer.Kind STANDING = new ClothRenderer.Kind(9, 17, SX, SY, DEPTH, 0.93, true, POLE, BAR);
-    public static final ClothRenderer.Kind WALL = new ClothRenderer.Kind(9, 17, SX, SY, DEPTH, 0.93, true, BAR);
     /**
-     * A cape on a body (model units are blocks, y down, +z behind the back): 10 × 16 pixels like vanilla's, hanging just
-     * behind the back, kept out of the body and legs; Physics Mod's capes keep 85.5% of their speed.
+     * Wool banner cloth: heavier and stiffer than Physics Mod's silk-like flags (which keep 93% of their speed and take
+     * all the wind), so it sways and billows in a few broad folds; a pixel thick.
      */
-    public static final ClothRenderer.Kind CAPE = new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8, 1.0 / 12, 0.145, 0.855, false,
-            new double[]{-0.35, -0.2, -0.25, 0.35, 1.6, 0.14});
+    public static final ClothRenderer.Fabric BANNER_WOOL = new ClothRenderer.Fabric(0.85, 0.5, 0.6, 0.5, 0.6, 1 / 16.0);
+    /** Thick wool for capes: hangs heavy, swings slowly and settles soon, curves without creasing; 0.8 px thick. */
+    public static final ClothRenderer.Fabric CAPE_WOOL = new ClothRenderer.Fabric(0.78, 0.25, 0.6, 0.8, 0.35, 0.05);
+    public static final ClothRenderer.Kind STANDING = new ClothRenderer.Kind(9, 17, SX, SY, DEPTH, BANNER_WOOL, true, false, POLE, BAR);
+    public static final ClothRenderer.Kind WALL = new ClothRenderer.Kind(9, 17, SX, SY, DEPTH, BANNER_WOOL, true, false, BAR);
+    /**
+     * A cape on a body (model units are blocks, y down, +z behind the back): 10 × 16 pixels like vanilla's, hanging
+     * behind the back with its inner face on it, kept out of the body and legs.
+     */
+    public static final ClothRenderer.Kind CAPE = new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8, 1.0 / 12, 0.16, CAPE_WOOL, false, true,
+            new double[]{-0.35, -0.2, -0.25, 0.35, 1.6, 0.155});
+    /** The cape over a chestplate: armour stands a pixel off the body (3 px behind the spine), so the cape hangs past it. */
+    public static final ClothRenderer.Kind CAPE_ON_ARMOUR = new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8, 1.0 / 12, 0.235, CAPE_WOOL, false, true,
+            new double[]{-0.4, -0.2, -0.3, 0.4, 1.6, 0.23});
 
     @Nullable
     private static ModelPart pole;

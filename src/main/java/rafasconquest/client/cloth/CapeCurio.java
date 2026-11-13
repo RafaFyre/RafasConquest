@@ -32,7 +32,9 @@ public final class CapeCurio implements ICurioRenderer {
         }
         pose.pushPose();
         model.body.translateAndRotate(pose);
-        ClothRenderer.draw(new ClothRenderer.Carried(wearer.getId(), "cape"), BannerArt.CAPE, pose, buffers, light,
+        boolean armoured = !wearer.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).isEmpty();
+        ClothRenderer.draw(new ClothRenderer.Carried(wearer.getId(), "cape"), armoured ? BannerArt.CAPE_ON_ARMOUR : BannerArt.CAPE,
+                pose, buffers, light,
                 OverlayTexture.NO_OVERLAY, BannerArt.plain(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor())),
                 wearer.position());
         pose.popPose();

@@ -14,6 +14,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4d;
+import org.joml.Matrix4dc;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3d;
@@ -37,10 +38,27 @@ public final class ClothRenderer {
     public record Layer(Material material, int argb, boolean solid) {
     }
 
-    /** A kind of cloth: its grid, depth, the boxes it stays out of, how much speed it keeps, whether blocks stop it. */
-    public record Kind(int w, int h, double sx, double sy, double depth, double friction, boolean blocks, double[]... boxes) {
+    /**
+     * What a cloth is made of, which is how heavy and stiff it moves.
+     *
+     * @param keep    share of its speed kept each tick (less: it settles sooner, as heavy cloth does)
+     * @param wind    share of the wind that moves it (heavier cloth, the same wind, less push)
+     * @param aero    share of the wind that presses along its facing rather than evenly (billowing, not twisting)
+     * @param bend    stiffness of its bend springs (0 silk that creases anywhere, 1 felt)
+     * @param flutter how fast gusts come and go on it (1 Physics Mod's flag flutter)
+     * @param thick   how thick it is drawn, in the kind's local units
+     */
+    public record Fabric(double keep, double wind, double aero, double bend, double flutter, double thick) {
+    }
+
+    /**
+     * A kind of cloth: its grid, depth, fabric, the boxes it stays out of, whether blocks stop it, and whether it hangs
+     * on a back (local +z behind, −x the wearer's right), where wind must not press it into the wearer.
+     */
+    public record Kind(int w, int h, double sx, double sy, double depth, Fabric fabric, boolean blocks, boolean onBack,
+                       double[]... boxes) {
         Cloth make() {
-            return new Cloth(w, h, sx, sy, depth).keepOut(boxes);
+            return new Cloth(w, h, sx, sy, depth, fabric.bend()).keepOut(boxes);
         }
     }
 
@@ -68,7 +86,7 @@ public final class ClothRenderer {
     private static final double RANGE = 64;
     /** How far a carried cloth's frame may be from its carrier before it is taken for a menu's picture of it. */
     private static final double NEAR = 8;
-    private static final double GRAVITY = -9.81;
+    private static final double GRAVITY = 9.81;
     private static final int ITERATIONS = 25;
     private static long ticks;
     @Nullable
@@ -112,13 +130,39 @@ public final class ClothRenderer {
             Matrix4d carry = new Matrix4d(live.now).mul(live.atTick.invert(new Matrix4d()));
             live.atTick.set(live.now);
             Cloth c = live.cloth;
-            Wind.at(live.level, c.x[0], c.y[0], c.z[0], wind);
+            Fabric fabric = live.kind.fabric();
+            Wind.at(live.level, c.x[0], c.y[0], c.z[0], fabric.flutter(), fabric.wind(), wind);
+            if (live.kind.onBack()) {
+                offTheBack(live.atTick, wind);
+            }
             Level level = live.level;
             Cloth.Solid solid = live.kind.blocks()
                     ? (x, y, z) -> level.getBlockState(at.set(x, y, z)).isCollisionShapeFullBlock(level, at)
                     : null;
-            c.step(0.05, wind[0], GRAVITY + wind[1], wind[2], ITERATIONS, live.kind.friction(), live.atTick, carry, solid);
+            c.step(0.05, GRAVITY, wind, fabric.aero(), ITERATIONS, fabric.keep(), live.atTick, carry, solid);
         }
+    }
+
+    /**
+     * Wind from behind would press a cape into its wearer: that part of it blows the cape to the wearer's right instead,
+     * at half strength.
+     */
+    static void offTheBack(Matrix4dc frame, double[] wind) {
+        Vector3d back = frame.transformDirection(new Vector3d(0, 0, 1));
+        back.y = 0;
+        if (back.lengthSquared() < 1e-12) {
+            return;
+        }
+        back.normalize();
+        double along = wind[0] * back.x + wind[2] * back.z;
+        if (along >= 0) {
+            return;
+        }
+        Vector3d right = frame.transformDirection(new Vector3d(-1, 0, 0));
+        right.y = 0;
+        right.normalize();
+        wind[0] += -along * (back.x + right.x * 0.5);
+        wind[2] += -along * (back.z + right.z * 0.5);
     }
 
     /**
@@ -137,6 +181,7 @@ public final class ClothRenderer {
         float[] py = new float[n];
         float[] pz = new float[n];
         PoseStack.Pose drawPose;
+        float thick = (float) kind.fabric().thick();
         if (live == null) {
             Cloth rest = restOf(kind);
             for (int p = 0; p < n; p++) {
@@ -150,8 +195,9 @@ public final class ClothRenderer {
             PoseStack undo = new PoseStack();
             undo.mulPose(modelView.invert(new Matrix4f()));
             drawPose = undo.last();
+            thick *= (float) live.now.transformDirection(new Vector3d(1, 0, 0)).length(); // local units to blocks
         }
-        emit(kind, px, py, pz, drawPose, buffers, light, overlay, layers);
+        emit(kind, px, py, pz, thick, drawPose, buffers, light, overlay, layers);
     }
 
     @Nullable
@@ -206,9 +252,12 @@ public final class ClothRenderer {
         return REST.computeIfAbsent(kind, Kind::make);
     }
 
-    /** The grid as quads, once per layer, on the banner texture's flag (u 1–21, v 1–41 of 64). */
-    private static void emit(Kind kind, float[] px, float[] py, float[] pz, PoseStack.Pose pose, MultiBufferSource buffers,
-                             int light, int overlay, List<Layer> layers) {
+    /**
+     * The grid as quads, once per layer, on the banner texture's flag (u 1–21, v 1–41 of 64): a front and a back face
+     * {@code thick} apart, and (in the cloth's own colours) a strip round the edge between them, so it looks thick.
+     */
+    private static void emit(Kind kind, float[] px, float[] py, float[] pz, float thick, PoseStack.Pose pose,
+                             MultiBufferSource buffers, int light, int overlay, List<Layer> layers) {
         int w = kind.w();
         int h = kind.h();
         float[] nx = new float[px.length];
@@ -235,27 +284,68 @@ public final class ClothRenderer {
                 nz[p] = cz / len;
             }
         }
-        for (Layer layer : layers) {
+        int n = px.length;
+        float half = thick * 0.5F;
+        float[][] front = new float[3][n];
+        float[][] back = new float[3][n];
+        for (int p = 0; p < n; p++) {
+            front[0][p] = px[p] + nx[p] * half;
+            front[1][p] = py[p] + ny[p] * half;
+            front[2][p] = pz[p] + nz[p] * half;
+            back[0][p] = px[p] - nx[p] * half;
+            back[1][p] = py[p] - ny[p] * half;
+            back[2][p] = pz[p] - nz[p] * half;
+        }
+        // The rim: down each side, along the bottom, and along the top under the bar.
+        int[] rim = new int[2 * (w - 1) + 2 * (h - 1)];
+        int r = 0;
+        for (int i = 0; i < w - 1; i++) {
+            rim[r++] = i;
+            rim[r++] = (h - 1) * w + i;
+        }
+        for (int j = 0; j < h - 1; j++) {
+            rim[r++] = j * w;
+            rim[r++] = j * w + w - 1;
+        }
+        for (int l = 0; l < layers.size(); l++) {
+            Layer layer = layers.get(l);
             VertexConsumer vc = layer.solid()
                     ? layer.material().buffer(buffers, RenderType::entityCutoutNoCull)
                     : layer.material().buffer(buffers, RenderType::entityNoOutline);
+            int argb = layer.argb();
             for (int j = 0; j < h - 1; j++) {
                 for (int i = 0; i < w - 1; i++) {
                     int p = j * w + i;
-                    vertex(vc, pose, px, py, pz, nx, ny, nz, p, i, j, w, h, layer.argb(), light, overlay);
-                    vertex(vc, pose, px, py, pz, nx, ny, nz, p + w, i, j + 1, w, h, layer.argb(), light, overlay);
-                    vertex(vc, pose, px, py, pz, nx, ny, nz, p + w + 1, i + 1, j + 1, w, h, layer.argb(), light, overlay);
-                    vertex(vc, pose, px, py, pz, nx, ny, nz, p + 1, i + 1, j, w, h, layer.argb(), light, overlay);
+                    quad(vc, pose, front, nx, ny, nz, 1, w, h, argb, light, overlay, p, p + w, p + w + 1, p + 1);
+                    quad(vc, pose, back, nx, ny, nz, -1, w, h, argb, light, overlay, p + 1, p + w + 1, p + w, p);
+                }
+            }
+            if (l < 2 && thick > 0) { // the cloth and its base colour; dye patterns stay on the faces
+                for (int e = 0; e < rim.length; e++) {
+                    int a = rim[e];
+                    int b = e < 2 * (w - 1) ? a + 1 : a + w;
+                    vertex(vc, pose, front, nx, ny, nz, 1, a, w, h, argb, light, overlay);
+                    vertex(vc, pose, front, nx, ny, nz, 1, b, w, h, argb, light, overlay);
+                    vertex(vc, pose, back, nx, ny, nz, 1, b, w, h, argb, light, overlay);
+                    vertex(vc, pose, back, nx, ny, nz, 1, a, w, h, argb, light, overlay);
                 }
             }
         }
     }
 
-    private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[] px, float[] py, float[] pz,
-                               float[] nx, float[] ny, float[] nz, int p, int i, int j, int w, int h, int argb, int light, int overlay) {
-        float u = (1 + 20F * i / (w - 1)) / 64F;
-        float v = (1 + 40F * j / (h - 1)) / 64F;
-        vc.addVertex(pose, px[p], py[p], pz[p]).setColor(argb).setUv(u, v).setOverlay(overlay).setLight(light)
-                .setNormal(pose, nx[p], ny[p], nz[p]);
+    private static void quad(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz, int side,
+                             int w, int h, int argb, int light, int overlay, int a, int b, int c, int d) {
+        vertex(vc, pose, at, nx, ny, nz, side, a, w, h, argb, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, b, w, h, argb, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, c, w, h, argb, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, d, w, h, argb, light, overlay);
+    }
+
+    private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
+                               int side, int p, int w, int h, int argb, int light, int overlay) {
+        float u = (1 + 20F * (p % w) / (w - 1)) / 64F;
+        float v = (1 + 40F * (p / w) / (h - 1)) / 64F;
+        vc.addVertex(pose, at[0][p], at[1][p], at[2][p]).setColor(argb).setUv(u, v).setOverlay(overlay).setLight(light)
+                .setNormal(pose, nx[p] * side, ny[p] * side, nz[p] * side);
     }
 }
