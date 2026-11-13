@@ -62,7 +62,7 @@ public final class Siege {
     /** Defenders sent to a breach go after attackers this far from the gate, inside. */
     static final double BREACH_REACH = 40;
     /** The cavalry's wedge waits this far out from the gate it will charge. */
-    static final double WEDGE_OUT = 40;
+    static final double WEDGE_OUT = Siege.START;
     /** Rams come round the walls this far out. */
     static final double ROUND_OUT = 12;
     /** Artillery shots (a trebuchet's stone a point, {@link Machine#batter}) that break a stretch of wall open. */
@@ -652,11 +652,12 @@ public final class Siege {
     }
 
     /**
-     * How far out from a wall's face its attackers stand: their shooters' line, in bowshot of the walls; a tower where it
-     * sets out from, beyond that; and a row of blocks behind the one before it.
+     * How far out from a wall's face the attackers start, front row and towers alike; the line their shooters and
+     * artillery then march up to, in bowshot of the walls; and a row of blocks behind the one before it.
      */
+    static final double START = 50;
     static final double FIRING_LINE = 25;
-    static final double TOWER_START = 45;
+    static final double TOWER_START = START;
     static final double ROW = 6;
 
     /**
@@ -807,7 +808,7 @@ public final class Siege {
         f.mantlets.stream().filter(m -> !screens.containsKey(m)).forEach(idle::add);
         standBy.addAll(idle);
 
-        Rows rows = new Rows(f, FIRING_LINE);
+        Rows rows = new Rows(f, START);
         rows.place(f.shooters, ROW);
         rows.place(f.artillery, ROW);
         rows.place(f.rams.stream().filter(r -> !idle.contains(r)).toList(), ROW);
@@ -1196,11 +1197,12 @@ public final class Siege {
                     hold(b, b.pos.distanceTo(g.mouth()) > AT ? g.mouth() : g.button());
                 }
             }
-            // Its shooters and artillery keep their lines before its wall, loosing at whatever is in reach.
+            // Its shooters and artillery march up from where they started to their lines in bowshot, loosing at whatever is in reach.
+            double up = START - FIRING_LINE;
             for (List<FieldBlock> line : List.of(f.shooters, f.artillery)) {
                 for (FieldBlock b : line) {
                     if (b.alive > 0 && b.duty != Duty.FLEEING && b.duty != Duty.ROUTED && b.duty != Duty.RALLYING && !b.led) {
-                        hold(b, b.deployed);
+                        hold(b, b.deployed.plus(-f.outX() * up, -f.outZ() * up));
                     }
                 }
             }
