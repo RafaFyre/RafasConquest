@@ -718,17 +718,17 @@ class FieldBattleTest {
     }
 
     @Test
-    void aFleetDeploysInOneLineAbreastTwentyBlocksApart() {
+    void aFleetDeploysInOneLineAbreast() {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
         boolean camps = false;
         for (int side = 0; side < 2; side++) {
             // The battle's axis is x: a line abreast stands at one x, its ships along z.
-            java.util.List<Point> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != FieldBlock.ShipKind.CAMP)
+            java.util.List<Point> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != FieldBlock.ShipKind.CAMP && battle.holder(b) == b)
                     .map(FieldBlock::pos).sorted(java.util.Comparator.comparingDouble(Point::z)).toList();
             for (int i = 1; i < ships.size(); i++) {
                 assertEquals(ships.get(0).x(), ships.get(i).x(), 1e-6, "not in one line abreast");
-                assertEquals(FieldBattle.FLEET_SPACING, ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not 20 apart");
+                assertEquals(FieldBattle.FLEET_SPACING, ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not FLEET_SPACING apart");
             }
             double facing = battle.army(side).facingX();
             for (FieldBlock camp : battle.army(side).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.CAMP).toList()) {
@@ -743,9 +743,77 @@ class FieldBattleTest {
     void aShipPlacedOnAnotherDropsClearOfIt() {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
-        java.util.List<FieldBlock> ships = battle.army(0).blocks();
+        java.util.List<FieldBlock> ships = battle.army(0).blocks().stream().filter(b -> battle.holder(b) == b).toList();
         battle.place(ships.get(1), ships.get(0).pos());
         assertTrue(ships.get(1).pos().distanceTo(ships.get(0).pos()) >= FieldBattle.SHIP_LENGTH - 1e-6, "placed on top of another ship");
+        for (FieldBlock aboard : battle.crew(ships.get(1))) {
+            assertEquals(ships.get(1).pos(), aboard.pos(), "left behind when its ship was placed");
+        }
+    }
+
+    @Test
+    void eachUnitSailsOneShipWithAllItsBlocksAboard() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.setType(BattleType.OCEAN);
+        for (int side = 0; side < 2; side++) {
+            java.util.Set<Integer> ships = new java.util.HashSet<>();
+            for (FieldBlock b : battle.army(side).blocks()) {
+                ships.add(b.shipId());
+                FieldBlock h = battle.holder(b);
+                assertEquals(h.pos(), b.pos(), "not where its ship is");
+                assertEquals(h.ship(), b.ship(), "two kinds of ship in one unit");
+                if (b.platoon >= 0) {
+                    assertTrue(battle.crew(b).stream().allMatch(c -> c.platoon == b.platoon), "blocks of another unit aboard");
+                    assertEquals(rafasconquest.core.SeaLanes.Size.XXLARGE, b.hull(), "a unit's ship not the biggest");
+                }
+            }
+            long platoons = battle.army(side).blocks().stream().filter(b -> b.platoon >= 0).mapToInt(b -> b.platoon).distinct().count();
+            assertEquals(platoons + 1, ships.size(), "not one ship to a unit, and the general's");
+        }
+        for (int s = 0; s < 60; s++) {
+            battle.second();
+        }
+        for (int side = 0; side < 2; side++) {
+            for (FieldBlock b : battle.army(side).blocks()) {
+                if (b.alive() > 0) {
+                    assertEquals(battle.holder(b).pos(), b.pos(), "a block left its ship");
+                }
+            }
+        }
+    }
+
+    @Test
+    void anOfficersShipSailsWhereTheySendItAndHoldsThere() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.setType(BattleType.OCEAN);
+        FieldBlock ship = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.SWORDSMEN && battle.holder(b) == b)
+                .findFirst().orElseThrow();
+        for (FieldBlock b : battle.crew(ship)) {
+            battle.lead(b);
+        }
+        Point to = ship.pos().plus(-60, 0); // away from the enemy, astern of the fleet
+        FieldBlock last = battle.crew(ship).get(battle.crew(ship).size() - 1);
+        battle.steer(last, to, 0, 1, false, null); // any block aboard: the whole ship goes
+        for (int s = 0; s < 120 && !battle.over() && ship.pos().distanceTo(to) > FieldBattle.AT_PLACE; s++) {
+            battle.second();
+            assertEquals(to, ship.line, "its captain sent it elsewhere at second " + battle.seconds() + " " + battle.outcome());
+        }
+        assertTrue(ship.pos().distanceTo(to) <= FieldBattle.AT_PLACE, "not where it was sent, " + to + ": " + ship.pos()
+                + " (" + ship.duty() + " at second " + battle.seconds() + ")");
+        assertTrue(ship.lashed().isEmpty(), "went boarding instead");
+        assertEquals(ship.pos(), last.pos(), "the ship left a block behind");
+    }
+
+    @Test
+    void grapplingLashesEveryoneAboardBothShips() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.setType(BattleType.OCEAN);
+        FieldBlock a = battle.army(0).blocks().stream().filter(b -> b.platoon >= 0 && battle.crew(b).size() > 1).findFirst().orElseThrow();
+        FieldBlock b = battle.army(1).blocks().stream().filter(o -> o.platoon >= 0 && battle.crew(o).size() > 1).findFirst().orElseThrow();
+        battle.lash(a, b);
+        for (FieldBlock x : battle.crew(a)) {
+            assertTrue(x.lashed().containsAll(battle.crew(b)), "someone aboard can't board the enemy");
+        }
     }
 
     /** A swordsman ship of a sea battle, alone at (0, 0) with its bow to +x. */
@@ -831,7 +899,7 @@ class FieldBattleTest {
             battle.second();
             for (int side = 0; side < 2; side++) {
                 java.util.List<FieldBlock> sailing = battle.army(side).blocks().stream()
-                        .filter(b -> b.alive() > 0 && b.afloat() && b.lashed().isEmpty() && b.prey() != null && !b.charged()).toList();
+                        .filter(b -> b.alive() > 0 && b.afloat() && battle.holder(b) == b && b.lashed().isEmpty() && b.prey() != null && !b.charged()).toList();
                 for (int i = 0; i < sailing.size(); i++) {
                     for (int j = i + 1; j < sailing.size(); j++) {
                         assertTrue(sailing.get(i).line.distanceTo(sailing.get(j).line) > 1,
@@ -848,7 +916,7 @@ class FieldBattleTest {
     void shipsOfOneSideThatEndUpInEachOtherEdgeApart() {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
-        java.util.List<FieldBlock> fleet = battle.army(0).blocks();
+        java.util.List<FieldBlock> fleet = battle.army(0).blocks().stream().filter(o -> battle.holder(o) == o).toList();
         FieldBlock a = fleet.get(0);
         FieldBlock b = fleet.get(1);
         b.pos = a.pos;
@@ -857,8 +925,8 @@ class FieldBattleTest {
         for (int s = 0; s < 6; s++) {
             battle.second();
         }
-        // Clear, hull to hull (23 long, 7 wide), whichever way they now lie to each other.
-        assertTrue(a.pos().distanceTo(b.pos()) > 7, "still in each other: " + a.pos() + " and " + b.pos());
+        // Clear, hull to hull (a unit's ship 13 wide), whichever way they now lie to each other.
+        assertTrue(a.pos().distanceTo(b.pos()) > rafasconquest.core.SeaLanes.Size.XXLARGE.width, "still in each other: " + a.pos() + " and " + b.pos());
     }
 
     @Test

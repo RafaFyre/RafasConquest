@@ -106,8 +106,8 @@ final class DistantShips {
         int battle = 0;
         int battleReal = 0;
         for (FormationSnapshot f : DistantArmies.now()) {
-            if (f.ship() != null) {
-                SeaLanes.Size size = f.kind() == FormationSnapshot.Kind.GENERAL ? SeaLanes.Size.XLARGE : SeaLanes.Size.LARGE;
+            if (f.ship() != null && f.ship().hull() >= 0) { // one hull to a ship, drawn by the block sailing it
+                SeaLanes.Size size = SeaLanes.Size.values()[f.ship().hull()];
                 Far ship = far(real, f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()), size, null, f.ship());
                 ships.add(ship);
                 battle++;

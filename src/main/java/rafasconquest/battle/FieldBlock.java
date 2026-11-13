@@ -111,6 +111,13 @@ public final class FieldBlock {
     /** At sea, what its ship is for (null for the general's, guard's and standard-bearer's, and ashore). */
     @Nullable
     ShipKind ship;
+    /**
+     * At sea, the ship it rides: a unit's blocks share one ship, its id the unit's first block's ({@code shipId}); its
+     * section of that ship's deck ({@code berth}, 0 first); and the ship's hull.
+     */
+    int shipId;
+    int berth;
+    rafasconquest.core.SeaLanes.Size hull = rafasconquest.core.SeaLanes.Size.LARGE;
     /** At sea, the enemy ships grappled to its own: their soldiers may board each other's decks. */
     final java.util.List<FieldBlock> lashed = new java.util.ArrayList<>();
     /**
@@ -217,6 +224,7 @@ public final class FieldBlock {
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
                Point line, double facingX, double facingZ, Duty duty) {
         this.id = id;
+        this.shipId = id;
         this.side = side;
         this.arm = arm;
         this.health = new float[soldiers];
@@ -309,6 +317,19 @@ public final class FieldBlock {
     @Nullable
     public ShipKind ship() {
         return ship;
+    }
+
+    /** The ship it rides at sea, shared by its unit's blocks ({@link FieldBattle#crew}). */
+    public int shipId() {
+        return shipId;
+    }
+
+    public int berth() {
+        return berth;
+    }
+
+    public rafasconquest.core.SeaLanes.Size hull() {
+        return hull;
     }
 
     /** The enemy ships grappled to its own. */

@@ -1041,6 +1041,7 @@ public final class ConquestNetwork {
                 if (ship != null) {
                     buf.writeByte(ship.sail());
                     buf.writeByte(ship.stripe());
+                    buf.writeByte(ship.hull());
                 }
                 if (engine != null) {
                     buf.writeByte(engine.kind());
@@ -1056,7 +1057,7 @@ public final class ConquestNetwork {
         /** A formation's ship, after the rest of it; null if its flags say it is ashore. */
         @org.jetbrains.annotations.Nullable
         private static FormationSnapshot.Ship readShip(FriendlyByteBuf buf, int flags) {
-            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), (flags & 8) != 0);
+            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), (flags & 8) != 0, buf.readByte());
         }
 
         static BattleSnapshot read(FriendlyByteBuf buf) {

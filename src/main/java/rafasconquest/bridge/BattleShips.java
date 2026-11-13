@@ -145,7 +145,7 @@ final class BattleShips {
     }
 
     private static SeaLanes.Size size(SableLink.Helm h) {
-        return h.flagship() ? SeaLanes.Size.XLARGE : SeaLanes.Size.LARGE;
+        return h.hull();
     }
 
     /** The footprint formation {@code h}'s ship would have at (x, z), at rest, bow along its helm's facing. */

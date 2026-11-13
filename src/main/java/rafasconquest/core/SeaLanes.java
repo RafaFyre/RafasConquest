@@ -41,7 +41,9 @@ public final class SeaLanes {
     static final int AT_SEA_PER_SIDE = 4;
 
     public enum Size {
-        SMALL(11, 5), MEDIUM(17, 5), LARGE(23, 7), XLARGE(31, 9);
+        SMALL(11, 5), MEDIUM(17, 5), LARGE(23, 7), XLARGE(31, 9),
+        /** A battle's unit ship, two hundred soldiers on deck; never on the lanes. */
+        XXLARGE(41, 13);
 
         public final int length;
         public final int width;

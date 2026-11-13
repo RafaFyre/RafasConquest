@@ -62,9 +62,10 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
     }
     /**
      * A formation's ship at sea, as its real one is built ({@link rafasconquest.style.ShipHulls#battle}): its sail's and
-     * its stripe's dye colours (DyeColor ids), and whether it is a supply ship, stores on deck and nobody showing.
+     * its stripe's dye colours (DyeColor ids), whether it is a supply ship, stores on deck and nobody showing, and its
+     * hull (a {@link rafasconquest.core.SeaLanes.Size} ordinal; -1 for a block aboard a ship another block of its unit draws).
      */
-    public record Ship(int sail, int stripe, boolean cargo) {
+    public record Ship(int sail, int stripe, boolean cargo, int hull) {
     }
 
     /** Aboard its ship, at sea. */
