@@ -3,6 +3,7 @@ package rafasconquest.bridge;
 import dev.ryanhcode.sable.api.physics.handle.RigidBodyHandle;
 import dev.ryanhcode.sable.api.sublevel.ServerSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.api.sublevel.ticket.SubLevelLoadingTicketType;
 import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
@@ -187,6 +188,9 @@ final class BattleShips {
         CompoundTag tag = sub.getUserDataTag().copy();
         tag.putString(BATTLE, battle);
         sub.setUserDataTag(tag);
+        // Else Sable unloads it once it touches a chunk not fully loaded, and it's built again: two ships blinking in and
+        // out. Sable's own ticket type, as one of ours left in a save would be unknown to it on loading. Taking it away drops it.
+        SubLevelContainer.getContainer(level).addForceLoadTicket(sub, SubLevelLoadingTicketType.COMMAND_FORCED, net.minecraft.util.Unit.INSTANCE);
         ships.put(key(h), sub);
         RigidBodyHandle body = RigidBodyHandle.of(sub);
         if (body != null && body.isValid()) {
