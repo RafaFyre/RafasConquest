@@ -7,6 +7,8 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
@@ -91,8 +93,8 @@ public final class WaterSwell {
     /**
      * Distant Horizons' terrain shader as loaded, with the sea's slope light and foam laid on its water tops (DH's water
      * material, 12, facing up, at sea level). Shading only: DH merges water into big quads, so nothing is lifted, and
-     * the calm is read per fragment (open sea past the calm texture). The swell fades out as a pixel covers more than a
-     * few blocks, so the far sea doesn't shimmer. Uniforms come from {@link #upload}, as for Sodium.
+     * the calm is read per fragment (open sea past the calm texture). Each wave and the foam noise are filtered by the
+     * pixel's footprint in {@link #foamGlsl}, so the far sea keeps the crests it can show without shimmering. Uniforms come from {@link #upload}, as for Sodium.
      */
     public static String patchDh(String path, String source) {
         boolean vertex = path.endsWith("terrain/gl/vert.vert");
@@ -118,12 +120,10 @@ public final class WaterSwell {
                 + "uniform vec3 u_SwellCalmAt;\nuniform sampler2D u_SwellCalm;\nuniform vec3 u_SwellFoamAt;\nuniform sampler3D u_SwellFoam;\n"
                 + "in vec4 v_SwellAt;\nin vec3 v_SwellLight;\n\n" + Swell.glsl() + "\n\n" + foamGlsl() + "\n\n";
         String body = "vec4 swellAt = v_SwellAt;\n"
-                + "    vec2 swellCover = fwidth(swellAt.xy);\n"
                 + "    if (swellAt.w > 0.99) {\n"
                 + "        vec2 c = (swellAt.xy - u_SwellCalmAt.xy) * u_SwellCalmAt.z;\n"
-                + "        float calm = all(greaterThanEqual(c, vec2(0.0))) && all(lessThanEqual(c, vec2(1.0))) ? texture(u_SwellCalm, c).r : 1.0;\n"
-                + "        swellAt.z = calm * (1.0 - smoothstep(2.0, 8.0, max(swellCover.x, swellCover.y)));\n"
-                + "        if (swellAt.z < 0.01) {\n            swellAt.w = 0.0; // faded out: skip the 48 waves\n        }\n    }\n    "
+                + "        swellAt.z = all(greaterThanEqual(c, vec2(0.0))) && all(lessThanEqual(c, vec2(1.0))) ? texture(u_SwellCalm, c).r : 1.0;\n"
+                + "    }\n    "
                 + foamMix("fragColor", "u_", "swellAt", "v_SwellLight") + "\n    ";
         return source.substring(0, main) + head + source.substring(main, at) + body + source.substring(at);
     }
@@ -169,22 +169,24 @@ public final class WaterSwell {
         return """
                 float whitecap(vec4 at, mat4 pa, mat4 pb, mat4 pc, float tall, vec3 foamAt, sampler3D foam, out float shade) {
                     shade = 0.0;
-                    vec2 pixel = fwidth(at.xy); // before any branch, as derivatives need
+                    vec2 dx = dFdx(at.xy); // before any branch, as derivatives need
+                    vec2 dy = dFdy(at.xy);
                     if (at.w < 0.99) {
                         return 0.0;
                     }
                     vec2 slope;
                     vec2 moved;
-                    float h = swellDetail(at.xy, pa, pb, pc, max(pixel.x, pixel.y), slope, moved) * tall * at.z;
+                    float h = swellDetail(at.xy, pa, pb, pc, dx, dy, slope, moved) * tall * at.z;
                     float lean = tall / 13.0 * at.z;
                     vec3 n = normalize(vec3(slope.x * lean, 0.6, slope.y * lean));
                     shade = mix(n.x * 0.5 + 0.5, 0.0, pow(n.y, 4.0)) * 0.3;
                     float crest = clamp(h * pow(max(n.y, 0.0), 4.0) * 1.2, 0.0, 1.0);
                     vec2 w = mix(at.xy, moved, clamp(at.z * 2.0, 0.2, 1.0)) + foamAt.xy;
                     float t = foamAt.z / 360.0;
-                    vec2 s1 = textureLod(foam, vec3(w * 0.26, t), 0.0).rg;
-                    vec2 s2 = textureLod(foam, vec3(w * 0.02, t + 0.5), 0.0).rg;
-                    vec2 s3 = textureLod(foam, vec3(w * 0.1, t + 1.0), 0.0).rg;
+                    // mipmapped reads over the pixel's footprint: far off, the noise blends to its mean instead of sparkling
+                    vec2 s1 = textureGrad(foam, vec3(w * 0.26, t), vec3(dx * 0.26, 0.0), vec3(dy * 0.26, 0.0)).rg;
+                    vec2 s2 = textureGrad(foam, vec3(w * 0.02, t + 0.5), vec3(dx * 0.02, 0.0), vec3(dy * 0.02, 0.0)).rg;
+                    vec2 s3 = textureGrad(foam, vec3(w * 0.1, t + 1.0), vec3(dx * 0.1, 0.0), vec3(dy * 0.1, 0.0)).rg;
                     float cover = s1.r * s2.r * s3.r * 2.8 * 0.8;
                     cover = (1.0 - crest) * cover + crest * 0.8;
                     float cells = 0.2 + 0.8 * s1.g * (1.0 - s2.g);
@@ -267,7 +269,11 @@ public final class WaterSwell {
             GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
             GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_RG8, FOAM_SIDE, FOAM_SIDE, FOAM_SLICES, 0, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE, buffer);
             GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4);
-            GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+            GL30.glGenerateMipmap(GL12.GL_TEXTURE_3D);
+            GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR_MIPMAP_LINEAR);
+            if (GL.getCapabilities().GL_EXT_texture_filter_anisotropic) { // keeps far foam sharp across a grazing look
+                GL11.glTexParameterf(GL12.GL_TEXTURE_3D, EXTTextureFilterAnisotropic.GL_TEXTURE_MAX_ANISOTROPY_EXT, 16f);
+            }
             GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
             GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
             GL11.glTexParameteri(GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);

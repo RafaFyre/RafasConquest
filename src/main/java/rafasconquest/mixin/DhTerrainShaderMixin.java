@@ -9,7 +9,9 @@ import rafasconquest.client.WaterSwell;
 
 /** Sends the swell to Distant Horizons' terrain shader once it has bound it and set its own uniforms. */
 @Pseudo
-@Mixin(targets = "com.seibel.distanthorizons.common.render.openGl.terrain.GlDhTerrainShaderProgram", remap = false)
+// DH's merged jar runs the _neoforge copy on NeoForge; without it the far sea gets no swell uniforms and shows plain
+@Mixin(targets = {"com.seibel.distanthorizons.common.render.openGl.terrain.GlDhTerrainShaderProgram",
+        "com.seibel.distanthorizons.common.render.openGl.terrain.GlDhTerrainShaderProgram_neoforge"}, remap = false)
 public class DhTerrainShaderMixin {
     @Inject(method = "fillUniformData", at = @At("TAIL"))
     private void rafasconquest$swell(CallbackInfo ci) {
