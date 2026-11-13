@@ -85,7 +85,39 @@ public final class ConquestContent {
             () -> new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.COBBLESTONE).mapColor(net.minecraft.world.level.material.MapColor.GOLD)));
     public static final DeferredHolder<Item, Item> PATHFINDING_BLOCK_ITEM = ITEMS.register("pathfinding_block",
             () -> new BlockItem(PATHFINDING_BLOCK.get(), new Item.Properties()));
-    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
+    /** Battle banners: banners flying their nation's arms in cloth that moves; the big ones twice as tall and wide. */
+    public static final DeferredHolder<Block, Block> BATTLE_BANNER = BLOCKS.register("battle_banner",
+            () -> new BattleBannerBlock(bannerProperties(), false));
+    public static final DeferredHolder<Block, Block> BATTLE_WALL_BANNER = BLOCKS.register("battle_wall_banner",
+            () -> new BattleWallBannerBlock(bannerProperties().lootFrom(BATTLE_BANNER), false));
+    public static final DeferredHolder<Block, Block> BIG_BATTLE_BANNER = BLOCKS.register("big_battle_banner",
+            () -> new BattleBannerBlock(bannerProperties(), true));
+    public static final DeferredHolder<Block, Block> BIG_BATTLE_WALL_BANNER = BLOCKS.register("big_battle_wall_banner",
+            () -> new BattleWallBannerBlock(bannerProperties().lootFrom(BIG_BATTLE_BANNER), true));
+    public static final DeferredHolder<Item, Item> BATTLE_BANNER_ITEM = ITEMS.register("battle_banner",
+            () -> new net.minecraft.world.item.StandingAndWallBlockItem(BATTLE_BANNER.get(), BATTLE_WALL_BANNER.get(),
+                    new Item.Properties().stacksTo(16), net.minecraft.core.Direction.DOWN));
+    public static final DeferredHolder<Item, Item> BIG_BATTLE_BANNER_ITEM = ITEMS.register("big_battle_banner",
+            () -> new net.minecraft.world.item.StandingAndWallBlockItem(BIG_BATTLE_BANNER.get(), BIG_BATTLE_WALL_BANNER.get(),
+                    new Item.Properties().stacksTo(16), net.minecraft.core.Direction.DOWN));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<BattleBannerBlockEntity>> BATTLE_BANNER_ENTITY =
+            BLOCK_ENTITIES.register("battle_banner", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(BattleBannerBlockEntity::new, BATTLE_BANNER.get(), BATTLE_WALL_BANNER.get(), BIG_BATTLE_BANNER.get(), BIG_BATTLE_WALL_BANNER.get())
+                    .build(null));
+    /** The battle standard: a battle banner twice the size, held or worn on a mob's head. */
+    public static final DeferredHolder<Item, Item> BATTLE_STANDARD = ITEMS.register("battle_standard",
+            () -> new BattleStandardItem(new Item.Properties().stacksTo(16)));
+    /** The cape: battle-banner cloth on the wearer's back (a Curios slot), one dyed colour (tag minecraft:dyeable). */
+    public static final DeferredHolder<Item, Item> CAPE = ITEMS.register("cape",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+
+    private static BlockBehaviour.Properties bannerProperties() {
+        return BlockBehaviour.Properties.of().mapColor(net.minecraft.world.level.material.MapColor.WOOD).forceSolidOn()
+                .instrument(net.minecraft.world.level.block.state.properties.NoteBlockInstrument.BASS).noCollission()
+                .strength(1.0F).sound(net.minecraft.world.level.block.SoundType.WOOD).ignitedByLava();
+    }
+
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB =TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup.rafasconquest"))
             .icon(() -> COMMAND_TABLE_ITEM.get().getDefaultInstance())
             .displayItems((parameters, output) -> {
@@ -100,6 +132,10 @@ public final class ConquestContent {
                 output.accept(DOCK_BLOCK_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
+                output.accept(BATTLE_BANNER_ITEM.get());
+                output.accept(BIG_BATTLE_BANNER_ITEM.get());
+                output.accept(BATTLE_STANDARD.get());
+                output.accept(CAPE.get());
                 if (GATE_PLANKS_ITEM != null) {
                     output.accept(GATE_PLANKS_ITEM.get());
                 }

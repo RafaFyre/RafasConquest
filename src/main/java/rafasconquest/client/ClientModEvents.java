@@ -18,6 +18,28 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(DistantHorizonsLink::link);
+        if (net.neoforged.fml.ModList.get().isLoaded("curios")) {
+            event.enqueueWork(rafasconquest.client.cloth.CapeCurio::register);
+        }
+    }
+
+    /** Battle banners, the standard and the cape draw their cloth as items too. */
+    @SubscribeEvent
+    public static void onClientExtensions(net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent event) {
+        net.neoforged.neoforge.client.extensions.common.IClientItemExtensions cloth = new net.neoforged.neoforge.client.extensions.common.IClientItemExtensions() {
+            private rafasconquest.client.cloth.ClothItemRenderer renderer;
+
+            @Override
+            public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {
+                if (renderer == null) {
+                    renderer = new rafasconquest.client.cloth.ClothItemRenderer();
+                }
+                return renderer;
+            }
+        };
+        event.registerItem(cloth, rafasconquest.content.ConquestContent.BATTLE_BANNER_ITEM.get(),
+                rafasconquest.content.ConquestContent.BIG_BATTLE_BANNER_ITEM.get(),
+                rafasconquest.content.ConquestContent.BATTLE_STANDARD.get(), rafasconquest.content.ConquestContent.CAPE.get());
     }
 
     @SubscribeEvent
@@ -31,6 +53,8 @@ public final class ClientModEvents {
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.RECRUITER.get(), RecruiterRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.MARKER_ENTITY.get(), MarkerRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.GATE_ENTITY.get(), GateRenderer::new);
+        event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.BATTLE_BANNER_ENTITY.get(),
+                rafasconquest.client.cloth.BattleBannerRenderer::new);
     }
 
     /** Generals are Recruits' plain recruits; their back banner is a layer on that renderer (either look). */

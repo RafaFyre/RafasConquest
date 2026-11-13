@@ -52,7 +52,7 @@ public final class RankKits {
 
     /** The nation a player serves, or null. */
     @Nullable
-    private static Faction nationOf(ServerPlayer player, @Nullable BaseMap map) {
+    public static Faction nationOf(ServerPlayer player, @Nullable BaseMap map) {
         ConquestServer server = ConquestServer.get();
         if (map == null || server == null) {
             return null;

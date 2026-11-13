@@ -141,6 +141,7 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         BattleSounds.tick();
+        rafasconquest.client.cloth.ClothRenderer.tick();
     }
 
     /** A battle soldier (or its horse) past the handover is hidden; its figure stands in for it. */
@@ -152,7 +153,14 @@ public final class ClientEvents {
         if (DistantArmyRenderer.hides(event.getEntity(), eye, event.getPartialTick())
                 || event.getEntity() == mc.player && mc.screen instanceof CityManagerScreen) {
             event.setCanceled(true);
+        } else {
+            rafasconquest.client.cloth.ClothRenderer.setCurrent(event.getEntity()); // its held and worn cloth moves with it
         }
+    }
+
+    @SubscribeEvent
+    public static void onRenderLivingDone(RenderLivingEvent.Post<?, ?> event) {
+        rafasconquest.client.cloth.ClothRenderer.setCurrent(null);
     }
 
     /** Right-clicking the war horn opens the battle screen instead of blowing it. */

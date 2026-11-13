@@ -115,6 +115,8 @@ dependencies {
     // Distant Horizons is also compiled against, to draw battles in its terrain. Only client/DistantHorizonsArmies
     // touches it, and only when it is installed.
     implementation "maven.modrinth:distanthorizons:${distant_horizons_version}"
+    // Curios is also compiled against, for the cape slot. Only client/CapeCurio touches it, and only when it is installed.
+    implementation "maven.modrinth:curios:${curios_version}"
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'

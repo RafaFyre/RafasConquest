@@ -1,0 +1,44 @@
+package rafasconquest.client.cloth;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.DyedItemColor;
+import rafasconquest.content.BattleStandardItem;
+import rafasconquest.content.ConquestContent;
+
+/**
+ * Draws battle banner items, the battle standard and the cape as items: in the hand or on a head the cloth moves
+ * (each carrier's own); in menus, frames and on the ground it hangs at rest. Standards and big banners are twice the
+ * size everywhere but in menus and their carrier's own first-person view.
+ */
+public class ClothItemRenderer extends BlockEntityWithoutLevelRenderer {
+    public ClothItemRenderer() {
+        super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
+    }
+
+    @Override
+    public void renderByItem(ItemStack stack, ItemDisplayContext context, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+        boolean cape = stack.is(ConquestContent.CAPE.get());
+        boolean standard = stack.is(ConquestContent.BATTLE_STANDARD.get());
+        boolean big = standard || stack.is(ConquestContent.BIG_BATTLE_BANNER_ITEM.get());
+        boolean carried = context.firstPerson() || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+                || context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND || context == ItemDisplayContext.HEAD;
+        LivingEntity carrier = !carried ? null : context.firstPerson() ? Minecraft.getInstance().player : ClothRenderer.current();
+        pose.pushPose();
+        // Double size would fill the screen in menus and in the player's own hand.
+        BannerArt.standing(pose, 0, big && context != ItemDisplayContext.GUI && !context.firstPerson());
+        BannerArt.draw(pose, buffers, light, overlay, !cape, !cape,
+                carrier == null ? null : new ClothRenderer.Carried(carrier.getId(), context),
+                BannerArt.STANDING,
+                cape ? BannerArt.plain(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor()))
+                        : BannerArt.arms(standard ? BattleStandardItem.nation(stack) : null),
+                carrier == null ? null : carrier.position());
+        pose.popPose();
+    }
+}
