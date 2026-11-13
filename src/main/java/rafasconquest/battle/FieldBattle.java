@@ -370,6 +370,27 @@ public final class FieldBattle {
     public static final double TOUCH_GAP = 1;
 
     /** A boarding ship lays itself alongside its enemy this far off, centre to centre: two half beams and half a block between. */
+    /** Hooks go over only with the two ships this near parallel, bows the same way or opposite (radians)... */
+    public static final double GRAPPLE_PARALLEL = Math.toRadians(15);
+    /** ...and lying side by side along more than this share of the shorter hull's length. */
+    public static final double GRAPPLE_ALONGSIDE = 0.6;
+
+    /** Whether {@code b}'s crew may throw their hooks at {@code e}: the ships parallel and overlapping along their length. */
+    public static boolean hookable(FieldBlock b, FieldBlock e) {
+        double lb = Math.max(1e-6, Math.hypot(b.facingX, b.facingZ));
+        double le = Math.max(1e-6, Math.hypot(e.facingX, e.facingZ));
+        double fx = b.facingX / lb;
+        double fz = b.facingZ / lb;
+        if (Math.abs(fx * e.facingX / le + fz * e.facingZ / le) < Math.cos(GRAPPLE_PARALLEL)) {
+            return false;
+        }
+        double along = (e.pos.x() - b.pos.x()) * fx + (e.pos.z() - b.pos.z()) * fz;
+        double hb = b.hull.length / 2.0;
+        double he = e.hull.length / 2.0;
+        double overlap = Math.min(hb, along + he) - Math.max(-hb, along - he);
+        return overlap > GRAPPLE_ALONGSIDE * 2 * Math.min(hb, he);
+    }
+
     static double boardAbeam(FieldBlock b, FieldBlock e) {
         return (b.hull.width + e.hull.width) / 2.0 + TOUCH_GAP / 2;
     }
@@ -535,8 +556,8 @@ public final class FieldBattle {
                         double same = b.facingX * e.facingX + b.facingZ * e.facingZ < 0 ? -1 : 1;
                         b.settleX = same * e.facingX;
                         b.settleZ = same * e.facingZ;
-                        if (hooked == e || Ramming.overlap(footprint(b), footprint(e), GRAPPLE_RANGE / 2)) {
-                            b.hookedTo = e; // in reach: grapple hooks over, and the lines haul the two together
+                        if (hooked == e || Ramming.overlap(footprint(b), footprint(e), GRAPPLE_RANGE / 2) && hookable(b, e)) {
+                            b.hookedTo = e; // in reach and lying alongside: grapple hooks over, and the lines haul the two together
                             if (!b.live) {
                                 haul(b); // a real ship is hauled on the water (BattleShips)
                             }

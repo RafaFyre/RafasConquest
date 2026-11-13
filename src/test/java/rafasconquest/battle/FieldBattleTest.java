@@ -812,9 +812,15 @@ class FieldBattleTest {
         boolean grappled = false;
         for (int s = 0; s < 300 && !battle.over(); s++) {
             java.util.Map<FieldBlock, Boolean> wasLashed = new java.util.HashMap<>();
+            java.util.Set<java.util.List<FieldBlock>> alongside = new java.util.HashSet<>(); // before the second moves them
             for (int side = 0; side < 2; side++) {
                 for (FieldBlock b : battle.army(side).blocks()) {
                     wasLashed.put(b, !b.lashed().isEmpty());
+                    for (FieldBlock e : battle.army(1 - side).blocks()) {
+                        if (FieldBattle.hookable(b, e)) {
+                            alongside.add(java.util.List.of(b, e));
+                        }
+                    }
                 }
             }
             battle.second();
@@ -827,6 +833,7 @@ class FieldBattleTest {
                     if (e != null && hooked.add(b) && b.lashed().isEmpty()) {
                         assertTrue(Ramming.overlap(hull(b), hull(e), FieldBattle.GRAPPLE_RANGE / 2 + 0.01),
                                 "hooks thrown from out of reach at second " + battle.seconds());
+                        assertTrue(alongside.contains(java.util.List.of(b, e)), "hooks thrown with the ships not lying alongside at second " + battle.seconds());
                     }
                     if (!wasLashed.get(b) && e != null && b.lashed().contains(battle.holder(e)) && battle.holder(e).ship() != FieldBlock.ShipKind.SHOCK) {
                         grappled = true;
@@ -854,6 +861,29 @@ class FieldBattleTest {
         for (FieldBlock x : battle.crew(a)) {
             assertTrue(x.lashed().containsAll(battle.crew(b)), "someone aboard can't board the enemy");
         }
+    }
+
+    @Test
+    void hooksGoOverOnlyAlongsideParallelAndMostlyOverlapped() {
+        FieldBlock a = loneShip();
+        FieldBlock e = loneShip();
+        double beam = FieldBattle.boardAbeam(a, e);
+        double length = a.hull().length; // both the same size
+        e.pos = new Point(0, beam);
+        assertTrue(FieldBattle.hookable(a, e), "abeam, parallel, fully overlapped");
+        e.facingX = -1;
+        assertTrue(FieldBattle.hookable(a, e), "bows opposite is still parallel");
+        e.pos = new Point(length * 0.35, beam);
+        assertTrue(FieldBattle.hookable(a, e), "65% overlapped");
+        e.pos = new Point(length * 0.45, beam);
+        assertFalse(FieldBattle.hookable(a, e), "only 55% overlapped");
+        e.pos = new Point(0, beam);
+        e.facingX = Math.cos(Math.toRadians(30));
+        e.facingZ = Math.sin(Math.toRadians(30));
+        assertFalse(FieldBattle.hookable(a, e), "30 degrees off parallel");
+        e.facingX = Math.cos(Math.toRadians(10));
+        e.facingZ = Math.sin(Math.toRadians(10));
+        assertTrue(FieldBattle.hookable(a, e), "10 degrees off counts as parallel");
     }
 
     /** A swordsman ship of a sea battle, alone at (0, 0) with its bow to +x. */
