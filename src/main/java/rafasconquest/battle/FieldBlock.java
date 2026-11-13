@@ -535,4 +535,67 @@ public final class FieldBlock {
         }
         return fell;
     }
+
+    /**
+     * As {@link #takeDamage}, but each hit goes to a living soldier picked by {@code weight} (how many blows each took),
+     * so those the enemy actually reached fall; with no weight on anyone living, to anyone, as there.
+     */
+    int takeDamage(double damage, java.util.Random random, int[] weight) {
+        int total = 0;
+        for (int i = 0; i < health.length; i++) {
+            total += health[i] > 0 ? weight[i] : 0;
+        }
+        if (total == 0) {
+            return takeDamage(damage, random);
+        }
+        pendingDamage += damage;
+        int fell = 0;
+        while (pendingDamage >= FieldRules.HIT && alive > 0 && total > 0) {
+            pendingDamage -= FieldRules.HIT;
+            int pick = random.nextInt(total);
+            for (int i = 0; i < health.length; i++) {
+                if (health[i] > 0 && weight[i] > 0 && (pick -= weight[i]) < 0) {
+                    health[i] -= FieldRules.HIT;
+                    if (health[i] <= 0) {
+                        health[i] = 0;
+                        alive--;
+                        fell++;
+                        total -= weight[i];
+                    }
+                    break;
+                }
+            }
+        }
+        if (alive == 0) {
+            pendingDamage = 0;
+        }
+        return fell;
+    }
+
+    /** Ranks stand this many soldiers' spacings apart, front to back. */
+    static final double SLOT_DEPTH = 1.75;
+
+    /** How far right of its block's middle soldier i stands. */
+    public double slotRight(int i) {
+        int f = Math.max(1, files);
+        return health.length == 1 ? 0 : (place(i) % f - (f - 1) / 2.0) * BattlePlan.SPACING;
+    }
+
+    /** How far behind its block's front rank soldier i stands. */
+    public double slotBack(int i) {
+        return (place(i) / Math.max(1, files)) * BattlePlan.SPACING * SLOT_DEPTH;
+    }
+
+    /** Where soldier i stands in the ranks, counting along each rank from the front: the captain in the back rank's middle. */
+    private int place(int i) {
+        if (captain < 0) {
+            return i;
+        }
+        int back = BattlePlan.captainPlace(health.length, Math.max(1, files));
+        return i == captain ? back : i == back ? captain : i;
+    }
+
+    /** Each soldier's body in the battle's {@link Bodies} (-1 for none), or null while it has none. */
+    @Nullable
+    int[] body;
 }

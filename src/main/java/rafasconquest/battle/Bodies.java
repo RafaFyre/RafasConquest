@@ -22,10 +22,12 @@ public final class Bodies {
     /** Closing faster than this, blocks a second, a body hitting an enemy is a charge. */
     static final float CHARGE_SPEED = 3;
     /** A charge knocks its target down when its weight times its closing speed is this many times the target's weight. */
-    static final float KNOCK = 2.5f;
+    static final float KNOCK = 4; // two men running head-on (closing at 9) stay up; a galloping horse (77) never does
     static final float DOWN_SECONDS = 2;
     /** Within this of an enemy (beyond touching) a soldier goes for it rather than its place. */
     static final float ENGAGE = 1.2f;
+    /** Going for a foe, a soldier strays at most this far from its place in the ranks. */
+    static final float LEASH = 1;
 
     /** What a body is: its size and weight from Minecraft's hitboxes (a recruit 0.6 wide, a horse 1.4), pace and blows. */
     public enum Kind {
@@ -73,6 +75,37 @@ public final class Bodies {
     private float minX;
     private float minZ;
     private final int[] fallen = new int[2];
+    /** Blows each soldier swung, and took, since {@link #clearCounts}: a battle that keeps health itself reads these. */
+    private int[] swings = new int[0], struck = new int[0];
+    /** Whether blows take health here; off when the battle deals the damage and only asks who fought whom. */
+    private boolean lethal = true;
+
+    public void lethal(boolean lethal) {
+        this.lethal = lethal;
+    }
+
+    /** Takes soldier {@code i} out (it fell in the battle's own reckoning, or became a real soldier), not as fallen here. */
+    public void remove(int i) {
+        dead[i] = true;
+    }
+
+    public int swings(int i) {
+        return swings[i];
+    }
+
+    public int struck(int i) {
+        return struck[i];
+    }
+
+    /** Whom soldier {@code i} last went for, or -1. */
+    public int target(int i) {
+        return target[i];
+    }
+
+    public void clearCounts() {
+        Arrays.fill(swings, 0, n, 0);
+        Arrays.fill(struck, 0, n, 0);
+    }
 
     /** Adds a soldier of {@code side} (0 or 1) standing at ({@code x}, {@code z}), facing its block's front; returns its index. */
     public int add(int side, Kind kind, float x, float z, float frontX, float frontZ) {
@@ -150,8 +183,16 @@ public final class Bodies {
             down[i] -= STEP;
         } else {
             int t = target[i];
-            float tx = t >= 0 ? x[t] : goalX[i];
-            float tz = t >= 0 ? z[t] : goalZ[i];
+            float tx = goalX[i];
+            float tz = goalZ[i];
+            if (t >= 0) { // at its foe, but no further than LEASH from its place: the ranks hold, as Total War's do
+                float lx = x[t] - tx;
+                float lz = z[t] - tz;
+                float l = (float) Math.sqrt(lx * lx + lz * lz);
+                float s = l > LEASH ? LEASH / l : 1;
+                tx += lx * s;
+                tz += lz * s;
+            }
             float dx = tx - x[i];
             float dz = tz - z[i];
             float d = (float) Math.sqrt(dx * dx + dz * dz);
@@ -276,7 +317,9 @@ public final class Bodies {
         float mj = kind[j].mass;
         if (mi * closing >= mj * KNOCK * CHARGE_SPEED) {
             down[j] = DOWN_SECONDS;
-            hurt[j] += kind[i].damage * closing / CHARGE_SPEED / 2; // the impact itself
+            if (lethal) {
+                hurt[j] += kind[i].damage * closing / CHARGE_SPEED / 2; // the impact itself
+            }
             kickX[j] += ux * closing * 0.1f;
             kickZ[j] += uz * closing * 0.1f;
         }
@@ -321,7 +364,11 @@ public final class Bodies {
         float dz = z[t] - z[i];
         float reach = kind[i].radius + kind[t].radius + kind[i].reach;
         if (dx * dx + dz * dz <= reach * reach) {
-            hurt[t] += kind[i].damage;
+            if (lethal) {
+                hurt[t] += kind[i].damage;
+            }
+            swings[i]++;
+            struck[t]++;
             cooldown[i] = kind[i].interval;
         }
     }
@@ -352,6 +399,8 @@ public final class Bodies {
         kickZ = Arrays.copyOf(kickZ, size);
         slow = Arrays.copyOf(slow, size);
         target = Arrays.copyOf(target, size);
+        swings = Arrays.copyOf(swings, size);
+        struck = Arrays.copyOf(struck, size);
         cellOf = Arrays.copyOf(cellOf, size);
         order = Arrays.copyOf(order, size);
     }
