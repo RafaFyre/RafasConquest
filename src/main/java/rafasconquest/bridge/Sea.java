@@ -33,7 +33,8 @@ public final class Sea {
     private static int depth(Level level, int x, int z) {
         int surface = level.getSeaLevel() - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, surface + 1, z);
-        if (!level.hasChunkAt(pos)) {
+        // ClientLevel.hasChunk is always true, and an unloaded chunk then reads as air (land): ask its chunk cache instead
+        if (level.isClientSide ? !level.getChunkSource().hasChunk(x >> 4, z >> 4) : !level.hasChunkAt(pos)) {
             return SeaCalm.UNKNOWN;
         }
         if (!level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()) {
