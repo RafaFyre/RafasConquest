@@ -49,6 +49,15 @@ public final class ConquestContent {
             () -> new StrategyBoardBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.CARTOGRAPHY_TABLE)));
     public static final DeferredHolder<Item, Item> STRATEGY_BOARD_ITEM = ITEMS.register("strategy_board",
             () -> new BlockItem(STRATEGY_BOARD.get(), new Item.Properties()));
+    /** Oar blocks: spruce planks with an oar sticking out of the left or right side. */
+    public static final DeferredHolder<Block, Block> OAR_LEFT = BLOCKS.register("oar_left",
+            () -> new OarBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS), false));
+    public static final DeferredHolder<Item, Item> OAR_LEFT_ITEM = ITEMS.register("oar_left",
+            () -> new BlockItem(OAR_LEFT.get(), new Item.Properties()));
+    public static final DeferredHolder<Block, Block> OAR_RIGHT = BLOCKS.register("oar_right",
+            () -> new OarBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS), true));
+    public static final DeferredHolder<Item, Item> OAR_RIGHT_ITEM = ITEMS.register("oar_right",
+            () -> new BlockItem(OAR_RIGHT.get(), new Item.Properties()));
     /** The Character Marker: blue bedrock, set in a style's structures where people are to stand. */
     public static final DeferredHolder<Block, Block> MARKER = BLOCKS.register("character_marker",
             () -> new rafasconquest.style.MarkerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BEDROCK).noLootTable()));
@@ -130,6 +139,8 @@ public final class ConquestContent {
                 output.accept(DIRT_PATH_SLAB_ITEM.get());
                 output.accept(MARKER_ITEM.get());
                 output.accept(DOCK_BLOCK_ITEM.get());
+                output.accept(OAR_LEFT_ITEM.get());
+                output.accept(OAR_RIGHT_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
                 output.accept(BATTLE_BANNER_ITEM.get());

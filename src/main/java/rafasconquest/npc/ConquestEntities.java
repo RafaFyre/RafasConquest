@@ -33,6 +33,14 @@ public final class ConquestEntities {
                     .clientTrackingRange(4)
                     .build(RafasConquest.MOD_ID + ":recruiter"));
 
+    /** An oar of vanilla blocks; kept with the world, its turns sent every tick to clients within 128 blocks. */
+    public static final DeferredHolder<EntityType<?>, EntityType<rafasconquest.content.Oar>> OAR = ENTITY_TYPES.register("oar",
+            () -> EntityType.Builder.<rafasconquest.content.Oar>of(rafasconquest.content.Oar::new, MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build(RafasConquest.MOD_ID + ":oar"));
+
     private ConquestEntities() {
     }
 
