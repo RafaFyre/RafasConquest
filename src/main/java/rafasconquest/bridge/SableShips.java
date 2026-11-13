@@ -14,7 +14,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Block;
-import org.joml.AxisAngle4d;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
@@ -166,9 +165,12 @@ final class SableShips {
      */
     static Vector3d spinToward(Pose3dc pose, double yaw, Vector3d spin, double[] slope) {
         Quaterniond heading = new Quaterniond().rotationTo(0, 1, 0, -slope[0], 1, -slope[1]).mul(new Quaterniond().rotationY(yaw));
-        AxisAngle4d turn = new AxisAngle4d(heading.mul(new Quaterniond(pose.orientation()).invert()));
-        double angle = turn.angle > Math.PI ? turn.angle - 2 * Math.PI : turn.angle;
-        return new Vector3d(turn.x, turn.y, turn.z).mul(angle * TURN).sub(spin);
+        // Not AxisAngle4d: at no turn at all its sqrt(1 - w²) rounds below zero and gives NaN, which breaks Sable's physics.
+        Quaterniond turn = heading.mul(new Quaterniond(pose.orientation()).invert()).normalize();
+        double s = turn.w < 0 ? -1 : 1; // the short way round
+        Vector3d axis = new Vector3d(turn.x * s, turn.y * s, turn.z * s);
+        double sin = axis.length();
+        return axis.mul((sin < 1e-12 ? 2 : 2 * Math.atan2(sin, turn.w * s) / sin) * TURN).sub(spin);
     }
 
     /**
