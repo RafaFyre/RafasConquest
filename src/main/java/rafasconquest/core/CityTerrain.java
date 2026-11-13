@@ -16,10 +16,10 @@ import java.util.List;
  *   <li>The <b>carve</b> removes land above a slope rising from the plate. The slope is 1 up per 2 out, made steeper
  *       wherever that is needed to meet the land at the end of its reach, so the carve never ends in a wall. How steep
  *       blends smoothly along the edge. The carve only ever removes blocks.</li>
- *   <li>The <b>fill</b> eases the plate down into lower land with a 1-up-2-out slope. It only runs on stretches of the
- *       edge where the land falls away, so blocks are never added to build up toward higher ground.</li>
- *   <li>Where the land falls away too far for the fill to reach (a <b>valley</b>), there is no fill and no ledge: the
- *       wall's outer face drops straight into the natural cliff, with stone under the wall.</li>
+ *   <li>The <b>fill</b> eases the plate down into lower land with a 1-up-2-out slope, made steeper wherever that is
+ *       needed to meet the land at the end of its reach, so even a deep valley is eased into rather than left as a
+ *       cliff. It only runs on stretches of the edge where the land falls away, so blocks are never added to build up
+ *       toward higher ground.</li>
  * </ul>
  * Coordinates here are city-local, as in {@link CityLayout}: (0, 0) is the city square's north-west corner.
  */
@@ -62,10 +62,8 @@ public final class CityTerrain {
     public enum Edge {
         /** Land rises (or is level): carve only. */
         CARVE,
-        /** Land falls away within reach: fill down to it (and carve any bumps). */
-        FILL,
-        /** Land falls away beyond reach: no fill; the wall stands flush on the natural cliff. */
-        VALLEY
+        /** Land falls away: fill down to it, however deep (and carve any bumps). */
+        FILL
     }
 
     /** Sides of the box, in the order the edges are stored. */
@@ -167,10 +165,6 @@ public final class CityTerrain {
     public enum Kind {
         /** Inside the box: flatten to the plate. */
         PLATE,
-        /** Under the wall on a valley stretch: flatten, with stone right up to the plate so the cliff face is natural. */
-        WALL_BASE,
-        /** Outside the wall on a valley stretch: only clear anything above the plate. */
-        CLEAR_ABOVE,
         /** Outside the box: carve down to {@code high} if higher; fill up to {@code low} if lower and {@code fill}. */
         SLOPE,
         /** Leave the land alone. */
@@ -253,24 +247,19 @@ public final class CityTerrain {
         return Math.min(boxMax, boxMin + segment * EDGE_SEGMENT + EDGE_SEGMENT / 2);
     }
 
-    /** Looks straight out from the box edge: does the land fall away, and if so does a 1:2 fill reach it? */
+    /** Looks straight out from the box edge: does the land fall away? */
     static Edge classify(int originX, int originZ, Heights heights, int plate, Side side, int along, Plan box) {
         long sum = 0;
-        boolean fillMeets = false;
         for (int d = RAY_STEP; d <= SLOPE_REACH; d += RAY_STEP) {
-            int y = height(originX, originZ, heights, side, along, d, box);
-            sum += y - plate;
-            if (y >= plate - box.rise(d)) {
-                fillMeets = true;
-            }
+            sum += height(originX, originZ, heights, side, along, d, box) - plate;
         }
-        if (sum >= 0) {
-            return Edge.CARVE;
-        }
-        return fillMeets ? Edge.FILL : Edge.VALLEY;
+        return sum >= 0 ? Edge.CARVE : Edge.FILL;
     }
 
-    /** The highest land around the end of the carve's reach, relative to the plate: what the carve has to meet. */
+    /**
+     * The highest land around the end of the slope's reach, relative to the plate: what the carve has to meet, or (below
+     * the plate) what the fill comes down to.
+     */
     static int carveTarget(int originX, int originZ, Heights heights, int plate, Side side, int along, Plan box) {
         int highest = Integer.MIN_VALUE;
         for (int offset = -RAY_SPREAD; offset <= RAY_SPREAD; offset += RAY_SPREAD) {
@@ -315,6 +304,11 @@ public final class CityTerrain {
         return Math.max(gentle, steep);
     }
 
+    /** How far the fill drops {@code d} blocks out: the gentle slope, or steeper to come down to land {@code -target} below. */
+    private static int fillDrop(int d, int target, int gentle) {
+        return carveRise(d, -target, gentle);
+    }
+
     /**
      * A column of a city with an outside noble district: the platform's own inside its box, else the city's inside its;
      * else, where both shape the land, fill to the higher of their fills and carve to the higher of their carves, so
@@ -354,7 +348,7 @@ public final class CityTerrain {
         int dz = lz < boxMin ? boxMin - lz : lz > boxMax ? lz - boxMax : 0;
         int plate = plan.plateY();
         if (dx == 0 && dz == 0) {
-            return insideBox(plan, lx, lz);
+            return new Column(Kind.PLATE, plate, plate, false);
         }
         int d = Math.max(dx, dz);
         if (plan.run() < 0) {
@@ -385,47 +379,8 @@ public final class CityTerrain {
             target = carveTarget(plan, side, along);
             fill = plan.edge(side, segment(plan, along)) == Edge.FILL;
         }
-        return new Column(Kind.SLOPE, plate - plan.rise(d), plate + carveRise(d, target, plan.rise(d)), fill);
-    }
-
-    /** Inside the box: the plate, except under and outside the wall on valley stretches. */
-    private static Column insideBox(Plan plan, int lx, int lz) {
-        int plate = plan.plateY();
-        int far = plan.size() - 1;
-        int wall = CityLayout.ROAD_WIDTH;
-        // The wall's outer face, on the low and high side of each axis.
-        int lo = -plan.outset();
-        int hi = far + plan.outset();
-        // Which valley stretch, if any, this column faces, and whether it is outside the wall or under it.
-        boolean outside = false;
-        boolean under = false;
-        if (lz < wall && valley(plan, Side.NORTH, lx)) {
-            outside |= lz < lo;
-            under |= lz >= lo;
-        }
-        if (lz > far - wall && valley(plan, Side.SOUTH, lx)) {
-            outside |= lz > hi;
-            under |= lz <= hi;
-        }
-        if (lx < wall && valley(plan, Side.WEST, lz)) {
-            outside |= lx < lo;
-            under |= lx >= lo;
-        }
-        if (lx > far - wall && valley(plan, Side.EAST, lz)) {
-            outside |= lx > hi;
-            under |= lx <= hi;
-        }
-        if (outside) {
-            return new Column(Kind.CLEAR_ABOVE, plate, plate, false);
-        }
-        if (under) {
-            return new Column(Kind.WALL_BASE, plate, plate, false);
-        }
-        return new Column(Kind.PLATE, plate, plate, false);
-    }
-
-    private static boolean valley(Plan plan, Side side, int along) {
-        return plan.edge(side, segment(plan, along)) == Edge.VALLEY;
+        int gentle = plan.rise(d);
+        return new Column(Kind.SLOPE, plate - fillDrop(d, target, gentle), plate + carveRise(d, target, gentle), fill);
     }
 
     /** The carve's target at a position along a side, blended linearly between neighbouring stretch centres. */

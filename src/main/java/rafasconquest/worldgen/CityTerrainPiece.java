@@ -175,9 +175,7 @@ public class CityTerrainPiece extends StructurePiece {
                 boolean wall = CityLayout.inWallBand(plan.size(), x - originX, z - originZ);
                 int keep = styled.pieces().isEmpty() && styled.path().isEmpty() ? -1 : styled.top(x - originX, z - originZ);
                 switch (column.kind()) {
-                    case PLATE -> flatten(level, pos, x, z, column.low(), false, wall, keep);
-                    case WALL_BASE -> flatten(level, pos, x, z, column.low(), true, wall, keep);
-                    case CLEAR_ABOVE -> clearAbove(level, pos, x, z, keep > 0 ? column.low() + keep - 1 : column.low());
+                    case PLATE -> flatten(level, pos, x, z, column.low(), wall, keep);
                     case SLOPE -> {
                         if (keep < 0) {
                             slope(level, pos, x, z, column); // a wall piece standing out over the slope keeps its ground
@@ -192,25 +190,23 @@ public class CityTerrainPiece extends StructurePiece {
 
     /**
      * Clears everything above the plate and fills everything below it, so the column ends exactly at the plate.
-     * Under the wall on a valley edge ({@code bare}), the fill is plain stone so the cliff face below the wall looks
-     * natural.
      * <p>
      * On the wall's footprint ({@code wall}), blocks of the wall itself are kept. Some segments reach a few blocks
      * into the neighbouring cell, whose terrain may be laid after the wall, and must not erase it. Under a styled piece
      * {@code keep} blocks tall, only what is above it is cleared, and its floor is only filled where it is open.
      */
-    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int plate, boolean bare, boolean wall, int keep) {
+    private void flatten(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int plate, boolean wall, int keep) {
         BlockState stone = Blocks.STONE.defaultBlockState();
         clearAbove(level, pos, x, z, keep > 0 ? plate + keep - 1 : plate, wall);
         pos.set(x, plate, z);
         BlockState floor = level.getBlockState(pos);
         if (!(wall && isWall(floor)) && (keep < 0 || floor.isAir() || floor.canBeReplaced())) {
-            level.setBlock(pos, bare ? stone : variant.ground(), 2);
+            level.setBlock(pos, variant.ground(), 2);
         }
         for (int y = plate - 1; y > level.getMinBuildHeight(); y--) {
             BlockState existing = level.getBlockState(pos.set(x, y, z));
             boolean hole = existing.isAir() || !existing.getFluidState().isEmpty() || existing.canBeReplaced();
-            boolean underSurface = !bare && y >= plate - SUBSOIL_DEPTH;
+            boolean underSurface = y >= plate - SUBSOIL_DEPTH;
             if (hole) {
                 level.setBlock(pos, underSurface ? variant.subsoil() : stone, 2);
             } else if (underSurface && existing.is(Blocks.STONE)) {
@@ -219,10 +215,6 @@ public class CityTerrainPiece extends StructurePiece {
                 return; // reached solid natural ground
             }
         }
-    }
-
-    private static void clearAbove(WorldGenLevel level, BlockPos.MutableBlockPos pos, int x, int z, int floor) {
-        clearAbove(level, pos, x, z, floor, false);
     }
 
     /** Clears everything above {@code floor}; with {@code keepWall}, blocks of the city wall stay. */

@@ -120,24 +120,21 @@ class CityTerrainTest {
     }
 
     @Test
-    void valleyHasNoFillAndTheWallStandsOnTheCliff() {
+    void deepValleyIsFilledSteeperSoTheFillMeetsItsFloor() {
+        // 70 below the plate; 1:2 would only come down 42 by the end of the reach.
         CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> z > CityTerrain.BOX_MAX ? 10 : 80), SEA);
-        assertEquals(CityTerrain.Edge.VALLEY, plan.edge(CityTerrain.Side.SOUTH, 6));
-        int far = CityLayout.SIZE - 1;
-        int outerFace = far + CityLayout.WALL_OUTSET;
-        // Outside the wall: nothing built, only anything above the plate cleared.
-        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, outerFace + 1).kind());
-        assertEquals(CityTerrain.Kind.CLEAR_ABOVE, CityTerrain.column(plan, MID, CityTerrain.BOX_MAX).kind());
-        // Under the whole 5-wide wall: bare stone fill, so the cliff face below the wall is natural.
-        for (int z = far - CityLayout.ROAD_WIDTH + 1; z <= outerFace; z++) {
-            assertEquals(CityTerrain.Kind.WALL_BASE, CityTerrain.column(plan, MID, z).kind());
+        assertEquals(CityTerrain.Edge.FILL, plan.edge(CityTerrain.Side.SOUTH, 6));
+        // The flat zone runs out over it to the box's edge.
+        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, CityTerrain.BOX_MAX).kind());
+        CityTerrain.Column atReach = CityTerrain.column(plan, MID, CityTerrain.BOX_MAX + CityTerrain.SLOPE_REACH);
+        assertTrue(atReach.fill() && atReach.low() <= 10, "fill ends at " + atReach.low() + ", above the valley floor at 10");
+        int previous = 80;
+        for (int d = 1; d <= CityTerrain.SLOPE_REACH; d++) {
+            CityTerrain.Column c = CityTerrain.column(plan, MID, CityTerrain.BOX_MAX + d);
+            assertTrue(c.fill());
+            assertTrue(c.low() <= previous && previous - c.low() <= 2, "fill drops from " + previous + " to " + c.low() + " at " + d);
+            previous = c.low();
         }
-        // Just inside the wall: ordinary plate.
-        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, far - CityLayout.ROAD_WIDTH).kind());
-        // Beyond the box: no fill down into the valley.
-        assertFalse(CityTerrain.column(plan, MID, CityTerrain.BOX_MAX + 10).fill());
-        // A side facing level land keeps its ledge.
-        assertEquals(CityTerrain.Kind.PLATE, CityTerrain.column(plan, MID, CityTerrain.BOX_MIN).kind());
     }
 
     @Test
