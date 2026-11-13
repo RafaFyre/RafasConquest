@@ -105,7 +105,8 @@ public final class WaterSwell {
     /**
      * Distant Horizons' terrain shader as loaded, with the sea's slope light and foam laid on its water tops (DH's water
      * material, 12, facing up, at sea level). Shading only: DH merges water into big quads, so nothing is lifted, and
-     * the calm is read per fragment (open sea past the calm texture). Each wave and the foam noise are filtered by the
+     * the calm is read per fragment (open sea past the calm texture). DH's block texture is left off the sea's top, which
+     * takes the LOD's flat colour, as Sodium's mipmapped water reads from afar. Each wave and the foam noise are filtered by the
      * pixel's footprint in {@link #foamGlsl}, so the far sea keeps the crests it can show without shimmering. Uniforms come from {@link #upload}, as for Sodium.
      */
     public static String patchDh(String path, String source) {
@@ -133,7 +134,9 @@ public final class WaterSwell {
                 + "in vec4 v_SwellAt;\nin vec3 v_SwellLight;\n\n" + Swell.glsl() + "\n\n" + foamGlsl() + "\n\n";
         String body = "vec4 swellAt = v_SwellAt;\n"
                 + "    if (swellAt.w > 0.99) {\n"
-                + "        vec2 c = (swellAt.xy - u_SwellCalmAt.xy) * u_SwellCalmAt.z;\n"
+                // DH's block texture (doubled contrast, no blur with distance) would show as a busy pattern next to Sodium's
+                + "        fragColor.rgb = vertexColor.rgb;\n"
+                + "        vec2 c =(swellAt.xy - u_SwellCalmAt.xy) * u_SwellCalmAt.z;\n"
                 + "        swellAt.z = all(greaterThanEqual(c, vec2(0.0))) && all(lessThanEqual(c, vec2(1.0))) ? texture(u_SwellCalm, c).r : 1.0;\n"
                 + "    }\n    "
                 + foamMix("fragColor", "u_", "swellAt", "v_SwellLight") + "\n    ";
