@@ -50,6 +50,10 @@ public class FactionMapScreen extends Screen {
     private double lastClickX;
     private double lastClickY;
     private boolean toFactionInfo;
+    /** Static, so the legend stays minimized the next time the map is opened. */
+    private static boolean legendMinimized;
+    @Nullable
+    private Button legendToggle;
 
     public FactionMapScreen(Screen parent) {
         this(parent, Component.translatable("gui.rafasconquest.map"));
@@ -81,6 +85,11 @@ public class FactionMapScreen extends Screen {
             view.setViewport(MARGIN, TITLE_BAR, width - MARGIN, height - MARGIN);
             addRenderableWidget(Button.builder(Component.literal("✕"), b -> onClose())
                     .bounds(width - MARGIN - 14, 4, 14, 14).build());
+            legendToggle = addRenderableWidget(Button.builder(Component.literal(legendMinimized ? "+" : "-"), b -> {
+                legendMinimized = !legendMinimized;
+                b.setMessage(Component.literal(legendMinimized ? "+" : "-"));
+            }).bounds(0, 0, 12, 12).build());
+            legendToggle.visible = false; // shown and placed by renderLegend, once there is a map
         }
         if (factions == null) {
             ConquestNetwork.requestFactionInfo();
@@ -157,11 +166,12 @@ public class FactionMapScreen extends Screen {
     /** The legend, bottom left: every layer's entries, top layer first. */
     private void renderLegend(GuiGraphics g) {
         List<MapLayer.LegendEntry> entries = new ArrayList<>();
-        for (int i = layers.size() - 1; i >= 0; i--) {
+        for (int i = layers.size() - 1; !legendMinimized && i >= 0; i--) {
             entries.addAll(layers.get(i).legend());
         }
+        Component heading = Component.translatable("gui.rafasconquest.map.legend");
         int rowHeight = 13;
-        int w = 0;
+        int w = font.width(heading) - 4; // room for the heading and the button beside it
         for (MapLayer.LegendEntry e : entries) {
             w = Math.max(w, font.width(e.label()));
         }
@@ -171,7 +181,11 @@ public class FactionMapScreen extends Screen {
         int y = view.bottom - 6 - boxH;
         g.fill(x, y, x + boxW, y + boxH, LEGEND_BACK);
         g.renderOutline(x, y, boxW, boxH, 0xFF5A5A5A);
-        g.drawString(font, Component.translatable("gui.rafasconquest.map.legend"), x + 6, y + 5, 0xFFD75E, false);
+        g.drawString(font, heading, x + 6, y + 5, 0xFFD75E, false);
+        if (legendToggle != null) {
+            legendToggle.setPosition(x + boxW - 15, y + 3);
+            legendToggle.visible = true;
+        }
         int row = y + 17;
         for (MapLayer.LegendEntry e : entries) {
             e.symbol().draw(g, x + 6, row);
