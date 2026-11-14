@@ -6444,8 +6444,14 @@ public final class RecruitsBattle {
         int bx = Mth.floor(x);
         int bz = Mth.floor(z);
         int y;
+        rafasconquest.battle.Siege.Region region = survey == null || field.siege() == null ? null
+                : field.siege().region(new Point(x, z));
         if (level.hasChunk(bx >> 4, bz >> 4)) {
             y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, bx, bz);
+        } else if (region == rafasconquest.battle.Siege.Region.WALL) {
+            y = survey.walkYAt(x, z); // the generator knows nothing of the city: its walls and plate are built later
+        } else if (region == rafasconquest.battle.Siege.Region.IN && hall != null) {
+            y = Mth.floor(hall.y); // the city's plate is flat: its hall's floor stands for all of it
         } else {
             long chunk = ChunkPos.asLong(bx >> 4, bz >> 4);
             Integer known = groundCache.get(chunk);
