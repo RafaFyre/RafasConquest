@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794683097.926124,
-    "seen": 1794683316.4715478,
-    "ast_hash": "58a4547cdd166c7ff329657b7bc74fba",
+    "mtime": 1794684160.242477,
+    "seen": 1794684186.0109105,
+    "ast_hash": "6c99d51ee684fc669a2bc109ca726c93",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -222,9 +222,9 @@
     "semantic_hash": "b4b367d198f74f77cefe518e92cfa224"
   },
   "src/main/java/rafasconquest/client/BattleSounds.java": {
-    "mtime": 1794496100.9936223,
-    "seen": 1794496134.1104755,
-    "ast_hash": "71123591c37fcdccd9b4db3c037f372c",
+    "mtime": 1794684140.5065892,
+    "seen": 1794684186.010945,
+    "ast_hash": "203e309268963e7271f156906ae768d0",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleSpotRing.java": {
@@ -294,9 +294,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmies.java": {
-    "mtime": 1794457792.6658647,
-    "seen": 1794457849.7872376,
-    "ast_hash": "671c349ba2939e97ac02fb0f868428ec",
+    "mtime": 1794684140.5065892,
+    "seen": 1794684186.010969,
+    "ast_hash": "3673d4ae29b41df28831f4b8bf562f09",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
@@ -1368,9 +1368,9 @@
     "semantic_hash": "07c704709a234c5a1bd0cf4550511c66"
   },
   "src/main/resources/assets/rafasconquest/sounds.json": {
-    "mtime": 1794431713.868819,
-    "seen": 1794431740.4609365,
-    "ast_hash": "faeccc1884bf19e938a0454fe6697c36",
+    "mtime": 1794684062.8677483,
+    "seen": 1794684186.0114286,
+    "ast_hash": "3cbac8bd662886c0a2b88819037463ab",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/worldgen/structure_set/villages.json": {
@@ -3711,6 +3711,96 @@
     "mtime": 1794676346.3559895,
     "seen": 1794676435.664163,
     "ast_hash": "334eb1bea8cb8288c7321b3f6ea93b5c",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars1.ogg": {
+    "mtime": 1794684059.855067,
+    "seen": 1794684186.0117404,
+    "ast_hash": "694d9ab88d5d08b96f74422a988dde3f",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars2.ogg": {
+    "mtime": 1794684060.0366685,
+    "seen": 1794684186.011742,
+    "ast_hash": "3d5460ebb692aa06c4b7c1979bf6ec8d",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars3.ogg": {
+    "mtime": 1794684060.235154,
+    "seen": 1794684186.0117435,
+    "ast_hash": "ffa8f5a594909610d3d04cef40af63c7",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars4.ogg": {
+    "mtime": 1794684060.421877,
+    "seen": 1794684186.011745,
+    "ast_hash": "9739d7cfb6b2cb38161c2637ff06b3ee",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars5.ogg": {
+    "mtime": 1794684060.5966492,
+    "seen": 1794684186.011746,
+    "ast_hash": "11223cb7e9fdc88dd8d036abf2fc33c4",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/oars6.ogg": {
+    "mtime": 1794684060.8007374,
+    "seen": 1794684186.0117474,
+    "ast_hash": "896520ebf1a5cbe2908d0ce250a58ca3",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/ram1.ogg": {
+    "mtime": 1794684062.1578238,
+    "seen": 1794684186.011751,
+    "ast_hash": "6af5c39af95c94d841a61ac57300bef4",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/ram2.ogg": {
+    "mtime": 1794684062.2929027,
+    "seen": 1794684186.0117521,
+    "ast_hash": "e197944d61694ecde6d0d99e60a930f0",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/ram3.ogg": {
+    "mtime": 1794684062.4305253,
+    "seen": 1794684186.0117533,
+    "ast_hash": "7f1739769a0ba06fd534f16d3b685209",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout1.ogg": {
+    "mtime": 1794684061.0118122,
+    "seen": 1794684186.0117545,
+    "ast_hash": "639309a35ef22c76b989fa40761e8beb",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout2.ogg": {
+    "mtime": 1794684061.22129,
+    "seen": 1794684186.0117557,
+    "ast_hash": "02fc0323c28701e6acb0249b0863bcac",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout3.ogg": {
+    "mtime": 1794684061.4176846,
+    "seen": 1794684186.011757,
+    "ast_hash": "768b07d67ba81bd27d82810f81d3e164",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout4.ogg": {
+    "mtime": 1794684061.6353297,
+    "seen": 1794684186.011758,
+    "ast_hash": "c27c67e7c6f4b0204203b3af971033b8",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout5.ogg": {
+    "mtime": 1794684061.8218367,
+    "seen": 1794684186.011759,
+    "ast_hash": "030e881d7916fe8bafe8ee822f1a2220",
+    "semantic_hash": ""
+  },
+  "src/main/resources/assets/rafasconquest/sounds/battle/shout6.ogg": {
+    "mtime": 1794684062.027592,
+    "seen": 1794684186.0117605,
+    "ast_hash": "09df2dc93ce9211bde35b269ab3929a4",
     "semantic_hash": ""
   }
 }

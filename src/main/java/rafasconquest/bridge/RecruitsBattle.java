@@ -2214,6 +2214,12 @@ public final class RecruitsBattle {
                 continue;
             }
             field.lash(rammer, struck);
+            double[] crash = SableLink.shipAt(struck.shipId());
+            if (crash != null) { // the crash of the bow going in, heard across the water
+                level.playSound(null, crash[0], crash[4], crash[1], Holder.direct(SoundEvent.createVariableRangeEvent(
+                        net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(rafasconquest.RafasConquest.MOD_ID, "battle.ram"))),
+                        SoundSource.NEUTRAL, RAM_VOLUME, 0.9F + level.random.nextFloat() * 0.2F);
+            }
             for (FieldBlock aboard : field.crew(struck)) {
                 thrown.put(aboard, level.getGameTime() + THROWN_TICKS); // off their spots ({@link #pin}) to be thrown
                 Live hit = live.get(aboard);
@@ -4754,6 +4760,9 @@ public final class RecruitsBattle {
     public enum HornCall {
         MOVING, RETREATING, RALLYING, ATTACKING
     }
+
+    /** A ram's crash carries 16 times this many blocks. */
+    private static final float RAM_VOLUME = 6;
 
     /** The horn styles shipped, each a folder of sounds/horns with a sounds.json event per {@link HornCall}. */
     public static final List<String> HORN_STYLES = List.of("kraven");

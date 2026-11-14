@@ -97,6 +97,13 @@ public final class DistantArmies {
         return Math.hypot(target.x() - start.x(), target.z() - start.z()) * 1000 / GLIDE_MILLIS;
     }
 
+    /** Whether a formation is turning: it faces another way than it did a snapshot ago. */
+    public static boolean turning(FormationSnapshot formation) {
+        FormationSnapshot start = from.get(formation.id());
+        FormationSnapshot target = to.get(formation.id());
+        return start != null && target != null && start.facingX() * target.facingX() + start.facingZ() * target.facingZ() < 0.9995;
+    }
+
     /** What a formation's soldiers wear; null if the server hasn't said (its figures wear the army's colour). */
     @Nullable
     static FigureGear gear(int id) {

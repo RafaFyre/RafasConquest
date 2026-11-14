@@ -24,6 +24,17 @@
       "rafasconquest:battle/din6"
     ]
   },
+  "battle.oars": {
+    "sounds": ["rafasconquest:battle/oars1", "rafasconquest:battle/oars2", "rafasconquest:battle/oars3",
+      "rafasconquest:battle/oars4", "rafasconquest:battle/oars5", "rafasconquest:battle/oars6"]
+  },
+  "battle.shout": {
+    "sounds": ["rafasconquest:battle/shout1", "rafasconquest:battle/shout2", "rafasconquest:battle/shout3",
+      "rafasconquest:battle/shout4", "rafasconquest:battle/shout5", "rafasconquest:battle/shout6"]
+  },
+  "battle.ram": {
+    "sounds": ["rafasconquest:battle/ram1", "rafasconquest:battle/ram2", "rafasconquest:battle/ram3"]
+  },
   "battle.select.swordsmen": {"sounds": ["rafasconquest:battle/select_swordsmen"]},
   "battle.select.shieldwall": {"sounds": ["rafasconquest:battle/select_shieldwall"]},
   "battle.select.archers": {"sounds": ["rafasconquest:battle/select_archers"]},
