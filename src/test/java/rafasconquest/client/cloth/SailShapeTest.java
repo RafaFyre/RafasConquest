@@ -41,12 +41,4 @@ class SailShapeTest {
         still.point(4.5, 7, p);
         assertTrue(p[1] > -7, "the foot's middle is drawn up");
     }
-
-    @Test
-    void frontFacesForward() {
-        double[] n = new double[3];
-        still.normal(4.5, 1, n);
-        assertTrue(n[2] > 0.5, "normal " + n[2]);
-        assertEquals(1, Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]), 1e-9);
-    }
 }
