@@ -3642,9 +3642,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/OarFigures.java": {
-    "mtime": 1794619406.4303696,
-    "seen": 1794619470.060582,
-    "ast_hash": "2dbb8730953916e4a5cbf2d401692527",
+    "mtime": 1794622885.9640286,
+    "seen": 1794622917.7982867,
+    "ast_hash": "dd304461f361bcd31cabb6bc316db80d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/Sail.java": {

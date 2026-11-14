@@ -303,8 +303,8 @@ final class OarFigures {
     }
 
     /**
-     * The oar's model, handle at the origin and shaft along +z: four oak fence posts, the outer two faced with open oak
-     * trapdoors, captured from the game's own block models (the old block entity renderer's layout, unturned).
+     * The oar's model, handle at the origin and shaft along +z: four oak fence posts, the outer two faced with upright open
+     * oak trapdoors, captured from the game's own block models (the old block entity renderer's layout, unturned).
      */
     private static float[] model() {
         RecruitFigures.Capture c = new RecruitFigures.Capture();
@@ -316,6 +316,10 @@ final class OarFigures {
             blocks.renderSingleBlock(FENCE, pose, type -> c, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
             if (i >= Oar.LENGTH - 2) {
                 pose.pushPose();
+                // A quarter turn about the shaft: the blade stands upright in the water, not flat on it.
+                pose.translate(0.5, 0, 0.5);
+                pose.mulPose(Axis.YP.rotationDegrees(90));
+                pose.translate(-0.5, 0, -0.5);
                 pose.translate(0, 0, BLADE_SHIFT);
                 blocks.renderSingleBlock(BLADE, pose, type -> c, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
                 pose.popPose();
