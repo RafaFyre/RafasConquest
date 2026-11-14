@@ -112,11 +112,12 @@ final class DistantShips {
         double[][] owns = match(wants, real);
         List<Far> ships = new ArrayList<>();
         RIDES.values().forEach(r -> r.seen = false);
+        net.minecraft.world.phys.Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         int battle = 0;
         int battleReal = 0;
         for (int i = 0; i < wants.size(); i++) {
             Want w = wants.get(i);
-            Far ship = far(owns[i], w.key, w.x, w.z, w.yaw, w.size, w.lane, w.battle);
+            Far ship = far(owns[i], eye, w.key, w.x, w.z, w.yaw, w.size, w.lane, w.battle);
             ships.add(ship);
             if (w.battle != null) {
                 battle++;
@@ -170,12 +171,18 @@ final class DistantShips {
         return owns;
     }
 
-    private static Far far(@Nullable double[] own, Object key, double x, double z, double yaw, SeaLanes.Size size,
-                           @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
+    private static Far far(@Nullable double[] own, net.minecraft.world.phys.Vec3 eye, Object key, double x, double z, double yaw,
+                           SeaLanes.Size size, @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
         if (own != null) {
             x = own[0];
             z = own[1];
             yaw = own[2];
+        }
+        // Only a ship drawn as a level of detail shows its float: a sprite is too far, and Sable floats the real one.
+        // Floating every lane ship in the world was a sixth of a sea battle's frame.
+        double flat = Math.hypot(x - eye.x, z - eye.z);
+        if (flat > SPRITE_PAST || own != null && flat < REAL_WITHIN) {
+            return new Far(x, z, yaw, size, own != null, lane, battle, own != null ? own[3] : 0, own != null ? own[4] : 0, 0, 0, 0);
         }
         Riding r = ride(key, x, z, yaw, size);
         Swell.Ride ride = r.ride;

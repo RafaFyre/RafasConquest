@@ -65,6 +65,7 @@ class SwellTest {
         double camZ = -18_000.7;
         long t = 5_000_000;
         float[] phases = Swell.phases(camX, camZ, t);
+        assertEquals(Swell.tall() * Swell.heightOff(phases, 0, 0), Swell.height(camX, camZ, t), 0); // the very same sum
         for (int dx = -200; dx <= 200; dx += 8) {
             assertEquals(Swell.height(camX + dx, camZ - dx / 2.0, t), Swell.tall() * Swell.heightOff(phases, dx, -dx / 2.0), 0.01);
         }

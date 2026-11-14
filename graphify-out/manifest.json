@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1794619362.1159716,
-    "seen": 1794619470.0605335,
-    "ast_hash": "1e2a4ab1a3b778344a83c07f00bc4316",
+    "mtime": 1794623629.0299506,
+    "seen": 1794623685.4781072,
+    "ast_hash": "4978a9b80c6a2413a37c59c1013685d6",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -2568,15 +2568,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/Swell.java": {
-    "mtime": 1794560149.407793,
-    "seen": 1794560314.7647738,
-    "ast_hash": "9953c393a340729f178a8648b431924c",
+    "mtime": 1794623629.1317072,
+    "seen": 1794623685.4782505,
+    "ast_hash": "6c72ad4836aef34ac1484d42a69d8bef",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SwellTest.java": {
-    "mtime": 1794541693.096619,
-    "seen": 1794541737.6124527,
-    "ast_hash": "2585c083f6e9c06439bf51db15eabf7f",
+    "mtime": 1794623637.181238,
+    "seen": 1794623685.4787467,
+    "ast_hash": "619e64b88fb06c2341f3e53e3c9ddcba",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/WaterSwell.java": {

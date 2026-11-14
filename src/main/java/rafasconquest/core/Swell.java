@@ -94,7 +94,23 @@ public final class Swell {
 
     /** How far open sea (full strength) stands above (or below) its still line here and now. */
     public static double height(double x, double z, double time) {
-        return calm ? 0 : tall() * heightOff(phases(x, z, time), 0, 0);
+        if (calm) {
+            return 0;
+        }
+        // heightOff(phases(x, z, time), 0, 0), step for step, without its array of DETAIL phases: ships read this five
+        // times a tick each.
+        float qx = 0;
+        float qz = 0;
+        float h = 0;
+        for (int i = 0; i < WAVES; i++) {
+            float p = (float) KX[i] * qx + (float) KZ[i] * qz + (float) ((KX[i] * x + KZ[i] * z + SPIN[i] * time) % (2 * Math.PI));
+            float s = (float) Math.exp(Math.sin(p) - 1);
+            h += (float) WEIGHT[i] * s;
+            float c = s * (float) Math.cos(p);
+            qx -= (float) PUSH_X[i] * c;
+            qz -= (float) PUSH_Z[i] * c;
+        }
+        return tall() * (h / WEIGHTS - 0.5);
     }
 
     /** How far the sea stands off its still line here and now, where {@code calmness} gives the wave strength (0–1). */
