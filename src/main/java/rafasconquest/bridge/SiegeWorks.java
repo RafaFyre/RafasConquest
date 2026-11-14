@@ -559,8 +559,9 @@ final class SiegeWorks {
         }
         for (BlockPos p : ahead) {
             BlockState state = level.getBlockState(p);
-            // Only trees: logs and wood (the logs tag holds both) and leaves; anything else stands.
-            if (state.is(net.minecraft.tags.BlockTags.LOGS) || state.is(net.minecraft.tags.BlockTags.LEAVES)) {
+            // Only trees and bamboo: logs and wood (the logs tag holds both), leaves, bamboo shoots; anything else stands.
+            if (state.is(net.minecraft.tags.BlockTags.LOGS) || state.is(net.minecraft.tags.BlockTags.LEAVES)
+                    || state.is(net.minecraft.world.level.block.Blocks.BAMBOO) || state.is(net.minecraft.world.level.block.Blocks.BAMBOO_SAPLING)) {
                 level.destroyBlock(p, false);
             }
         }
