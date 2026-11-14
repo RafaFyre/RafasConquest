@@ -45,7 +45,8 @@ final class SableSeen {
             }
             List<double[]> ships = new ArrayList<>();
             for (ClientSubLevel sub : container.getAllSubLevels()) {
-                if (!sub.isRemoved()) {
+                // Not until its blocks have come: till then Sable draws nothing there, and the stand-in must stay.
+                if (!sub.isRemoved() && columns(level, sub) != null) {
                     Pose3dc pose = sub.logicalPose();
                     Vector3d bow = new Quaterniond(pose.orientation()).transform(new Vector3d(0, 0, 1));
                     Vector3d port = new Quaterniond(pose.orientation()).transform(new Vector3d(1, 0, 0));

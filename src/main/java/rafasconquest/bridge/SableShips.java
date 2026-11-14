@@ -68,12 +68,23 @@ final class SableShips {
         long time = level.getGameTime();
         boolean look = time % 20 == 0;
         if (look) {
+            Map<String, ServerSubLevel> steered = new HashMap<>(live);
             live.clear();
             List<ServerSubLevel> twice = new ArrayList<>();
             for (ServerSubLevel sub : container.getAllSubLevels()) {
                 CompoundTag tag = sub.getUserDataTag();
-                if (tag != null && tag.contains(TAG) && !sub.isRemoved() && live.putIfAbsent(tag.getString(TAG), sub) != null) {
-                    twice.add(sub); // a second ship for one lane ship (Sable brought back one we'd rebuilt) sits unsteered for ever
+                if (tag == null || !tag.contains(TAG) || sub.isRemoved()) {
+                    continue;
+                }
+                ServerSubLevel first = live.putIfAbsent(tag.getString(TAG), sub);
+                if (first != null) {
+                    // A second ship for one lane ship (Sable brought back one we'd rebuilt): keep the one being steered, so the
+                    // ship in view stays and the stale one goes, not the other way round.
+                    boolean keepNew = steered.get(tag.getString(TAG)) == sub;
+                    if (keepNew) {
+                        live.put(tag.getString(TAG), sub);
+                    }
+                    twice.add(keepNew ? first : sub);
                 }
             }
             twice.forEach(sub -> container.removeSubLevel(sub, SubLevelRemovalReason.REMOVED));

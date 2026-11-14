@@ -24,4 +24,20 @@ class SeaCalmTest {
             }
         }
     }
+
+    @Test
+    void chunkNearUnseenColumnsIsSweptAgainOnlyAfterRetry() {
+        int[] reads = {0};
+        // Columns past x = 20 can't be seen yet: chunk 0's sweep reaches them.
+        SeaCalm calm = new SeaCalm((x, z) -> {
+            reads[0]++;
+            return x >= 20 ? SeaCalm.UNKNOWN : 10;
+        });
+        calm.at(0).column(5, 5);
+        int first = reads[0];
+        calm.at(1).column(6, 6);
+        assertEquals(first, reads[0], "kept within the retry window");
+        calm.at(25).column(6, 6);
+        assertEquals(true, reads[0] > first, "swept again after it");
+    }
 }

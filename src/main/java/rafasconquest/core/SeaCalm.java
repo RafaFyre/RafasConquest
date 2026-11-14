@@ -16,6 +16,8 @@ public final class SeaCalm {
     public static final int DEEP = 32;
     /** Remembered columns are looked at again after this many ticks, so a new pier or a filled bay shows up. */
     private static final long STALE = 600;
+    /** A chunk worked out partly from unseen columns is looked at again after this many ticks. */
+    private static final long RETRY = 20;
 
     /** What {@link Depths} gives for a column it can't see yet (not loaded): taken as open sea for now, never remembered. */
     public static final int UNKNOWN = -1;
@@ -83,9 +85,9 @@ public final class SeaCalm {
             }
             guessed = false;
             known = new Strengths(square(x & ~15, z & ~15, 16), now);
-            if (!guessed) {
-                strengths.put(key, known);
-            }
+            // Part of it guessed (unloaded columns near): kept only for RETRY ticks, not swept again on every call, which
+            // cost 8% of a sea battle's server tick with ships near the loaded edge.
+            strengths.put(key, guessed ? new Strengths(known.bytes(), now - STALE + RETRY) : known);
         }
         return (known.bytes()[(z & 15) * 16 + (x & 15)] & 0xff) / 255.0; // exact: strengths are whole 255ths
     }

@@ -98,18 +98,26 @@ final class DistantShips {
             return List.of();
         }
         List<double[]> real = SableSeen.ships(mc.level);
-        List<Far> ships = new ArrayList<>();
-        RIDES.values().forEach(r -> r.seen = false);
+        List<Want> wants = new ArrayList<>();
         for (SeaLanes.Ship s : lanes(partialTick)) {
-            ships.add(far(real, s.id(), s.x(), s.z(), s.yaw(), s.size(), s, null));
+            wants.add(new Want(s.id(), s.x(), s.z(), s.yaw(), s.size(), s, null));
         }
-        int battle = 0;
-        int battleReal = 0;
         for (FormationSnapshot f : DistantArmies.now()) {
             if (f.ship() != null && f.ship().hull() >= 0) { // one hull to a ship, drawn by the block sailing it
-                SeaLanes.Size size = SeaLanes.Size.values()[f.ship().hull()];
-                Far ship = far(real, f.id(), f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()), size, null, f.ship());
-                ships.add(ship);
+                wants.add(new Want(f.id(), f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()),
+                        SeaLanes.Size.values()[f.ship().hull()], null, f.ship()));
+            }
+        }
+        double[][] owns = match(wants, real);
+        List<Far> ships = new ArrayList<>();
+        RIDES.values().forEach(r -> r.seen = false);
+        int battle = 0;
+        int battleReal = 0;
+        for (int i = 0; i < wants.size(); i++) {
+            Want w = wants.get(i);
+            Far ship = far(owns[i], w.key, w.x, w.z, w.yaw, w.size, w.lane, w.battle);
+            ships.add(ship);
+            if (w.battle != null) {
                 battle++;
                 battleReal += ship.real() ? 1 : 0;
             }
@@ -128,17 +136,45 @@ final class DistantShips {
      * where it should be, riding the swell as the server rides the real ones ({@link Swell.Ride}). {@code key} names it
      * from frame to frame (a lane ship's id, a battle formation's).
      */
-    private static Far far(List<double[]> real, Object key, double x, double z, double yaw, SeaLanes.Size size,
-                           @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
-        double[] own = null;
-        for (double[] r : real) {
-            if (Math.hypot(r[0] - x, r[1] - z) <= OWN_SHIP) {
-                own = r;
-                x = r[0];
-                z = r[1];
-                yaw = r[2];
-                break;
+    record Want(Object key, double x, double z, double yaw, SeaLanes.Size size, @Nullable SeaLanes.Ship lane,
+                        @Nullable FormationSnapshot.Ship battle) {
+    }
+
+    /**
+     * Each wanted ship's real one, or null: nearest pairs first, each real ship given to one ship at most. Else, in a
+     * packed fleet, two ships both took one real ship, one of them was hidden with its own real hull elsewhere, and as
+     * they drifted the claim swapped back and forth: ships blinking out right by the player.
+     */
+    static double[][] match(List<Want> wants, List<double[]> real) {
+        List<double[]> pairs = new ArrayList<>(); // {distance, want, real}
+        for (int i = 0; i < wants.size(); i++) {
+            for (int j = 0; j < real.size(); j++) {
+                double d = Math.hypot(real.get(j)[0] - wants.get(i).x, real.get(j)[1] - wants.get(i).z);
+                if (d <= OWN_SHIP) {
+                    pairs.add(new double[]{d, i, j});
+                }
             }
+        }
+        pairs.sort((a, b) -> Double.compare(a[0], b[0]));
+        double[][] owns = new double[wants.size()][];
+        boolean[] taken = new boolean[real.size()];
+        for (double[] p : pairs) {
+            int i = (int) p[1];
+            int j = (int) p[2];
+            if (owns[i] == null && !taken[j]) {
+                owns[i] = real.get(j);
+                taken[j] = true;
+            }
+        }
+        return owns;
+    }
+
+    private static Far far(@Nullable double[] own, Object key, double x, double z, double yaw, SeaLanes.Size size,
+                           @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
+        if (own != null) {
+            x = own[0];
+            z = own[1];
+            yaw = own[2];
         }
         Swell.Ride ride = ride(key, x, z, yaw, size);
         return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], ride.offset())

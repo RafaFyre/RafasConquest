@@ -159,6 +159,8 @@ public final class RecruitsBattle {
     private static final double GROUND_AHEAD = 32;
     /** A formation afloat within this of a player sails a real ship; wherever a client has none, it draws a stand-in. */
     public static final double SHIPS_WITHIN = NUMBERS_BEYOND + BLOCK_REACH;
+    /** A battle ship already sailing is taken away only this much further out than {@link #SHIPS_WITHIN}. */
+    private static final double SHIPS_KEPT_PAST = 32;
     /**
      * Battles up to this many blocks (both sides) are also fought through as numbers at the start, for comparing; a
      * bigger one would hold the server up for seconds.
@@ -2182,7 +2184,9 @@ public final class RecruitsBattle {
                 for (Point w : watchers) {
                     near = Math.min(near, w.distanceTo(block.pos()));
                 }
-                if (near > SHIPS_WITHIN) {
+                // A ship sailing is kept a little further out than one is built, else a formation on the line has its ship
+                // taken away and built again over and over: ships blinking near the player.
+                if (near > SHIPS_WITHIN + (SableLink.shipAt(block.shipId()) != null ? SHIPS_KEPT_PAST : 0)) {
                     continue;
                 }
                 boolean real = field.crew(block).stream().anyMatch(live::containsKey);
