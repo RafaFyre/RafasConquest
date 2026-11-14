@@ -1,5 +1,6 @@
 {
   "replace": false,
   "values": [ "rafasconquest:command_table", "rafasconquest:grand_strategy", "rafasconquest:strategy_board",
-    "rafasconquest:gate_block", "rafasconquest:artillery", { "id": "rafasconquest:gate_planks", "required": false } ]
+    "rafasconquest:gate_block",
+    "rafasconquest:helm", "rafasconquest:artillery", { "id": "rafasconquest:gate_planks", "required": false } ]
 }

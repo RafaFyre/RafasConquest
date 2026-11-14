@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/lectern",
+  "textures": {
+    "particle": "rafasconquest:block/helm_sides",
+    "bottom": "rafasconquest:block/helm_base",
+    "base": "rafasconquest:block/helm_base",
+    "front": "rafasconquest:block/helm_front",
+    "sides": "rafasconquest:block/helm_sides",
+    "top": "rafasconquest:block/helm_top"
+  }
+}

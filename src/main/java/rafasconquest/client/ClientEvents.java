@@ -96,6 +96,7 @@ public final class ClientEvents {
             DistantOcclusion.begin();
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getFrustum(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantArmyRenderer.renderShips(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            OarFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantOcclusion.end();
             ArrowVolleys.render(event.getPoseStack(), event.getCamera(), event.getFrustum());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));

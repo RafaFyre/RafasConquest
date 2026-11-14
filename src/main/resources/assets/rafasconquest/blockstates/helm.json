@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=south": { "model": "rafasconquest:block/helm" },
+    "facing=west": { "model": "rafasconquest:block/helm", "y": 90 },
+    "facing=north": { "model": "rafasconquest:block/helm", "y": 180 },
+    "facing=east": { "model": "rafasconquest:block/helm", "y": 270 }
+  }
+}

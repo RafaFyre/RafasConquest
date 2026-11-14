@@ -83,6 +83,11 @@ public final class ConquestContent {
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<GateBlockEntity>> GATE_ENTITY =
             BLOCK_ENTITIES.register("gate_block", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
                     .of(GateBlockEntity::new, GATE_BLOCK.get()).build(null));
+    /** The Helm: a red lectern marking a Sable ship's front, back, left and right ({@link HelmBlock}). */
+    public static final DeferredHolder<Block, Block> HELM = BLOCKS.register("helm",
+            () -> new HelmBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.LECTERN).mapColor(net.minecraft.world.level.material.MapColor.COLOR_RED)));
+    public static final DeferredHolder<Item, Item> HELM_ITEM = ITEMS.register("helm",
+            () -> new BlockItem(HELM.get(), new Item.Properties()));
     /** The Artillery Block: on a Sable ship, a Siegeworks engine stands on it, crewed by a siege engineer ({@link ArtilleryBlock}). */
     public static final DeferredHolder<Block, Block> ARTILLERY = BLOCKS.register("artillery",
             () -> new ArtilleryBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS)));
@@ -91,6 +96,9 @@ public final class ConquestContent {
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<ArtilleryMount>> ARTILLERY_ENTITY =
             BLOCK_ENTITIES.register("artillery", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
                     .of(ArtilleryMount::new, ARTILLERY.get()).build(null));
+    /** The sail stitcher: an iron stick (does nothing yet). */
+    public static final DeferredHolder<Item, Item> SAIL_STITCHER = ITEMS.register("sail_stitcher",
+            () -> new Item(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -152,7 +160,9 @@ public final class ConquestContent {
                 output.accept(DOCK_BLOCK_ITEM.get());
                 output.accept(OAR_LEFT_ITEM.get());
                 output.accept(OAR_RIGHT_ITEM.get());
+                output.accept(HELM_ITEM.get());
                 output.accept(ARTILLERY_ITEM.get());
+                output.accept(SAIL_STITCHER.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
                 output.accept(BATTLE_BANNER_ITEM.get());
