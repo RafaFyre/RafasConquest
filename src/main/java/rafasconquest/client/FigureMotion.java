@@ -147,7 +147,7 @@ final class FigureMotion {
         if (foe != null) {
             double dx = foe.x() - f.x();
             double dz = foe.z() - f.z();
-            double length = Math.hypot(dx, dz);
+            double length = Math.sqrt(dx * dx + dz * dz);
             sx = dx / length;
             sz = dz / length;
             surge = Math.max(0, length - f.halfDepth() - foe.halfDepth()) / 2 + (horse ? HORSE_MIX : MIX);
@@ -228,11 +228,11 @@ final class FigureMotion {
     static void move(State s, double tx, double tz, double faceX, double faceZ, boolean real, double speed, double dt) {
         double dx = tx - s.x;
         double dz = tz - s.z;
-        double distance = Math.hypot(dx, dz);
+        double distance = Math.sqrt(dx * dx + dz * dz);
         // Which way the place itself goes: a marching block's soldiers face the march, as Total War's do.
         double placeX = Double.isNaN(s.px) ? 0 : tx - s.px;
         double placeZ = Double.isNaN(s.pz) ? 0 : tz - s.pz;
-        double placeSpeed = dt > 0 ? Math.hypot(placeX, placeZ) / dt : 0;
+        double placeSpeed = dt > 0 ? Math.sqrt(placeX * placeX + placeZ * placeZ) / dt : 0;
         s.px = tx;
         s.pz = tz;
         if (distance > SNAP) {
@@ -287,7 +287,7 @@ final class FigureMotion {
             }
             double dx = g.x() - f.x();
             double dz = g.z() - f.z();
-            double length = Math.hypot(dx, dz);
+            double length = Math.sqrt(dx * dx + dz * dz);
             if (length < 1e-6 || dx * f.facingX() + dz * f.facingZ() <= 0
                     || length - f.halfDepth() - g.halfDepth() > REACH || length >= nearest) {
                 continue;

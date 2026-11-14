@@ -151,8 +151,10 @@ final class DistantShips {
         List<double[]> pairs = new ArrayList<>(); // {distance, want, real}
         for (int i = 0; i < wants.size(); i++) {
             for (int j = 0; j < real.size(); j++) {
-                double d = Math.hypot(real.get(j)[0] - wants.get(i).x, real.get(j)[1] - wants.get(i).z);
-                if (d <= OWN_SHIP) {
+                double dx = real.get(j)[0] - wants.get(i).x;
+                double dz = real.get(j)[1] - wants.get(i).z;
+                double d = dx * dx + dz * dz; // squared: it only ranks the pairs
+                if (d <= OWN_SHIP * OWN_SHIP) {
                     pairs.add(new double[]{d, i, j});
                 }
             }

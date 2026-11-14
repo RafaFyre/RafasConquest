@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1794623629.0299506,
-    "seen": 1794623685.4781072,
-    "ast_hash": "4978a9b80c6a2413a37c59c1013685d6",
+    "mtime": 1794624124.7944598,
+    "seen": 1794624283.7222888,
+    "ast_hash": "7eaba76284fce9c788581d5dcca8564f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -3006,9 +3006,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureMotion.java": {
-    "mtime": 1794558764.181391,
-    "seen": 1794558848.7136915,
-    "ast_hash": "f5bda92376384d2fe35e1261a59c9546",
+    "mtime": 1794624118.7435033,
+    "seen": 1794624283.7222965,
+    "ast_hash": "5549df838c6454bd3a58f85ef726a634",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/FigureMotionTest.java": {
