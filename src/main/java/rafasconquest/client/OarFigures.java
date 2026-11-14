@@ -109,7 +109,7 @@ final class OarFigures {
     }
 
     /** The ship's render turn for an oar at {@code pos} on one (moving {@code at} from its plot into the world), or null. */
-    private static Quaterniond shipTurn(Minecraft mc, BlockPos pos, float partialTick, Vector3d at) {
+    static Quaterniond shipTurn(Minecraft mc, BlockPos pos, float partialTick, Vector3d at) {
         if (sableBroken || !SableLink.available()) {
             return null;
         }

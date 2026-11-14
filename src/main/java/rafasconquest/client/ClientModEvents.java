@@ -55,8 +55,6 @@ public final class ClientModEvents {
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.GATE_ENTITY.get(), GateRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.BATTLE_BANNER_ENTITY.get(),
                 rafasconquest.client.cloth.BattleBannerRenderer::new);
-        event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.SAIL_ENTITY.get(),
-                rafasconquest.client.cloth.SailRenderer::new);
     }
 
     /** Generals are Recruits' plain recruits; their back banner is a layer on that renderer (either look). */

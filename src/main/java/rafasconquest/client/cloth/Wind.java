@@ -11,7 +11,7 @@ import net.minecraft.world.level.levelgen.synth.ImprovedNoise;
  * across the land, scaled by the weather (clear 0.1, rain +1, thunder +1.4, a third of those), plus fast gusts.
  * A slight breeze always blows; under a roof (below the highest blocking block in its column) that is all there is.
  */
-final class Wind {
+public final class Wind {
     private static final ImprovedNoise NOISE = new ImprovedNoise(RandomSource.create(0x5EED_C107L));
     /** Physics Mod's scale from wind strength to push, in blocks/s². */
     private static final double PUSH = 42;
@@ -28,7 +28,7 @@ final class Wind {
      * the gusts (1: Physics Mod's flags; heavy cloth answers slower); {@code share} is how much of the weather's wind
      * and gusts move the cloth (heavier, less). The breeze moves all cloth alike.
      */
-    static void at(Level level, double x, double y, double z, double flutter, double share, double[] out) {
+    public static void at(Level level, double x, double y, double z, double flutter, double share, double[] out) {
         double ticks = level.getGameTime();
         double angle = Math.toRadians(NOISE.noise(0.2412, ticks / 4000.0, 0) * 1080);
         // A slight breeze always blows, even under a roof, so cloth is never quite still.
