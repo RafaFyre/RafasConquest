@@ -58,6 +58,9 @@ public final class ConquestContent {
             () -> new OarBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS), true));
     public static final DeferredHolder<Item, Item> OAR_RIGHT_ITEM = ITEMS.register("oar_right",
             () -> new BlockItem(OAR_RIGHT.get(), new Item.Properties()));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<Oar>> OAR_ENTITY =
+            BLOCK_ENTITIES.register("oar", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(Oar::new, OAR_LEFT.get(), OAR_RIGHT.get()).build(null));
     /** The Character Marker: blue bedrock, set in a style's structures where people are to stand. */
     public static final DeferredHolder<Block, Block> MARKER = BLOCKS.register("character_marker",
             () -> new rafasconquest.style.MarkerBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BEDROCK).noLootTable()));

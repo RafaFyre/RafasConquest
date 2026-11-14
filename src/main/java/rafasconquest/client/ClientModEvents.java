@@ -51,7 +51,7 @@ public final class ClientModEvents {
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.TOWNSPERSON.get(), TownspersonRenderer::new);
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.RECRUITER.get(), RecruiterRenderer::new);
-        event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.OAR.get(), OarRenderer::new);
+        event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.OAR_ENTITY.get(), OarRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.MARKER_ENTITY.get(), MarkerRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.GATE_ENTITY.get(), GateRenderer::new);
         event.registerBlockEntityRenderer(rafasconquest.content.ConquestContent.BATTLE_BANNER_ENTITY.get(),
