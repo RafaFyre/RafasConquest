@@ -224,6 +224,18 @@ public final class ClientEvents {
         }
     }
 
+    /** The middle mouse button (pick block) switches a held halberd's or glaive's swing mode instead. */
+    @SubscribeEvent
+    public static void onPickBlock(net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (event.isPickBlock() && mc.player != null && rafasconquest.bridge.SwingModes.installed()
+                && rafasconquest.bridge.SwingModes.polearm(mc.player.getMainHandItem()) != null) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            rafasconquest.net.ConquestNetwork.cycleSwing();
+        }
+    }
+
     @SubscribeEvent
     public static void onEntityLeave(EntityLeaveLevelEvent event) {
         if (event.getLevel().isClientSide()) {

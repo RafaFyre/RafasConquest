@@ -245,6 +245,17 @@ public final class ConquestNetwork {
                 .decoder(b -> new ChargeHits(b.readVarIntArray(), b.readVarIntArray()))
                 .consumerMainThread((m, context) -> rafasconquest.client.ThrownFigures.receive(m.cavalry(), m.struck()))
                 .add();
+        CHANNEL.messageBuilder(CycleSwing.class, 38, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                })
+                .decoder(b -> new CycleSwing())
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null && rafasconquest.bridge.SwingModes.installed()) {
+                        rafasconquest.bridge.SwingModes.cycle(player);
+                    }
+                })
+                .add();
         CHANNEL.messageBuilder(Streets.class, 37, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> b.writeCollection(m.walks(), (o, w) -> {
                     o.writeDouble(w.x0());
@@ -264,6 +275,14 @@ public final class ConquestNetwork {
 
     public static void sendStreets(ServerPlayer player, List<rafasconquest.core.StreetWalks.Walk> walks) {
         CHANNEL.send(player, new Streets(walks));
+    }
+
+    /** Client → server: switch the swing mode of the halberd or glaive in my hand ({@link rafasconquest.bridge.SwingModes}). */
+    public record CycleSwing() {
+    }
+
+    public static void cycleSwing() {
+        CHANNEL.sendToServer(new CycleSwing());
     }
 
     /** Server → client: cavalry formation {@code cavalry[i]} tore into formation {@code struck[i]} this second. */

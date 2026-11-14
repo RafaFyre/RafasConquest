@@ -117,6 +117,9 @@ dependencies {
     implementation "maven.modrinth:distanthorizons:${distant_horizons_version}"
     // Curios is also compiled against, for the cape slot. Only client/CapeCurio touches it, and only when it is installed.
     implementation "maven.modrinth:curios:${curios_version}"
+    // Better Combat is only compiled against, for halberd and glaive swing modes. Only bridge/SwingModes touches it,
+    // and only when it is installed. Not in dev runs: it needs Player Animator and Cloth Config there.
+    compileOnly "maven.modrinth:better-combat:${better_combat_version}"
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
