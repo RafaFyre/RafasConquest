@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794620198.2275398,
-    "seen": 1794620394.2313845,
-    "ast_hash": "c293be70c42d9042f771879716e5f488",
+    "mtime": 1794625235.8863447,
+    "seen": 1794625545.3852036,
+    "ast_hash": "91ea1121e76c54be892c6fc20f146167",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1794624124.7944598,
-    "seen": 1794624283.7222888,
-    "ast_hash": "7eaba76284fce9c788581d5dcca8564f",
+    "mtime": 1794625235.888365,
+    "seen": 1794625545.3852124,
+    "ast_hash": "273d709a04466babd25e71d62bef3d09",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -3006,9 +3006,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureMotion.java": {
-    "mtime": 1794624118.7435033,
-    "seen": 1794624283.7222965,
-    "ast_hash": "5549df838c6454bd3a58f85ef726a634",
+    "mtime": 1794625207.7232814,
+    "seen": 1794625545.3852196,
+    "ast_hash": "7828724f24c641c0b936b8c20d9db5e2",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/FigureMotionTest.java": {
@@ -3480,9 +3480,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/DistantShipsTest.java": {
-    "mtime": 1794604395.0564945,
-    "seen": 1794604450.6452675,
-    "ast_hash": "4f31216b3791b9a7f6df2e4bf719c352",
+    "mtime": 1794625244.5229914,
+    "seen": 1794625545.3858025,
+    "ast_hash": "16c1b2231f8201e498b08c8da79d621b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/Oar.java": {
@@ -3648,9 +3648,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/Sail.java": {
-    "mtime": 1794618880.6632538,
-    "seen": 1794619101.2729025,
-    "ast_hash": "ff87bbb82997aa161012b29f64d325b4",
+    "mtime": 1794625184.8363333,
+    "seen": 1794625545.3853164,
+    "ast_hash": "27360252391cc3b8a0a7494c9db23f02",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/SailBlock.java": {
@@ -3690,9 +3690,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SailFigures.java": {
-    "mtime": 1794618906.5085073,
-    "seen": 1794619101.272822,
-    "ast_hash": "9e2e613304593a8f7d14c5b996600cef",
+    "mtime": 1794626054.491756,
+    "seen": 1794626519.650325,
+    "ast_hash": "1b68e4f06660ca8dc0baf7afe942546e",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/OarRowingTest.java": {

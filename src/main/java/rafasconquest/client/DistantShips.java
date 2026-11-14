@@ -237,6 +237,41 @@ final class DistantShips {
         return r;
     }
 
+    /**
+     * A hull's blocks as a key for its model, equal for equal hulls, with their hash worked out once: hashing a ship's
+     * every block for every ship every frame was a thirtieth of a sea battle's frame.
+     */
+    private static final class HullKey {
+        final List<ShipHulls.Part> parts;
+        final int hash;
+
+        HullKey(List<ShipHulls.Part> parts) {
+            this.parts = parts;
+            this.hash = parts.hashCode();
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof HullKey k && (k.parts == parts || k.hash == hash && k.parts.equals(parts));
+        }
+    }
+
+    /** Each hull list's key, by the list itself; and the one key kept for each hull, so a look-up meets the very same key. */
+    private static final Map<List<ShipHulls.Part>, HullKey> HULL_KEYS = new java.util.IdentityHashMap<>();
+    private static final Map<HullKey, HullKey> HULLS_KNOWN = new HashMap<>();
+
+    static Object hullKey(List<ShipHulls.Part> parts) {
+        if (HULL_KEYS.size() > 1024) {
+            HULL_KEYS.clear(); // shortcut: lane hull lists are made anew every 10 s and the old ones stay here; a weak identity map if this ever shows
+        }
+        return HULL_KEYS.computeIfAbsent(parts, p -> HULLS_KNOWN.computeIfAbsent(new HullKey(p), k -> k));
+    }
+
     /** Where a ship's keel sits: a block down in the water, as the server holds the real ones. */
     static double keel() {
         Minecraft mc = Minecraft.getInstance();

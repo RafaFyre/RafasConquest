@@ -25,6 +25,8 @@ public class Sail extends BlockEntity {
     public int[] colours = new int[0];
     /** The game time the sheet was last measured (long ago until it is). */
     public long measured = -1000;
+    /** The way it faced when last measured (null until it is). */
+    public net.minecraft.core.Direction facing;
 
     public Sail(BlockPos pos, BlockState state) {
         super(ConquestContent.SAIL_ENTITY.get(), pos, state);

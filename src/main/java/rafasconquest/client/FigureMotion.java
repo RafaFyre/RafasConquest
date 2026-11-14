@@ -98,7 +98,8 @@ final class FigureMotion {
         long seen;
     }
 
-    private static final Map<Long, State> STATES = new HashMap<>();
+    /** Each formation's figures' states, by its id, then the figure's number: a map of every figure by a key was a tenth of a big battle's frame in look-ups. */
+    private static final Map<Integer, State[]> STATES = new HashMap<>();
     private static final Map<Integer, Match> MATCHES = new HashMap<>();
     private static long last;
     private static long pruned;
@@ -127,8 +128,8 @@ final class FigureMotion {
         }
         if (now - pruned > 1000) {
             pruned = now;
-            STATES.values().removeIf(s -> now - s.seen > FORGET_MILLIS);
             MATCHES.values().removeIf(m -> now - m.seen > FORGET_MILLIS);
+            STATES.keySet().retainAll(MATCHES.keySet()); // every formation stepped has a match
         }
         return all;
     }
@@ -139,6 +140,11 @@ final class FigureMotion {
         List<Sprite> slots = ranks.layout();
         int[] slotOf = match(f.id(), ranks, sprites, slots, now);
         List<Placed> placed = new ArrayList<>(sprites.size());
+        State[] states = STATES.get(f.id());
+        if (states == null || states.length < sprites.size()) {
+            states = states == null ? new State[sprites.size()] : java.util.Arrays.copyOf(states, sprites.size());
+            STATES.put(f.id(), states);
+        }
         boolean horse = f.kind().mounted();
         // Toward the foe, and how far the front rank presses on: half the gap between the fronts, and then some.
         double sx = 0;
@@ -173,10 +179,9 @@ final class FigureMotion {
             }
             double faceX = foe != null ? sx : ranks.facingX();
             double faceZ = foe != null ? sz : ranks.facingZ();
-            State state = STATES.get(key(f.id(), i));
-            if (state == null) {
-                state = new State(tx, tz, faceX, faceZ);
-                STATES.put(key(f.id(), i), state);
+            State state = states[i];
+            if (state == null || now - state.seen > FORGET_MILLIS) { // never seen, or not for a while: it starts at its place
+                state = states[i] = new State(tx, tz, faceX, faceZ);
             }
             double[] thrown = ThrownFigures.offset(f.id(), i, now);
             if (thrown != null) {
@@ -312,7 +317,7 @@ final class FigureMotion {
                 || Math.abs(m.halfWidth - ranks.halfWidth()) > REMATCH_SHAPE || Math.abs(m.halfDepth - ranks.halfDepth()) > REMATCH_SHAPE) {
             boolean first = m == null;
             m = new Match();
-            m.slotOf = deal(id, sprites, slots, first);
+            m.slotOf = deal(id, sprites, slots, first, now);
             m.fx = ranks.facingX();
             m.fz = ranks.facingZ();
             m.halfWidth = ranks.halfWidth();
@@ -323,14 +328,15 @@ final class FigureMotion {
         return m.slotOf;
     }
 
-    private static int[] deal(int id, List<Sprite> sprites, List<Sprite> slots, boolean first) {
+    private static int[] deal(int id, List<Sprite> sprites, List<Sprite> slots, boolean first, long now) {
+        State[] states = STATES.get(id);
         int n = sprites.size();
         int[] slotOf = new int[n];
         List<Integer> walkers = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             slotOf[i] = i;
-            State s = STATES.get(key(id, i));
-            if (s == null && !sprites.get(i).real()) {
+            State s = states == null || i >= states.length ? null : states[i];
+            if ((s == null || now - s.seen > FORGET_MILLIS) && !sprites.get(i).real()) {
                 first = true; // a figure not yet seen: everyone takes their own number
             }
             if (!sprites.get(i).real() && i < slots.size() && !slots.get(i).leader()) {
@@ -343,7 +349,7 @@ final class FigureMotion {
         // Every figure to every free place (the places of the walking figures), closest first.
         List<long[]> pairs = new ArrayList<>(walkers.size() * walkers.size());
         for (int a : walkers) {
-            State s = STATES.get(key(id, a));
+            State s = states[a];
             for (int b : walkers) {
                 double d = Math.hypot(slots.get(b).x() - s.x, slots.get(b).z() - s.z);
                 pairs.add(new long[]{Double.doubleToLongBits(d), a, b}); // a non-negative double's bits sort as it does
@@ -362,12 +368,6 @@ final class FigureMotion {
             }
         }
         return slotOf;
-    }
-
-    private static long key(int id, int index) {
-        // Times an odd number, so still one key each, but spread: a Long hashes as id ^ index, and small ids and
-        // indexes all collided, turning the map's buckets into slow trees (3 ms a frame in a big battle).
-        return ((long) id << 32 | (index & 0xffffffffL)) * 0x9E3779B97F4A7C15L;
     }
 
     static void clear() {

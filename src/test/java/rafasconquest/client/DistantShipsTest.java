@@ -31,4 +31,12 @@ class DistantShipsTest {
         assertSame(a, owns[0]);
         assertSame(b, owns[1]);
     }
+    @Test
+    void equalHullsShareOneKey() {
+        // A lane's hull list is made anew every few seconds: the new list, equal to the old, must find the old model.
+        java.util.List<rafasconquest.style.ShipHulls.Part> first = new java.util.ArrayList<>();
+        java.util.List<rafasconquest.style.ShipHulls.Part> again = new java.util.ArrayList<>();
+        assertSame(DistantShips.hullKey(first), DistantShips.hullKey(again));
+        assertSame(DistantShips.hullKey(first), DistantShips.hullKey(first));
+    }
 }

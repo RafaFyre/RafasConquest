@@ -76,14 +76,20 @@ final class SailFigures {
         Matrix3f turn = new Matrix3f();
         count = 0;
         colourCount = 0;
+        long time = mc.level.getGameTime(); // once a frame: asked of each sail block it was a thirtieth of the frame
         for (Sail sail : Sail.CLIENT_LOADED) {
             BlockState state = sail.getBlockState();
             Level level = sail.getLevel();
             if (sail.isRemoved() || level == null || !(state.getBlock() instanceof SailBlock)) {
                 continue;
             }
-            Direction facing = state.getValue(SailBlock.FACING);
-            measure(sail, level, facing);
+            // Its facing as last measured: reading it off the block state for every sail block every frame was a
+            // twentieth of a sea battle's frame.
+            Direction facing = sail.facing;
+            if (facing == null || time - sail.measured >= 20 || time < sail.measured) {
+                facing = sail.facing = state.getValue(SailBlock.FACING);
+                measure(sail, level, facing);
+            }
             if (sail.inner) {
                 continue;
             }
