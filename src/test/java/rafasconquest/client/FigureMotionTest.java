@@ -90,6 +90,26 @@ class FigureMotionTest {
     }
 
     @Test
+    void aFigureStepsUpOneBlockButNotTwo() {
+        FigureMotion.Ground was = FigureMotion.ground;
+        try {
+            // Flat at 60, a one-block step at x >= 1, a two-block wall at z >= 1.
+            FigureMotion.ground = (x, z, near) -> z >= 1 ? 62 : x >= 1 ? 61 : 60;
+            FigureMotion.State s = new FigureMotion.State(1.2, 0.5, 0, -1);
+            s.y = 60;
+            FigureMotion.stayBelowWalls(s, 0.5, 0.5, 64);
+            assertEquals(1.2, s.x, 1e-9, "one block: steps up");
+            s = new FigureMotion.State(0.8, 1.2, 0, 1);
+            s.y = 60;
+            FigureMotion.stayBelowWalls(s, 0.5, 0.5, 64);
+            assertEquals(0.8, s.x, 1e-9, "slides along the wall");
+            assertEquals(0.5, s.z, 1e-9, "two blocks: stopped at the wall");
+        } finally {
+            FigureMotion.ground = was;
+        }
+    }
+
+    @Test
     void aFigureAboveTheGroundFallsAndOneBelowStepsUp() {
         FigureMotion.Ground was = FigureMotion.ground;
         try {

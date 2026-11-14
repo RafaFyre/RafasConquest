@@ -189,7 +189,12 @@ final class FigureMotion {
                 state.x = tx + thrown[0];
                 state.z = tz + thrown[2];
             } else {
+                double ox = state.x;
+                double oz = state.z;
                 move(state, tx, tz, faceX, faceZ, s.real(), horse ? HORSE_SPEED : FOOT_SPEED, dt);
+                if (!s.real() && !f.afloat()) {
+                    stayBelowWalls(state, ox, oz, s.y());
+                }
             }
             state.seen = now;
             // Aboard, the deck height comes from the server: the ground under a ship is the seabed (Sable decks aren't in the heightmap).
@@ -198,6 +203,32 @@ final class FigureMotion {
                     (float) state.swing, (float) state.amount));
         }
         return placed;
+    }
+
+    /** The highest a figure steps up, as a mob jumps: one block, never two (walls, tree trunks). */
+    static final double MAX_STEP = 1.0;
+
+    /**
+     * Undoes a step from ({@code ox}, {@code oz}) onto ground more than {@link #MAX_STEP} above the figure; like a mob
+     * it slides along the wall on whichever axis is still open, else stands.
+     */
+    static void stayBelowWalls(State s, double ox, double oz, double near) {
+        if (!tooHigh(s.x, s.z, s.y, near)) {
+            return;
+        }
+        if (!tooHigh(s.x, oz, s.y, near)) {
+            s.z = oz;
+        } else if (!tooHigh(ox, s.z, s.y, near)) {
+            s.x = ox;
+        } else {
+            s.x = ox;
+            s.z = oz;
+        }
+    }
+
+    private static boolean tooHigh(double x, double z, double y, double near) {
+        double floor = ground.at(x, z, near);
+        return !Double.isNaN(y) && !Double.isNaN(floor) && floor > y + MAX_STEP;
     }
 
     /**
