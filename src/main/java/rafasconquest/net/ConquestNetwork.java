@@ -245,6 +245,25 @@ public final class ConquestNetwork {
                 .decoder(b -> new ChargeHits(b.readVarIntArray(), b.readVarIntArray()))
                 .consumerMainThread((m, context) -> rafasconquest.client.ThrownFigures.receive(m.cavalry(), m.struck()))
                 .add();
+        CHANNEL.messageBuilder(Streets.class, 37, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> b.writeCollection(m.walks(), (o, w) -> {
+                    o.writeDouble(w.x0());
+                    o.writeDouble(w.z0());
+                    o.writeDouble(w.x1());
+                    o.writeDouble(w.z1());
+                }))
+                .decoder(b -> new Streets(b.readList(i -> new rafasconquest.core.StreetWalks.Walk(i.readDouble(), i.readDouble(),
+                        i.readDouble(), i.readDouble(), false))))
+                .consumerMainThread((m, context) -> rafasconquest.client.ClientTownsfolk.set(m.walks()))
+                .add();
+    }
+
+    /** Server → client: the townsfolk's stretches of road in the districts near the player, which the client walks and draws. */
+    public record Streets(List<rafasconquest.core.StreetWalks.Walk> walks) {
+    }
+
+    public static void sendStreets(ServerPlayer player, List<rafasconquest.core.StreetWalks.Walk> walks) {
+        CHANNEL.send(player, new Streets(walks));
     }
 
     /** Server → client: cavalry formation {@code cavalry[i]} tore into formation {@code struck[i]} this second. */

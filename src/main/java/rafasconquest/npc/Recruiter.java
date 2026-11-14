@@ -27,6 +27,8 @@ import java.util.UUID;
  */
 public class Recruiter extends Mob {
     private static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(Recruiter.class, EntityDataSerializers.INT);
+    /** Which of Recruits' 20 human skins they wear. */
+    public static final int SKINS = 20;
 
     /** The nation they recruit for (its faction's id). */
     @Nullable
@@ -51,7 +53,7 @@ public class Recruiter extends Mob {
         moveTo(x, y, z, yaw, 0);
         setYHeadRot(yaw);
         setYBodyRot(yaw);
-        entityData.set(SKIN, Math.floorMod(skin, Townsperson.SKINS));
+        entityData.set(SKIN, Math.floorMod(skin, Recruiter.SKINS));
         setCustomName(Component.literal(rafasconquest.data.Dialogue.say("recruiter.name", "nation", nationName)));
         setCustomNameVisible(true);
     }

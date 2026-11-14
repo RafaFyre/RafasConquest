@@ -461,7 +461,7 @@ public final class DistantArmyRenderer {
      * The light a figure stands in, as the game lights a mob there: the sky and block light at its head height. Out
      * past the chunks the client has, it is open sky.
      */
-    private static int lightAt(Minecraft mc, double x, double y, double z) {
+    static int lightAt(Minecraft mc, double x, double y, double z) {
         BlockPos head = BlockPos.containing(x, y + 1, z);
         if (mc.level == null || !mc.level.hasChunkAt(head)) {
             return LightTexture.FULL_SKY;

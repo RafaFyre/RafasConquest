@@ -304,20 +304,39 @@ final class RecruitFigures {
      */
     static void clear() {
         LOOKS.clear();
+        TOWNSFOLK.clear();
         HORSES.values().removeAll(FILMING);
         FILMING.clear();
     }
 
     // ---- what a block looks like ----
 
-    private static Look look(FormationSnapshot f, @Nullable FigureGear gear) {
-        Minecraft mc = Minecraft.getInstance();
-        List<Layer> layers = new ArrayList<>();
-        Mesh bodyMesh = MESHES.computeIfAbsent("body", k -> {
+    /** Townsfolk's looks, by skin: the body alone, no cloth or gear. */
+    private static final Map<Integer, Look> TOWNSFOLK = new HashMap<>();
+
+    /** The next figures {@link #add}ed are townsfolk in Recruits' skin {@code skin}, until the next call. False if they can't be drawn. */
+    static boolean townsfolk(int skin) {
+        if (!usable || !ready()) {
+            return false;
+        }
+        RUN_LOOKS.add(TOWNSFOLK.computeIfAbsent(skin, s ->
+                new Look(null, 0, List.of(new Layer(bodyMesh(), texture(recruits("human/human_" + s)), -1)), 0)));
+        RUNS.add(new int[]{count, 0});
+        return true;
+    }
+
+    private static Mesh bodyMesh() {
+        return MESHES.computeIfAbsent("body", k -> {
             Capture c = new Capture();
             humanoid(c, models()[0], List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.FEET));
             return upload(c);
         });
+    }
+
+    private static Look look(FormationSnapshot f, @Nullable FigureGear gear) {
+        Minecraft mc = Minecraft.getInstance();
+        List<Layer> layers = new ArrayList<>();
+        Mesh bodyMesh = bodyMesh();
         layers.add(new Layer(bodyMesh, texture(recruits("human/human_" + Math.floorMod(f.id(), SKINS))), -1));
         layers.add(new Layer(bodyMesh, texture(recruits("human/human_team_" + TEAMS[cloth(f.rgb())])), -1));
         int hands = 0;

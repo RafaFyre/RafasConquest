@@ -80,6 +80,7 @@ public final class ClientEvents {
         ArrowVolleys.clear();
         ThrownFigures.clear();
         FigureMotion.clear();
+        ClientTownsfolk.clear();
     }
 
     /**
@@ -95,6 +96,7 @@ public final class ClientEvents {
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantOcclusion.begin();
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getFrustum(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            ClientTownsfolk.render(event.getPoseStack(), event.getCamera(), event.getFrustum(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantArmyRenderer.renderShips(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             OarFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             SailFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));

@@ -6,11 +6,10 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.resources.ResourceLocation;
 import rafasconquest.npc.Recruiter;
-import rafasconquest.npc.Townsperson;
 
 /** A recruiter: a player-shaped figure in one of Recruits' human skins, like the townsfolk. */
 public class RecruiterRenderer extends HumanoidMobRenderer<Recruiter, PlayerModel<Recruiter>> {
-    private static final ResourceLocation[] SKINS = new ResourceLocation[Townsperson.SKINS];
+    private static final ResourceLocation[] SKINS = new ResourceLocation[Recruiter.SKINS];
 
     static {
         for (int i = 0; i < SKINS.length; i++) {

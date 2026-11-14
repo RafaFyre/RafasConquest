@@ -50,7 +50,6 @@
   "gui.rafasconquest.map.legend.city_road": "City road (gravel)",
   "gui.rafasconquest.map.legend.town_road": "Town road (dirt path)",
   "gui.rafasconquest.map.legend.shipping_route": "Shipping route (by sea)",
-  "entity.rafasconquest.townsperson": "Townsperson",
   "entity.rafasconquest.recruiter": "Recruiter",
   "item.rafasconquest.world_map": "World Map",
   "item.rafasconquest.grapple_hook": "Grapple Hook",

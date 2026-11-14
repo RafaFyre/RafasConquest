@@ -99,7 +99,7 @@ public final class Barks {
         if (e instanceof Recruiter r) {
             return r.person() < 0 ? "recruiter" : "noble";
         }
-        return e instanceof Townsperson ? "townsfolk" : null;
+        return null;
     }
 
     private static String nationName(Mob e) {
