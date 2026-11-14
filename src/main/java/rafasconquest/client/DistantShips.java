@@ -44,10 +44,11 @@ final class DistantShips {
      * A ship to draw: the middle of its hull, its heading (a turn about the up axis taking +z to its bow), its size, and
      * whether the client has the real ship there (and so where it really is). A sea lane's ship has its {@code lane}; a
      * battle's, its formation's {@code battle} ship. It floats as the real one does: its deck rising {@code fore} a block
-     * toward the bow and {@code port} toward its left, its waterline {@code lift} off the still sea.
+     * toward the bow and {@code port} toward its left, its waterline {@code lift} off the still sea. Its left and right
+     * oars row {@code rowLeft} and {@code rowRight} ({@link OarFigures.Rowing}).
      */
     record Far(double x, double z, double yaw, SeaLanes.Size size, boolean real, @Nullable SeaLanes.Ship lane,
-               @Nullable FormationSnapshot.Ship battle, double fore, double port, double lift) {
+               @Nullable FormationSnapshot.Ship battle, double fore, double port, double lift, float rowLeft, float rowRight) {
         boolean warship() {
             return lane == null || lane.warship();
         }
@@ -176,16 +177,22 @@ final class DistantShips {
             z = own[1];
             yaw = own[2];
         }
-        Swell.Ride ride = ride(key, x, z, yaw, size);
-        return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], ride.offset())
-                : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset());
+        Riding r = ride(key, x, z, yaw, size);
+        Swell.Ride ride = r.ride;
+        return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], ride.offset(), r.rowLeft, r.rowRight)
+                : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset(), r.rowLeft, r.rowRight);
     }
 
-    /** A far ship's float on the swell, and the game tick it was last ticked to. Client thread only. */
+    /**
+     * A far ship's float on the swell, and the game tick it was last ticked to; where it lay then, and how its left and
+     * right oars row ({@link OarFigures.Rowing}). Client thread only.
+     */
     private static final class Riding {
         final Swell.Ride ride = new Swell.Ride();
         long tick = Long.MIN_VALUE / 2;
         boolean seen;
+        double x, z, yaw, forward, turn;
+        float rowLeft, rowRight;
     }
 
     private static final Map<Object, Riding> RIDES = new HashMap<>();
@@ -193,7 +200,7 @@ final class DistantShips {
     private static final int SETTLE_TICKS = 40;
 
     // shortcut: ticks once a game tick, so the bob steps at 20 a second; interpolate with partialTick if it shows up close.
-    private static Swell.Ride ride(Object key, double x, double z, double yaw, SeaLanes.Size size) {
+    private static Riding ride(Object key, double x, double z, double yaw, SeaLanes.Size size) {
         Minecraft mc = Minecraft.getInstance();
         Riding r = RIDES.computeIfAbsent(key, k -> new Riding());
         r.seen = true;
@@ -204,8 +211,21 @@ final class DistantShips {
         for (long t = Math.max(r.tick, now - SETTLE_TICKS) + 1; t <= now; t++) {
             r.ride.tick(x, z, dirX, dirZ, size.length / 2.0, size.width / 2.0, t, calm);
         }
+        long ticks = now - r.tick;
+        if (ticks > 0 && ticks <= SETTLE_TICKS) { // not on the tick it is first seen: it has no motion yet
+            // Smoothed: a battle's ships come in uneven steps.
+            r.forward += (((x - r.x) * dirX + (z - r.z) * dirZ) / ticks - r.forward) * 0.3;
+            r.turn += (Math.IEEEremainder(yaw - r.yaw, 2 * Math.PI) / ticks - r.turn) * 0.3;
+            r.rowLeft = OarFigures.Rowing.ease(r.rowLeft, OarFigures.Rowing.target(r.forward, r.turn, false));
+            r.rowRight = OarFigures.Rowing.ease(r.rowRight, OarFigures.Rowing.target(r.forward, r.turn, true));
+        }
+        if (ticks > 0) {
+            r.x = x;
+            r.z = z;
+            r.yaw = yaw;
+        }
         r.tick = now;
-        return r.ride;
+        return r;
     }
 
     /** Where a ship's keel sits: a block down in the water, as the server holds the real ones. */

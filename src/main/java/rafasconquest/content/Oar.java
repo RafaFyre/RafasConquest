@@ -17,6 +17,9 @@ public class Oar extends BlockEntity {
     public static final int LENGTH = 4;
     /** The client's loaded oars, for drawing. Render thread only. */
     public static final Set<Oar> CLIENT_LOADED = Collections.newSetFromMap(new WeakHashMap<>());
+    /** Client only: how it rows, eased: 1 ahead, -1 backwards, 0 at rest; and the game tick it was last eased on. */
+    public float stroke;
+    public long strokeTick;
 
     public Oar(BlockPos pos, BlockState state) {
         super(ConquestContent.OAR_ENTITY.get(), pos, state);

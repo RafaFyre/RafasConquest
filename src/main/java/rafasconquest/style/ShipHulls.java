@@ -11,6 +11,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import rafasconquest.content.ConquestContent;
+import rafasconquest.content.HelmBlock;
+import rafasconquest.content.OarBlock;
 import rafasconquest.content.SailBlock;
 import rafasconquest.core.SeaLanes;
 
@@ -34,10 +36,12 @@ public final class ShipHulls {
 
     private static final Map<StructureTemplate, List<Part>> READ = new WeakHashMap<>();
     private static final Map<SeaLanes.Size, List<Part>> PLAIN = new java.util.EnumMap<>(SeaLanes.Size.class);
+    private static final Map<SeaLanes.Size, List<Part>> WARSHIP = new java.util.EnumMap<>(SeaLanes.Size.class);
 
     static {
         for (SeaLanes.Size size : SeaLanes.Size.values()) {
             PLAIN.put(size, plain(size.length, size.width));
+            WARSHIP.put(size, rowed(PLAIN.get(size), size.length, size.width));
         }
     }
 
@@ -50,7 +54,7 @@ public final class ShipHulls {
         // shortcut: a ship file wider than one style tile (32 blocks) is not read, and the plain hull sails instead.
         StructureTemplate template = file == null ? null : StyleLibrary.template(file);
         if (template == null) {
-            return PLAIN.get(ship.size());
+            return (ship.warship() ? WARSHIP : PLAIN).get(ship.size());
         }
         synchronized (READ) {
             return READ.computeIfAbsent(template, ShipHulls::read);
@@ -103,7 +107,7 @@ public final class ShipHulls {
     private static List<Part> buildBattle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
         int middle = (DECK + 4 + DECK + 1 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
         List<Part> parts = new ArrayList<>();
-        for (Part p : PLAIN.get(size)) {
+        for (Part p : WARSHIP.get(size)) {
             parts.add(p.state().getBlock() instanceof SailBlock
                     ? new Part(p.x(), p.y(), p.z(), p.state().setValue(SailBlock.COLOR, p.y() == middle ? stripe : sail)) : p);
         }
@@ -117,6 +121,25 @@ public final class ShipHulls {
                 parts.add(new Part(x, DECK + 1, z, goods[Math.floorMod(x + z, goods.length)]));
             }
         }
+        return List.copyOf(parts);
+    }
+
+    /**
+     * A plain hull made a warship: a Helm at the back middle of its deck facing the bow, and oars along both flat sides,
+     * every other side plank of the row above the keel, right oars on the right (-x, the bow being +z), left on the left.
+     */
+    private static List<Part> rowed(List<Part> plain, int length, int width) {
+        int beam = width / 2;
+        BlockState left = ConquestContent.OAR_LEFT.get().defaultBlockState().setValue(OarBlock.FACING, Direction.SOUTH);
+        BlockState right = ConquestContent.OAR_RIGHT.get().defaultBlockState().setValue(OarBlock.FACING, Direction.SOUTH);
+        List<Part> parts = new ArrayList<>();
+        for (Part p : plain) {
+            boolean oar = p.y() == 1 && Math.abs(p.x()) == beam && p.z() % 2 == 0 && p.state().is(Blocks.SPRUCE_PLANKS);
+            parts.add(oar ? new Part(p.x(), p.y(), p.z(), p.x() < 0 ? right : left) : p);
+        }
+        // plain()'s stern row is only the rail; one in, the deck's middle block is open between the rails.
+        parts.add(new Part(0, DECK + 1, -(length / 2) + 1,
+                ConquestContent.HELM.get().defaultBlockState().setValue(HelmBlock.FACING, Direction.SOUTH)));
         return List.copyOf(parts);
     }
 

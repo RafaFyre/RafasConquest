@@ -38,6 +38,7 @@ import rafasconquest.RafasConquest;
 import rafasconquest.bridge.SableLink;
 import rafasconquest.content.Oar;
 import rafasconquest.content.OarBlock;
+import rafasconquest.style.ShipHulls;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -72,13 +73,13 @@ final class OarFigures {
 
     static void render(PoseStack pose, Camera camera, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
-        if (Oar.CLIENT_LOADED.isEmpty() || mc.level == null || !ready()) {
+        if (mc.level == null || !ready()) {
             return;
         }
         Vec3 eye = camera.getPosition();
-        double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Matrix3f turn = new Matrix3f();
-        count = 0;
+        double phase = phase(mc, partialTick);
+        // count isn't reset: the far ships' oars (far()) were put in just before, and go in this one draw.
         for (Oar oar : Oar.CLIENT_LOADED) {
             BlockState state = oar.getBlockState();
             if (oar.isRemoved() || !(state.getBlock() instanceof OarBlock block)) {
@@ -88,8 +89,8 @@ final class OarFigures {
             BlockPos pos = oar.getBlockPos();
             // The handle: where the shaft leaves the block's side, half way up.
             Vector3d at = new Vector3d(pos.getX() + 0.5 + side.getStepX() * 0.5, pos.getY() + 0.5, pos.getZ() + 0.5 + side.getStepZ() * 0.5);
-            // The model's shaft runs along +z; turned out of its side as the old renderer did, then by the ship.
-            Quaterniond q = new Quaterniond().rotationY(Math.toRadians(-side.toYRot()));
+            boolean right = side == state.getValue(OarBlock.FACING).getClockWise();
+            Quaterniond q = oarTurn(side, right, stroke(mc, oar, state, right), phase);
             Quaterniond ship = shipTurn(mc, pos, partialTick, at);
             if (ship != null) {
                 q.premul(ship);
@@ -97,8 +98,10 @@ final class OarFigures {
             double dx = at.x - eye.x;
             double dy = at.y - eye.y;
             double dz = at.z - eye.z;
-            // shortcut: no frustum test, the batch is cheap; past the render distance the hull's far copy has no oars yet.
-            if (dx * dx + dz * dz > renderBlocks * renderBlocks) {
+            // Out to where Sable stops drawing its ship, as it does; past that DistantShips' far copy has them (far()).
+            // shortcut: no frustum test, the batch is cheap; judged by the oar, not its ship, so near the hand-over a
+            // ship's oars can show twice or not at all for a moment; judge by the ship if it shows.
+            if (dx * dx + dz * dz > DistantShips.REAL_WITHIN * DistantShips.REAL_WITHIN) {
                 continue;
             }
             turn.set(new Quaternionf(q));
@@ -106,6 +109,121 @@ final class OarFigures {
             put((float) dx, (float) dy, (float) dz, turn, light);
         }
         draw(pose.last().pose());
+    }
+
+    /** Far ships' hull oar blocks, by their parts list (the same list each frame); cleared when it grows, as lane hulls are rebuilt. */
+    private static final java.util.Map<java.util.List<ShipHulls.Part>, java.util.List<ShipHulls.Part>> FAR_OARS = new java.util.IdentityHashMap<>();
+
+    /**
+     * A far ship's oars ({@link DistantArmyRenderer#renderShips}): one for each oar block of its hull {@code parts}, placed
+     * and turned as its far model is (its middle {@code x y z} from the camera, drawn {@code scale} size), rowing as
+     * {@link DistantShips.Far#rowLeft} and {@code rowRight} say. Drawn with the near oars in {@link #render}, next.
+     */
+    static void far(DistantShips.Far ship, java.util.List<ShipHulls.Part> parts, float x, float y, float z, float scale, int light,
+                    float partialTick) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || !ready()) {
+            return;
+        }
+        if (FAR_OARS.size() > 64) {
+            FAR_OARS.clear();
+        }
+        var oars = FAR_OARS.computeIfAbsent(parts, k -> k.stream().filter(p -> p.state().getBlock() instanceof OarBlock).toList());
+        double phase = phase(mc, partialTick);
+        Quaterniond yaw = new Quaterniond().rotationY(ship.yaw()); // the far model's turn (FigureBatches' Facing)
+        Matrix3f turn = new Matrix3f();
+        Vector3d at = new Vector3d();
+        for (ShipHulls.Part p : oars) {
+            Direction side = ((OarBlock) p.state().getBlock()).side(p.state());
+            boolean right = side == p.state().getValue(OarBlock.FACING).getClockWise();
+            double hx = p.x() + side.getStepX() * 0.5;
+            double hz = p.z() + side.getStepZ() * 0.5;
+            // Lifted as the model's deck is sheared on the swell; not tilted, only a few degrees.
+            yaw.transform(at.set(hx, p.y() + 0.5 + hz * ship.fore() + hx * ship.port() + ship.lift(), hz));
+            Quaterniond q = new Quaterniond(yaw).mul(oarTurn(side, right, right ? ship.rowRight() : ship.rowLeft(), phase));
+            turn.set(new Quaternionf(q)).scale(scale);
+            put(x + (float) at.x * scale, y + (float) at.y * scale, z + (float) at.z * scale, turn, light);
+        }
+    }
+
+    private static double phase(Minecraft mc, float partialTick) {
+        return (mc.level.getGameTime() + partialTick) * 2 * Math.PI / STROKE_TICKS;
+    }
+
+    /**
+     * An oar's turn on its hull: the model's shaft runs along +z; swept and dipped by its stroke {@code s}, then turned
+     * out of its side as the old renderer did. In the turned-out frame, +x is side's counter-clockwise: the bow for a right oar.
+     */
+    private static Quaterniond oarTurn(Direction side, boolean right, float s, double phase) {
+        return new Quaterniond().rotationY(Math.toRadians(-side.toYRot()))
+                .rotateY((right ? 1 : -1) * Math.abs(s) * SWEEP * Math.cos(phase))
+                .rotateX(s * DIP * Math.sin(phase)); // blade down while it sweeps sternward (ahead) or bowward (backwards)
+    }
+
+    /** Ticks for one stroke; its fore-and-aft sweep and its dip either side of straight out, radians. */
+    private static final double STROKE_TICKS = 40, SWEEP = Math.toRadians(30), DIP = Math.toRadians(20);
+    /** A ship's motion, smoothed over ticks: x and z velocity, turn rate (+ to its left), the tick last read. */
+    private static final java.util.Map<ClientSubLevel, double[]> MOTION = new java.util.WeakHashMap<>();
+
+    /**
+     * How an oar rows, eased a little each tick toward {@link Rowing#target}: its ship's motion along the oar's bow and turn
+     * rate, from Sable's last two poses. 0 (at rest) off a ship.
+     */
+    private static float stroke(Minecraft mc, Oar oar, BlockState state, boolean right) {
+        long tick = mc.level.getGameTime();
+        if (oar.strokeTick == tick) {
+            return oar.stroke;
+        }
+        oar.strokeTick = tick;
+        int want = 0;
+        if (!sableBroken && SableLink.available()) {
+            try {
+                if (Sable.HELPER.getContaining(mc.level, oar.getBlockPos()) instanceof ClientSubLevel ship && !ship.isRemoved()) {
+                    double[] m = MOTION.computeIfAbsent(ship, k -> new double[]{0, 0, 0, tick});
+                    if (m[3] != tick) {
+                        m[3] = tick;
+                        org.joml.Vector3dc now = ship.logicalPose().position(), was = ship.lastPose().position();
+                        Vector3d b1 = new Quaterniond(ship.logicalPose().orientation()).transform(new Vector3d(0, 0, 1));
+                        Vector3d b0 = new Quaterniond(ship.lastPose().orientation()).transform(new Vector3d(0, 0, 1));
+                        double yaw = Math.atan2(b0.z * b1.x - b0.x * b1.z, b0.x * b1.x + b0.z * b1.z);
+                        m[0] += (now.x() - was.x() - m[0]) * 0.3; // smoothed: client poses come in uneven steps
+                        m[1] += (now.z() - was.z() - m[1]) * 0.3;
+                        m[2] += (yaw - m[2]) * 0.3;
+                    }
+                    Direction facing = state.getValue(OarBlock.FACING);
+                    Vector3d bow = new Quaterniond(ship.logicalPose().orientation())
+                            .transform(new Vector3d(facing.getStepX(), 0, facing.getStepZ()));
+                    double flat = Math.max(1e-6, Math.hypot(bow.x, bow.z));
+                    want = Rowing.target((m[0] * bow.x + m[1] * bow.z) / flat, m[2], right);
+                }
+            } catch (LinkageError e) {
+                sableBroken = true;
+                RafasConquest.LOGGER.warn("Sable's client API doesn't match; oars on ships are drawn where their blocks are", e);
+            }
+        }
+        return oar.stroke = Rowing.ease(oar.stroke, want);
+    }
+
+    /** Kept apart from the oar drawing's game statics, so tests can call it without starting the game. */
+    static final class Rowing {
+        /** Slower than these (blocks a tick along the bow, radians a tick about up) a ship is still / not turning. */
+        static final double MOVING = 0.02, TURNING = Math.toRadians(3) / 20;
+
+        /**
+         * 1 to row ahead, -1 backwards, 0 to rest: turning, the oars on the outside of the turn row ahead and those on
+         * the inside backwards; otherwise all row the way the ship goes along its bow.
+         */
+        static int target(double forward, double turnLeft, boolean right) {
+            if (Math.abs(turnLeft) > TURNING) {
+                return (turnLeft > 0) == right ? 1 : -1;
+            }
+            return forward > MOVING ? 1 : forward < -MOVING ? -1 : 0;
+        }
+
+        /** A stroke {@code s} eased one tick toward {@code want}: about a second from rest to rowing. */
+        static float ease(float s, int want) {
+            return s + (want - s) * 0.15F;
+        }
     }
 
     /** The ship's render turn for an oar at {@code pos} on one (moving {@code at} from its plot into the world), or null. */
@@ -173,6 +291,7 @@ final class OarFigures {
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, instances.limit(count * INSTANCE_BYTES), GL15.GL_STREAM_DRAW);
         instances.clear();
         GL31.glDrawArraysInstanced(GL11.GL_TRIANGLES, 0, vertices, count);
+        count = 0;
         GlStateManager._glUseProgram(oldProgram);
         GlStateManager._glBindVertexArray(oldVao);
         GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, oldBuffer);
@@ -288,7 +407,7 @@ final class OarFigures {
             void main() {
                 mat3 turn = mat3(TurnX, TurnY, TurnZ);
                 gl_Position = Mvp * vec4(Origin + turn * Local, 1.0);
-                vec3 n = turn * Normal;
+                vec3 n = normalize(turn * Normal); // a far ship's oar's turn is scaled
                 // The game's block face shading: up 1, down 0.5, north/south 0.8, east/west 0.6.
                 float shade = n.x * n.x * 0.6 + n.z * n.z * 0.8 + n.y * n.y * (n.y > 0.0 ? 1.0 : 0.5);
                 vec4 light = vec4(float(Light & 255u), float((Light >> 8) & 255u), float((Light >> 16) & 255u), 255.0) / 255.0;
