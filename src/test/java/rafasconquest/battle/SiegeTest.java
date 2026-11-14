@@ -326,4 +326,12 @@ class SiegeTest {
         attacker.pos = new Point(23, defender.pos.z()); // at the wall's foot, outside
         assertTrue(!siege.reaches(attacker, defender) && !siege.reaches(defender, attacker));
     }
+
+    @Test
+    void aHorseOnTheWallIsPushedOffToTheNearerSide() {
+        Siege siege = new Siege(castle(EnumSet.noneOf(Siege.Engine.class))); // east wall from x 16 to 21
+        assertEquals(Siege.Region.WALL, siege.region(new Point(19, 0)));
+        assertEquals(Siege.Region.OUT, siege.region(siege.offWall(new Point(19, 0))));
+        assertEquals(Siege.Region.IN, siege.region(siege.offWall(new Point(17, 0))));
+    }
 }

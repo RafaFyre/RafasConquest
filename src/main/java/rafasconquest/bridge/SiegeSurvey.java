@@ -108,6 +108,25 @@ public final class SiegeSurvey {
     private SiegeSurvey() {
     }
 
+    /** As {@link #survey}, once the chunks it reads are loaded by tickets, so the server thread never waits on them. */
+    public static java.util.concurrent.CompletableFuture<Result> surveyAsync(ServerLevel level, int x, int z, int half, @Nullable Point hall,
+                                                                             @Nullable Direction port, Set<Siege.Engine> engines) {
+        // The walls are read from 8 out to 30 in from where they should stand, Gate Blocks within 16 of them.
+        int outer = half + 16;
+        int inner = half - 32;
+        it.unimi.dsi.fastutil.longs.LongArrayList ring = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        for (int cx = (x - outer) >> 4; cx <= (x + outer) >> 4; cx++) {
+            for (int cz = (z - outer) >> 4; cz <= (z + outer) >> 4; cz++) {
+                int minX = cx << 4;
+                int minZ = cz << 4;
+                if (!(minX > x - inner && minX + 15 < x + inner && minZ > z - inner && minZ + 15 < z + inner)) {
+                    ring.add(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
+                }
+            }
+        }
+        return ChunkWait.load(level, ring).thenApply(v -> survey(level, x, z, half, hall, port, engines));
+    }
+
     /**
      * Surveys the fortress about ({@code x}, {@code z}) whose walls stand about {@code half} out each way. The defending
      * general's council meets at {@code hall} (null: the middle). The side its harbour opens on, {@code port} (null: none), is

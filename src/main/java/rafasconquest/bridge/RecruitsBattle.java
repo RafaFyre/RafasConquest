@@ -96,7 +96,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /**
  * A battle between two factions' armies, for the prototype: fought as numbers ({@link FieldBattle}) everywhere, and
@@ -3440,7 +3439,9 @@ public final class RecruitsBattle {
     public enum UnitOrder {
         FOLLOW, HOLD, MOVE, CHARGE, SQUARE, LINE, SHIELDS_UP, SHIELDS_DOWN, WEDGE, V, BRACE, GO, REFORM, RALLY, LEAD_CHARGE,
         /** Sent twice in a row, at the start and the end of a line dragged on the ground: the cards stand along it. */
-        LINE_UP
+        LINE_UP,
+        /** At sea: the ships ram the enemy ship there, bow first, and board it over the bow. */
+        RAM
     }
 
     /** Space between cards stood along a dragged line, at the least. */
@@ -3465,6 +3466,8 @@ public final class RecruitsBattle {
         float yaw;
         @Nullable
         FieldBlock target;
+        /** Its ship rams {@code target} rather than boarding it abreast. */
+        boolean ram;
         /** Ordered during deployment: put straight in its place when next placed, not marched there. */
         boolean snap;
 
@@ -3643,7 +3646,7 @@ public final class RecruitsBattle {
                     }
                 }
                 case CHARGE -> field.steer(u.block, u.block.pos(), u.block.facingX(), u.block.facingZ(), true,
-                        u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null);
+                        u.card.target != null && u.card.target.alive() > 0 ? u.card.target : null, u.card.ram);
                 case FOLLOW -> following.add(u);
                 default -> {
                 }
@@ -3896,7 +3899,7 @@ public final class RecruitsBattle {
         HornCall call = HornCall.MOVING;
         for (int k = 0; k < orders.size(); k++) {
             HornCall blown = switch (orders.get(k)) {
-                case CHARGE, LEAD_CHARGE -> HornCall.ATTACKING;
+                case CHARGE, LEAD_CHARGE, RAM -> HornCall.ATTACKING;
                 case GO -> places.get(k) != null && battle.enemyBlockAt(e.side, places.get(k)) != null ? HornCall.ATTACKING : HornCall.MOVING;
                 case RALLY, REFORM -> HornCall.RALLYING;
                 case FOLLOW -> HornCall.RETREATING; // falling back on the player
@@ -3938,9 +3941,12 @@ public final class RecruitsBattle {
         if (us.isEmpty()) {
             return;
         }
+        if (order == UnitOrder.RAM && (enemyBlockAt(e.side, place) == null || !enemyBlockAt(e.side, place).afloat())) {
+            return; // only a ship is rammed
+        }
         List<Card> cards = split(e, us);
         switch (order) {
-            case GO, LEAD_CHARGE -> {
+            case GO, LEAD_CHARGE, RAM -> {
                 if (order == UnitOrder.LEAD_CHARGE && !lead(e, us, player)) {
                     return;
                 }
@@ -3949,9 +3955,12 @@ public final class RecruitsBattle {
                     move(e, cards, place);
                 } else {
                     for (Unit u : us) {
-                        order(e, u, UnitOrder.CHARGE, player);
+                        order(e, u, UnitOrder.CHARGE, player); // clears each card's target and ram
                     }
-                    cards.forEach(c -> c.target = target);
+                    cards.forEach(c -> {
+                        c.target = target;
+                        c.ram = order == UnitOrder.RAM;
+                    });
                 }
             }
             case MOVE -> move(e, cards, place);
@@ -3995,6 +4004,7 @@ public final class RecruitsBattle {
             card.at = old.at;
             card.yaw = old.yaw;
             card.target = old.target;
+            card.ram = old.ram;
             entry.getValue().forEach(u -> u.card = card);
             e.units.stream().filter(o -> o.card == old).forEach(o -> o.replace = true); // the rest close up
             cards.add(card);
@@ -4230,6 +4240,7 @@ public final class RecruitsBattle {
         List<AbstractRecruitEntity> soldiers = soldiersOf(u);
         if (order != UnitOrder.SHIELDS_UP && order != UnitOrder.SHIELDS_DOWN) {
             u.card.target = null;
+            u.card.ram = false;
         }
         switch (order) {
             case FOLLOW -> {
@@ -6377,18 +6388,19 @@ public final class RecruitsBattle {
 
     /** Holds the ground under each point, as {@link #loadGround} does, without waiting on the server thread. */
     private CompletableFuture<Void> loadGroundAsync(List<Point> points) {
-        List<CompletableFuture<?>> loading = new ArrayList<>();
+        it.unimi.dsi.fastutil.longs.LongOpenHashSet chunks = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
         for (Point at : points) {
             int cx = Mth.floor(at.x()) >> 4;
             int cz = Mth.floor(at.z()) >> 4;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     hold(ChunkPos.asLong(cx + dx, cz + dz));
-                    loading.add(level.getChunkSource().getChunkFuture(cx + dx, cz + dz, ChunkStatus.FULL, true));
+                    chunks.add(ChunkPos.asLong(cx + dx, cz + dz));
                 }
             }
         }
-        return CompletableFuture.allOf(loading.toArray(CompletableFuture[]::new));
+        // Not getChunkFuture: on the server thread it waits there for each chunk (2.6 s for a siege's camps).
+        return ChunkWait.load(level, chunks);
     }
 
     /** Where {@link #buildCamps} and {@link #hallFloor} will load ground: every wing's camp, and a besieged hall. */

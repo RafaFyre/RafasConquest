@@ -223,6 +223,8 @@ public final class FieldBlock {
     boolean ledCharge;
     @Nullable
     FieldBlock ledTarget;
+    /** Afloat, sent at {@code ledTarget} to ram it (bow first, then board over the bow) rather than board abreast. */
+    boolean ledRam;
 
     FieldBlock(int id, int side, Arm arm, int soldiers, float soldierHealth, int captain, boolean champion,
                Point line, double facingX, double facingZ, Duty duty) {

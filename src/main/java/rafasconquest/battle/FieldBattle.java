@@ -506,6 +506,8 @@ public final class FieldBattle {
                     b.line = b.pos; // hooked by an enemy: held where it lies while their lines haul them in
                     continue;
                 }
+                FieldBlock.ShipKind kind = b.ship;
+                FieldBlock ordered = null; // the enemy ship a player sent it at
                 if (b.led) {
                     if (!b.ledCharge) {
                         // An officer's ship sails where they sent it, and lies as they said.
@@ -518,6 +520,11 @@ public final class FieldBattle {
                     }
                     if (b.ledTarget != null && b.ledTarget.alive > 0) {
                         previous = holder(b.ledTarget); // sent at a ship: its captain goes for that one first
+                        if (b.ledTarget.afloat && b.ship != null && b.ship != FieldBlock.ShipKind.CAMP) {
+                            // The player's order, whatever the ship is for: board it abreast, or ram it if told to.
+                            ordered = previous;
+                            kind = b.ledRam ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
+                        }
                     }
                 }
                 b.strikeAt = null;
@@ -539,7 +546,7 @@ public final class FieldBattle {
                     b.line = b.pos;
                     continue;
                 }
-                switch (b.ship) {
+                switch (kind) {
                     case CAMP -> {
                     }
                     case ARCHERS -> {
@@ -547,7 +554,7 @@ public final class FieldBattle {
                         b.prey = mark(b, enemy, previous);
                     }
                     case SWORDSMEN -> {
-                        Target t = claim(b, boardable, previous, taken);
+                        Target t = claim(b, ordered != null ? List.of(ordered) : boardable, previous, taken);
                         if (t == null) {
                             b.line = standOff(b, foe, SHOCK_STANDOFF); // every side taken: wait clear of the fight
                             break;
@@ -570,7 +577,7 @@ public final class FieldBattle {
                         }
                     }
                     case SHOCK -> {
-                        Target t = claim(b, engaged, previous, taken);
+                        Target t = claim(b, ordered != null ? List.of(ordered) : engaged, previous, taken);
                         if (t == null) {
                             b.line = standOff(b, foe, SHOCK_STANDOFF);
                             break;
@@ -2821,10 +2828,16 @@ public final class FieldBattle {
         block.ledFacingZ = block.facingZ;
         block.ledCharge = false;
         block.ledTarget = null;
+        block.ledRam = false;
     }
 
     /** A led block's player orders it: to stand at {@code line} facing ({@code fx}, {@code fz}), or to charge (at a target). */
     public void steer(FieldBlock block, Point line, double fx, double fz, boolean charge, @Nullable FieldBlock target) {
+        steer(block, line, fx, fz, charge, target, false);
+    }
+
+    /** As above; afloat, {@code ram} has its ship ram {@code target} instead of boarding it abreast. */
+    public void steer(FieldBlock block, Point line, double fx, double fz, boolean charge, @Nullable FieldBlock target, boolean ram) {
         // Afloat, the order is its ship's: whichever block aboard is ordered, the whole ship goes.
         for (FieldBlock b : block.afloat ? crew(block) : List.of(block)) {
             b.ledLine = line;
@@ -2832,6 +2845,7 @@ public final class FieldBattle {
             b.ledFacingZ = fz;
             b.ledCharge = charge;
             b.ledTarget = target;
+            b.ledRam = ram;
         }
     }
 

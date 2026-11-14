@@ -1139,7 +1139,7 @@ public final class Siege {
             Point home = homes.get(b);
             FieldBlock foe = breach ? nearestEnemy(a, home, BREACH_REACH, r -> r == Region.IN) : null;
             if (foe == null && breach && target >= 0) {
-                foe = nearestEnemy(a, gates.get(target).gate.mouth(), 12, r -> true);
+                foe = nearestEnemy(a, gates.get(target).gate.mouth(), 12, r -> r != Region.WALL);
             }
             if (foe != null) {
                 charge(b, foe);
@@ -1234,7 +1234,7 @@ public final class Siege {
                 } else if (region(b.pos) == Region.OUT && b.pos.distanceTo(g.mouth()) > AT) {
                     hold(b, g.mouth());
                 } else {
-                    FieldBlock foe = nearestEnemy(d, b.pos, Double.MAX_VALUE, r -> r != Region.OUT);
+                    FieldBlock foe = nearestEnemy(d, b.pos, Double.MAX_VALUE, r -> r == Region.IN); // horses can't go up onto the walls
                     if (foe != null) {
                         charge(b, foe);
                     } else {
@@ -1411,6 +1411,9 @@ public final class Siege {
     boolean reaches(FieldBlock striker, FieldBlock foe) {
         Region a = region(striker.pos);
         Region b = region(foe.pos);
+        if ((striker.arm.mounted() || foe.arm.mounted()) && (a == Region.WALL) != (b == Region.WALL)) {
+            return false; // a rider and a man on the walkway: one is up the wall, the other not
+        }
         if (a == b || a != Region.OUT && b != Region.OUT) {
             return true;
         }
@@ -1430,15 +1433,21 @@ public final class Siege {
      * soldiers have the real walls to stop them.
      */
     Point fence(FieldBlock b, Point to) {
+        if (b.arm.mounted() && !byBreach(b.pos)) {
+            // Horses never go up onto the walls, only through a gate broken open: one up there is pushed off.
+            if (region(b.pos) == Region.WALL) {
+                return offWall(b.pos);
+            }
+            if (region(to) == Region.WALL) {
+                return b.pos;
+            }
+        }
         boolean out = region(b.pos) == Region.OUT;
         if (out == (region(to) == Region.OUT)) {
             return to;
         }
-        double pass = plan.thickness() + AT;
-        for (GateState g : gates) {
-            if (g.breached() && b.pos.distanceTo(g.gate.mouth()) <= pass) {
-                return to;
-            }
+        if (byBreach(b.pos)) {
+            return to;
         }
         Work w = b.side == 0 && b.arm != Arm.ENGINES ? workOf(b) : null;
         if (w != null && w.kind != Engine.RAMS && w.state == State.UP
@@ -1446,6 +1455,41 @@ public final class Siege {
             return to;
         }
         return b.pos;
+    }
+
+    /** Whether {@code p} is in the way through a gate or breach broken open (its passage crosses the wall). */
+    private boolean byBreach(Point p) {
+        double pass = plan.thickness() + AT;
+        for (GateState g : gates) {
+            if (g.breached() && (p.distanceTo(g.gate.mouth()) <= pass || p.distanceTo(g.gate.button()) <= pass)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The nearest place off the walls from {@code p} on them: just outside their outer face, or just inside their inner. */
+    Point offWall(Point p) {
+        double t = plan.thickness();
+        double outward = Math.min(Math.min(p.x() - plan.minX(), plan.maxX() - p.x()), Math.min(p.z() - plan.minZ(), plan.maxZ() - p.z()));
+        double ix = Math.max(plan.minX() + t + 1, Math.min(plan.maxX() - t - 1, p.x()));
+        double iz = Math.max(plan.minZ() + t + 1, Math.min(plan.maxZ() - t - 1, p.z()));
+        if (Math.hypot(ix - p.x(), iz - p.z()) <= outward + 1) {
+            return new Point(ix, iz);
+        }
+        // Out across whichever face is nearest.
+        double x = p.x();
+        double z = p.z();
+        if (outward == p.x() - plan.minX()) {
+            x = plan.minX() - 1;
+        } else if (outward == plan.maxX() - p.x()) {
+            x = plan.maxX() + 1;
+        } else if (outward == p.z() - plan.minZ()) {
+            z = plan.minZ() - 1;
+        } else {
+            z = plan.maxZ() + 1;
+        }
+        return new Point(x, z);
     }
 
     /** How much of a hand-to-hand blow lands: climbers fight only a few at a time; super heavy infantry shrugs off much. */

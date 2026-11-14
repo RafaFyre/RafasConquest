@@ -437,24 +437,30 @@ public final class PveCommands {
                 }
             }
         }
-        var survey = rafasconquest.bridge.SiegeSurvey.survey(server.overworld(), castle.x(), castle.z(), castle.half(),
+        source.sendSuccess(() -> Component.literal("Surveying the walls of " + castle.name() + "..."), false);
+        rafasconquest.bridge.SiegeSurvey.surveyAsync(server.overworld(), castle.x(), castle.z(), castle.half(),
                 city ? rafasconquest.bridge.SiegeSurvey.cityHall(server.overworld(), castle.x(), castle.z()) : null,
-                castle.port() ? net.minecraft.core.Direction.fromDelta(castle.outX(), 0, castle.outZ()) : null, engines);
-        for (String line : survey.report(castle.name())) {
-            source.sendSuccess(() -> Component.literal(line), false);
-        }
-        try {
-            RecruitsBattle.start(server.overworld(), a, attackers, d, defenders,
-                    new BattlePlan.Point(castle.x(), castle.z()), 1, 0, null, null, BattleType.SIEGE, 0, null, survey, line -> {
-                        String url = BattleMap.open(server.overworld().getServer());
-                        source.sendSuccess(() -> Component.literal(line + ". The armies are deploying: ")
-                                .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA)
-                                        .withUnderlined(true).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
-                                .append(Component.literal(" or /pve debug battle start")), true);
-                    }, why -> source.sendFailure(Component.literal(why)));
-        } catch (IllegalStateException e) {
-            throw new SimpleCommandExceptionType(Component.literal(e.getMessage())).create();
-        }
+                castle.port() ? net.minecraft.core.Direction.fromDelta(castle.outX(), 0, castle.outZ()) : null, engines).whenComplete((survey, error) -> {
+            if (error != null) {
+                source.sendFailure(Component.literal("Couldn't survey the walls: " + error.getMessage()));
+                return;
+            }
+            for (String line : survey.report(castle.name())) {
+                source.sendSuccess(() -> Component.literal(line), false);
+            }
+            try {
+                RecruitsBattle.start(server.overworld(), a, attackers, d, defenders,
+                        new BattlePlan.Point(castle.x(), castle.z()), 1, 0, null, null, BattleType.SIEGE, 0, null, survey, line -> {
+                            String url = BattleMap.open(server.overworld().getServer());
+                            source.sendSuccess(() -> Component.literal(line + ". The armies are deploying: ")
+                                    .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA)
+                                            .withUnderlined(true).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
+                                    .append(Component.literal(" or /pve debug battle start")), true);
+                        }, why -> source.sendFailure(Component.literal(why)));
+            } catch (IllegalStateException e) {
+                source.sendFailure(Component.literal(e.getMessage()));
+            }
+        });
         return 1;
     }
 

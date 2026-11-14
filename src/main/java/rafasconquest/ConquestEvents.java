@@ -142,6 +142,7 @@ public final class ConquestEvents {
 
     @SubscribeEvent
     public static void onServerTickEnd(ServerTickEvent.Post event) {
+        rafasconquest.bridge.ChunkWait.tick();
         RecruitsBattle.onServerTickEnd();
         rafasconquest.bridge.CameraView.tick(event.getServer());
         BattleMap.tick();
@@ -155,6 +156,7 @@ public final class ConquestEvents {
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         RecruitsBattle.stop();
+        rafasconquest.bridge.ChunkWait.clear();
         BattleMap.close();
         rafasconquest.npc.Townsfolk.clear();
     }

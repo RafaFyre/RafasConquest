@@ -114,6 +114,9 @@ public final class BattleScreen extends Screen {
     @Nullable
     private Vec3 lineTo;
     private boolean leading;
+    /** A ship's card was told to ram: the units aboard it, until the next right-click picks the enemy ship; else null. */
+    @Nullable
+    private List<Integer> ramming;
     /** Opened for an officer's deployment: the whole army is selected once its units arrive. */
     private boolean selectAll;
     @Nullable
@@ -173,7 +176,7 @@ public final class BattleScreen extends Screen {
         }
         Set<Integer> blocks = new HashSet<>();
         for (UnitInfo u : units) {
-            if (screen.selected.contains(u.number())) {
+            if (screen.selected.contains(u.number()) && shipOf(u) == null) { // at sea the ship is outlined, not its crew
                 blocks.add(u.block());
             }
         }
@@ -351,6 +354,46 @@ public final class BattleScreen extends Screen {
         return marks;
     }
 
+    /**
+     * The Sable ship a unit is aboard, as the formation sailing it (the one with its hull); null ashore. Everyone aboard
+     * lies where that formation does (FieldBattle.syncCrews), so it is the hull of their side the unit stands on.
+     */
+    @Nullable
+    private static FormationSnapshot shipOf(UnitInfo u) {
+        FormationSnapshot f = DistantArmies.at(u.block());
+        if (f == null || !f.afloat()) {
+            return null;
+        }
+        if (f.ship().hull() >= 0) {
+            return f;
+        }
+        int side = rafasconquest.battle.FieldBattle.sideOf(f.id());
+        for (FormationSnapshot s : DistantArmies.now()) {
+            if (s.afloat() && s.ship().hull() >= 0 && rafasconquest.battle.FieldBattle.sideOf(s.id()) == side && onHull(new Vec3(f.x(), 0, f.z()), s)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    private static boolean onHull(Vec3 at, FormationSnapshot ship) {
+        return rafasconquest.battle.FieldBattle.onHull(new rafasconquest.battle.BattlePlan.Point(at.x, at.z),
+                new rafasconquest.battle.BattlePlan.Point(ship.x(), ship.z()), ship.facingX(), ship.facingZ(),
+                rafasconquest.core.SeaLanes.Size.values()[ship.ship().hull()]);
+    }
+
+    /** One of the player's units aboard the ship whose hull is at {@code at}, or null. */
+    @Nullable
+    private UnitInfo ownShipAt(@Nullable Vec3 at) {
+        for (UnitInfo u : at == null ? List.<UnitInfo>of() : units) {
+            FormationSnapshot s = shipOf(u);
+            if (s != null && onHull(at, s)) {
+                return u;
+            }
+        }
+        return null;
+    }
+
     // ---- cards and wings ----
 
     /** The cards of a wing, by card id, each its units. */
@@ -501,6 +544,9 @@ public final class BattleScreen extends Screen {
                 6, 6, 0xFFF4EEDC);
         if (leading) {
             g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
+        }
+        if (ramming != null) {
+            g.drawCenteredString(font, "Ram: right-click an enemy ship", width / 2, 20, GOLD);
         }
         drawTrack(g, mouseX, mouseY);
         drawPlayer(g, mouseX, mouseY);
@@ -763,8 +809,12 @@ public final class BattleScreen extends Screen {
             soundSelected();
             return;
         }
-        // On the field: the unit of the soldier nearest the click, or the player's body; else nothing.
-        UnitInfo best = unitAt(mx, my);
+        // On the field: one of the player's ships clicked anywhere on its hull, else the unit of the soldier nearest the
+        // click, or the player's body; else nothing.
+        UnitInfo best = ownShipAt(ground(mx, my));
+        if (best == null) {
+            best = unitAt(mx, my);
+        }
         double bestD = best == null ? PICK : pickDistance(best, mx, my);
         double[] me = project(minecraft.player.position().add(0, 1, 0));
         boolean onMe = me != null && Math.hypot(me[0] - mx, me[1] - my) < Math.min(bestD, PICK);
@@ -903,8 +953,21 @@ public final class BattleScreen extends Screen {
         return lines;
     }
 
-    /** A unit picked on the field selects its whole platoon (its card), or with ctrl held only itself (its block). */
+    /**
+     * A unit picked on the field selects its whole platoon (its card), or with ctrl held only itself (its block); at sea,
+     * its whole ship, everyone aboard: the player commands ships there, not the units on them.
+     */
     private void take(UnitInfo u) {
+        FormationSnapshot ship = shipOf(u);
+        if (ship != null) {
+            for (UnitInfo o : units) {
+                FormationSnapshot s = shipOf(o);
+                if (s != null && s.id() == ship.id()) {
+                    selected.add(o.number());
+                }
+            }
+            return;
+        }
         if (hasControlDown()) {
             selected.add(u.number());
             return;
@@ -961,10 +1024,19 @@ public final class BattleScreen extends Screen {
                     && Math.hypot(f.x() - at.x, f.z() - at.z) <= rafasconquest.bridge.RecruitsBattle.ATTACK_PICK) {
                 return true;
             }
-            if (rafasconquest.battle.FieldBattle.sideOf(f.id()) != side && f.ship() != null && f.ship().hull() >= 0
-                    && rafasconquest.battle.FieldBattle.onHull(new rafasconquest.battle.BattlePlan.Point(at.x, at.z), new rafasconquest.battle.BattlePlan.Point(f.x(), f.z()),
-                    f.facingX(), f.facingZ(), rafasconquest.core.SeaLanes.Size.values()[f.ship().hull()])) {
-                return true; // on an enemy ship's hull: sending a ship there boards it
+        }
+        return onEnemyShip(at); // on an enemy ship's hull: sending a ship there boards it
+    }
+
+    /** Whether {@code at} is on an enemy ship's hull. */
+    private boolean onEnemyShip(Vec3 at) {
+        if (units.isEmpty()) {
+            return false;
+        }
+        int side = rafasconquest.battle.FieldBattle.sideOf(units.get(0).block());
+        for (FormationSnapshot f : DistantArmies.now()) {
+            if (rafasconquest.battle.FieldBattle.sideOf(f.id()) != side && f.afloat() && f.ship().hull() >= 0 && onHull(at, f)) {
+                return true;
             }
         }
         return false;
@@ -1013,6 +1085,17 @@ public final class BattleScreen extends Screen {
             return;
         }
         Vec3 at = ground(mx, my);
+        if (ramming != null) {
+            List<Integer> rammers = ramming;
+            ramming = null; // one right-click: the enemy ship, or a miss that calls it off
+            if (at != null && onEnemyShip(at)) {
+                BattleSpotRing.flash(at);
+                send(rammers, UnitOrder.RAM, at);
+                play(ORDER_ATTACK);
+                charged(rammers);
+            }
+            return;
+        }
         if (at == null) {
             return;
         }
@@ -1063,6 +1146,13 @@ public final class BattleScreen extends Screen {
         }));
         entries.add(new Entry("Brace", () -> send(numbers, UnitOrder.BRACE, null)));
         entries.add(new Entry("Follow me", () -> send(numbers, UnitOrder.FOLLOW, null)));
+        FormationSnapshot ship = shipOf(card.get(0));
+        if (ship != null) {
+            entries.add(new Entry("Ram", () -> {
+                leading = false;
+                ramming = units.stream().filter(u -> shipOf(u) != null && shipOf(u).id() == ship.id()).map(UnitInfo::number).toList();
+            }));
+        }
         return menuAt(mx, my, entries);
     }
 
@@ -1108,7 +1198,7 @@ public final class BattleScreen extends Screen {
     private void glow() {
         Set<Integer> now = new HashSet<>();
         for (UnitInfo u : units) {
-            if (selected.contains(u.number())) {
+            if (selected.contains(u.number()) && shipOf(u) == null) { // a selected ship is outlined itself (renderSelection)
                 for (int id : u.ids()) {
                     now.add(id);
                 }
@@ -1169,5 +1259,29 @@ public final class BattleScreen extends Screen {
             }
         }
         BattleSpotRing.rings(pose, cam.getPosition(), rings, count, 0.15F, GOLD); // one draw for them all
+        // Each selected ship: a gold outline about its hull at deck height, a block clear of its sides.
+        // shortcut: drawn from the battle's numbers, not Sable's real blocks; trace the sub-level's own outline if the two part.
+        Set<Integer> outlined = new HashSet<>();
+        for (UnitInfo u : units) {
+            FormationSnapshot s = screen.selected.contains(u.number()) ? shipOf(u) : null;
+            if (s == null || !outlined.add(s.id())) {
+                continue;
+            }
+            rafasconquest.core.SeaLanes.Size hull = rafasconquest.core.SeaLanes.Size.values()[s.ship().hull()];
+            double len = Math.max(1e-6, Math.hypot(s.facingX(), s.facingZ()));
+            double fx = s.facingX() / len;
+            double fz = s.facingZ() / len;
+            double l = hull.length / 2.0 + 1;
+            double w = hull.width / 2.0 + 1;
+            Vec3[] corner = new Vec3[4];
+            for (int i = 0; i < 4; i++) {
+                double a = i == 0 || i == 3 ? l : -l; // bow, stern, stern, bow
+                double b = i < 2 ? w : -w;
+                corner[i] = new Vec3(s.x() + fx * a - fz * b, s.y(), s.z() + fz * a + fx * b);
+            }
+            for (int i = 0; i < 4; i++) {
+                BattleSpotRing.strip(pose, cam.getPosition(), corner[i], corner[(i + 1) % 4], 0.3F, GOLD);
+            }
+        }
     }
 }

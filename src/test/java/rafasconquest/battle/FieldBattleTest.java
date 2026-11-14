@@ -805,6 +805,30 @@ class FieldBattleTest {
     }
 
     @Test
+    void anOfficersShipSentAtAnEnemyBoardsItAbreastOrRamsItWhenTold() {
+        for (boolean ram : new boolean[]{false, true}) {
+            FieldBattle battle = battle(60, 60, 3);
+            battle.setType(BattleType.OCEAN);
+            // An archer ship: left to its captain it would stand off and shoot; the player's order comes first.
+            FieldBlock ship = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.ARCHERS && battle.holder(b) == b)
+                    .findFirst().orElseThrow();
+            FieldBlock target = battle.army(1).blocks().stream().filter(b -> b.afloat() && b.ship() != FieldBlock.ShipKind.CAMP && battle.holder(b) == b)
+                    .findFirst().orElseThrow();
+            battle.crew(ship).forEach(battle::lead);
+            battle.steer(ship, ship.pos(), ship.facingX, ship.facingZ, true, target, ram);
+            battle.second();
+            assertTrue(target == ship.prey(), "went for another ship");
+            // to the enemy's heading when its captain chose (it turns a few degrees within the second): 0.1 of slack
+            double along = Math.abs(ship.settleX * target.facingX + ship.settleZ * target.facingZ);
+            if (ram) {
+                assertEquals(0, along, 0.1, "a rammer comes about bow-in to the enemy's side");
+            } else {
+                assertEquals(1, along, 0.1, "a boarding ship lies alongside, parallel to the enemy");
+            }
+        }
+    }
+
+    @Test
     void boardingShipsHookFromReachAndGrappleOnlyHullToHull() {
         FieldBattle battle = battle(60, 60, 3);
         battle.setType(BattleType.OCEAN);
