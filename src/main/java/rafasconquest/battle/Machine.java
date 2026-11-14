@@ -17,7 +17,7 @@ import java.util.List;
  * Its crew carry {@code ammo}: item id and count, each a shot's worth or a tool kept. The battering ram, siege tower
  * and mantlet shoot nothing: their crews bring them to the gate, the wall, or before the shooters ({@link Siege}).
  */
-public enum Machine {
+public enum Machine implements net.minecraft.util.StringRepresentable {
     CULVERIN("culverin", 5, Age.GUNPOWDER, null, true, false, true, 120, 15, 42, 0,
             "black_powder", 64, "cannon_ball", 16, "ramrod", 1),
     SERPENTINE("serpentine", 10, Age.GUNPOWDER, null, true, false, true, 140, 19, 63, 0,
@@ -74,6 +74,12 @@ public enum Machine {
         this.damage = damage;
         this.batter = batter;
         this.ammo = ammo;
+    }
+
+    /** Its name in an Artillery Block's state: its entity id. */
+    @Override
+    public String getSerializedName() {
+        return id;
     }
 
     /** Whether it shoots: the ram, tower and mantlet don't. */

@@ -42,6 +42,11 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new GateScreen(pos, left, right));
     }
 
+    /** An Artillery Block's weapon, to pick. */
+    public static void openArtillery(net.minecraft.core.BlockPos pos, rafasconquest.battle.Machine weapon) {
+        Minecraft.getInstance().setScreen(new ArtilleryScreen(pos, weapon));
+    }
+
     /** A Character Marker's settings, to edit. */
     public static void openMarker(net.minecraft.core.BlockPos pos, rafasconquest.style.MarkerSpec spec) {
         Minecraft.getInstance().setScreen(new MarkerScreen(pos, spec));

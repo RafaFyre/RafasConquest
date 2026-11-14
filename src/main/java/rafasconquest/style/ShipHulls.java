@@ -75,7 +75,9 @@ public final class ShipHulls {
             ListTag pos = b.getList("pos", Tag.TAG_INT);
             int x = pos.getInt(0) - sx / 2;
             int z = pos.getInt(2) - sz / 2;
-            parts.add(turn ? new Part(z, pos.getInt(1), x, state) : new Part(x, pos.getInt(1), z, state));
+            // A quarter turn (not a mirror), so stairs, artillery and other facing blocks turn with the hull.
+            parts.add(turn ? new Part(-z, pos.getInt(1), x, state.rotate(net.minecraft.world.level.block.Rotation.CLOCKWISE_90))
+                    : new Part(x, pos.getInt(1), z, state));
         }
         return parts.isEmpty() ? PLAIN.get(SeaLanes.Size.MEDIUM) : List.copyOf(parts);
     }

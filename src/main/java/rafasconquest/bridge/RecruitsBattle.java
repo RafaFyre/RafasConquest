@@ -1152,6 +1152,11 @@ public final class RecruitsBattle {
         engine.addTag(SiegeWorks.TAG); // swept up if a crash leaves it
         level.addFreshEntity(engine);
         machines.put(soldier.getId(), engine);
+        man(soldier, engine, machine);
+    }
+
+    /** {@code soldier} takes {@code machine}'s ammunition into their pack and rides {@code engine} (already in the world) to work it. */
+    public static void man(AbstractRecruitEntity soldier, Entity engine, rafasconquest.battle.Machine machine) {
         for (java.util.Map.Entry<String, Integer> ammo : machine.ammo()) {
             Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(ammo.getKey()));
             for (int left = ammo.getValue(); left > 0 && item != Items.AIR; left -= item.getDefaultMaxStackSize()) {

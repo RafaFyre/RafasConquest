@@ -83,6 +83,14 @@ public final class ConquestContent {
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<GateBlockEntity>> GATE_ENTITY =
             BLOCK_ENTITIES.register("gate_block", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
                     .of(GateBlockEntity::new, GATE_BLOCK.get()).build(null));
+    /** The Artillery Block: on a Sable ship, a Siegeworks engine stands on it, crewed by a siege engineer ({@link ArtilleryBlock}). */
+    public static final DeferredHolder<Block, Block> ARTILLERY = BLOCKS.register("artillery",
+            () -> new ArtilleryBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS)));
+    public static final DeferredHolder<Item, Item> ARTILLERY_ITEM = ITEMS.register("artillery",
+            () -> new BlockItem(ARTILLERY.get(), new Item.Properties()));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<ArtilleryMount>> ARTILLERY_ENTITY =
+            BLOCK_ENTITIES.register("artillery", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(ArtilleryMount::new, ARTILLERY.get()).build(null));
     public static final DeferredHolder<Item, Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -144,6 +152,7 @@ public final class ConquestContent {
                 output.accept(DOCK_BLOCK_ITEM.get());
                 output.accept(OAR_LEFT_ITEM.get());
                 output.accept(OAR_RIGHT_ITEM.get());
+                output.accept(ARTILLERY_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
                 output.accept(BATTLE_BANNER_ITEM.get());
