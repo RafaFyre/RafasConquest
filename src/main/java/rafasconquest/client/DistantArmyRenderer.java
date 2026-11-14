@@ -23,7 +23,6 @@ import org.joml.Vector3f;
 import rafasconquest.battle.DistantDepth;
 import rafasconquest.battle.FormationSnapshot;
 import rafasconquest.style.ShipHulls;
-import net.minecraft.world.level.EmptyBlockGetter;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -347,9 +346,9 @@ public final class DistantArmyRenderer {
     }
 
     /**
-     * Ships beyond the real ones ({@link DistantShips}): out to {@link DistantShips#SPRITE_PAST} a box for each block of
-     * the hull, turned to its heading; past that a flat ship turned to face the camera, a hull under a mast and sail.
-     * Both are models drawn instanced by {@link FigureBatches}, as the soldiers are.
+     * Ships beyond the real ones ({@link DistantShips}): out to {@link DistantShips#SPRITE_PAST} the hull's own block
+     * models, textured, turned to its heading ({@link OarFigures#hull}); past that a flat ship turned to face the camera,
+     * a hull under a mast and sail ({@link FigureBatches}). Both are drawn instanced, as the soldiers are.
      */
     public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
         List<DistantShips.Far> ships = DistantShips.all(partialTick);
@@ -385,8 +384,7 @@ public final class DistantArmyRenderer {
             float z = (float) dz * scale;
             if (flat <= DistantShips.SPRITE_PAST) {
                 List<ShipHulls.Part> parts = ship.parts(); // keyed by its parts: a lane's list is rebuilt every few seconds
-                FigureBatches.add(DistantShips.hullKey(parts), () -> hullModel(parts), FigureBatches.shipPalette(ship.fore(), ship.port(), ship.lift()),
-                        x, y, z, scale, (float) Math.sin(ship.yaw()), (float) Math.cos(ship.yaw()), lit, FigureBatches.SHIP);
+                OarFigures.hull(DistantShips.hullKey(parts), parts, ship, x, y, z, scale, lit);
                 OarFigures.far(ship, parts, x, y, z, scale, lit, partialTick);
             } else { // too far for its tilt or bob to show
                 ShipSprite sprite = new ShipSprite(ship.size().length, ship.warship());
@@ -414,55 +412,6 @@ public final class DistantArmyRenderer {
             }
             return f.model();
         }
-    }
-
-    /**
-     * A ship's 3D level of detail: its hull's faces open to the air, in the block's map colour, in its own frame (z to
-     * the bow). No bottoms: they're under water. Each face is a hair inside its block, so where the real ship still
-     * shows, it wins and nothing flickers.
-     */
-    private static int[] hullModel(List<ShipHulls.Part> parts) {
-        Set<Long> solid = new HashSet<>();
-        for (ShipHulls.Part p : parts) {
-            if (colour(p) != 0) {
-                solid.add(cell(p.x(), p.y(), p.z()));
-            }
-        }
-        FigureBatches.Corners out = new FigureBatches.Corners();
-        float in = 0.48F;
-        for (ShipHulls.Part p : parts) {
-            int rgb = colour(p);
-            if (rgb == 0) {
-                continue; // glass and the like
-            }
-            // The figure shader's right is the ship's -x (port and starboard would swap otherwise).
-            float x = -p.x();
-            int y = p.y();
-            int z = p.z();
-            if (!solid.contains(cell(p.x(), y + 1, z))) {
-                float t = y + 2 * in;
-                out.quad(rgb, 0, 0, 1.0F, x - 0.5F, t, z - 0.5F, x + 0.5F, t, z - 0.5F, x + 0.5F, t, z + 0.5F, x - 0.5F, t, z + 0.5F);
-            }
-            for (int side = -1; side <= 1; side += 2) {
-                if (!solid.contains(cell(p.x() + side, y, z))) {
-                    float s = x - side * in;
-                    out.quad(rgb, 0, 0, 0.6F, s, y, z - 0.5F, s, y, z + 0.5F, s, y + 1, z + 0.5F, s, y + 1, z - 0.5F);
-                }
-                if (!solid.contains(cell(p.x(), y, z + side))) {
-                    float s = z + side * in;
-                    out.quad(rgb, 0, 0, 0.8F, x - 0.5F, y, s, x + 0.5F, y, s, x + 0.5F, y + 1, s, x - 0.5F, y + 1, s);
-                }
-            }
-        }
-        return out.model();
-    }
-
-    private static int colour(ShipHulls.Part p) {
-        return p.state().getMapColor(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).col;
-    }
-
-    private static long cell(int x, int y, int z) {
-        return ((long) (x + 1024) << 32) | ((long) (y + 1024) << 16) | (z + 1024);
     }
 
     private static void finish(Minecraft mc, BufferBuilder buffer, int drawn) {

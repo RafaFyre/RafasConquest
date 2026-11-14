@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794625235.8863447,
-    "seen": 1794625545.3852036,
-    "ast_hash": "91ea1121e76c54be892c6fc20f146167",
+    "mtime": 1794674288.8744962,
+    "seen": 1794674530.6681564,
+    "ast_hash": "322334d6c15201c54f671083d6ef491c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -3210,9 +3210,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureBatches.java": {
-    "mtime": 1794539909.5273764,
-    "seen": 1794539953.2788754,
-    "ast_hash": "0d56a635bfe36a3c975392022f97528d",
+    "mtime": 1794674297.0931916,
+    "seen": 1794674530.6681693,
+    "ast_hash": "065496f4b19159640f809e078aee89bc",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/bridge/WarCampTest.java": {
@@ -3642,9 +3642,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/OarFigures.java": {
-    "mtime": 1794622885.9640286,
-    "seen": 1794622917.7982867,
-    "ast_hash": "dd304461f361bcd31cabb6bc316db80d",
+    "mtime": 1794674400.229138,
+    "seen": 1794674530.6681874,
+    "ast_hash": "b265066fba39395f9192d4239b908d40",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/Sail.java": {

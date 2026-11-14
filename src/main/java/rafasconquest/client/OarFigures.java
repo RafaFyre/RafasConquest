@@ -47,6 +47,7 @@ import java.nio.FloatBuffer;
  * Every loaded {@link Oar}, GPU-instanced like the recruit figures: the game's own oak fence and open trapdoor quads,
  * in the block atlas, captured once into one model on the graphics card; each frame one record per oar (where its
  * handle is, how it is turned, its light) and one draw for all. An oar on a Sable ship takes the ship's render pose.
+ * Far ships' hulls ({@link #hull}) are drawn the same way, one model per hull from its blocks' own game models.
  * <p>
  * Render thread only. Leaves the game's GL state as it found it.
  */
@@ -62,9 +63,22 @@ final class OarFigures {
     /** Shifts the blade panel from z 13/16 back to 10/16, flat against the fence post's face (z 6/16 to 10/16). */
     private static final float BLADE_SHIFT = -3 / 16F;
 
-    private static ByteBuffer instances = MemoryUtil.memAlloc(INSTANCE_BYTES * 64);
-    private static int count;
-    private static int program = -1, vao, vertices, instanceBuffer, mvp, modulator, atlas;
+    /** A model on the graphics card, and this frame's records for it. */
+    private static final class Model {
+        final int vao, vertices;
+        ByteBuffer instances = MemoryUtil.memAlloc(INSTANCE_BYTES * 64);
+        int count;
+
+        Model(int vao, int vertices) {
+            this.vao = vao;
+            this.vertices = vertices;
+        }
+    }
+
+    private static Model oarModel;
+    /** Far ships' hulls, by {@link DistantShips#hullKey}. shortcut: never freed, as FigureBatches' models; free unseen ones if the card's memory shows. */
+    private static final java.util.Map<Object, Model> HULLS = new java.util.HashMap<>();
+    private static int program = -1, instanceBuffer, mvp, modulator, atlas;
     private static boolean usable = true;
     private static boolean sableBroken;
 
@@ -106,9 +120,80 @@ final class OarFigures {
             }
             turn.set(new Quaternionf(q));
             int light = FigureBatches.lightColour(LevelRenderer.getLightColor(oar.getLevel(), pos.relative(side)));
-            put((float) dx, (float) dy, (float) dz, turn, light);
+            put(oarModel, (float) dx, (float) dy, (float) dz, turn, light);
         }
         draw(pose.last().pose());
+    }
+
+    /**
+     * A far ship's hull ({@link DistantArmyRenderer#renderShips}), its own blocks' models with their textures, placed as
+     * its oars are ({@link #far}): its middle {@code x y z} from the camera, drawn {@code scale} size, turned to its
+     * heading, its deck sheared along the swell's slope and lifted on it. Drawn with the oars in {@link #render}, next.
+     */
+    static void hull(Object key, java.util.List<ShipHulls.Part> parts, DistantShips.Far ship, float x, float y, float z, float scale, int light) {
+        if (Minecraft.getInstance().level == null || !ready()) {
+            return;
+        }
+        Model m = HULLS.computeIfAbsent(key, k -> upload(hullModel(parts)));
+        // y' = y + fore * z + port * x: the deck rising toward the bow and toward port, a few degrees at most.
+        Matrix3f shear = new Matrix3f().m01((float) ship.port()).m21((float) ship.fore());
+        Matrix3f turn = new Matrix3f().rotationY((float) ship.yaw()).mul(shear).scale(scale);
+        put(m, x, y + (float) ship.lift() * scale, z, turn, light);
+    }
+
+    /**
+     * A hull's blocks as the game models them, in its own frame (z to the bow, each block centred on its x and z), with
+     * the faces against a solid neighbour left out. A block drawn by its block entity shows as nothing, but a sail as
+     * wool of its colour.
+     */
+    private static float[] hullModel(java.util.List<ShipHulls.Part> parts) {
+        java.util.Map<Long, BlockState> cells = new java.util.HashMap<>();
+        for (ShipHulls.Part p : parts) {
+            BlockState shown = shown(p.state());
+            if (shown != null) {
+                cells.put(cell(p.x(), p.y(), p.z()), shown);
+            }
+        }
+        RecruitFigures.Capture c = new RecruitFigures.Capture();
+        PoseStack pose = new PoseStack();
+        var blocks = Minecraft.getInstance().getBlockRenderer();
+        net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(42);
+        for (ShipHulls.Part p : parts) {
+            BlockState state = cells.get(cell(p.x(), p.y(), p.z()));
+            if (state == null) {
+                continue;
+            }
+            var model = blocks.getBlockModel(state);
+            pose.pushPose();
+            pose.translate(p.x() - 0.5, p.y(), p.z() - 0.5);
+            // shortcut: tinted quads (leaves, grass) come out untinted, Capture keeps no colour; tint them if a ship shows it.
+            for (Direction d : Direction.values()) {
+                BlockState next = cells.get(cell(p.x() + d.getStepX(), p.y() + d.getStepY(), p.z() + d.getStepZ()));
+                if (next == null || !next.isSolidRender(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) {
+                    for (var quad : model.getQuads(state, d, random)) {
+                        c.putBulkData(pose.last(), quad, 1, 1, 1, 1, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+                    }
+                }
+            }
+            for (var quad : model.getQuads(state, null, random)) {
+                c.putBulkData(pose.last(), quad, 1, 1, 1, 1, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+            }
+            pose.popPose();
+        }
+        return c.triangles();
+    }
+
+    /** What a hull block is drawn as: itself if the game models it, a sail as wool of its colour, else nothing. */
+    private static BlockState shown(BlockState state) {
+        if (state.getBlock() instanceof rafasconquest.content.SailBlock) {
+            return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.withDefaultNamespace(
+                    state.getValue(rafasconquest.content.SailBlock.COLOR).getName() + "_wool")).defaultBlockState();
+        }
+        return state.getRenderShape() == net.minecraft.world.level.block.RenderShape.MODEL ? state : null;
+    }
+
+    private static long cell(int x, int y, int z) {
+        return ((long) (x + 1024) << 32) | ((long) (y + 1024) << 16) | (z + 1024);
     }
 
     /** Far ships' hull oar blocks, by their parts list (the same list each frame); cleared when it grows, as lane hulls are rebuilt. */
@@ -142,7 +227,7 @@ final class OarFigures {
             yaw.transform(at.set(hx, p.y() + 0.5 + hz * ship.fore() + hx * ship.port() + ship.lift(), hz));
             Quaterniond q = new Quaterniond(yaw).mul(oarTurn(side, right, right ? ship.rowRight() : ship.rowLeft(), phase));
             turn.set(new Quaternionf(q)).scale(scale);
-            put(x + (float) at.x * scale, y + (float) at.y * scale, z + (float) at.z * scale, turn, light);
+            put(oarModel, x + (float) at.x * scale, y + (float) at.y * scale, z + (float) at.z * scale, turn, light);
         }
     }
 
@@ -246,23 +331,24 @@ final class OarFigures {
         }
     }
 
-    private static void put(float x, float y, float z, Matrix3f turn, int light) {
-        if ((count + 1) * INSTANCE_BYTES > instances.capacity()) {
-            instances = MemoryUtil.memRealloc(instances, instances.capacity() * 2);
-            instances.clear();
+    private static void put(Model model, float x, float y, float z, Matrix3f turn, int light) {
+        if ((model.count + 1) * INSTANCE_BYTES > model.instances.capacity()) {
+            model.instances = MemoryUtil.memRealloc(model.instances, model.instances.capacity() * 2);
+            model.instances.clear();
         }
-        int at = count * INSTANCE_BYTES;
+        ByteBuffer instances = model.instances;
+        int at = model.count * INSTANCE_BYTES;
         instances.putFloat(at, x).putFloat(at + 4, y).putFloat(at + 8, z);
         float[] m = turn.get(new float[9]); // column by column
         for (int i = 0; i < 9; i++) {
             instances.putFloat(at + 12 + i * 4, m[i]);
         }
         instances.putInt(at + 48, light);
-        count++;
+        model.count++;
     }
 
     private static void draw(Matrix4f pose) {
-        if (count == 0) {
+        if (program < 0 || oarModel.count == 0 && HULLS.values().stream().allMatch(h -> h.count == 0)) {
             return;
         }
         int oldProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -286,12 +372,8 @@ final class OarFigures {
         float[] colour = RenderSystem.getShaderColor();
         GL20.glUniform4f(modulator, colour[0], colour[1], colour[2], colour[3]);
         GL20.glUniform1i(atlas, 0);
-        GlStateManager._glBindVertexArray(vao);
-        GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, instanceBuffer);
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, instances.limit(count * INSTANCE_BYTES), GL15.GL_STREAM_DRAW);
-        instances.clear();
-        GL31.glDrawArraysInstanced(GL11.GL_TRIANGLES, 0, vertices, count);
-        count = 0;
+        drawEach(oarModel);
+        HULLS.values().forEach(OarFigures::drawEach);
         GlStateManager._glUseProgram(oldProgram);
         GlStateManager._glBindVertexArray(oldVao);
         GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, oldBuffer);
@@ -300,6 +382,18 @@ final class OarFigures {
         GL33.glBindSampler(0, oldSampler);
         GL13.glActiveTexture(oldActive);
         RenderSystem.enableCull();
+    }
+
+    private static void drawEach(Model model) {
+        if (model.count == 0) {
+            return;
+        }
+        GlStateManager._glBindVertexArray(model.vao);
+        GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, instanceBuffer);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, model.instances.limit(model.count * INSTANCE_BYTES), GL15.GL_STREAM_DRAW);
+        model.instances.clear();
+        GL31.glDrawArraysInstanced(GL11.GL_TRIANGLES, 0, model.vertices, model.count);
+        model.count = 0;
     }
 
     /**
@@ -365,12 +459,17 @@ final class OarFigures {
         modulator = GL20.glGetUniformLocation(p, "ColorModulator");
         atlas = GL20.glGetUniformLocation(p, "Atlas");
         instanceBuffer = GlStateManager._glGenBuffers();
+        oarModel = upload(model());
+        program = p;
+        RafasConquest.LOGGER.info("[oars] drawing oars instanced ({} corners)", oarModel.vertices);
+        return true;
+    }
 
-        float[] corners = model();
-        vertices = corners.length / 12;
+    /** A model's corners ({@link RecruitFigures.Capture#triangles}) onto the graphics card, wired to the records' buffer. */
+    private static Model upload(float[] corners) {
         int oldVao = GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING);
         int oldBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
-        vao = GlStateManager._glGenVertexArrays();
+        int vao = GlStateManager._glGenVertexArrays();
         GlStateManager._glBindVertexArray(vao);
         GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, GlStateManager._glGenBuffers());
         ByteBuffer data = MemoryUtil.memAlloc(Math.max(4, corners.length * 4));
@@ -389,9 +488,7 @@ final class OarFigures {
         GlStateManager._glBindVertexArray(oldVao);
         GlStateManager._glBindBuffer(GL15.GL_ARRAY_BUFFER, oldBuffer);
         BufferUploader.invalidate();
-        program = p;
-        RafasConquest.LOGGER.info("[oars] drawing oars instanced ({} corners)", vertices);
-        return true;
+        return new Model(vao, corners.length / 12);
     }
 
     private static final String VERTEX = """
