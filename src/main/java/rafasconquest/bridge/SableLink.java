@@ -49,7 +49,8 @@ public final class SableLink {
         }
         try {
             SableShips.tick(level);
-            if (!RecruitsBattle.running() && level.getGameTime() % 100 == 0) {
+            // Not while a battle that is over still sails its ships: they'd be taken away and rebuilt every 5 s, blinking.
+            if (!RecruitsBattle.exists() && level.getGameTime() % 100 == 0) {
                 BattleShips.tick(level, "", List.of()); // a battle's ships left from a stopped battle, or a crash, are taken away
             }
         } catch (LinkageError e) {

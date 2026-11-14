@@ -550,13 +550,18 @@ public final class RecruitsBattle {
 
     /** Every few seconds while no battle runs: siege engines a stopped battle (or a crash) left behind are taken away. */
     public static void sweep(ServerLevel level) {
-        if (!running() && level.getGameTime() % 100 == 0) {
+        if (!exists() && level.getGameTime() % 100 == 0) {
             SiegeWorks.sweep(level);
         }
     }
 
     public static boolean running() {
         return current != null && !current.over;
+    }
+
+    /** A battle, running or over but not yet cleared: it still sails its ships and keeps its engines. */
+    public static boolean exists() {
+        return current != null;
     }
 
     /** Whether this soldier or horse belongs to the current battle (its deaths drop nothing). */
