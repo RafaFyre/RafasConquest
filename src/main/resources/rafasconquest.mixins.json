@@ -4,6 +4,7 @@
   "package": "rafasconquest.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ArrowSaveMixin",
     "ChunkMapAccess",
     "ChunkMapCameraMixin",
     "CityVegetationMixin",

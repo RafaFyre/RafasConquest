@@ -33,15 +33,18 @@ public final class Sea {
     private static int depth(Level level, int x, int z) {
         int surface = level.getSeaLevel() - 1;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, surface + 1, z);
-        // ClientLevel.hasChunk is always true, and an unloaded chunk then reads as air (land): ask its chunk cache instead
-        if (level.isClientSide ? !level.getChunkSource().hasChunk(x >> 4, z >> 4) : !level.hasChunkAt(pos)) {
+        // The chunk if it is here now, never waited for: a ship's force-load ticket makes a chunk "there" before it has
+        // loaded, and reading a block of it then held the server's tick up until it had (a sea battle's ships each read
+        // five columns a tick). ClientLevel.hasChunk is always true, too, and an unloaded chunk reads as air (land).
+        net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
+        if (chunk == null) {
             return SeaCalm.UNKNOWN;
         }
-        if (!level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()) {
+        if (!chunk.getBlockState(pos).getCollisionShape(level, pos).isEmpty()) {
             return 0;
         }
         int depth = 0;
-        for (pos.setY(surface); depth < SeaCalm.DEEP && level.getFluidState(pos).is(FluidTags.WATER); pos.move(0, -1, 0)) {
+        for (pos.setY(surface); depth < SeaCalm.DEEP && chunk.getFluidState(pos).is(FluidTags.WATER); pos.move(0, -1, 0)) {
             depth++;
         }
         return depth;

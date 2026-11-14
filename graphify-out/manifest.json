@@ -2604,9 +2604,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest.mixins.json": {
-    "mtime": 1794540158.438949,
-    "seen": 1794540213.03182,
-    "ast_hash": "431879fe2f4fdc38271fce6eb545234f",
+    "mtime": 1794623815.743719,
+    "seen": 1794623963.7176576,
+    "ast_hash": "2acd628f891350525e11834d10a81583",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/RecruitsArrowCleanerMixin.java": {
@@ -2616,9 +2616,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/Sea.java": {
-    "mtime": 1794602708.4666016,
-    "seen": 1794602745.7448263,
-    "ast_hash": "41c6978855af0865e6568c7d5f370081",
+    "mtime": 1794623802.9907753,
+    "seen": 1794623963.7170515,
+    "ast_hash": "cf49920ecea76b5b680f9b22270c0bcb",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaCalm.java": {
@@ -3699,6 +3699,12 @@
     "mtime": 1794619150.2993944,
     "seen": 1794619470.0620272,
     "ast_hash": "fdc0bbfb8eaaf26049e01ead9444ab5f",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/ArrowSaveMixin.java": {
+    "mtime": 1794623815.6240392,
+    "seen": 1794623963.7172923,
+    "ast_hash": "f05bcf8cc97846e37f3b356720be9b05",
     "semantic_hash": ""
   }
 }
