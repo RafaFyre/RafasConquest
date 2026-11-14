@@ -6530,10 +6530,14 @@ public final class RecruitsBattle {
                     int shown = block.ship() == FieldBlock.ShipKind.CAMP ? 0 : block.alive();
                     int ranks = (Math.max(1, shown) + FieldBattle.DECK_FILES - 1) / FieldBattle.DECK_FILES;
                     Point section = field.deckSection(block);
-                    Point at = block == field.holder(block) ? block.pos()
-                            : BattlePlan.place(block.pos(), block.facingX(), block.facingZ(), section.x(), section.z());
+                    // With a real ship, where it really lies and heads: the field's own numbers only catch up each second.
+                    double[] ship = SableLink.shipAt(block.shipId());
+                    Point centre = ship != null ? new Point(ship[0], ship[1]) : block.pos();
+                    double fx = ship != null ? ship[2] : block.facingX();
+                    double fz = ship != null ? ship[3] : block.facingZ();
+                    Point at = block == field.holder(block) ? centre : BattlePlan.place(centre, fx, fz, section.x(), section.z());
                     all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, shown, at.x(),
-                            level.getSeaLevel() + rafasconquest.style.ShipHulls.DECK, at.z(), block.facingX(), block.facingZ(), // feet on the deck: keel a block under the sea, deck DECK + 1 over it
+                            level.getSeaLevel() + rafasconquest.style.ShipHulls.DECK, at.z(), fx, fz, // feet on the deck: keel a block under the sea, deck DECK + 1 over it
                             lone ? 0 : FieldBattle.DECK_FILES * FieldBattle.DECK_SPACING / 2, lone ? 0 : ranks * FieldBattle.DECK_SPACING / 2,
                             block.fighting(), block.captainAlive(), new int[0], -1, shipOf(block)));
                     continue;
