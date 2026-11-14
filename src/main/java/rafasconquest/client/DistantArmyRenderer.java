@@ -493,7 +493,7 @@ public final class DistantArmyRenderer {
         Minecraft mc = Minecraft.getInstance();
         int bx = net.minecraft.util.Mth.floor(x);
         int bz = net.minecraft.util.Mth.floor(z);
-        if (mc.level == null || !mc.level.hasChunk(bx >> 4, bz >> 4)) {
+        if (mc == null || mc.level == null || !mc.level.hasChunk(bx >> 4, bz >> 4)) { // no game: tests
             return Double.NaN;
         }
         // MOTION_BLOCKING: the no-leaves map is server-only, so step down through any canopy ourselves.
