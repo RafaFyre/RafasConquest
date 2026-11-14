@@ -154,4 +154,17 @@ public final class SableLink {
             return null;
         }
     }
+
+    /** A spot on formation {@code id}'s deck in the world, {right, back} of its hull's middle: {x, y, z}; null with none sailing. */
+    @org.jetbrains.annotations.Nullable
+    public static double[] onDeck(int id, double right, double back) {
+        if (!enabled) {
+            return null;
+        }
+        try {
+            return BattleShips.onDeck(id, right, back);
+        } catch (LinkageError e) {
+            return null;
+        }
+    }
 }

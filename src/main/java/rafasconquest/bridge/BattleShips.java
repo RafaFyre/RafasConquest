@@ -160,6 +160,23 @@ final class BattleShips {
         return h == null ? null : new double[]{h.x(), h.z(), h.dirX(), h.dirZ(), decks.getOrDefault(id, Double.NaN)};
     }
 
+    /**
+     * Where a spot on formation {@code id}'s deck is in the world: {@code right} and {@code back} of its hull's middle,
+     * standing on the deck as the ship lies now, turned, rolled and pitched: {x, y, z}; null with no ship sailing.
+     */
+    @org.jetbrains.annotations.Nullable
+    static double[] onDeck(int id, double right, double back) {
+        ServerSubLevel sub = ships.get("battle-" + id);
+        if (sub == null || sub.isRemoved()) {
+            return null;
+        }
+        BoundingBox3ic box = sub.getPlot().getBoundingBox();
+        // Built bow to +z, so its right (seen facing the bow) is -x and astern is -z.
+        Vector3d at = sub.logicalPose().transformPosition(new Vector3d((box.minX() + box.maxX() + 1) / 2.0 - right,
+                box.minY() + ShipHulls.DECK + 1, (box.minZ() + box.maxZ() + 1) / 2.0 - back));
+        return new double[]{at.x, at.y, at.z};
+    }
+
     private static String key(SableLink.Helm h) {
         return "battle-" + h.id();
     }

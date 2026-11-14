@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794616330.1487021,
-    "seen": 1794616490.7807953,
-    "ast_hash": "5d346a6e9721703d0e3fd0faf009f2fb",
+    "mtime": 1794622191.5680313,
+    "seen": 1794622373.7850952,
+    "ast_hash": "3937b0978874beb78e0cc479e6586e04",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -2280,9 +2280,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableLink.java": {
-    "mtime": 1794615435.2270725,
-    "seen": 1794615479.2711217,
-    "ast_hash": "b86280a2103f31a7cb6717a7e371ca60",
+    "mtime": 1794622174.7337658,
+    "seen": 1794622373.7851,
+    "ast_hash": "1c90c885cb4b38844d9ec9c2ec459802",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableShips.java": {
@@ -2364,9 +2364,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/BattleShips.java": {
-    "mtime": 1794558764.1754065,
-    "seen": 1794558848.7136083,
-    "ast_hash": "cf8259a757f8fed53841c686b097f2bc",
+    "mtime": 1794622174.6012115,
+    "seen": 1794622373.7850862,
+    "ast_hash": "bed990d7b8bbecceaea16ba1bdb1ebca",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {

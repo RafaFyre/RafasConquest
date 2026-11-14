@@ -2214,6 +2214,7 @@ public final class RecruitsBattle {
             }
             field.lash(rammer, struck);
             for (FieldBlock aboard : field.crew(struck)) {
+                thrown.put(aboard, level.getGameTime() + THROWN_TICKS); // off their spots ({@link #pin}) to be thrown
                 Live hit = live.get(aboard);
                 if (hit != null && (ram.knockX() != 0 || ram.knockZ() != 0)) {
                     // Rammed in the side: the blow throws them across the deck, some over the rail.
@@ -2225,6 +2226,7 @@ public final class RecruitsBattle {
             }
         }
         byId.clear();
+        Set<Integer> held = new HashSet<>();
         for (Live l : live.values()) {
             if (!l.block.afloat()) {
                 continue;
@@ -2239,9 +2241,66 @@ public final class RecruitsBattle {
             climb(l);
             if (l.block.lashed().stream().anyMatch(live::containsKey)) {
                 board(l);
+            } else if (!over) {
+                pin(l, held);
             }
         }
+        unpin(held);
         throwHooks();
+    }
+
+    /** Soldiers riding their ship on their deck spots ({@link #pin}), by entity id. */
+    private final Map<Integer, AbstractRecruitEntity> pinned = new HashMap<>();
+    /** Formations thrown by a ram, until the tick they may be pinned again. */
+    private final Map<FieldBlock, Long> thrown = new HashMap<>();
+    private static final int THROWN_TICKS = 40;
+    /** How near (blocks) a free soldier walks to their deck spot before it takes them up again. */
+    private static final double PIN_REACH = 2.0;
+
+    /**
+     * A formation holding its deck rides its ship as part of it: each soldier is put on their own deck spot every tick,
+     * as the ship lies (turning, rolling and pitching with it), with no walking or colliding. Colliding every soldier with
+     * every ship was a fifth of a large sea battle's slow ticks (Sable's), and the formation turned raggedly as each
+     * bumped and caught up. In the water, climbing, thrown by a ram or under a player's command a soldier moves freely;
+     * back near their spot, they are taken up again.
+     */
+    private void pin(Live l, Set<Integer> held) {
+        if (thrown.getOrDefault(l.block, 0L) > level.getGameTime()) {
+            return;
+        }
+        for (int i = 0; i < l.soldiers.length; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            if (s == null || !s.isAlive() || commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || s.isInWater()) {
+                continue;
+            }
+            Point spot = field.deckSpot(l.block, i);
+            double[] at = SableLink.onDeck(l.block.shipId(), spot.x(), spot.z());
+            if (at == null) {
+                return;
+            }
+            if (!pinned.containsKey(s.getId()) && (Math.hypot(s.getX() - at[0], s.getZ() - at[2]) > PIN_REACH
+                    || Math.abs(s.getY() - at[1]) > PIN_REACH)) {
+                continue;
+            }
+            s.noPhysics = true;
+            s.setDeltaMovement(Vec3.ZERO);
+            s.setPos(at[0], at[1], at[2]);
+            s.setOnGround(true);
+            s.fallDistance = 0;
+            pinned.put(s.getId(), s);
+            held.add(s.getId());
+        }
+    }
+
+    /** Lets go of every pinned soldier not in {@code held}: they walk, fall and collide again. */
+    private void unpin(Set<Integer> held) {
+        pinned.entrySet().removeIf(e -> {
+            if (held.contains(e.getKey())) {
+                return false;
+            }
+            e.getValue().noPhysics = false;
+            return true;
+        });
     }
 
     /** Each boarding ship's grapple hooks, by its ship's id, while its lines are out. */
@@ -4816,6 +4875,7 @@ public final class RecruitsBattle {
 
     private void end() {
         over = true;
+        unpin(Set.of());
         DistantGeneration.resume();
         FieldBattle.Outcome outcome = field.outcome();
         for (Live l : live.values()) {
