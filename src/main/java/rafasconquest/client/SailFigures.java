@@ -72,7 +72,6 @@ final class SailFigures {
             return;
         }
         Vec3 eye = camera.getPosition();
-        double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Matrix3f turn = new Matrix3f();
         count = 0;
         colourCount = 0;
@@ -104,7 +103,8 @@ final class SailFigures {
                 turn.rotateLocal(new Quaternionf(ship));
             }
             double dx = at.x - eye.x, dy = at.y - eye.y, dz = at.z - eye.z;
-            if (dx * dx + dz * dz > renderBlocks * renderBlocks) {
+            // As far as Sable's real ship shows; past that the distant ship's level of detail has its sails.
+            if (dx * dx + dz * dz > DistantShips.REAL_WITHIN * DistantShips.REAL_WITHIN) {
                 continue;
             }
             Wind.at(level, at.x, at.y, at.z, 1, 1, WIND);

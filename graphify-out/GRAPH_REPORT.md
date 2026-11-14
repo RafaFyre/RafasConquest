@@ -1,7 +1,7 @@
-# Graph Report - RafasConquest  (2026-11-13)
+# Graph Report - RafasConquest  (2026-11-14)
 
 ## Corpus Check
-- 543 files · ~468,802 words
+- 543 files · ~468,815 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 119 file(s) not represented in the graph (top: .nbt 84, .toml 18, (none) 3)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9a2c5123`
+- Built from commit: `5be115f7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -934,13 +934,13 @@ Cohesion: 0.33
 Nodes (6): UnitMode, CHARGE, FOLLOW, HOLD, MOVE, RECRUITS
 
 ## Ambiguous Edges - Review These
+- `Roads (high, city, town roads; bridges; signposts)` → `Mustering (offensive and ceremonial)`  [AMBIGUOUS]
+  README.md · relation: conceptually_related_to
 - `/pve debug battle simulate` → `Open questions (R1/R2, thresholds, capture rules, resources, off-player battles)`  [AMBIGUOUS]
   Recruits PvE Addon — Design Doc.pdf · relation: conceptually_related_to
-- `Mustering (offensive and ceremonial)` → `Roads (high, city, town roads; bridges; signposts)`  [AMBIGUOUS]
-  README.md · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **414 isolated node(s):** `COUNT`, `KNIGHT`, `NONE`, `NO_LIGHTMAP`, `NO_SHADER_COLOUR` (+409 more)
+- **414 isolated node(s):** `LADDERS`, `RAMS`, `TOWERS`, `NO_LIGHTMAP`, `NO_SHADER_COLOUR` (+409 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1378 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **243 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -948,20 +948,20 @@ Nodes (6): UnitMode, CHARGE, FOLLOW, HOLD, MOVE, RECRUITS
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `RecruitsBattle` connect `RecruitsBattle` to `BattleShips`, `net.minecraft.nbt.CompoundTag`, `.army`, `UnitMode`, `.general`, `net.minecraft.server.level.ServerPlayer`, `RecruitsBattle.java`, `rafasconquest.map.BaseMap`, `PveCommands.java`, `org.jetbrains.annotations.Nullable`, `WarCouncil`, `.enlist`, `PveCommands Registration`, `CameraView.java`, `.send`, `net.minecraft.world.item.ItemStack`, `rafasconquest.faction.Faction`, `FieldBlock`, `UnitOrder`, `.startAt`, `BattleMap.java`, `GrappleHook`, `net.minecraft.server.level.ServerLevel`, `.end`, `.inCity`, `WarCamp`, `ClientEvents`, `SiegeWorks`, `ConquestEvents.java`?**
-  _High betweenness centrality (0.063) - this node is a cross-community bridge._
-- **What connects `COUNT`, `KNIGHT`, `NONE` to the rest of the system?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **What connects `LADDERS`, `RAMS`, `TOWERS` to the rest of the system?**
   _414 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `net.minecraft.network.FriendlyByteBuf` be split into smaller, more focused modules?**
   _Cohesion score 0.04576271186440678 - nodes in this community are weakly interconnected._
-- **Why does `CityLayout` connect `CityLayout` to `assertequals`, `net.minecraft.nbt.CompoundTag`, `.findGenerationPoint`, `BattleMap.java`, `.onLevelLoad`, `arraylist`, `.wallSegments`, `Barracks`, `HarbourCut`, `.roadStart`, `City`, `.postChunk`, `ConquestEvents.java`, `PoiPrecomputer.java`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+- **Why does `ConquestNetwork` connect `ConquestNetwork` to `net.minecraft.network.FriendlyByteBuf`, `PveCommands Registration`, `assertequals`, `.send`, `Machine`, `SetSetting`, `BattleSnapshot`, `.rightClick`, `State`, `arraylist`, `net.minecraft.client.gui.GuiGraphics`, `BlockPos`, `org.jetbrains.annotations.Nullable`, `CityManagerScreen`, `net.minecraft.world.level.Level`, `War`?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
 - **Should `net.minecraft.nbt.CompoundTag` be split into smaller, more focused modules?**
   _Cohesion score 0.05749385749385749 - nodes in this community are weakly interconnected._
 
 ### Low-confidence Hints
 _AMBIGUOUS edges — the extractor was unsure. Verify before acting on these._
 
-- **What is the exact relationship between `/pve debug battle simulate` and `Open questions (R1/R2, thresholds, capture rules, resources, off-player battles)`?**
+- **What is the exact relationship between `Roads (high, city, town roads; bridges; signposts)` and `Mustering (offensive and ceremonial)`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **What is the exact relationship between `Mustering (offensive and ceremonial)` and `Roads (high, city, town roads; bridges; signposts)`?**
+- **What is the exact relationship between `/pve debug battle simulate` and `Open questions (R1/R2, thresholds, capture rules, resources, off-player battles)`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
