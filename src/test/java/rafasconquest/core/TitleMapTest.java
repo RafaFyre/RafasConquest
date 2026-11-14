@@ -239,4 +239,13 @@ class TitleMapTest {
             assertEquals(TitleMap.Tier.COUNTY, t.rank(seat));
         }
     }
+
+    @Test
+    void seatsOverAProvinceRunEmpireDownToCounty() {
+        // Provinces 0 and 1 are counties 0 and 1 of one duchy, kingdom and empire; province 2 lies in no county.
+        TitleMap t = new TitleMap(new int[]{0, 1, -1}, new int[]{0, 0}, new int[]{0}, new int[]{0},
+                new int[]{0, 1}, new int[]{0}, new int[]{0}, new int[]{1});
+        assertArrayEquals(new int[]{1, 0, 0, 1}, t.seatsOver(1));
+        assertEquals(0, t.seatsOver(2).length);
+    }
 }

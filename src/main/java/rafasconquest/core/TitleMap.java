@@ -190,6 +190,17 @@ public record TitleMap(int[] county, int[] duchy, int[] kingdom, int[] empire,
         }
     }
 
+    /** The seats of the titles a province lies in, empire first down to county; empty if it lies in none. */
+    public int[] seatsOver(int province) {
+        int c = county[province];
+        if (c < 0) {
+            return new int[0];
+        }
+        int d = duchy[c];
+        int k = kingdom[d];
+        return new int[]{empireSeat[empire[k]], kingdomSeat[k], duchySeat[d], countySeat[c]};
+    }
+
     /** The title of this tier a province lies in. */
     public int titleOf(int province, Tier tier) {
         int t = county[province];

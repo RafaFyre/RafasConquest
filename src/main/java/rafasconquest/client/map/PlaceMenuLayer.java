@@ -16,10 +16,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Layer 8, on top of the rest: in creative mode, a right-click on any place drawn on the map (a seat city, a castle,
- * village, hamlet, watchtower or ruin, a dojo, a war's battle site, a capital, City-state or farm) opens a small menu
- * there, headed by the place's name, offering to teleport to it. The server checks the player is in creative and puts
- * them on the ground there. A click anywhere else closes it.
+ * Layer 8, on top of the rest: a right-click on the map opens a small drop-down menu there. Over any province it
+ * offers "See title owners" ({@link rafasconquest.client.TitleOwnersScreen}); in creative mode, on a place drawn on the
+ * map (a seat city, a castle, village, hamlet, watchtower or ruin, a dojo, a war's battle site, a capital, City-state
+ * or farm), it is headed by the place's name and also offers to teleport there (the server checks the player is in
+ * creative and puts them on the ground there). A click anywhere else closes it.
  */
 public class PlaceMenuLayer implements MapLayer {
     private static final int BG = 0xF0201D18;
@@ -34,31 +35,49 @@ public class PlaceMenuLayer implements MapLayer {
     private record Place(String name, int x, int z) {
     }
 
-    @Nullable
-    private Place open;
+    /** One option of the menu, and what a click on it does. */
+    private record Row(String label, Runnable run) {
+    }
+
+    private String heading = "";
+    /** The open menu's options; empty while it is closed. */
+    private List<Row> rows = List.of();
     private int menuX;
     private int menuY;
 
     @Override
     public void render(GuiGraphics g, MapView view, MapContext map, int mouseX, int mouseY) {
-        if (open == null) {
+        if (rows.isEmpty()) {
             return;
         }
         Font font = Minecraft.getInstance().font;
-        String teleport = "Teleport here";
-        int w = Math.max(font.width(open.name()), font.width(teleport)) + 12;
-        int h = ROW * 2 + 6;
+        int w = width(font);
+        int h = ROW * (rows.size() + 1) + 6;
         g.pose().pushPose();
         g.pose().translate(0, 0, 400); // over every mark and tooltip
         g.fill(menuX, menuY, menuX + w, menuY + h, BG);
         g.renderOutline(menuX, menuY, w, h, EDGE);
-        g.drawString(font, open.name(), menuX + 6, menuY + 4, 0xFFE0C060, false);
-        int rowY = menuY + 4 + ROW;
-        if (inRow(mouseX, mouseY, w, rowY)) {
-            g.fill(menuX + 1, rowY - 2, menuX + w - 1, rowY + ROW - 2, HOVER);
+        g.drawString(font, heading, menuX + 6, menuY + 4, 0xFFE0C060, false);
+        for (int i = 0; i < rows.size(); i++) {
+            int rowY = rowY(i);
+            if (inRow(mouseX, mouseY, w, rowY)) {
+                g.fill(menuX + 1, rowY - 2, menuX + w - 1, rowY + ROW - 2, HOVER);
+            }
+            g.drawString(font, rows.get(i).label(), menuX + 6, rowY, TEXT, false);
         }
-        g.drawString(font, teleport, menuX + 6, rowY, TEXT, false);
         g.pose().popPose();
+    }
+
+    private int width(Font font) {
+        int w = font.width(heading);
+        for (Row row : rows) {
+            w = Math.max(w, font.width(row.label()));
+        }
+        return w + 12;
+    }
+
+    private int rowY(int i) {
+        return menuY + 4 + ROW * (i + 1);
     }
 
     private boolean inRow(double mouseX, double mouseY, int w, int rowY) {
@@ -68,24 +87,38 @@ public class PlaceMenuLayer implements MapLayer {
     @Override
     public boolean mouseClicked(MapView view, MapContext map, double mouseX, double mouseY, int button, boolean doubleClick) {
         Minecraft mc = Minecraft.getInstance();
-        if (open != null) {
-            Font font = mc.font;
-            int w = Math.max(font.width(open.name()), font.width("Teleport here")) + 12;
-            if (button == 0 && inRow(mouseX, mouseY, w, menuY + 4 + ROW)) {
-                ConquestNetwork.teleport(open.x(), open.z());
-                mc.setScreen(null);
+        if (!rows.isEmpty()) {
+            List<Row> open = rows;
+            int w = width(mc.font);
+            rows = List.of();
+            for (int i = 0; button == 0 && i < open.size(); i++) {
+                if (inRow(mouseX, mouseY, w, rowY(i))) {
+                    open.get(i).run().run();
+                }
             }
-            open = null;
             return true;
         }
-        if (button != 1 || mc.player == null || !mc.player.isCreative()) {
+        if (button != 1 || mc.player == null) {
             return false;
         }
-        Place place = nearest(view, map, mouseX, mouseY);
-        if (place == null) {
+        int province = map.base.provinceIndexAt((int) Math.floor(view.worldX(mouseX)), (int) Math.floor(view.worldZ(mouseY)));
+        Place place = mc.player.isCreative() ? nearest(view, map, mouseX, mouseY) : null;
+        List<Row> found = new ArrayList<>();
+        if (province >= 0) {
+            found.add(new Row("See title owners",
+                    () -> mc.setScreen(new rafasconquest.client.TitleOwnersScreen(mc.screen, map.base, province))));
+        }
+        if (place != null) {
+            found.add(new Row("Teleport here", () -> {
+                ConquestNetwork.teleport(place.x(), place.z());
+                mc.setScreen(null);
+            }));
+        }
+        if (found.isEmpty()) {
             return false;
         }
-        open = place;
+        heading = place != null ? place.name() : map.base.names().get(province);
+        rows = found;
         menuX = (int) mouseX + 4;
         menuY = (int) mouseY + 4;
         return true;

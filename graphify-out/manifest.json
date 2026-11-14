@@ -396,9 +396,9 @@
     "semantic_hash": "ac5474c65552b62beed4d32fb109355e"
   },
   "src/main/java/rafasconquest/client/map/FactionMapScreen.java": {
-    "mtime": 1794418960.4187162,
-    "seen": 1794419181.8815053,
-    "ast_hash": "778850d80b489e585053e853ab05ade8",
+    "mtime": 1794698294.753177,
+    "seen": 1794698320.8042674,
+    "ast_hash": "0b62d60295da760e4e5e61b17713b108",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/LabelLayer.java": {
@@ -426,9 +426,9 @@
     "semantic_hash": "5a9c9eb19dd279ac010faa1bef5960d2"
   },
   "src/main/java/rafasconquest/client/map/PlaceMenuLayer.java": {
-    "mtime": 1793928881.5703013,
-    "seen": 1793929199.9141817,
-    "ast_hash": "c56069d55985b30c8690b1263a0b6d4d",
+    "mtime": 1794698568.4465704,
+    "seen": 1794698658.8794355,
+    "ast_hash": "cd63a6ab4ce045a8ec8a01ccdadb292d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/PoiIconLayer.java": {
@@ -600,9 +600,9 @@
     "semantic_hash": "02aad7f02367fa2d6fd4dad46ff7a288"
   },
   "src/main/java/rafasconquest/core/TitleMap.java": {
-    "mtime": 1793937054.9577582,
-    "seen": 1793937218.308478,
-    "ast_hash": "334de3287e9aa137b6f30ac21db4d67f",
+    "mtime": 1794698568.5487251,
+    "seen": 1794698658.879517,
+    "ast_hash": "35e69833129fb2e167c0e474b6b8beca",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/WorldFeatures.java": {
@@ -1782,9 +1782,9 @@
     "semantic_hash": "b0bc7343fa4967988d76c1284d6289a2"
   },
   "src/test/java/rafasconquest/core/TitleMapTest.java": {
-    "mtime": 1793937146.2905457,
-    "seen": 1793937218.308816,
-    "ast_hash": "b807301e398496f2395da7ebbc11e06f",
+    "mtime": 1794698598.1814518,
+    "seen": 1794698658.8800244,
+    "ast_hash": "337062b7a97b952429f06ec4e195383b",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/data/ConquestSavedDataTest.java": {
@@ -1854,9 +1854,9 @@
     "semantic_hash": "cac8d3862163101f29fec1b3fd2e580a"
   },
   "README.md": {
-    "mtime": 1794409567.2419887,
-    "seen": 1794409930.7099726,
-    "ast_hash": "669adcfd8f069829236cb34fa00b510a",
+    "mtime": 1794698123.4615176,
+    "seen": 1794698320.8049154,
+    "ast_hash": "c3033386092d82853baa0785e03887bd",
     "semantic_hash": ""
   },
   "docs/index.html": {
@@ -3849,6 +3849,12 @@
     "mtime": 1794696615.0229173,
     "seen": 1794696963.5242069,
     "ast_hash": "ee31e3519ee88c412fd4b0b2b48f5d97",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/client/TitleOwnersScreen.java": {
+    "mtime": 1794698610.231608,
+    "seen": 1794698658.8794088,
+    "ast_hash": "b7c2d04a1e56df510967cca8e0e8c1b0",
     "semantic_hash": ""
   }
 }
