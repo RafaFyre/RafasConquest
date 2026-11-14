@@ -34,6 +34,11 @@ final class FeudDuel {
     @Nullable
     private static FeudDuel current;
 
+    /** A world loads: a duel of the last one is forgotten (its feud fights again, as none is saved waiting). */
+    static void clear() {
+        current = null;
+    }
+
     private final long feud;
     private final AbstractRecruitEntity a;
     private final AbstractRecruitEntity b;

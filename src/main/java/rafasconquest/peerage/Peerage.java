@@ -83,7 +83,7 @@ public final class Peerage extends SavedData {
     private final Map<Integer, String> fates = new HashMap<>();
 
     public static Peerage get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Peerage::new, (tag, registries) -> Peerage.load(tag)), NAME);
+        return rafasconquest.data.SaveGuard.get(server, NAME, Peerage::new, Peerage::load);
     }
 
     public Peer of(UUID player) {

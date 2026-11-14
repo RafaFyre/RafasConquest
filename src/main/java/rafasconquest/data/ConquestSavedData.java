@@ -51,10 +51,9 @@ public class ConquestSavedData extends SavedData {
     }
 
     public static ConquestSavedData get(ServerLevel overworld, WorldSettings forNewWorld) {
-        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(
+        return SaveGuard.get(overworld.getServer(), NAME,
                 () -> new ConquestSavedData(forNewWorld, Math.floorDiv(overworld.getDayTime(), 24_000L), System.currentTimeMillis()),
-                (tag, registries) -> ConquestSavedData.load(tag)),
-                NAME);
+                ConquestSavedData::load);
     }
 
     public WorldSettings settings() {

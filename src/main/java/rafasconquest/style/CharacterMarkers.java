@@ -266,7 +266,7 @@ public final class CharacterMarkers {
         private final List<CompoundTag> labels = new ArrayList<>();
 
         static Placed get(ServerLevel level) {
-            return level.getServer().overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Placed::new, (tag, registries) -> Placed.load(tag)), NAME);
+            return rafasconquest.data.SaveGuard.get(level.getServer(), NAME, Placed::new, Placed::load);
         }
 
         boolean has(int person) {

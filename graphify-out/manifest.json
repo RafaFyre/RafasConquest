@@ -264,9 +264,9 @@
     "semantic_hash": "4e1899e9a28206ea1423d749ac98f9f9"
   },
   "src/main/java/rafasconquest/client/ClientPolitics.java": {
-    "mtime": 1793938055.3232906,
-    "seen": 1793938163.4492028,
-    "ast_hash": "074cb44dc3db8725724856234f9361cb",
+    "mtime": 1794696273.7607522,
+    "seen": 1794696343.142847,
+    "ast_hash": "c9fd179b908d547f65c708b696c5e6d3",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientScreens.java": {
@@ -618,15 +618,15 @@
     "semantic_hash": "5ed50b25447a57e933bff67efeeec2f4"
   },
   "src/main/java/rafasconquest/data/ConquestSavedData.java": {
-    "mtime": 1793878242.0206132,
-    "seen": 1793890446.4240274,
-    "ast_hash": "811b11ad13e99c4c06dbc79e0da8e720",
+    "mtime": 1794696574.256,
+    "seen": 1794696963.5236726,
+    "ast_hash": "c37eeec1d34616472c51721a232b2f78",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/data/Ranks.java": {
-    "mtime": 1793878242.0405602,
-    "seen": 1793890446.4240286,
-    "ast_hash": "9b2b06357ddfc0338fdb91e4d879c147",
+    "mtime": 1794696574.369698,
+    "seen": 1794696963.5236776,
+    "ast_hash": "d4d341ae483dbe3f4ed500722b4b7f7a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/dev/BattleMap.java": {
@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMap.java": {
-    "mtime": 1794068405.331557,
-    "seen": 1794069112.6818225,
-    "ast_hash": "3b4e1687a64c9730d42a1bac76801624",
+    "mtime": 1794696766.5602508,
+    "seen": 1794696963.5236979,
+    "ast_hash": "f9d4810b4fd1bae77241dcbc89f311a3",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMapGenerator.java": {
@@ -708,10 +708,10 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BaseMapStore.java": {
-    "mtime": 1793427705.3559043,
-    "seen": 1793865705.7986789,
-    "ast_hash": "93bda3a339b45b2ae901b66911ebd8b2",
-    "semantic_hash": "93bda3a339b45b2ae901b66911ebd8b2"
+    "mtime": 1794696766.749452,
+    "seen": 1794696963.5237005,
+    "ast_hash": "6efb03f47aa26533d587420ad73a720d",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/map/BiomePalette.java": {
     "mtime": 1793878182.5165765,
@@ -810,9 +810,9 @@
     "semantic_hash": "fbee8b2acf32d9bc247db1f0ec76db1c"
   },
   "src/main/java/rafasconquest/peerage/Peerage.java": {
-    "mtime": 1794429605.2034574,
-    "seen": 1794429653.7907138,
-    "ast_hash": "23cc59e6acb2502639c85963a62cf5ff",
+    "mtime": 1794696574.489378,
+    "seen": 1794696963.5237467,
+    "ast_hash": "9076eb8969202d8937a9d73c1f0a927e",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/PeerageSync.java": {
@@ -918,9 +918,9 @@
     "semantic_hash": "51372731878b2c91ae57dcd891e89c2e"
   },
   "src/main/java/rafasconquest/people/Realm.java": {
-    "mtime": 1793938271.087441,
-    "seen": 1793938671.7814424,
-    "ast_hash": "0a64eeb64bffc9eafa0ded45b2f1fb95",
+    "mtime": 1794696547.8355706,
+    "seen": 1794696963.5237746,
+    "ast_hash": "f0a7322bafac35d6cd84e6deb5336428",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/RealmPlanner.java": {
@@ -984,15 +984,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/PoliticsData.java": {
-    "mtime": 1793878242.05153,
-    "seen": 1793890446.4241161,
-    "ast_hash": "4c83af7c744cfc7a1a2422b8d50669f0",
+    "mtime": 1794696574.591106,
+    "seen": 1794696963.523796,
+    "ast_hash": "342340a450fb18d54f687363de7d213c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/PoliticsSync.java": {
-    "mtime": 1793935803.8850596,
-    "seen": 1793935972.5985088,
-    "ast_hash": "6c17d09be45d52b81305121a0a7e9e50",
+    "mtime": 1794696273.6540358,
+    "seen": 1794696343.143139,
+    "ast_hash": "239501643e3e7e09a91a8475f8e6a543",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/War.java": {
@@ -1002,9 +1002,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/Wars.java": {
-    "mtime": 1794558764.1893697,
-    "seen": 1794558848.7139752,
-    "ast_hash": "4da4d46d90ca145d6b1b0d34aa60dbca",
+    "mtime": 1794697196.164239,
+    "seen": 1794697233.5673635,
+    "ast_hash": "6abda418a51ad71aa21fe01d90503e63",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/sim/CityBanners.java": {
@@ -1044,9 +1044,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/CharacterMarkers.java": {
-    "mtime": 1793935854.37882,
-    "seen": 1793935972.5985224,
-    "ast_hash": "deabc72c44bed7901257318bfbf29e02",
+    "mtime": 1794696574.7117827,
+    "seen": 1794696963.5238113,
+    "ast_hash": "e28d5c0e66e92b2a11445d038a91ebb5",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/CityPlan.java": {
@@ -2382,9 +2382,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/FeudDuel.java": {
-    "mtime": 1793998407.7964258,
-    "seen": 1793998889.9353676,
-    "ast_hash": "d578ad06c6538cb13399116fcafb7906",
+    "mtime": 1794697196.299856,
+    "seen": 1794697233.567349,
+    "ast_hash": "937a5619cb768dab2885a8a6e0af29db",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/politics/Feuds.java": {
@@ -2394,9 +2394,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Succession.java": {
-    "mtime": 1793938514.4297352,
-    "seen": 1793938671.7814467,
-    "ast_hash": "a0d6dc2dd5dd376348267a49e0d9e855",
+    "mtime": 1794696547.7208767,
+    "seen": 1794696963.5237792,
+    "ast_hash": "55b68288c499bc3ed2163bcac9779b94",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/people/Marriages.java": {
@@ -2766,9 +2766,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CityGates.java": {
-    "mtime": 1794143964.537464,
-    "seen": 1794144017.96447,
-    "ast_hash": "048b199efd66111a6da504d2169e328b",
+    "mtime": 1794696574.837448,
+    "seen": 1794696963.5238283,
+    "ast_hash": "0cc7da64069b787e9baa4a55d5697d8a",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/blockstates/gate_block.json": {
@@ -3837,6 +3837,18 @@
     "mtime": 1794684422.9218109,
     "seen": 1794684490.76897,
     "ast_hash": "7640d2ea61b150a9d520bb7e8d65e6db",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/data/SaveGuard.java": {
+    "mtime": 1794696561.0273752,
+    "seen": 1794696963.5236793,
+    "ast_hash": "b99165f04efb16c639d8cf3cda1863e3",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/people/SuccessionFormatTest.java": {
+    "mtime": 1794696615.0229173,
+    "seen": 1794696963.5242069,
+    "ast_hash": "ee31e3519ee88c412fd4b0b2b48f5d97",
     "semantic_hash": ""
   }
 }

@@ -268,8 +268,9 @@ public record BaseMap(int minX, int minZ, int blocksPerPixel, int width, int hei
 
     public static BaseMap decode(byte[] data) throws IOException {
         try (DataInputStream in = new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(data)))) {
-            if (in.readInt() != FORMAT) {
-                throw new IOException("unknown base map format");
+            int format = in.readInt();
+            if (format != FORMAT) {
+                throw new IOException("saved in format " + format + ", this version reads " + FORMAT);
             }
             int minX = in.readInt();
             int minZ = in.readInt();

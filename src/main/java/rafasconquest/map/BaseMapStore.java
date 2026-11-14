@@ -142,6 +142,22 @@ public class BaseMapStore {
         }
     }
 
+    /**
+     * The saved map can't be used, so it is drawn anew: the old file is kept beside it, since cities already built,
+     * conquests and people saved with the world name its provinces and people by number, and may not match the new one.
+     */
+    private void keepOld(String why) {
+        Path kept = file.resolveSibling(FILE + ".old-" + System.currentTimeMillis());
+        try {
+            Files.move(file, kept);
+            RafasConquest.LOGGER.error("REDRAWING THE WORLD MAP: the saved one can't be used ({}). It is kept as {}. Cities already built,"
+                    + " conquests and characters may not match the new map; go back to the jar that drew it to keep playing this world as it was.",
+                    why, kept.getFileName());
+        } catch (IOException e) {
+            RafasConquest.LOGGER.error("REDRAWING THE WORLD MAP: the saved one can't be used ({}), nor kept ({})", why, e.toString());
+        }
+    }
+
     private Ready loadOrDraw() {
         try {
             if (Files.exists(file)) {
@@ -150,9 +166,10 @@ public class BaseMapStore {
                 if (map.visibleRadius() == visibleRadius) {
                     return new Ready(map, saved);
                 }
+                keepOld("it reaches " + map.visibleRadius() + " blocks, this world's map reaches " + visibleRadius);
             }
-        } catch (IOException e) {
-            RafasConquest.LOGGER.warn("Redrawing the world map: the saved one could not be read ({})", e.getMessage());
+        } catch (IOException | RuntimeException e) {
+            keepOld(e.getMessage());
         }
         long start = System.nanoTime();
         BaseMap map = drawGently(() -> BaseMapGenerator.generate(level, settings, visibleRadius, settings.warZoneOuterEdge()));

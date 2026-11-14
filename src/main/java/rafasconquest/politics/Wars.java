@@ -64,6 +64,9 @@ public final class Wars {
         MapLands.of(map).regroup();
         mustered.clear();
         pendingWar = -1;
+        pendingFeud = -1;
+        feudTeam = null; // the last world's, in its own scoreboard
+        FeudDuel.clear();
         MusterBars.clear();
     }
 

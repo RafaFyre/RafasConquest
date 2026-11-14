@@ -162,8 +162,7 @@ public final class CityGates {
         private final LongOpenHashSet keys = new LongOpenHashSet();
 
         static Done get(ServerLevel level) {
-            return level.getServer().overworld().getDataStorage().computeIfAbsent(
-                    new SavedData.Factory<>(Done::new, (tag, registries) -> load(tag)), NAME);
+            return rafasconquest.data.SaveGuard.get(level.getServer(), NAME, Done::new, Done::load);
         }
 
         private static Done load(CompoundTag tag) {

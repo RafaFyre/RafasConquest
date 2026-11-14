@@ -22,7 +22,7 @@ public final class Ranks extends SavedData {
     private final Map<UUID, BattleRole> roles = new HashMap<>();
 
     public static Ranks get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(Ranks::new, (tag, registries) -> Ranks.load(tag)), NAME);
+        return SaveGuard.get(server, NAME, Ranks::new, Ranks::load);
     }
 
     public Rank of(UUID player) {

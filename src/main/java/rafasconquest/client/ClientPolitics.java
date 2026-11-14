@@ -25,6 +25,10 @@ public final class ClientPolitics {
     }
 
     public static void set(ConquestNetwork.PoliticsView politics) {
+        if (politics.succession().length == 0) { // unchanged since the last send: keep it
+            politics = new ConquestNetwork.PoliticsView(politics.wars(), politics.armies(), politics.alliances(), politics.conquered(),
+                    politics.news(), politics.clashes(), politics.clashNames(), view.succession());
+        }
         view = politics;
         BaseMap map = rafasconquest.client.map.ClientMapCache.map();
         if (map != null) {

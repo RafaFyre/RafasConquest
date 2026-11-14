@@ -443,9 +443,16 @@ public final class Succession {
                 nation, p.away(), p.spouse());
     }
 
+    /** Starts the bytes; a format-1 save from before it starts with the years (never this low). */
+    private static final short MARK = Short.MIN_VALUE;
+    /** Raise when this layout or {@link Realm#writePerson}'s changes, so old saves start anew instead of reading garbage. */
+    static final int FORMAT = 1;
+
     public byte[] encode() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bytes)) {
+            out.writeShort(MARK);
+            out.writeByte(FORMAT);
             out.writeShort(years);
             out.writeShort(changed.size());
             for (Map.Entry<Integer, Person> e : changed.entrySet()) {
@@ -476,7 +483,17 @@ public final class Succession {
             return s;
         }
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            s.years = in.readShort();
+            int first = in.readShort();
+            if (first == MARK) {
+                int format = in.readUnsignedByte();
+                if (format != FORMAT) {
+                    rafasconquest.RafasConquest.LOGGER.warn("Succession saved in format {}, this version reads {}: started anew", format, FORMAT);
+                    return new Succession();
+                }
+                s.years = in.readShort();
+            } else {
+                s.years = first; // saved before the format was written: the layout of format 1
+            }
             int n = in.readShort();
             for (int i = 0; i < n; i++) {
                 int index = in.readShort();
@@ -491,8 +508,10 @@ public final class Succession {
             for (int i = 0; i < hookCount; i++) {
                 s.hooks.add(new Hook(in.readShort(), in.readShort(), Hook.Kind.values()[in.readUnsignedByte()]));
             }
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
+        } catch (IOException | RuntimeException e) {
+            // Lose only the succession, never the wars and conquests saved beside it.
+            rafasconquest.RafasConquest.LOGGER.warn("Succession could not be read ({}): started anew", e.toString());
+            return new Succession();
         }
         return s;
     }

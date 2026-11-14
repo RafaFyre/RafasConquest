@@ -15,8 +15,18 @@ public final class PoliticsSync {
     private PoliticsSync() {
     }
 
+    /** The succession last sent to everyone: it grows with the world's age, so it is sent again only when it changes. */
+    private static byte[] lastSuccession = new byte[0];
+
     public static void toAll(MinecraftServer server) {
         ConquestNetwork.PoliticsView view = view(server);
+        if (java.util.Arrays.equals(view.succession(), lastSuccession)) {
+            // Empty: the clients keep the succession they have (a real one is never empty).
+            view = new ConquestNetwork.PoliticsView(view.wars(), view.armies(), view.alliances(), view.conquered(), view.news(),
+                    view.clashes(), view.clashNames(), new byte[0]);
+        } else {
+            lastSuccession = view.succession();
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             ConquestNetwork.sendPolitics(player, view);
         }

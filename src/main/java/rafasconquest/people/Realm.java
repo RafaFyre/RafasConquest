@@ -230,6 +230,7 @@ public record Realm(List<Culture> cultures, List<Faith> faiths, List<Person> peo
         }
     }
 
+    /** Also saved in the politics file: raise {@link Succession#FORMAT} (and BaseMap's) when this changes. */
     static void writePerson(DataOutputStream out, Person p) throws IOException {
         out.writeUTF(p.given());
         out.writeUTF(p.family());

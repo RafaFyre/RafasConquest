@@ -19,8 +19,8 @@ public final class PoliticsData extends SavedData {
     }
 
     public static PoliticsData get(net.minecraft.server.level.ServerLevel overworld) {
-        return overworld.getDataStorage().computeIfAbsent(new SavedData.Factory<>(() -> new PoliticsData(new Politics()),
-                (tag, registries) -> new PoliticsData(Politics.load(tag.getCompound("politics")))), NAME);
+        return rafasconquest.data.SaveGuard.get(overworld.getServer(), NAME, () -> new PoliticsData(new Politics()),
+                tag -> new PoliticsData(Politics.load(tag.getCompound("politics"))));
     }
 
     public Politics politics() {
