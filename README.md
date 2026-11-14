@@ -1,12 +1,12 @@
 # RafasConquest
 
 A PvE addon for [Villager Recruits](https://modrinth.com/mod/villager-recruits): AI-run factions that grow their armies from territory.
-Forge 1.20.1 (47.4.28), Java 17. The design doc is `Recruits PvE Addon — Design Doc.pdf` in this folder.
+NeoForge 1.21.1 (21.1.265), Java 21. The design doc is `Recruits PvE Addon — Design Doc.pdf` in this folder.
 
 ## Build and run
 
 ```
-gradlew build          # compiles, runs unit tests, writes build/libs/rafasconquest-<version>.jar
+gradlew build          # compiles, runs unit tests, writes build/libs/rafasconquestPREALPHA-<version>.<commit>.jar
 gradlew test           # unit tests only
 gradlew runClient      # dev client with Recruits loaded
 gradlew runServer      # dev server (needs eula=true in run/eula.txt)
@@ -16,15 +16,16 @@ Recruits is pulled from Modrinth's maven, pinned by version ID in `gradle.proper
 
 ## Recommended mods
 
-Not required (they aren't in `mods.toml`), but recommended for everyone, and loaded in dev runs:
+Not required (they aren't in `neoforge.mods.toml`), but recommended for everyone, and loaded in dev runs:
 
-- [Embeddium](https://modrinth.com/mod/embeddium) (0.3.31+mc1.20.1): rendering performance.
-- [Distant Horizons](https://modrinth.com/mod/distanthorizons) (3.3.3-1.20.1): far-away terrain, so cities and their
-  walls can be seen from a distance. Its distant generation runs normal world generation, cities included, for far
-  chunks, so expect background CPU use while it fills in.
+- [Sodium](https://modrinth.com/mod/sodium) (0.8.13): rendering performance. Not Embeddium: Veil (inside Sable)
+  refuses to load next to it.
+- [Distant Horizons](https://modrinth.com/mod/distanthorizons) (3.3.3-1.21.1): far-away terrain, so cities and their
+  walls can be seen from a distance, and battles drawn in it. Its distant generation runs normal world generation,
+  cities included, for far chunks, so expect background CPU use while it fills in.
 
-They are `runtimeOnly` dependencies in `build.gradle`, pinned in `gradle.properties` (`embeddium_version`,
-`distant_horizons_version`).
+Both are pinned in `gradle.properties` (`sodium_version`, `distant_horizons_version`). Sodium is `runtimeOnly` in
+`build.gradle`; Distant Horizons is also compiled against, but only used when installed.
 
 ## Epic Knights
 
@@ -267,7 +268,7 @@ first. The old relation is restored when the battle ends.
   old relations come back then. The winner's army and camp stay until `/pve debug battle clear`.
   A beaten army runs a quarter faster than its pursuers march, so foot outruns foot and only horse rides it down.
   For testing, `/pve debug battle end general <side>` fells a side's general and `/pve debug battle end surrender
-  <side>` makes a side surrender. (Minecraft 1.20.1 has no `/tick` command to speed time up.)
+  <side>` makes a side surrender. (Minecraft's `/tick sprint` speeds time up.)
 - **Deployment countdown:** a bar at the top of the screen counts the deployment down, in the nation's colour for
   players of each army (neutral for others): 4 minutes the first day, 1 minute every morning after. At 0 the battle
   begins (`/pve debug battle start` still starts it at once). Players on a side are enlisted as soon as the battle is
@@ -1150,7 +1151,7 @@ runs in the background and writes its results to the server log.
 
 ## Decisions the design doc left open
 
-- **"Spawn" means the world origin (0, 0).** The Forge `LevelEvent.Load` that freezes settings fires before vanilla picks the
+- **"Spawn" means the world origin (0, 0).** The NeoForge `LevelEvent.Load` that freezes settings fires before vanilla picks the
   spawn point, and `/setworldspawn` can move spawn later. The origin keeps every zone deterministic from the seed alone.
 - **Placement reads the frozen settings, not JSON numbers.** Farms and Capitals use custom placement types
   (`rafasconquest:farm_spread`, `rafasconquest:capital_sites`) that read the world's frozen `WorldSettings`. The precompute uses the
