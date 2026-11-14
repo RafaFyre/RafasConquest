@@ -1659,7 +1659,9 @@ public final class RecruitsBattle {
             List<AbstractRecruitEntity> marked = shooting ? preyOf(block, List.of()) : List.of();
             List<AbstractRecruitEntity> anyone = shooting ? enemiesOf(block.side(), false) : List.of();
             for (AbstractRecruitEntity s : living) {
-                if (shooting) {
+                // Off its deck spot an archer holds its fire: with a target, Recruits' bow goal stops its walk back
+                // every tick, so it stood while its ship sailed and turned away. Pinned again ({@link #pin}), it looses.
+                if (shooting && pinned.containsKey(s.getId())) {
                     if (s.getState() != 0) {
                         s.setAggroState(0);
                     }
