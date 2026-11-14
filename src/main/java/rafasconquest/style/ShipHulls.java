@@ -1,15 +1,17 @@
 package rafasconquest.style;
 
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import rafasconquest.content.ConquestContent;
+import rafasconquest.content.SailBlock;
 import rafasconquest.core.SeaLanes;
 
 import java.util.ArrayList;
@@ -102,7 +104,8 @@ public final class ShipHulls {
         int middle = (DECK + 4 + DECK + 1 + size.length / 2) / 2; // halfway between plain()'s lowest and highest sail rows
         List<Part> parts = new ArrayList<>();
         for (Part p : PLAIN.get(size)) {
-            parts.add(p.state().is(Blocks.WHITE_WOOL) ? new Part(p.x(), p.y(), p.z(), wool(p.y() == middle ? stripe : sail)) : p);
+            parts.add(p.state().getBlock() instanceof SailBlock
+                    ? new Part(p.x(), p.y(), p.z(), p.state().setValue(SailBlock.COLOR, p.y() == middle ? stripe : sail)) : p);
         }
         if (!cargo) {
             return List.copyOf(parts);
@@ -117,10 +120,6 @@ public final class ShipHulls {
         return List.copyOf(parts);
     }
 
-    private static BlockState wool(DyeColor dye) {
-        return BuiltInRegistries.BLOCK.get(ResourceLocation.parse(dye.getName() + "_wool")).defaultBlockState();
-    }
-
     /**
      * A plain flat-topped boat, six blocks tall: a keel, planked sides up to a flat deck narrowing to bow and stern, a rail one block high round the
      * deck's edge, and one mast with a sail stepped near the stern, clear of the deck's middle where soldiers stand.
@@ -129,7 +128,7 @@ public final class ShipHulls {
         BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
         BlockState deck = Blocks.OAK_PLANKS.defaultBlockState();
         BlockState mast = Blocks.SPRUCE_LOG.defaultBlockState();
-        BlockState sail = Blocks.WHITE_WOOL.defaultBlockState();
+        BlockState sail = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.SOUTH); // the bow is +z
         List<Part> parts = new ArrayList<>();
         int half = length / 2;
         for (int z = -half; z <= half; z++) {
@@ -155,9 +154,7 @@ public final class ShipHulls {
         int sailHalf = width / 2 + 1;
         for (int y = DECK + 4; y < top; y++) {
             for (int x = -sailHalf; x <= sailHalf; x++) {
-                if (x != 0) {
-                    parts.add(new Part(x, y, stern, sail));
-                }
+                parts.add(new Part(x, y, stern + 1, sail)); // hung before the mast, so it is one sheet
             }
         }
         return List.copyOf(parts);

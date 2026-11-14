@@ -99,6 +99,15 @@ public final class ConquestContent {
     /** The sail stitcher: an iron stick (does nothing yet). */
     public static final DeferredHolder<Item, Item> SAIL_STITCHER = ITEMS.register("sail_stitcher",
             () -> new Item(new Item.Properties().stacksTo(1)));
+    /** Sail: a square of a ship's sail, drawn as billowing cloth in its dye ({@link SailBlock}). */
+    public static final DeferredHolder<Block, Block> SAIL = BLOCKS.register("sail",
+            () -> new SailBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.WHITE_WOOL).noOcclusion()
+                    .mapColor(state -> state.getValue(SailBlock.COLOR).getMapColor())));
+    public static final DeferredHolder<Item, Item> SAIL_ITEM = ITEMS.register("sail",
+            () -> new BlockItem(SAIL.get(), new Item.Properties()));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<Sail>> SAIL_ENTITY =
+            BLOCK_ENTITIES.register("sail", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(Sail::new, SAIL.get()).build(null));
     public static final DeferredHolder<Item, Item> WORLD_MAP = ITEMS.register("world_map",
             () -> new WorldMapItem(new Item.Properties().stacksTo(1)));
 
@@ -163,6 +172,7 @@ public final class ConquestContent {
                 output.accept(HELM_ITEM.get());
                 output.accept(ARTILLERY_ITEM.get());
                 output.accept(SAIL_STITCHER.get());
+                output.accept(SAIL_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());
                 output.accept(GATE_BLOCK_ITEM.get());
                 output.accept(BATTLE_BANNER_ITEM.get());
