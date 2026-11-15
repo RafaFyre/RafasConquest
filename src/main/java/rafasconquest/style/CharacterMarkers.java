@@ -136,7 +136,7 @@ public final class CharacterMarkers {
         return pos.offset(ring[i % ring.length][0], 0, ring[i % ring.length][1]);
     }
 
-    private static void character(ServerLevel level, BaseMap map, int person, BlockPos pos, float yaw) {
+    public static void character(ServerLevel level, BaseMap map, int person, BlockPos pos, float yaw) {
         Person p = map.realm().people().get(person);
         Recruiter noble = ConquestEntities.RECRUITER.get().create(level);
         if (noble == null || p.nation() < 0) {

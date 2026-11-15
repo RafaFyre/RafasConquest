@@ -118,7 +118,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     }
 
     /** "Spring 2nd, 12 AD": four seasons to a year of {@link Succession#YEAR_DAYS} days, the first year 1 AD. */
-    static String date(long day) {
+    public static String date(long day) {
         int season = Succession.YEAR_DAYS / SEASONS.length;
         int inYear = (int) (day % Succession.YEAR_DAYS);
         int d = inYear % season + 1;

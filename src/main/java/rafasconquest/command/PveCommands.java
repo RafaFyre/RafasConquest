@@ -100,6 +100,9 @@ public final class PveCommands {
                                 .then(Commands.literal("none").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.NONE)))
                                 .then(Commands.literal("knight").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.KNIGHT)))
                                 .then(Commands.literal("count").executes(ctx -> titleSet(ctx, EntityArgument.getPlayer(ctx, "player"), rafasconquest.peerage.NobleTitle.COUNT)))))
+                // Testing: the nearest city's holder, stood beside the player, to talk to without travelling there.
+                .then(Commands.literal("holder").requires(source -> source.hasPermission(2))
+                        .executes(PveCommands::holderHere))
                 // A nation's horn style in battle ("goat": its goat horn call, as before horn styles).
                 .then(Commands.literal("horn").requires(source -> source.hasPermission(2))
                         .then(Commands.argument("nation", StringArgumentType.string())
@@ -633,6 +636,27 @@ public final class PveCommands {
      * Knights a player (or takes their knighthood) without their earning it, for testing: a noble enlists at a
      * barracks as a Major (rank 5). A landed player keeps their county.
      */
+    /** Spawns the holder of the city nearest the player two blocks in front of them, facing them. */
+    private static int holderHere(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        rafasconquest.map.BaseMap map = rafasconquest.worldgen.ConquestRuntime.map();
+        if (map == null) {
+            throw NOT_RUNNING.create();
+        }
+        rafasconquest.core.SeatCities.City city = map.cities().stream()
+                .min(java.util.Comparator.comparingDouble(c -> Math.hypot(c.x() - player.getX(), c.z() - player.getZ()))).orElse(null);
+        int person = city == null ? -1 : map.realm().holderOf(city.province());
+        if (person < 0) {
+            ctx.getSource().sendFailure(Component.literal("The nearest city has no holder"));
+            return 0;
+        }
+        Vec3 ahead = player.position().add(player.getLookAngle().multiply(2, 0, 2));
+        rafasconquest.style.CharacterMarkers.character(player.serverLevel(), map, person, net.minecraft.core.BlockPos.containing(ahead), player.getYRot() + 180);
+        String name = rafasconquest.peerage.Names.styled(map, map.realm().people().get(person));
+        ctx.getSource().sendSuccess(() -> Component.literal(name + " stands before you"), true);
+        return 1;
+    }
+
     private static int nobleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, boolean noble) {
         rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(ctx.getSource().getServer());
         rafasconquest.peerage.Peerage.Peer peer = peerage.of(player.getUUID());
