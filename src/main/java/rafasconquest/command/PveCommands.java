@@ -198,6 +198,14 @@ public final class PveCommands {
                         .then(Commands.literal("advance")
                                 .then(Commands.argument("days", IntegerArgumentType.integer(1, 100_000))
                                         .executes(ctx -> advance(ctx, IntegerArgumentType.getInteger(ctx, "days")))))
+                        // One of each kind of a nation's soldiers and engines, frozen on stone blocks, in a line to your
+                        // right starting 3 blocks ahead; clear removes them.
+                        .then(Commands.literal("display")
+                                .then(Commands.literal("clear").executes(ctx -> say(ctx, RecruitsBattle.clearDisplay(ctx.getSource().getLevel()))))
+                                .then(Commands.literal("unit").then(Commands.literal("all")
+                                        .then(Commands.argument("nation", StringArgumentType.greedyString())
+                                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(factionNames(), builder))
+                                                .executes(PveCommands::display)))))
                         .then(Commands.literal("battle")
                                 .executes(ctx -> battle(ctx, null, DEFAULT_ARMY, null, DEFAULT_ARMY))
                                 .then(Commands.literal("clear").executes(PveCommands::battleClear))
@@ -679,6 +687,17 @@ public final class PveCommands {
         String line = RecruitsBattle.watch(spot);
         ctx.getSource().sendSuccess(() -> Component.literal(line), true);
         return 1;
+    }
+
+    private static int display(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        Faction nation = byName(server(), arg(ctx, "nation"));
+        if (nation == null) {
+            throw NO_FACTION.create();
+        }
+        CommandSourceStack source = ctx.getSource();
+        net.minecraft.core.Direction facing = net.minecraft.core.Direction.fromYRot(source.getRotation().y);
+        return say(ctx, RecruitsBattle.display(source.getLevel(), nation, net.minecraft.core.BlockPos.containing(source.getPosition()).relative(facing, 3),
+                facing.getClockWise(), facing.getOpposite().toYRot()));
     }
 
     private static int battleClear(CommandContext<CommandSourceStack> ctx) {

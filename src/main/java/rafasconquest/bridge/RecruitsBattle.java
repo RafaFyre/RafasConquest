@@ -1428,11 +1428,16 @@ public final class RecruitsBattle {
      */
     @Nullable
     private AbstractRecruitEntity dressed(EntityType<? extends AbstractRecruitEntity> type, Side side, Role role, @Nullable Point p, float yaw) {
+        return dressedAt(level, type, side, role, p == null ? BlockPos.ZERO : ground(p), yaw);
+    }
+
+    @Nullable
+    private static AbstractRecruitEntity dressedAt(ServerLevel level, EntityType<? extends AbstractRecruitEntity> type, Side side, Role role,
+                                                   BlockPos feet, float yaw) {
         AbstractRecruitEntity soldier = type.create(level);
         if (soldier == null) {
             return null;
         }
-        BlockPos feet = p == null ? BlockPos.ZERO : ground(p);
         soldier.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, yaw, 0);
         if (soldier instanceof com.talhanation.recruits.entities.SiegeEngineerEntity engineer) {
             // Recruits 1.15.2's engineer finalizeSpawn casts its RecruitPathNavigation to GroundPathNavigation and
@@ -1455,6 +1460,100 @@ public final class RecruitsBattle {
         soldier.setMoral(100);
         soldier.setAggroState(0); // neutral: fights monsters and enemies of its faction, and whoever attacks it
         return soldier;
+    }
+
+    // ---- the debug display ----
+
+    /** Marks a display's soldiers, horses and engines, for {@link #clearDisplay}. */
+    private static final String DISPLAY_TAG = "rafasconquest_display";
+
+    /**
+     * One of each kind of the nation's soldiers (4 blocks on from the last), then one of each Siegeworks engine (15 on),
+     * in a line from {@code start} going {@code along}, facing {@code yaw}: each on a stone block set on the ground,
+     * frozen (no AI).
+     */
+    public static String display(ServerLevel level, Faction nation, BlockPos start, net.minecraft.core.Direction along, float yaw) {
+        Side side = new Side(nation, new RecruitsFactions(level).team(nation), mainColor(nation), markColor(nation), banner(level, nation),
+                horn(nation), null, new String[0], new Trait[0]);
+        int at = 0;
+        int soldiers = 0;
+        int engines = 0;
+        for (Arm arm : Arm.values()) {
+            BlockPos feet = pedestal(level, start.relative(along, at));
+            at += 4;
+            AbstractRecruitEntity soldier = dressedAt(level, type(arm), side, Role.SOLDIER, feet, yaw);
+            if (soldier == null) {
+                continue;
+            }
+            kitFor(soldier, side, arm, Role.SOLDIER);
+            freeze(soldier, yaw);
+            level.addFreshEntity(soldier);
+            if (side.team != null) {
+                FactionEvents.addRecruitToTeam(soldier, side.team, level);
+            }
+            Horse horse = arm.mounted() ? EntityType.HORSE.create(level) : null;
+            if (horse != null) {
+                horse.moveTo(soldier.getX(), soldier.getY(), soldier.getZ(), yaw, 0);
+                horse.setTamed(true);
+                horse.equipSaddle(new ItemStack(Items.SADDLE), null);
+                horse.getSlot(401).set(horseArmour(side, arm == Arm.HEAVY_CAVALRY)); // 401: the horse's armour slot
+                freeze(horse, yaw);
+                level.addFreshEntity(horse);
+                soldier.startRiding(horse, true);
+            }
+            soldiers++;
+        }
+        at += 15 - 4;
+        for (rafasconquest.battle.Machine machine : rafasconquest.battle.Machine.values()) {
+            EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(
+                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(rafasconquest.battle.Machine.MOD, machine.id)).orElse(null);
+            Entity engine = type == null ? null : type.create(level);
+            if (engine == null) {
+                continue; // no Siegeworks
+            }
+            BlockPos feet = pedestal(level, start.relative(along, at));
+            at += 15;
+            engine.moveTo(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, yaw, 0);
+            freeze(engine, yaw);
+            level.addFreshEntity(engine);
+            engines++;
+        }
+        return "Showing " + soldiers + " kinds of soldier and " + engines + " engines of " + nation.name();
+    }
+
+    /** A stone block set on top of the ground in this column; the place to stand on it. */
+    private static BlockPos pedestal(ServerLevel level, BlockPos column) {
+        BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, column);
+        level.setBlockAndUpdate(top, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+        return top.above();
+    }
+
+    private static void freeze(Entity e, float yaw) {
+        e.addTag(DISPLAY_TAG);
+        if (e instanceof net.minecraft.world.entity.Mob mob) {
+            mob.setNoAi(true);
+            mob.setPersistenceRequired();
+            mob.setYHeadRot(yaw);
+            mob.setYBodyRot(yaw);
+        }
+    }
+
+    /** Removes every display's soldiers, horses and engines in loaded chunks, and the stone each stood on. */
+    public static String clearDisplay(ServerLevel level) {
+        List<Entity> shown = new ArrayList<>();
+        for (Entity e : level.getAllEntities()) {
+            if (e.getTags().contains(DISPLAY_TAG)) {
+                shown.add(e);
+            }
+        }
+        for (Entity e : shown) {
+            BlockPos under = e.blockPosition().below();
+            if (!e.isPassenger() && level.getBlockState(under).is(net.minecraft.world.level.block.Blocks.STONE)) {
+                level.removeBlock(under, false);
+            }
+            e.discard();
+        }
+        return "Removed " + shown.size() + " displayed soldiers, horses and engines";
     }
 
     /**
