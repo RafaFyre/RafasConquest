@@ -61,6 +61,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private static final double REACH = 8;
     private static final int DOUBLE_CLICK_MS = 350;
     private static final String MANAGE = "Manage city";
+    private static final String SPAWN = "Spawn army";
     private static final String NOT_BUILT = "Not built yet";
     private static final String[] SEASONS = {"Spring", "Summer", "Autumn", "Winter"};
     /** The HUD's spots in {@link #spots()} order: 3 resources, 9 realm menus, 3 left buttons, then these. */
@@ -81,14 +82,26 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     private GrandStrategy.View fief;
     private final CityPanel panel = new CityPanel();
-    /** The hold's army on the map: a soldier holding the nation's battle banner; made on first need. */
-    @Nullable
-    private com.talhanation.recruits.entities.AbstractRecruitEntity bearer;
-    private int bearerNation = -2;
+    /** An army's figure on the map: a knight of its nation with the nation's battle banner; made on first need. */
+    private static final class Marcher {
+        com.talhanation.recruits.entities.AbstractRecruitEntity e;
+        int nation = -2;
+        long walkedAt;
+    }
+
+    /** Each army's marcher, by army id. */
+    private final java.util.Map<Integer, Marcher> marchers = new java.util.HashMap<>();
     @Nullable
     private SeatCities.City summary;
-    /** The army in the field is selected (a click on its marcher). */
-    private boolean armyPicked;
+    /** The selected army's id (a click on its marcher), or {@link GrandStrategy#NO_TARGET}. */
+    private int picked = GrandStrategy.NO_TARGET;
+    /** The next view's newest spawned army is selected: one was just spawned. */
+    private boolean pickNext;
+    /** Marches already met at their foe (army id and march start): each face-off, or chase, happens once. */
+    private final java.util.Set<String> faced = new java.util.HashSet<>();
+    /** Where creative's right-click menu would spawn an army (x, z), or null while it is not open. */
+    @Nullable
+    private double[] spawnAt;
     @Nullable
     private SeatCities.City menu;
     private int menuX;
@@ -117,31 +130,50 @@ public class GrandStrategyScreen extends FactionMapScreen {
     /** The server's answer to an army order: the same fief, its army as it now stands. */
     public void refresh(GrandStrategy.View fief) {
         this.fief = fief;
+        if (pickNext) { // the army just spawned comes selected
+            pickNext = false;
+            picked = fief.armies().stream().mapToInt(GrandStrategy.Army::id).max().orElse(GrandStrategy.NO_TARGET);
+            summary = null;
+            panel.mode = CityPanel.Mode.NONE;
+        }
     }
 
-    /** Where the hold's army stands now (x, z), or null while it is home in its city. */
+    /** The Army Spawn Menu sent a spawn: select the army the server's answer brings. */
+    void pickNextSpawned() {
+        pickNext = true;
+    }
+
+    /** Where an army stands now (x, z), or null while it is home in its city. */
     @Nullable
-    private double[] army() {
+    private double[] pos(GrandStrategy.Army a) {
         return minecraft == null || minecraft.level == null ? null
-                : Garrison.at(fief.fromX(), fief.fromZ(), fief.toX(), fief.toZ(), fief.start(), minecraft.level.getGameTime() + minecraft.getTimer().getGameTimeDeltaPartialTick(false)); // between ticks too, so he glides
+                : Garrison.at(a.fromX(), a.fromZ(), a.toX(), a.toZ(), a.start(), minecraft.level.getGameTime() + minecraft.getTimer().getGameTimeDeltaPartialTick(false)); // between ticks too, so he glides
+    }
+
+    /** An army's nation: its own, else (a hold no nation holds) the player's. */
+    private int nationOf(GrandStrategy.Army a) {
+        return a.nation() >= 0 ? a.nation() : fief.nation();
     }
 
     /**
-     * The marcher, the army out of its city: a knight of the nation with its banner on his back, made once; each call
-     * also walks his legs (while the army moves) and turns him the way it marches. Null while the army is home.
+     * An army's marcher, the army out of its city: a knight of its nation with its banner on his back, made once; each
+     * call also walks his legs (while the army moves) and turns him the way it marches. Null while the army is home.
      */
     @Nullable
-    private com.talhanation.recruits.entities.AbstractRecruitEntity marcher() {
-        double[] at = army();
+    private com.talhanation.recruits.entities.AbstractRecruitEntity marcher(GrandStrategy.Army a) {
+        double[] at = pos(a);
         if (at == null || minecraft.level == null) {
             return null;
         }
-        // His nation: the one holding the hold the army is raised from (the player may serve none), else the player's.
         BaseMap base = ClientMapCache.map();
-        int n = base != null && fief.seat() >= 0 && fief.seat() < base.holders().length && base.holders()[fief.seat()] >= 0
-                ? base.holders()[fief.seat()] : fief.nation();
-        if (bearer == null || bearer.level() != minecraft.level || bearerNation != n) {
-            bearer = ModEntityTypes.RECRUIT.get().create(minecraft.level);
+        int n = nationOf(a);
+        Marcher m = marchers.computeIfAbsent(a.id(), k -> new Marcher());
+        var bearer = m.e;
+        if (bearer == null || bearer.level() != minecraft.level || m.nation != n) {
+            if (bearer != null) {
+                rafasconquest.client.BackBanners.remove(bearer.getId());
+            }
+            bearer = m.e = ModEntityTypes.RECRUIT.get().create(minecraft.level);
             if (bearer == null) {
                 return null;
             }
@@ -165,16 +197,16 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
             rafasconquest.client.BackBanners.put(bearer.getId(), banner, 1.5F);
             bearer.setOnGround(true);
-            bearerNation = n;
-            walkedAt = Util.getMillis();
+            m.nation = n;
+            m.walkedAt = Util.getMillis();
         }
-        boolean moving = Math.hypot(fief.toX() - at[0], fief.toZ() - at[1]) > 0.5;
+        boolean moving = Math.hypot(a.toX() - at[0], a.toZ() - at[1]) > 0.5;
         long now = Util.getMillis();
-        for (; walkedAt + 50 <= now; walkedAt += 50) { // the walk animation's ticks since the last frame
+        for (; m.walkedAt + 50 <= now; m.walkedAt += 50) { // the walk animation's ticks since the last frame
             bearer.walkAnimation.update(moving ? 1F : 0F, 0.4F);
         }
         Portraits.animate(bearer);
-        float yaw = (float) Math.toDegrees(Math.atan2(-(fief.toX() - fief.fromX()), fief.toZ() - fief.fromZ()));
+        float yaw = (float) Math.toDegrees(Math.atan2(-(a.toX() - a.fromX()), a.toZ() - a.fromZ()));
         bearer.yBodyRot = bearer.yBodyRotO = yaw;
         bearer.setYRot(yaw);
         bearer.yRotO = yaw;
@@ -188,10 +220,10 @@ public class GrandStrategyScreen extends FactionMapScreen {
         return bearer;
     }
 
-    /** The marcher's box on screen (x0, y0, x1, y1, GUI pixels), or null if he is not on the map. */
+    /** An army's marcher's box on screen (x0, y0, x1, y1, GUI pixels), or null if he is not on the map. */
     @Nullable
-    private double[] marcherBox() {
-        double[] at = army();
+    private double[] marcherBox(GrandStrategy.Army a) {
+        double[] at = pos(a);
         if (at == null) {
             return null;
         }
@@ -206,21 +238,32 @@ public class GrandStrategyScreen extends FactionMapScreen {
         return new double[]{feet[0] - half, feet[1] - tall, feet[0] + half, feet[1] + 2};
     }
 
-    private boolean onMarcher(double mx, double my) {
-        double[] b = marcherBox();
+    private boolean onMarcher(GrandStrategy.Army a, double mx, double my) {
+        double[] b = marcherBox(a);
         return b != null && mx >= b[0] && mx < b[2] && my >= b[1] && my < b[3];
     }
 
-    private long walkedAt;
+    /** The army whose marcher is under the mouse (the last drawn, on top), or null. */
+    @Nullable
+    private GrandStrategy.Army armyAt(double mx, double my) {
+        GrandStrategy.Army hit = null;
+        for (GrandStrategy.Army a : fief.armies()) {
+            if (onMarcher(a, mx, my)) {
+                hit = a;
+            }
+        }
+        return hit;
+    }
+
     /** How tall the marcher stands on the map, in blocks (banner aside): fixed to the land, as the user approved it. */
     private static final double MARCHER_HEIGHT = 80;
     /** The marcher's banner's breeze, blocks/s² at life size: Wind's least breeze, a little more. */
     private static final double BREEZE = 3;
 
-    /** On the flat map, the marcher drawn as a figure over it (the 3D map has him in the world: {@link #renderMarcher}). */
-    private void renderArmy(GuiGraphics g) {
-        double[] at = camera == null ? army() : null;
-        var e = at == null ? null : marcher();
+    /** On the flat map, an army's marcher drawn as a figure over it (the 3D map has him in the world: {@link #renderMarcher}). */
+    private void renderArmy(GuiGraphics g, GrandStrategy.Army a) {
+        double[] at = camera == null ? pos(a) : null;
+        var e = at == null ? null : marcher(a);
         if (e == null) {
             return;
         }
@@ -237,11 +280,18 @@ public class GrandStrategyScreen extends FactionMapScreen {
      * {@link #MARCHER_HEIGHT} blocks tall, so he grows and shrinks with the land as the map zooms. Called while the world is drawn.
      */
     static void renderMarcher(PoseStack pose, Vec3 cam, MultiBufferSource buffers) {
-        if (!(Minecraft.getInstance().screen instanceof GrandStrategyScreen s) || s.camera == null) {
+        GrandStrategyScreen s = shown();
+        if (s == null || s.camera == null) {
             return;
         }
-        double[] at = s.army();
-        var e = at == null ? null : s.marcher();
+        for (GrandStrategy.Army a : s.fief.armies()) {
+            renderMarcher(s, a, pose, cam, buffers);
+        }
+    }
+
+    private static void renderMarcher(GrandStrategyScreen s, GrandStrategy.Army a, PoseStack pose, Vec3 cam, MultiBufferSource buffers) {
+        double[] at = s.pos(a);
+        var e = at == null ? null : s.marcher(a);
         BaseMap base = ClientMapCache.map();
         if (e == null || base == null) {
             return;
@@ -494,12 +544,54 @@ public class GrandStrategyScreen extends FactionMapScreen {
         return new double[]{width / 2.0 + vx / ahead * focal, height / 2.0 - up / ahead * focal};
     }
 
+    /** A menu drawn over the grand strategy map: it names the map under it. */
+    interface OverMap {
+        GrandStrategyScreen map();
+    }
+
+    /** The grand strategy map on screen, by itself or under one of its menus; null if neither. */
+    @Nullable
+    public static GrandStrategyScreen shown() {
+        var screen = Minecraft.getInstance().screen;
+        return screen instanceof GrandStrategyScreen s ? s : screen instanceof OverMap o ? o.map() : null;
+    }
+
+    /** A menu drawn over this map (the Army Spawn Menu, the face-off): leaving for it keeps the map, camera and marchers. */
+    private boolean overMenu;
+
+    private void openOver(net.minecraft.client.gui.screens.Screen menu) {
+        overMenu = true;
+        minecraft.setScreen(menu);
+    }
+
+    /** Drawn under a menu of {@code w} × {@code h}: the live map (no hover), then a clean depth so the menu lies over all of it. */
+    void renderUnder(GuiGraphics g, int w, int h, float partialTick) {
+        if (width != w || height != h) {
+            init(minecraft, w, h); // the window was resized under the menu
+        }
+        render(g, -1, -1, partialTick);
+        g.flush();
+        com.mojang.blaze3d.systems.RenderSystem.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
+    }
+
+    /** Whether this map is up as itself, not under a menu (which draws it): only then may it leave for another. */
+    private boolean onTop() {
+        return minecraft != null && minecraft.screen == this;
+    }
+
     @Override
     public void removed() {
-        if (bearer != null) {
-            rafasconquest.client.cloth.ClothRenderer.far(bearer.getId(), null);
-            rafasconquest.client.BackBanners.remove(bearer.getId());
+        if (overMenu) { // under a menu, which draws this map and comes back to it
+            overMenu = false;
+            return;
         }
+        for (Marcher m : marchers.values()) {
+            if (m.e != null) {
+                rafasconquest.client.cloth.ClothRenderer.far(m.e.getId(), null);
+                rafasconquest.client.BackBanners.remove(m.e.getId());
+            }
+        }
+        marchers.clear();
         leave3d();
         super.removed();
     }
@@ -525,21 +617,28 @@ public class GrandStrategyScreen extends FactionMapScreen {
                 g.renderOutline((int) s[0] - 7, (int) s[1] - 7, 14, 14, GOLD);
             }
         }
-        renderArmy(g);
-        double[] box = marcherBox();
-        if (box != null && (armyPicked || menu == null && onMarcher(mouseX, mouseY))) { // picked, or under the mouse
-            g.renderOutline((int) box[0], (int) box[1], (int) (box[2] - box[0]), (int) (box[3] - box[1]), armyPicked ? GOLD : 0x80E0C060);
+        GrandStrategy.Army under = menuOpen() ? null : armyAt(mouseX, mouseY);
+        for (GrandStrategy.Army a : fief.armies()) {
+            renderArmy(g, a);
+            double[] box = marcherBox(a);
+            if (box != null && (a.id() == picked || a == under)) { // picked, or under the mouse (red: a click attacks it)
+                int colour = a.id() == picked ? GOLD : picked != GrandStrategy.NO_TARGET ? 0xC0E04030 : 0x80E0C060;
+                g.renderOutline((int) box[0], (int) box[1], (int) (box[2] - box[0]), (int) (box[3] - box[1]), colour);
+            }
         }
         g.disableScissor();
-        armyPicked &= box != null;
-        if (summary != null) {
+        GrandStrategy.Army chosen = fief.army(picked);
+        if (chosen == null || marcherBox(chosen) == null) {
+            picked = GrandStrategy.NO_TARGET;
+        }
+        if (summary != null && panelArmy() != null) {
             panel.open(false);
-        } else if (armyPicked) {
+        } else if (picked != GrandStrategy.NO_TARGET) {
             panel.open(true);
         } else {
             panel.close();
         }
-        SeatCities.City hovered = menu == null && !overHud(mouseX, mouseY) ? seatAt(mouseX, mouseY) : null;
+        SeatCities.City hovered = !menuOpen() && !overHud(mouseX, mouseY) ? seatAt(mouseX, mouseY) : null;
         List<Spot> spots = spots();
         renderHud(g, spots, mouseX, mouseY);
         g.pose().pushPose();
@@ -547,11 +646,15 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (summary != null) {
             renderSummary(g, summary);
         }
-        panel.render(g, font, width, height, fief, mouseX, mouseY);
-        if (menu != null) {
+        if (panelArmy() != null) {
+            panel.render(g, font, width, height, panelArmy(), mouseX, mouseY);
+        }
+        if (menuOpen()) {
             renderMenu(g, mouseX, mouseY);
         } else if (hovered != null) {
             g.renderComponentTooltip(font, seatTip(hovered), mouseX, mouseY);
+        } else if (under != null && panel.mode != CityPanel.Mode.MARCH && !overHud(mouseX, mouseY)) {
+            g.renderComponentTooltip(font, armyTip(under), mouseX, mouseY);
         } else {
             for (Spot s : spots) {
                 if (s.over(mouseX, mouseY)) {
@@ -560,6 +663,54 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
         }
         g.pose().popPose();
+        meet(); // last: it may leave this screen for the face-off
+    }
+
+    /** The army the bottom panel shows: the hold's under a city's summary, else the picked one; null for none. */
+    @Nullable
+    private GrandStrategy.Army panelArmy() {
+        return fief.army(summary != null ? GrandStrategy.HOLD : picked);
+    }
+
+    private boolean menuOpen() {
+        return menu != null || spawnAt != null;
+    }
+
+    private List<Component> armyTip(GrandStrategy.Army a) {
+        List<Component> lines = new ArrayList<>(tip(FaceOffScreen.nation(a), FaceOffScreen.general(a)));
+        lines.add(Component.literal(a.units().length + " units, " + String.format("%,d", a.units().length * Garrison.MEN) + " soldiers").withColor(0xA8A49C));
+        lines.add(Component.literal(picked == GrandStrategy.NO_TARGET || a.id() == picked ? "Click: select" : "Click: attack it").withColor(0xE0C060));
+        return lines;
+    }
+
+    /** A nation's map colour (ARGB), grey for none. */
+    private int colour(int nation) {
+        BaseMap base = ClientMapCache.map();
+        return map == null || base == null || nation < 0 || nation >= base.nations().size() ? 0xFF6A6A6A : 0xFF000000 | map.color(base.nations().get(nation).id());
+    }
+
+    /** How near (blocks) an attacker must end its march to its foe to face it; farther, the foe has moved and it gives chase. */
+    private static final double MEET = 64;
+
+    /** An attacker at its march's end: face its foe if there, else march on to where the foe is now; once each march. */
+    private void meet() {
+        if (!onTop()) {
+            return; // drawn under a menu: no face-off from there
+        }
+        for (GrandStrategy.Army a : fief.armies()) {
+            double[] at = pos(a);
+            GrandStrategy.Army foe = a.target() == GrandStrategy.NO_TARGET ? null : fief.army(a.target());
+            double[] there = foe == null ? null : pos(foe);
+            if (at == null || there == null || Math.hypot(a.toX() - at[0], a.toZ() - at[1]) > 0.5 || !faced.add(a.id() + ":" + a.start())) {
+                continue; // no foe, still marching, or met already
+            }
+            if (Math.hypot(there[0] - at[0], there[1] - at[1]) > MEET) {
+                ConquestNetwork.orderGarrison(a.id(), GrandStrategy.ATTACK, foe.id(), 0, 0);
+            } else {
+                openOver(new FaceOffScreen(this, a, foe, colour(nationOf(a)), colour(nationOf(foe))));
+                return;
+            }
+        }
     }
 
     /** Every seat city on the 3D map: a square sized and coloured by its highest title, as on the flat map. */
@@ -735,8 +886,17 @@ public class GrandStrategyScreen extends FactionMapScreen {
         }
     }
 
+    /** The right-click menu's title and its one row: a city's, or creative's on open ground. */
+    private String menuTitle() {
+        return menu != null ? name(menu) : "Creative";
+    }
+
+    private String menuRow() {
+        return menu != null ? MANAGE : SPAWN;
+    }
+
     private int menuWidth() {
-        return Math.max(font.width(name(menu)), font.width(MANAGE)) + 12;
+        return Math.max(font.width(menuTitle()), font.width(menuRow())) + 12;
     }
 
     private boolean inManageRow(double mouseX, double mouseY) {
@@ -748,12 +908,12 @@ public class GrandStrategyScreen extends FactionMapScreen {
         int w = menuWidth();
         g.fill(menuX, menuY, menuX + w, menuY + ROW * 2 + 6, 0xF0201D18);
         g.renderOutline(menuX, menuY, w, ROW * 2 + 6, EDGE);
-        g.drawString(font, name(menu), menuX + 6, menuY + 4, GOLD, false);
+        g.drawString(font, menuTitle(), menuX + 6, menuY + 4, GOLD, false);
         int rowY = menuY + 4 + ROW;
         if (inManageRow(mouseX, mouseY)) {
             g.fill(menuX + 1, rowY - 2, menuX + w - 1, rowY + ROW - 2, HOVER);
         }
-        g.drawString(font, MANAGE, menuX + 6, rowY, TEXT, false);
+        g.drawString(font, menuRow(), menuX + 6, rowY, TEXT, false);
     }
 
     /** Opens a city's manager; only from the overworld, where the cities are. */
@@ -776,22 +936,27 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (menu != null) { // any click closes the menu; one on its row also opens the manager
+        if (menuOpen()) { // any click closes the menu; one on its row also does it
             SeatCities.City city = menu;
+            double[] at = spawnAt;
             boolean onRow = button == 0 && inManageRow(mouseX, mouseY);
             menu = null;
-            if (onRow) {
+            spawnAt = null;
+            if (onRow && city != null) {
                 manage(city);
+            } else if (onRow) {
+                openOver(new ArmySpawnScreen(this, at[0], at[1], fief.nation()));
             }
             return true;
         }
-        if (button == 0 && panel.click(mouseX, mouseY, width, height, fief)) {
+        GrandStrategy.Army shown = panelArmy();
+        if (button == 0 && shown != null && panel.click(mouseX, mouseY, width, height, shown)) {
             return true;
         }
-        if (panel.mode == CityPanel.Mode.MARCH && !overHud(mouseX, mouseY)) { // the march's goal; a right-click calls it off
+        if (panel.mode == CityPanel.Mode.MARCH && shown != null && !overHud(mouseX, mouseY)) { // the march's goal; a right-click calls it off
             double[] to = button == 0 ? unproject(mouseX, mouseY) : null;
             if (to != null) {
-                ConquestNetwork.orderGarrison(GrandStrategy.MARCH, 0, to[0], to[1]);
+                ConquestNetwork.orderGarrison(shown.id(), GrandStrategy.MARCH, 0, to[0], to[1]);
             }
             panel.mode = CityPanel.Mode.NONE;
             return true;
@@ -807,12 +972,20 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
             return true;
         }
-        if (button == 0 && onMarcher(mouseX, mouseY)) { // the army in the field, picked: Muster and March
-            armyPicked = true;
+        GrandStrategy.Army clicked = button == 0 ? armyAt(mouseX, mouseY) : null;
+        if (clicked != null && picked != GrandStrategy.NO_TARGET && clicked.id() != picked) { // another army: the picked one attacks it
+            ConquestNetwork.orderGarrison(picked, GrandStrategy.ATTACK, clicked.id(), 0, 0);
+            return true;
+        }
+        if (clicked != null) { // an army in the field, picked: Muster, Dismiss (spawned) and March
+            if (picked != clicked.id()) {
+                panel.mode = CityPanel.Mode.NONE;
+            }
+            picked = clicked.id();
             summary = null;
             return true;
         }
-        armyPicked = false;
+        picked = GrandStrategy.NO_TARGET;
         SeatCities.City city = ownedAt(mouseX, mouseY);
         if (city == null) {
             summary = null;
@@ -835,6 +1008,13 @@ public class GrandStrategyScreen extends FactionMapScreen {
                 if (labels.mouseClicked(view, map, mouseX, mouseY, button, twice)) {
                     return true; // a nation's name: twice opens its Faction Info
                 }
+            }
+            double[] ground = button == 1 && minecraft.player != null && minecraft.player.isCreative() ? unproject(mouseX, mouseY) : null;
+            if (ground != null) { // creative: Spawn army here
+                spawnAt = ground;
+                menuX = (int) mouseX + 4;
+                menuY = (int) mouseY + 4;
+                return true;
             }
             return super.mouseClicked(mouseX, mouseY, button);
         }

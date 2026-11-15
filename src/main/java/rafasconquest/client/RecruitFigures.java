@@ -143,7 +143,7 @@ final class RecruitFigures {
     /** Whether a block's soldiers are drawn here: foot or horse, close enough for 3D, and the graphics card can. */
     static boolean draws(FormationSnapshot f, boolean flat) {
         return usable && !flat && switch (f.kind()) {
-            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES -> true;
+            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, HALBERDIERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES -> true;
             default -> false;
         };
     }

@@ -27,9 +27,14 @@ final class CityPanel {
     private static final String[] TABS = {"City", "Army", "Intrigue"};
     private static final String[] BUTTONS = {"", "Muster", "Dismiss", "March"};
     static final String[] NAMES = {"Levy", "Heavy infantry", "Skirmishers", "Zweihandlers", "Archers", "Cavalry", "Heavy cavalry",
-            "Musketeers", "Siege train"};
+            "Musketeers", "Siege train", "Halberdiers", "Culverins", "Serpentines", "Mons Megs", "Hwachas", "Arcballistas",
+            "Onagers", "Trebuchets", "Tower crossbows"};
     private static final Item[] ICONS = {Items.STONE_SWORD, Items.SHIELD, Items.IRON_SWORD, Items.NETHERITE_SWORD, Items.BOW,
-            Items.SADDLE, Items.IRON_HORSE_ARMOR, Items.CROSSBOW, Items.DISPENSER};
+            Items.SADDLE, Items.IRON_HORSE_ARMOR, Items.CROSSBOW, Items.DISPENSER, Items.IRON_AXE, Items.FIRE_CHARGE,
+            Items.FIRE_CHARGE, Items.TNT, Items.FIREWORK_ROCKET, Items.ARROW, Items.COBBLESTONE, Items.STONE, Items.TIPPED_ARROW};
+    /** The arms the muster shop offers, by ordinal: the general roster (no siege train). */
+    private static final int[] SHOP = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster)
+            .mapToInt(Enum::ordinal).toArray();
     private static final int BACK = 0xF0201D18;
     private static final int EDGE = 0xFF8C6A2F;
     private static final int GOLD = 0xFFE0C060;
@@ -37,8 +42,8 @@ final class CityPanel {
     private static final int RED = 0xFFD04030;
     private static final int TAB_H = 14;
     private static final int BUTTON_W = 50;
-    private static final int CARD_W = 22;
-    private static final int CARD_H = 34;
+    static final int CARD_W = 22;
+    static final int CARD_H = 34;
     private static final int H = TAB_H + CARD_H + TAB_H + 12;
     private static final int SHOP_H = CARD_H + 22;
     private static final long SLIDE_MS = 200;
@@ -88,8 +93,9 @@ final class CityPanel {
         return mx >= left && mx < right && my >= shopTop;
     }
 
-    private Mode[] buttons() {
-        return field ? new Mode[]{Mode.MUSTER, Mode.MARCH} : new Mode[]{Mode.MUSTER, Mode.DISMISS, Mode.MARCH};
+    /** A spawned army may dismiss in the field; the hold's only in its city. */
+    private Mode[] buttons(GrandStrategy.Army army) {
+        return field && army.id() == GrandStrategy.HOLD ? new Mode[]{Mode.MUSTER, Mode.MARCH} : new Mode[]{Mode.MUSTER, Mode.DISMISS, Mode.MARCH};
     }
 
     private int buttonX(int i, int n) {
@@ -121,7 +127,7 @@ final class CityPanel {
         return -1;
     }
 
-    void render(GuiGraphics g, Font font, int width, int height, GrandStrategy.View fief, int mouseX, int mouseY) {
+    void render(GuiGraphics g, Font font, int width, int height, GrandStrategy.Army army, int mouseX, int mouseY) {
         if (!shown()) {
             return;
         }
@@ -135,26 +141,26 @@ final class CityPanel {
             g.drawCenteredString(font, TABS[i], x + 25, top + 5, i == tab ? GOLD : TEXT);
         }
         if (field) {
-            g.drawString(font, "Army in the field", left + 6, top + 5, GOLD, false);
+            g.drawString(font, army.general().isEmpty() ? "Army in the field" : "Army of " + army.general(), left + 6, top + 5, GOLD, false);
         }
         int body = top + TAB_H + 4;
         List<Component> tip = null;
         if (!field && tab != 1) {
             g.drawCenteredString(font, tab == 0 ? "City upgrades: not built yet" : "Intrigue: not built yet", (left + right) / 2, body + CARD_H / 2, 0xFFA8A49C);
         } else {
-            int[] army = fief.army();
-            int[] xs = cardXs(army.length);
+            int[] units = army.units();
+            int[] xs = cardXs(units.length);
             int hovered = cardAt(xs, body, mouseX, mouseY);
-            for (int i = 0; i < army.length; i++) {
-                card(g, font, xs[i], body, army[i], i == hovered ? (mode == Mode.DISMISS ? RED : GOLD) : 0xFFC8C8C8);
+            for (int i = 0; i < units.length; i++) {
+                card(g, font, xs[i], body, units[i], i == hovered ? (mode == Mode.DISMISS ? RED : GOLD) : 0xFFC8C8C8);
             }
             if (hovered >= 0) {
-                tip = tip(army[hovered], mode == Mode.DISMISS ? "Click: dismiss" : null);
+                tip = tip(units[hovered], mode == Mode.DISMISS ? "Click: dismiss" : null);
             }
-            String count = army.length + " units, " + String.format("%,d", army.length * Garrison.MEN) + " soldiers";
+            String count = units.length + (army.cap() > 0 ? " / " + army.cap() : "") + " units, " + String.format("%,d", units.length * Garrison.MEN) + " soldiers";
             g.drawString(font, count, right - 6 - font.width(count), top + 5, 0xFFA8A49C, false);
             int by = height - TAB_H - 4;
-            Mode[] buttons = buttons();
+            Mode[] buttons = buttons(army);
             for (int i = 0; i < buttons.length; i++) {
                 int x = buttonX(i, buttons.length);
                 boolean on = mode == buttons[i];
@@ -168,13 +174,13 @@ final class CityPanel {
                 g.fill(left, shopTop, right, top - 2, BACK);
                 g.renderOutline(left, shopTop, right - left, SHOP_H, EDGE);
                 g.drawString(font, "Muster: click a card to raise " + Garrison.MEN + " soldiers", left + 6, shopTop + 4, GOLD, false);
-                int[] shop = cardXs(NAMES.length);
+                int[] shop = cardXs(SHOP.length);
                 int over = cardAt(shop, shopTop + 16, mouseX, mouseY);
-                for (int i = 0; i < NAMES.length; i++) {
-                    card(g, font, shop[i], shopTop + 16, i, i == over ? GOLD : 0xFFC8C8C8);
+                for (int i = 0; i < SHOP.length; i++) {
+                    card(g, font, shop[i], shopTop + 16, SHOP[i], i == over ? GOLD : 0xFFC8C8C8);
                 }
                 if (over >= 0) {
-                    tip = tip(over, "Click: muster");
+                    tip = tip(SHOP[over], "Click: muster");
                 }
             } else if (mode == Mode.MARCH) {
                 String hint = "Click the map to march there; right-click to stop";
@@ -186,14 +192,14 @@ final class CityPanel {
         }
     }
 
-    private static List<Component> tip(int arm, @Nullable String click) {
+    static List<Component> tip(int arm, @Nullable String click) {
         Component name = Component.literal(NAMES[arm]);
         Component men = Component.literal(Garrison.MEN + " soldiers").withColor(0xA8A49C);
         return click == null ? List.of(name, men) : List.of(name, men, Component.literal(click).withColor(0xE0C060));
     }
 
     /** A unit card: its arm's icon and name, and its soldiers, on the battle screen's card colours. */
-    private static void card(GuiGraphics g, Font font, int x, int y, int arm, int edge) {
+    static void card(GuiGraphics g, Font font, int x, int y, int arm, int edge) {
         g.fill(x - 1, y - 1, x + CARD_W + 1, y + CARD_H + 1, edge);
         g.fill(x, y, x + CARD_W, y + CARD_H, 0xFFFFF2B0);
         g.renderItem(new ItemStack(ICONS[Math.floorMod(arm, ICONS.length)]), x + 3, y + 4);
@@ -207,7 +213,7 @@ final class CityPanel {
     }
 
     /** A left click in the panel (true: taken). */
-    boolean click(double mx, double my, int width, int height, GrandStrategy.View fief) {
+    boolean click(double mx, double my, int width, int height, GrandStrategy.Army army) {
         if (!over(mx, my, width, height)) {
             return false;
         }
@@ -223,7 +229,7 @@ final class CityPanel {
             return true;
         }
         int by = height - TAB_H - 4;
-        Mode[] buttons = buttons();
+        Mode[] buttons = buttons(army);
         for (int i = 0; i < buttons.length; i++) {
             int x = buttonX(i, buttons.length);
             if (mx >= x && mx < x + BUTTON_W && my >= by && my < by + TAB_H) {
@@ -233,14 +239,14 @@ final class CityPanel {
             }
         }
         if (mode == Mode.MUSTER) {
-            int shop = cardAt(cardXs(NAMES.length), top - SHOP_H - 2 + 16, mx, my);
-            if (shop >= 0 && shop < BattlePlan.Arm.values().length) {
-                ConquestNetwork.orderGarrison(GrandStrategy.MUSTER, shop, 0, 0);
+            int shop = cardAt(cardXs(SHOP.length), top - SHOP_H - 2 + 16, mx, my);
+            if (shop >= 0) {
+                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, SHOP[shop], 0, 0);
             }
         } else if (mode == Mode.DISMISS) {
-            int card = cardAt(cardXs(fief.army().length), top + TAB_H + 4, mx, my);
+            int card = cardAt(cardXs(army.units().length), top + TAB_H + 4, mx, my);
             if (card >= 0) {
-                ConquestNetwork.orderGarrison(GrandStrategy.DISMISS, card, 0, 0);
+                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.DISMISS, card, 0, 0);
             }
         }
         return true;

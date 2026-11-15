@@ -258,16 +258,34 @@ public final class ConquestNetwork {
                 .add();
         CHANNEL.messageBuilder(GarrisonOrder.class, 39, NetworkDirection.PLAY_TO_SERVER)
                 .encoder((m, b) -> {
+                    b.writeVarInt(m.army());
                     b.writeVarInt(m.op());
                     b.writeVarInt(m.arg());
                     b.writeDouble(m.x());
                     b.writeDouble(m.z());
                 })
-                .decoder(b -> new GarrisonOrder(b.readVarInt(), b.readVarInt(), b.readDouble(), b.readDouble()))
+                .decoder(b -> new GarrisonOrder(b.readVarInt(), b.readVarInt(), b.readVarInt(), b.readDouble(), b.readDouble()))
                 .consumerMainThread((m, context) -> {
                     ServerPlayer player = SimpleChannel.sender(context);
                     if (player != null) {
-                        rafasconquest.peerage.GrandStrategy.order(player, m.op(), m.arg(), m.x(), m.z());
+                        rafasconquest.peerage.GrandStrategy.order(player, m.army(), m.op(), m.arg(), m.x(), m.z());
+                    }
+                })
+                .add();
+        CHANNEL.messageBuilder(SpawnArmy.class, 40, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.nation());
+                    b.writeUtf(m.general(), 64);
+                    b.writeVarInt(m.soldiers());
+                    b.writeBoolean(m.autofill());
+                    b.writeDouble(m.x());
+                    b.writeDouble(m.z());
+                })
+                .decoder(b -> new SpawnArmy(b.readVarInt(), b.readUtf(64), b.readVarInt(), b.readBoolean(), b.readDouble(), b.readDouble()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.peerage.GrandStrategy.spawn(player, m.nation(), m.general(), m.soldiers(), m.autofill(), m.x(), m.z());
                     }
                 })
                 .add();
@@ -637,26 +655,42 @@ public final class ConquestNetwork {
             buf.writeInt(view.seat());
             buf.writeInt(view.nation());
             buf.writeLong(view.day());
-            buf.writeVarIntArray(view.army());
-            buf.writeDouble(view.fromX());
-            buf.writeDouble(view.fromZ());
-            buf.writeDouble(view.toX());
-            buf.writeDouble(view.toZ());
-            buf.writeLong(view.start());
+            buf.writeCollection(view.armies(), (b, a) -> {
+                b.writeInt(a.id());
+                b.writeInt(a.nation());
+                b.writeUtf(a.general());
+                b.writeVarInt(a.cap());
+                b.writeVarIntArray(a.units());
+                b.writeDouble(a.fromX());
+                b.writeDouble(a.fromZ());
+                b.writeDouble(a.toX());
+                b.writeDouble(a.toZ());
+                b.writeLong(a.start());
+                b.writeInt(a.target());
+            });
         }
 
         static GrandStrategyView read(FriendlyByteBuf buf) {
             return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong(),
-                    buf.readVarIntArray(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readLong()));
+                    buf.readList(b -> new rafasconquest.peerage.GrandStrategy.Army(b.readInt(), b.readInt(), b.readUtf(), b.readVarInt(),
+                            b.readVarIntArray(), b.readDouble(), b.readDouble(), b.readDouble(), b.readDouble(), b.readLong(), b.readInt()))));
         }
     }
 
-    /** Client → server: the player orders their hold's army ({@link rafasconquest.peerage.GrandStrategy#order}). */
-    public record GarrisonOrder(int op, int arg, double x, double z) {
+    /** Client → server: the player orders an army ({@link rafasconquest.peerage.GrandStrategy#order}). */
+    public record GarrisonOrder(int army, int op, int arg, double x, double z) {
     }
 
-    public static void orderGarrison(int op, int arg, double x, double z) {
-        CHANNEL.sendToServer(new GarrisonOrder(op, arg, x, z));
+    public static void orderGarrison(int army, int op, int arg, double x, double z) {
+        CHANNEL.sendToServer(new GarrisonOrder(army, op, arg, x, z));
+    }
+
+    /** Client → server: creative spawns an army on the grand strategy map ({@link rafasconquest.peerage.GrandStrategy#spawn}). */
+    public record SpawnArmy(int nation, String general, int soldiers, boolean autofill, double x, double z) {
+    }
+
+    public static void spawnArmy(int nation, String general, int soldiers, boolean autofill, double x, double z) {
+        CHANNEL.sendToServer(new SpawnArmy(nation, general, soldiers, autofill, x, z));
     }
 
     public static void sendGrandStrategy(ServerPlayer player, rafasconquest.peerage.GrandStrategy.View view) {

@@ -74,11 +74,12 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
     }
 
     public enum Kind {
-        LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES, GENERAL, BEARER;
+        LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES, GENERAL, BEARER,
+        HALBERDIERS;
 
-        /** The kind drawn for a block of {@code arm}: the same name. */
+        /** The kind drawn for a block of {@code arm}: the same name; every engine's crews drawn as the siege train. */
         public static Kind of(BattlePlan.Arm arm) {
-            return valueOf(arm.name());
+            return arm.engine() ? ENGINES : valueOf(arm.name());
         }
 
         public boolean mounted() {
@@ -87,7 +88,7 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
 
         /** Foot that fights hand to hand in the ranks. */
         public boolean infantry() {
-            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS;
+            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS || this == HALBERDIERS;
         }
     }
 

@@ -742,7 +742,7 @@ public final class Siege {
                 rams.add(b);
             } else if (b.machine == Machine.MANTLET) {
                 mantlets.add(b);
-            } else if (b.arm == Arm.ENGINES && b.machine != null) {
+            } else if (b.arm.engine() && b.machine != null) {
                 artillery.add(b);
             } else if (b.arm.shoots()) {
                 shooters.add(b);
@@ -1306,12 +1306,12 @@ public final class Siege {
 
     private void crewOrders(Work w, FieldBlock b, boolean carrier, int place, FieldArmy a, FieldArmy d) {
         Region at = region(b.pos);
-        if (carrier && b.arm == Arm.ENGINES && w.state != State.CARRIED) {
+        if (carrier && b.arm.engine() && w.state != State.CARRIED) {
             // A tower's or ram's crew stays with it once it is there: a tower's behind it, a ram's at the gate.
             hold(b, w.kind == Engine.TOWERS ? behind(w, 0) : w.foot);
             return;
         }
-        if (w.front.breach >= 0 && at == Region.OUT && b.arm != Arm.ENGINES) {
+        if (w.front.breach >= 0 && at == Region.OUT && !b.arm.engine()) {
             // The wall is open: through the breach, rather than up a ladder.
             Gate g = gates.get(w.front.breach).gate;
             hold(b, b.pos.distanceTo(g.mouth()) > AT ? g.mouth() : g.button());
@@ -1449,7 +1449,7 @@ public final class Siege {
         if (byBreach(b.pos)) {
             return to;
         }
-        Work w = b.side == 0 && b.arm != Arm.ENGINES ? workOf(b) : null;
+        Work w = b.side == 0 && !b.arm.engine() ? workOf(b) : null;
         if (w != null && w.kind != Engine.RAMS && w.state == State.UP
                 && (b.pos.distanceTo(w.foot) <= (w.kind == Engine.TOWERS ? w.out : 1.5) + AT || b.pos.distanceTo(w.top) <= AT * 2)) {
             return to;

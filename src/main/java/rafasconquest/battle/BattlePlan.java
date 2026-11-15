@@ -133,19 +133,69 @@ public final class BattlePlan {
         HEAVY_CAVALRY(1.3, 0.7, 0.9, 1.3),
         /** Gambesons and bayonet muskets (Musket Mod, Gunpowder age): slow, hard volleys that shields don't stop; soft. */
         MUSKETEERS(1.3, 1.2, 1, 0.9),
-        /** The siege train: crews working Siegeworks engines ({@link Machine}), each block its own kind. */
-        ENGINES(1, 1, 0.8, 1);
+        /**
+         * The siege train: crews working Siegeworks engines ({@link Machine}), each unit its own kind. Only the ram, tower
+         * and mantlet stay under it; a unit given a shooting engine becomes that engine's own arm ({@link #of}).
+         */
+        ENGINES(1, 1, 0.8, 1),
+        // New arms go last: city armies save their cards by ordinal.
+        /** Plate and halberds (Epic Knights only; else heavy infantry): the anti-horse line, hitting cavalry harder. */
+        HALBERDIERS(1.2, 0.9, 0.9, 1.1),
+        CULVERINS(Machine.CULVERIN),
+        SERPENTINES(Machine.SERPENTINE),
+        MONS_MEGS(Machine.MONS_MEG),
+        HWACHAS(Machine.HWACHA),
+        ARCBALLISTAS(Machine.ARCBALLISTA),
+        ONAGERS(Machine.ONAGER),
+        TREBUCHETS(Machine.TREBUCHET),
+        TOWER_CROSSBOWS(Machine.TOWER_CROSSBOW);
 
         private final double hits;
         private final double takes;
         private final double pace;
         private final double nerve;
+        private final Machine machine;
 
         Arm(double hits, double takes, double pace, double nerve) {
+            this(hits, takes, pace, nerve, null);
+        }
+
+        /** An engine's own arm: the siege train's rates, working only {@code machine}. */
+        Arm(Machine machine) {
+            this(1, 1, 0.8, 1, machine);
+        }
+
+        Arm(double hits, double takes, double pace, double nerve, Machine machine) {
             this.hits = hits;
             this.takes = takes;
             this.pace = pace;
             this.nerve = nerve;
+            this.machine = machine;
+        }
+
+        /** The engine this arm works, for an engine's own arm; null otherwise (the siege train's crews get theirs in battle). */
+        public Machine machine() {
+            return machine;
+        }
+
+        /** Crews working an engine: the siege train, or an engine's own arm. */
+        public boolean engine() {
+            return this == ENGINES || machine != null;
+        }
+
+        /** The arm of crews working {@code m}: its own arm, or the siege train for the ram, tower and mantlet. */
+        public static Arm of(Machine m) {
+            for (Arm a : values()) {
+                if (a.machine == m) {
+                    return a;
+                }
+            }
+            return ENGINES;
+        }
+
+        /** On the general roster (city army cards): every arm but the siege train. */
+        public boolean roster() {
+            return this != ENGINES;
         }
 
         public double hits() {
@@ -171,7 +221,7 @@ public final class BattlePlan {
 
         /** Foot that fights hand to hand, in files. */
         public boolean infantry() {
-            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS;
+            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS || this == HALBERDIERS;
         }
 
         public boolean mounted() {
@@ -180,7 +230,7 @@ public final class BattlePlan {
 
         /** Shoots from behind the front: archers, musketeers and the siege train. */
         public boolean shoots() {
-            return this == ARCHERS || this == MUSKETEERS || this == ENGINES;
+            return this == ARCHERS || this == MUSKETEERS || engine();
         }
 
         /** Bears shields: takes less from the front ({@link FieldRules#SHIELD_MELEE}, {@link FieldRules#SHIELD_ARROWS}). */
@@ -216,13 +266,14 @@ public final class BattlePlan {
     static final double TRAIN_SHARE = 0.05;
 
     /**
-     * Of every army, by headcount: levy, heavy infantry, skirmishers, zweihandlers (the infantry), archers, cavalry, heavy
-     * cavalry. With musketeers, they take {@link #MUSKETEER_SHARE}: half from the levy, half from the archers.
+     * Of every army, by headcount: levy, heavy infantry, skirmishers, zweihandlers, halberdiers (the infantry), archers,
+     * cavalry, heavy cavalry. With musketeers, they take {@link #MUSKETEER_SHARE}: half from the levy, half from the archers.
      */
-    static final double LEVY_SHARE = 0.30;
-    static final double HEAVY_SHARE = 0.20;
+    static final double LEVY_SHARE = 0.25;
+    static final double HEAVY_SHARE = 0.15;
     static final double SKIRMISHER_SHARE = 0.10;
     static final double ZWEIHANDLER_SHARE = 0.05;
+    static final double HALBERDIER_SHARE = 0.10;
     static final double ARCHER_SHARE = 0.20;
     static final double CAVALRY_SHARE = 0.10;
     static final double HEAVY_CAVALRY_SHARE = 0.05;
@@ -230,7 +281,7 @@ public final class BattlePlan {
     private static final double[] HORSE_SHARES = {CAVALRY_SHARE, HEAVY_CAVALRY_SHARE};
 
     private static double[] footShares(boolean musketeers) {
-        return new double[]{LEVY_SHARE - (musketeers ? MUSKETEER_SHARE / 2 : 0), HEAVY_SHARE, SKIRMISHER_SHARE, ZWEIHANDLER_SHARE};
+        return new double[]{LEVY_SHARE - (musketeers ? MUSKETEER_SHARE / 2 : 0), HEAVY_SHARE, SKIRMISHER_SHARE, ZWEIHANDLER_SHARE, HALBERDIER_SHARE};
     }
 
     /** The shooters: archers, musketeers, then the siege train. */
@@ -662,17 +713,19 @@ public final class BattlePlan {
     /**
      * A wing's infantry, {@code n} blocks of each kind in {@link #footShares}' order, in the order they take their
      * places from the front rank back: the levies first if they go up front, else the heavy infantry, the levies
-     * behind it; then the skirmishers and the zweihandlers (skirmishers too without Epic Knights).
+     * behind it, the halberdiers beside the heavy infantry; then the skirmishers and the zweihandlers. Without Epic
+     * Knights, zweihandlers fight as skirmishers and halberdiers as heavy infantry.
      */
     static List<Arm> foot(int[] n, boolean levyFront) {
-        int infantry = n[0] + n[1] + n[2] + n[3];
+        int infantry = n[0] + n[1] + n[2] + n[3] + n[4];
         Arm[] order = levyFront
-                ? new Arm[]{Arm.LEVY, Arm.HEAVY_INFANTRY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS}
-                : new Arm[]{Arm.HEAVY_INFANTRY, Arm.LEVY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS};
-        int[] count = levyFront ? new int[]{n[0], n[1], n[2], n[3]} : new int[]{n[1], n[0], n[2], n[3]};
+                ? new Arm[]{Arm.LEVY, Arm.HEAVY_INFANTRY, Arm.HALBERDIERS, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS}
+                : new Arm[]{Arm.HEAVY_INFANTRY, Arm.HALBERDIERS, Arm.LEVY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS};
+        int[] count = levyFront ? new int[]{n[0], n[1], n[4], n[2], n[3]} : new int[]{n[1], n[4], n[0], n[2], n[3]};
         List<Arm> foot = new ArrayList<>(infantry);
         for (int k = 0; k < order.length; k++) {
-            Arm arm = order[k] == Arm.ZWEIHANDLERS && !zweihandlers ? Arm.SKIRMISHERS : order[k];
+            Arm arm = zweihandlers ? order[k] : order[k] == Arm.ZWEIHANDLERS ? Arm.SKIRMISHERS
+                    : order[k] == Arm.HALBERDIERS ? Arm.HEAVY_INFANTRY : order[k];
             for (int i = 0; i < count[k]; i++) {
                 foot.add(arm);
             }
@@ -800,16 +853,13 @@ public final class BattlePlan {
         if (secondsElapsed < FORMING_SECONDS) {
             return Order.HOLD;
         }
-        return switch (arm) {
-            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
-            case ARCHERS, MUSKETEERS, ENGINES -> nearestEnemy <= reach ? Order.HOLD : Order.MARCH;
-            case CAVALRY, HEAVY_CAVALRY -> {
-                if (nearestEnemy <= CAVALRY_THREAT) {
-                    yield Order.CHARGE;
-                }
-                yield infantryEngaged ? Order.CHARGE : Order.HOLD;
-            }
-        };
+        if (arm.infantry()) {
+            return nearestEnemy <= INFANTRY_ENGAGE ? Order.ENGAGE : Order.MARCH;
+        }
+        if (arm.mounted()) {
+            return nearestEnemy <= CAVALRY_THREAT || infantryEngaged ? Order.CHARGE : Order.HOLD;
+        }
+        return nearestEnemy <= reach ? Order.HOLD : Order.MARCH; // the shooters
     }
 
     /** Whether a front block with {@code alive} of its {@code started} soldiers should be relieved. */

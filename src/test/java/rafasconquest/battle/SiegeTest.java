@@ -92,7 +92,7 @@ class SiegeTest {
                 double out = (b.pos().x() - 0.5) * f.outX() + (b.pos().z() - 0.5) * f.outZ();
                 assertTrue(out > 20.5 + Siege.CLEAR, b.arm() + " of the wall out " + f.outX() + "," + f.outZ() + " stands at " + b.pos());
             }
-            long engines = f.blocks().stream().filter(b -> b.arm() == Arm.ENGINES).count();
+            long engines = f.blocks().stream().filter(b -> b.arm().engine()).count();
             assertTrue(engines > 0, "no siege train at the wall out " + f.outX() + "," + f.outZ());
         }
         assertTrue(siege.works().stream().anyMatch(w -> w.outX() == 0), "no strategems brought against the walls beside the main one");

@@ -30,7 +30,7 @@ public final class Armoury {
     /** Who a kit is for. */
     public enum Kit {
         /** Battle blocks by kind: {@link rafasconquest.battle.BattlePlan.Arm}. */
-        LEVY, HEAVY_INFANTRY, SKIRMISHER, ZWEIHANDLER, ARCHER, CAVALRY, HEAVY_CAVALRY, MUSKETEER,
+        LEVY, HEAVY_INFANTRY, SKIRMISHER, ZWEIHANDLER, ARCHER, CAVALRY, HEAVY_CAVALRY, MUSKETEER, HALBERDIER,
         CAPTAIN, GENERAL, GUARD, ARCHER_GUARD,
         RULER, GREAT_NOBLE, NOBLE, SWORD_SAINT, SWORD_KING, SWORD_GOD
     }
@@ -481,6 +481,13 @@ public final class Armoury {
                 wear(slots, "sallet", body("knight_chestplate", "knight_leggings", "knight_boots"), colour, banner);
                 decorate(slots, EquipmentSlot.HEAD, s.lineCrest(), colour);
                 hold(slots, "iron_zweihander", null, banner);
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
+            case HALBERDIER -> {
+                // Plate under a bascinet, a steel halberd in both hands.
+                wear(slots, "bascinet", body("platemail_chestplate", "platemail_leggings", "platemail_boots"), colour, banner);
+                decorate(slots, EquipmentSlot.HEAD, s.lineCrest(), colour);
+                hold(slots, "steel_concavehalberd", null, banner);
                 slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
             }
             case GUARD -> {

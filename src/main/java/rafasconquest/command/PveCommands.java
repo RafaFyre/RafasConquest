@@ -694,6 +694,7 @@ public final class PveCommands {
             }
             peerage.release(player.getUUID());
             peerage.grant(player.getUUID(), seat, -1, map.realm().holderOf(seat) >= 0 && !peerage.replaced(seat) ? "dismissed" : null);
+            rafasconquest.peerage.Talk.joinSeatNation(player, seat);
             said = name + " is now Count of " + map.names().get(seat);
         } else {
             peerage.release(player.getUUID());

@@ -270,6 +270,7 @@ public final class Talk {
             peer.title = rank == null ? NobleTitle.COUNT : NobleTitle.of(rank);
             peer.persona = npc.person();
             peer.vassals.addAll(map.realm().vassals(npc.person()));
+            joinSeatNation(player, seat);
             PeerageSync.toAll(player.server);
             player.sendSystemMessage(Component.literal(Dialogue.say("noble.replaced", "speaker", p.name(), "player", Names.player(peer.name, peer.title))));
         } else if (key.equals("land")) {
@@ -303,6 +304,7 @@ public final class Talk {
         }
         peerage.grant(player.getUUID(), seat, npc.person(), map.realm().holderOf(seat) >= 0 ? "dismissed" : null);
         peer.title = NobleTitle.of(tier);
+        joinSeatNation(player, seat);
         PeerageSync.toAll(player.server);
         player.sendSystemMessage(Component.literal(Dialogue.say("noble.petition_granted", "speaker", npc.getName().getString(),
                 "title", map.titleName(tier, seat), "player", Names.player(peer.name, peer.title))));
@@ -322,6 +324,7 @@ public final class Talk {
         }
         peer.merits.remove(merit);
         peerage.grant(player.getUUID(), grant.seat(), grant.liege(), grant.fate());
+        joinSeatNation(player, grant.seat());
         PeerageSync.toAll(player.server);
         player.sendSystemMessage(Component.literal(Dialogue.say("noble.land_granted", "speaker", npc.getName().getString(), "way", grant.way().says(),
                 "county", map.names().get(grant.seat()), "player", Names.player(peer.name, peer.title))));
@@ -330,6 +333,20 @@ public final class Talk {
     /** Whether a player serves a nation: is in its faction (has enlisted). */
     public static boolean serves(ServerPlayer player, Faction nation) {
         return player.getTeam() instanceof PlayerTeam team && team.getDisplayName().getString().equals(nation.name());
+    }
+
+    /**
+     * Rule: a player who takes a character's place (their county) joins that character's team, the nation holding the
+     * seat, as a recruiter enlists them.
+     */
+    public static void joinSeatNation(ServerPlayer player, int seat) {
+        BaseMap map = ConquestRuntime.map();
+        ConquestServer server = ConquestServer.get();
+        int nation = map == null || seat < 0 ? -1 : map.holders()[seat];
+        Faction team = nation < 0 || server == null ? null : server.data().faction(map.nations().get(nation).id());
+        if (team != null && !server.recruits().join(player, team)) {
+            player.sendSystemMessage(Component.literal(Dialogue.say("recruiter.could_not_join", "nation", team.name())));
+        }
     }
 
     static Faction nationOf(Recruiter npc) {

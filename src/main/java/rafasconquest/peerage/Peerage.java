@@ -85,6 +85,8 @@ public final class Peerage extends SavedData {
     private final Map<Integer, String> fates = new HashMap<>();
     /** Each city's army, by its seat province: raised (at random) the first time it is asked for. */
     private final Map<Integer, Garrison> garrisons = new HashMap<>();
+    /** Armies spawned on the grand strategy map in creative; an army's id is its index here. */
+    final List<Garrison> spawned = new java.util.ArrayList<>();
 
     public static Peerage get(MinecraftServer server) {
         return rafasconquest.data.SaveGuard.get(server, NAME, Peerage::new, Peerage::load);
@@ -239,6 +241,9 @@ public final class Peerage extends SavedData {
         CompoundTag armies = new CompoundTag();
         garrisons.forEach((province, g) -> armies.put(Integer.toString(province), g.save()));
         tag.put("garrisons", armies);
+        ListTag spawnedTag = new ListTag();
+        spawned.forEach(g -> spawnedTag.add(g.save()));
+        tag.put("spawned", spawnedTag);
         return tag;
     }
 
@@ -298,6 +303,9 @@ public final class Peerage extends SavedData {
         CompoundTag armies = tag.getCompound("garrisons");
         for (String key : armies.getAllKeys()) {
             data.garrisons.put(Integer.parseInt(key), Garrison.load(armies.getCompound(key)));
+        }
+        for (Tag st : tag.getList("spawned", Tag.TAG_COMPOUND)) {
+            data.spawned.add(Garrison.load((CompoundTag) st));
         }
         return data;
     }

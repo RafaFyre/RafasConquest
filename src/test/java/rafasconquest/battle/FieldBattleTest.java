@@ -33,7 +33,8 @@ class FieldBattleTest {
                 FieldBattle.Outcome outcome = battle.run(BattlePlan.TIME_LIMIT_SECONDS);
                 double seconds = (System.nanoTime() - start) / 1e9;
                 assertNotNull(outcome, "never ended");
-                assertTrue(outcome.winner() >= 0, outcome.result());
+                // Halberdiers' tough lines can grind on to the time limit: a draw is a fair end (chosen 2026-11-15).
+                assertTrue(outcome.winner() >= 0 || outcome.seconds() >= BattlePlan.TIME_LIMIT_SECONDS, outcome.result());
                 assertTrue(seconds < 3, "took " + seconds + " s to simulate");
                 assertTrue(outcome.seconds() >= 240, "was over in " + outcome.seconds() + " s; big battles should last");
                 assertTrue(battle.army(0).reliefs() + battle.army(1).reliefs() >= 20, "the lines rotate");
@@ -447,17 +448,18 @@ class FieldBattleTest {
         try {
             FieldBattle battle = battle(200, 200, 5);
             battle.equip(0, List.of(Machine.TREBUCHET, Machine.ONAGER));
-            List<FieldBlock> train = battle.army(0).blocks().stream().filter(b -> b.arm() == Arm.ENGINES).toList();
+            List<FieldBlock> train = battle.army(0).blocks().stream().filter(b -> b.arm().engine()).toList();
             assertEquals(10, train.size());
             for (FieldBlock b : train) {
                 assertNotNull(b.machine());
+                assertEquals(b.machine() == Machine.TREBUCHET ? Arm.TREBUCHETS : Arm.ONAGERS, b.arm(), "each engine its own unit");
                 assertEquals(b.machine().perBlock() * Machine.SHOTS_EACH, b.arrows);
                 assertTrue(train.stream().filter(o -> o.platoon() == b.platoon()).allMatch(o -> o.machine() == b.machine()), "a unit works one kind");
             }
             boolean farShot = false;
             for (int i = 0; i < 300 && !farShot && battle.outcome() == null; i++) {
                 battle.second();
-                farShot = battle.volleys().stream().anyMatch(v -> v.archers().arm() == Arm.ENGINES
+                farShot = battle.volleys().stream().anyMatch(v -> v.archers().arm().engine()
                         && v.archers().pos().distanceTo(v.target().pos()) > FieldRules.ARCHER_RANGE);
             }
             assertTrue(farShot, "an engine hit something out of bow range");

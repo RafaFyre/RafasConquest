@@ -65,7 +65,8 @@ class BattlePlanTest {
         for (boolean levyFront : new boolean[]{true, false}) {
             List<Slot> front = BattlePlan.deployment(100, false, even, levyFront).stream().filter(s -> s.band() == BattlePlan.BAND_FRONT && s.line() == 0).toList();
             Arm first = levyFront ? Arm.LEVY : Arm.HEAVY_INFANTRY;
-            assertTrue(front.stream().allMatch(s -> s.arm() == first), "front rank all " + first);
+            // The halberdiers stand beside the heavy infantry in the anti-horse line.
+            assertTrue(front.stream().allMatch(s -> s.arm() == first || !levyFront && s.arm() == Arm.HALBERDIERS), "front rank all " + first);
         }
         assertTrue(FieldBattle.levyFront(WarPlan.of(List.of(Doctrine.BAIT_AND_PINCER)), new Random(1)));
         assertFalse(FieldBattle.levyFront(WarPlan.of(List.of(Doctrine.SPEAR_AND_SHIELD)), new Random(1)));
@@ -90,11 +91,11 @@ class BattlePlanTest {
 
     @Test
     void anArmyIsMadeOfEachKindByItsFixedShare() {
-        // levy 30, heavy infantry 20, skirmishers 10, zweihandlers 5, archers 20, cavalry 10, heavy cavalry 5 (%)
+        // levy 25, heavy infantry 15, skirmishers 10, zweihandlers 5, halberdiers 10, archers 20, cavalry 10, heavy cavalry 5 (%)
         List<Slot> slots = BattlePlan.deployment(100);
         assertEquals(100, slots.size());
         java.util.Map<Arm, Long> by = slots.stream().collect(java.util.stream.Collectors.groupingBy(Slot::arm, java.util.stream.Collectors.counting()));
-        assertEquals(java.util.Map.of(Arm.LEVY, 30L, Arm.HEAVY_INFANTRY, 20L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L,
+        assertEquals(java.util.Map.of(Arm.LEVY, 25L, Arm.HEAVY_INFANTRY, 15L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L, Arm.HALBERDIERS, 10L,
                 Arm.ARCHERS, 20L, Arm.CAVALRY, 10L, Arm.HEAVY_CAVALRY, 5L), by);
         for (int blocks : new int[]{5, 50, 250}) {
             assertEquals(blocks, BattlePlan.deployment(blocks).size());
@@ -129,6 +130,11 @@ class BattlePlanTest {
         assertTrue(Machine.allowed(gunpowder, rafasconquest.people.Homeland.JUNGLE, BattleType.LAND, false).contains(Machine.HWACHA), "the hwacha is the Jungle's");
         assertEquals(List.of(Machine.ONAGER, Machine.TREBUCHET, Machine.BATTERING_RAM, Machine.SIEGE_TOWER, Machine.MANTLET),
                 Machine.allowed(steel, plains, BattleType.SIEGE, false));
+        for (Machine m : Machine.values()) {
+            boolean train = m == Machine.BATTERING_RAM || m == Machine.SIEGE_TOWER || m == Machine.MANTLET;
+            assertEquals(train, Arm.of(m) == Arm.ENGINES, m + ": only the ram, tower and mantlet stay in the siege train");
+            assertEquals(!train, Arm.of(m).roster(), m + " on the general roster");
+        }
         assertEquals(List.of(Machine.TOWER_CROSSBOW), Machine.allowed(steel, plains, BattleType.SIEGE, true));
         assertTrue(Machine.allowed(gunpowder, plains, BattleType.OCEAN, false).isEmpty(), "none at sea");
         assertEquals(4, Machine.CULVERIN.perBlock());
@@ -143,7 +149,7 @@ class BattlePlanTest {
             rafasconquest.core.WorldFeatures.set(true, true, new rafasconquest.core.Age.Range(rafasconquest.core.Age.GUNPOWDER, rafasconquest.core.Age.STEAM));
             List<Slot> slots = BattlePlan.deployment(100);
             java.util.Map<Arm, Long> by = slots.stream().collect(java.util.stream.Collectors.groupingBy(Slot::arm, java.util.stream.Collectors.counting()));
-            assertEquals(java.util.Map.of(Arm.LEVY, 25L, Arm.HEAVY_INFANTRY, 20L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L,
+            assertEquals(java.util.Map.of(Arm.LEVY, 20L, Arm.HEAVY_INFANTRY, 15L, Arm.SKIRMISHERS, 10L, Arm.ZWEIHANDLERS, 5L, Arm.HALBERDIERS, 10L,
                     Arm.ARCHERS, 15L, Arm.MUSKETEERS, 10L, Arm.CAVALRY, 10L, Arm.HEAVY_CAVALRY, 5L), by);
             assertTrue(slots.stream().filter(s -> s.arm() == Arm.MUSKETEERS).allMatch(s -> s.band() == BattlePlan.BAND_ARCHERS), "they stand with the archers");
             assertEquals(BattlePlan.Order.HOLD, BattlePlan.order(Arm.MUSKETEERS, 10, BattlePlan.ARCHER_RANGE, true));

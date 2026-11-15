@@ -25,13 +25,27 @@ public final class Garrison {
     public double toX = Double.NaN;
     public double toZ = Double.NaN;
     public long start;
+    /**
+     * A spawned army's nation (index; -1: the hold's army, of its holder's nation), its general's name ("": the best at
+     * war), how many cards it may hold (0: no limit), and the army it marches to attack ({@link GrandStrategy#NO_TARGET}: none).
+     */
+    public int nation = -1;
+    public String general = "";
+    public int cap;
+    public int target = GrandStrategy.NO_TARGET;
 
     static Garrison raise(RandomSource random) {
         Garrison g = new Garrison();
-        for (int i = 0; i < START; i++) {
-            g.units.add(random.nextInt(BattlePlan.Arm.values().length));
-        }
+        g.fill(START, random);
         return g;
+    }
+
+    /** Adds random cards of the general roster until it holds {@code cards}. */
+    void fill(int cards, RandomSource random) {
+        BattlePlan.Arm[] roster = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster).toArray(BattlePlan.Arm[]::new);
+        while (units.size() < cards) {
+            units.add(roster[random.nextInt(roster.length)].ordinal());
+        }
     }
 
     public boolean home() {
@@ -56,6 +70,10 @@ public final class Garrison {
         t.putDouble("toX", toX);
         t.putDouble("toZ", toZ);
         t.putLong("start", start);
+        t.putInt("nation", nation);
+        t.putString("general", general);
+        t.putInt("cap", cap);
+        t.putInt("target", target);
         return t;
     }
 
@@ -69,6 +87,10 @@ public final class Garrison {
         g.toX = t.getDouble("toX");
         g.toZ = t.getDouble("toZ");
         g.start = t.getLong("start");
+        g.nation = t.contains("nation") ? t.getInt("nation") : -1; // older saves: hold armies only
+        g.general = t.getString("general");
+        g.cap = t.getInt("cap");
+        g.target = t.contains("target") ? t.getInt("target") : GrandStrategy.NO_TARGET;
         return g;
     }
 }

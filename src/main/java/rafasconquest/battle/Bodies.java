@@ -68,6 +68,8 @@ public final class Bodies {
     private float[] health = new float[0], hurt = new float[0], cooldown = new float[0], down = new float[0];
     private float[] pushX = new float[0], pushZ = new float[0], kickX = new float[0], kickZ = new float[0], slow = new float[0];
     private int[] target = new int[0];
+    /** Knocked down by a charge this step: falls in {@link #settle}, after every soldier has touched. */
+    private boolean[] knocked = new boolean[0];
     // The grid: soldiers sorted by cell (counting sort, rebuilt each step).
     private int[] cellOf = new int[0], order = new int[0], cellStart = new int[1];
     private int cols;
@@ -147,11 +149,12 @@ public final class Bodies {
             }
         }
         grid();
-        for (int i = 0; i < n; i++) {
+        // Across cores: the neighbour pass is most of a step (46,000 soldiers: ~6 ms on one), and touch(i) writes only i.
+        java.util.stream.IntStream.range(0, n).parallel().forEach(i -> {
             if (!dead[i]) {
                 touch(i);
             }
-        }
+        });
         for (int i = 0; i < n; i++) {
             if (!dead[i]) {
                 settle(i);
@@ -298,6 +301,9 @@ public final class Bodies {
                     pz -= uz * (touching - d) * share;
                     if (enemy) {
                         charge(i, j, ux, uz);
+                        if (!knocked[i]) {
+                            charged(i, j, ux, uz);
+                        }
                     }
                 }
             }
@@ -307,27 +313,39 @@ public final class Bodies {
         target[i] = best;
     }
 
-    /** {@code i} running into enemy {@code j} (direction {@code ux}, {@code uz}): fast and heavy enough, it knocks it down, and is slowed. */
+    /** {@code i} running into enemy {@code j} (direction {@code ux}, {@code uz}) fast enough: each body it hits takes some of its speed. */
     private void charge(int i, int j, float ux, float uz) {
         float closing = (vx[i] - vx[j]) * ux + (vz[i] - vz[j]) * uz;
         if (closing < CHARGE_SPEED || down[j] > 0) {
             return;
         }
         float mi = kind[i].mass;
-        float mj = kind[j].mass;
-        if (mi * closing >= mj * KNOCK * CHARGE_SPEED) {
-            down[j] = DOWN_SECONDS;
-            if (lethal) {
-                hurt[j] += kind[i].damage * closing / CHARGE_SPEED / 2; // the impact itself
-            }
-            kickX[j] += ux * closing * 0.1f;
-            kickZ[j] += uz * closing * 0.1f;
+        slow[i] *= mi / (mi + kind[j].mass);
+    }
+
+    /**
+     * Enemy {@code j} running into {@code i} ({@code ux}, {@code uz} from {@code i} to {@code j}): fast and heavy enough, it
+     * knocks {@code i} down. Only {@code i} is written, so soldiers touch in parallel; the fall lands in {@link #settle}.
+     */
+    private void charged(int i, int j, float ux, float uz) {
+        float closing = (vx[i] - vx[j]) * ux + (vz[i] - vz[j]) * uz; // the same from either side
+        if (closing < CHARGE_SPEED || down[i] > 0 || kind[j].mass * closing < kind[i].mass * KNOCK * CHARGE_SPEED) {
+            return;
         }
-        slow[i] *= mi / (mi + mj); // each body it hits takes some of its speed
+        knocked[i] = true;
+        if (lethal) {
+            hurt[i] += kind[j].damage * closing / CHARGE_SPEED / 2; // the impact itself
+        }
+        kickX[i] -= ux * closing * 0.1f;
+        kickZ[i] -= uz * closing * 0.1f;
     }
 
     /** Takes its push and any kick, and its speed from where it truly went; faces its foe, the way it goes, or its front. */
     private void settle(int i) {
+        if (knocked[i]) {
+            knocked[i] = false;
+            down[i] = DOWN_SECONDS;
+        }
         x[i] += pushX[i] + kickX[i];
         z[i] += pushZ[i] + kickZ[i];
         kickX[i] = kickZ[i] = 0;
@@ -399,6 +417,7 @@ public final class Bodies {
         kickZ = Arrays.copyOf(kickZ, size);
         slow = Arrays.copyOf(slow, size);
         target = Arrays.copyOf(target, size);
+        knocked = Arrays.copyOf(knocked, size);
         swings = Arrays.copyOf(swings, size);
         struck = Arrays.copyOf(struck, size);
         cellOf = Arrays.copyOf(cellOf, size);

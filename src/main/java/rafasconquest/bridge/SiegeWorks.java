@@ -369,7 +369,7 @@ final class SiegeWorks {
      */
     private void board(Siege.Work w, Entity tower, Function<FieldBlock, List<AbstractRecruitEntity>> soldiers) {
         for (FieldBlock crew : w.crews()) {
-            if (crew.arm() == BattlePlan.Arm.ENGINES) {
+            if (crew.arm().engine()) {
                 continue;
             }
             for (AbstractRecruitEntity s : soldiers.apply(crew)) {
@@ -577,7 +577,7 @@ final class SiegeWorks {
         long waiting = queued.values().stream().filter(foot::equals).count();
         Vec3 base = Vec3.atBottomCenterOf(foot);
         for (FieldBlock crew : w.crews()) {
-            if (crew.arm() == BattlePlan.Arm.ENGINES) {
+            if (crew.arm().engine()) {
                 continue; // a tower's crew stays with it
             }
             for (AbstractRecruitEntity s : soldiers.apply(crew)) {

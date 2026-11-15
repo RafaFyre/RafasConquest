@@ -1342,13 +1342,16 @@ public final class RecruitsBattle {
     // ---- the soldiers ----
 
     private static EntityType<? extends AbstractRecruitEntity> type(Arm arm) {
+        if (arm.engine()) {
+            return ModEntityTypes.SIEGE_ENGINEER.get();
+        }
         return switch (arm) {
-            case LEVY, SKIRMISHERS, ZWEIHANDLERS -> ModEntityTypes.RECRUIT.get();
+            case LEVY, SKIRMISHERS, ZWEIHANDLERS, HALBERDIERS -> ModEntityTypes.RECRUIT.get();
             case HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
             case ARCHERS -> ModEntityTypes.BOWMAN.get();
             case MUSKETEERS -> ModEntityTypes.CROSSBOWMAN.get();
-            case ENGINES -> ModEntityTypes.SIEGE_ENGINEER.get();
             case CAVALRY, HEAVY_CAVALRY -> ModEntityTypes.HORSEMAN.get();
+            default -> ModEntityTypes.SIEGE_ENGINEER.get();
         };
     }
 
@@ -1479,6 +1482,9 @@ public final class RecruitsBattle {
         int soldiers = 0;
         int engines = 0;
         for (Arm arm : Arm.values()) {
+            if (arm.machine() != null) {
+                continue; // the engines are lined up below
+            }
             BlockPos feet = pedestal(level, start.relative(along, at));
             at += 4;
             AbstractRecruitEntity soldier = dressedAt(level, type(arm), side, Role.SOLDIER, feet, yaw);
@@ -1600,6 +1606,7 @@ public final class RecruitsBattle {
      */
     private static void kitFor(AbstractRecruitEntity soldier, Side side, Arm arm, Role role) {
         ItemStack head = soldier.getItemBySlot(EquipmentSlot.HEAD).copy();
+        arm = arm.engine() ? Arm.ENGINES : arm; // every engine's crews dress alike
         switch (arm) {
             case LEVY -> hand(soldier, Items.STONE_SWORD, null);
             case HEAVY_INFANTRY -> {
@@ -1627,7 +1634,11 @@ public final class RecruitsBattle {
                     hand(soldier, musket.getItem(), ItemStack.EMPTY);
                 }
             }
-            case ENGINES -> {
+            case HALBERDIERS -> {
+                armour(soldier, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
+                hand(soldier, Items.IRON_AXE, ItemStack.EMPTY);
+            }
+            default -> {
             }
         }
         wear(soldier, side, switch (arm) {
@@ -1637,9 +1648,10 @@ public final class RecruitsBattle {
             case ZWEIHANDLERS -> rafasconquest.gear.Armoury.Kit.ZWEIHANDLER;
             case ARCHERS -> rafasconquest.gear.Armoury.Kit.ARCHER;
             case MUSKETEERS -> rafasconquest.gear.Armoury.Kit.MUSKETEER;
-            case ENGINES -> rafasconquest.gear.Armoury.Kit.ARCHER; // crews in the archers' gambesons, their own tools in hand
+            case HALBERDIERS -> rafasconquest.gear.Armoury.Kit.HALBERDIER;
             case CAVALRY -> rafasconquest.gear.Armoury.Kit.CAVALRY;
             case HEAVY_CAVALRY -> rafasconquest.gear.Armoury.Kit.HEAVY_CAVALRY;
+            default -> rafasconquest.gear.Armoury.Kit.ARCHER; // crews in the archers' gambesons, their own tools in hand
         });
         ItemStack halberd = arm == Arm.HEAVY_CAVALRY && soldier.getRandom().nextBoolean() ? rafasconquest.gear.Armoury.halberd() : null;
         if (halberd != null) {
@@ -6340,11 +6352,7 @@ public final class RecruitsBattle {
     }
 
     private static Calibration.Striker melee(Arm arm) {
-        return switch (arm) {
-            case LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS -> Calibration.Striker.INFANTRY;
-            case CAVALRY, HEAVY_CAVALRY -> Calibration.Striker.CAVALRY;
-            case ARCHERS, MUSKETEERS, ENGINES -> Calibration.Striker.ARCHER_MELEE;
-        };
+        return arm.infantry() ? Calibration.Striker.INFANTRY : arm.mounted() ? Calibration.Striker.CAVALRY : Calibration.Striker.ARCHER_MELEE;
     }
 
     private static void strike(Map<Live, double[]> strikers, Live struck, Calibration.Striker kind, double weight) {
@@ -6580,11 +6588,13 @@ public final class RecruitsBattle {
                 // Off the server thread, as Terrain's survey reads it: with ReTerraForged, 40 lookups here took 18 ms a tick.
                 int gx = (bx & ~15) + 8;
                 int gz = (bz & ~15) + 8;
+                // A world-generation heightmap, as every other reading of the generator: asked for one only built chunks
+                // have (MOTION_BLOCKING_NO_LEAVES), ReTerraForged answers the world's floor, and far figures sank to it.
                 CompletableFuture.supplyAsync(() -> level.getChunkSource().getGenerator().getBaseHeight(gx, gz,
-                                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, level, level.getChunkSource().randomState()),
+                                Heightmap.Types.OCEAN_FLOOR_WG, level, level.getChunkSource().randomState()),
                         net.minecraft.Util.backgroundExecutor()).whenCompleteAsync((h, e) -> {
                     groundAsked.remove(chunk);
-                    if (h != null) {
+                    if (h != null && h > level.getMinBuildHeight()) { // the floor is never a battlefield: keep the survey's height
                         groundCache.put(chunk, h);
                     }
                 }, level.getServer());

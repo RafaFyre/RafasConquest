@@ -140,7 +140,7 @@ public final class FieldBattle {
                 }
                 boolean command = b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER;
                 if (!command) {
-                    b.ship = kinds.computeIfAbsent(b.platoon, p -> b.arm == Arm.ENGINES || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
+                    b.ship = kinds.computeIfAbsent(b.platoon, p -> b.arm.engine() || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
                             : b.arm.shoots() ? FieldBlock.ShipKind.ARCHERS
                             : b.arm.shielded() ? FieldBlock.ShipKind.SWORDSMEN
                             : swordsmen[0]++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN);
@@ -281,8 +281,9 @@ public final class FieldBattle {
         trains.put(side, allowed);
         java.util.Map<Integer, Machine> byUnit = new java.util.HashMap<>();
         for (FieldBlock b : armies[side].blocks) {
-            if (b.arm == Arm.ENGINES) {
+            if (b.arm.engine()) {
                 b.machine = allowed.isEmpty() ? null : byUnit.computeIfAbsent(b.platoon, p -> allowed.get(random.nextInt(allowed.size())));
+                b.arm = b.machine == null ? Arm.ENGINES : Arm.of(b.machine); // a shooting engine's crews are its own unit
                 b.arrows = b.machine == null || !b.machine.shoots() ? 0 : b.machine.perBlock() * Machine.SHOTS_EACH;
             }
         }
@@ -3549,6 +3550,9 @@ public final class FieldBattle {
                     }
                     if (siege != null) {
                         damage *= siege.meleeFactor(block, foe);
+                    }
+                    if (block.arm == Arm.HALBERDIERS && foe.arm.mounted()) {
+                        damage *= FieldRules.HALBERDS_VS_HORSE;
                     }
                     if (block.braced && foe.arm.mounted() && sideOf(block, foe) == FieldRules.Side.FRONT) {
                         damage *= FieldRules.BRACED_DEALS;

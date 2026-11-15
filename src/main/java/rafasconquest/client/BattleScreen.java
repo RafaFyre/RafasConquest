@@ -51,7 +51,8 @@ public final class BattleScreen extends Screen {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, x - scale, feet - 2 * scale, x + scale, feet, scale, 0.0625F, mouseX, mouseY, entity);
     }
 
-    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV", "MUSKETS", "ENGINES"};
+    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV", "MUSKETS", "ENGINES", "HALBERDS",
+            "CULVERIN", "SERPENT", "MONS MEG", "HWACHA", "BALLISTA", "ONAGER", "TREBUCHT", "T. XBOW"};
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
     private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};

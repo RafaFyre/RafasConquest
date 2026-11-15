@@ -64,8 +64,9 @@ public final class ClientScreens {
 
     /** The grand strategy screen: the world map with the player's fief over it. */
     public static void openGrandStrategy(rafasconquest.peerage.GrandStrategy.View view) {
-        if (Minecraft.getInstance().screen instanceof rafasconquest.client.map.GrandStrategyScreen open) {
-            open.refresh(view); // an army order's answer: keep the camera where it is
+        rafasconquest.client.map.GrandStrategyScreen open = rafasconquest.client.map.GrandStrategyScreen.shown();
+        if (open != null) {
+            open.refresh(view); // an army order's answer: keep the camera where it is (and any menu over the map)
             return;
         }
         Minecraft.getInstance().setScreen(new rafasconquest.client.map.GrandStrategyScreen(view));
