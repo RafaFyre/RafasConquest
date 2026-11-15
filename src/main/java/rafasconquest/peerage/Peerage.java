@@ -56,6 +56,8 @@ public final class Peerage extends SavedData {
         /** The county held (its seat province), and the character they serve as vassal (-1: none). */
         public int hold = -1;
         public int liege = -1;
+        /** The character whose place they took (-1: none): that character's traits and bonds are the player's. */
+        public int persona = -1;
         public final Set<Integer> known = new HashSet<>();
         /** The characters sworn to them as vassals. */
         public final Set<Integer> vassals = new HashSet<>();
@@ -183,6 +185,7 @@ public final class Peerage extends SavedData {
             t.putInt("militaryRenown", p.militaryRenown);
             t.putInt("hold", p.hold);
             t.putInt("liege", p.liege);
+            t.putInt("persona", p.persona);
             t.putIntArray("known", p.known.stream().mapToInt(Integer::intValue).toArray());
             t.putIntArray("vassals", p.vassals.stream().mapToInt(Integer::intValue).toArray());
             CompoundTag retinue = new CompoundTag();
@@ -237,6 +240,7 @@ public final class Peerage extends SavedData {
             p.militaryRenown = t.getInt("militaryRenown");
             p.hold = t.getInt("hold");
             p.liege = t.getInt("liege");
+            p.persona = t.contains("persona") ? t.getInt("persona") : -1; // older saves have none
             for (int v : t.getIntArray("vassals")) {
                 p.vassals.add(v);
             }

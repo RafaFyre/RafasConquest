@@ -72,6 +72,10 @@ public class FactionMapScreen extends Screen {
         }
     }
 
+    /** What a screen built on this one draws over the layers, clipped to the map. */
+    protected void overlay(GuiGraphics g, MapContext map, int mouseX, int mouseY) {
+    }
+
     /** True for a screen that lays its own HUD over a map filling the whole screen: no title, close button, legend or coordinates. */
     protected boolean hud() {
         return false;
@@ -147,6 +151,7 @@ public class FactionMapScreen extends Screen {
             for (MapLayer layer : layers) {
                 layer.render(g, view, map, mouseX, mouseY);
             }
+            overlay(g, map, mouseX, mouseY);
             g.disableScissor();
             if (hud()) {
                 return;

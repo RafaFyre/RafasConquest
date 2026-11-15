@@ -122,6 +122,43 @@ public final class LandGrants {
         return grants.isEmpty() ? null : grants.get(random.nextInt(grants.size()));
     }
 
+    /**
+     * The titles of a tier (by seat province) a noble can be petitioned for: every one under the noble's highest title
+     * and still their nation's, whoever holds it, but for the noble's own seat, those a player holds ({@code taken}),
+     * and those seated with a higher title (a kingdom's capital duchy goes with the kingdom). None if the noble holds
+     * no title.
+     */
+    public static List<Integer> petition(BaseMap map, int noble, TitleMap.Tier tier, java.util.function.IntPredicate taken) {
+        Person p = map.realm().people().get(noble);
+        List<Integer> seats = new ArrayList<>();
+        Person.Kind kind = p.hold().kind();
+        if (p.nation() < 0 || kind != Person.Kind.CAPITAL && kind != Person.Kind.CITY && kind != Person.Kind.TOWN && kind != Person.Kind.CASTLE) {
+            return seats;
+        }
+        for (int seat : petition(map.titles(), p.hold().province(), tier)) {
+            if (map.holders()[seat] == p.nation() && !taken.test(seat)) {
+                seats.add(seat);
+            }
+        }
+        return seats;
+    }
+
+    static List<Integer> petition(TitleMap t, int home, TitleMap.Tier tier) {
+        int[] all = switch (tier) {
+            case COUNTY -> t.countySeat();
+            case DUCHY -> t.duchySeat();
+            case KINGDOM -> t.kingdomSeat();
+            case EMPIRE -> t.empireSeat();
+        };
+        List<Integer> seats = new ArrayList<>();
+        for (int seat : all) {
+            if (seat != home && t.seatOf(seat) == tier && under(t, seat, home)) {
+                seats.add(seat);
+            }
+        }
+        return seats;
+    }
+
     private static int pick(List<Integer> list, Random random) {
         return list.get(random.nextInt(list.size()));
     }

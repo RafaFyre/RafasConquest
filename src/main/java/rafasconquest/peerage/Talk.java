@@ -109,6 +109,13 @@ public final class Talk {
                     options.add(new Option("land", Dialogue.say("noble.options.land")));
                 }
                 fealty(map, peer, npc.person(), options);
+                if (peer.hold < 0 && java.util.Arrays.stream(rafasconquest.core.TitleMap.Tier.values()).anyMatch(
+                        tier -> !LandGrants.petition(map, npc.person(), tier, s -> peerage.heldBy(s) != null).isEmpty())) {
+                    options.add(new Option("petition", Dialogue.say("noble.options.petition", "name", p.name(), "their", p.female() ? "her" : "his")));
+                }
+            }
+            if (player.isCreative() && !peerage.replaced(p.hold().province())) {
+                options.add(new Option("replace", Dialogue.say("noble.options.replace")));
             }
         }
         options.add(new Option("bye", Dialogue.say("common.farewell")));
@@ -189,7 +196,19 @@ public final class Talk {
         Peerage.Peer peer = peerage.of(player.getUUID());
         // Only what the view offered: a choice is checked against it, never trusted.
         View view = view(player, npc);
+        if (key.startsWith("petition:")) { // a title picked on the map: allowed while the petition itself is offered
+            if (view.options().stream().anyMatch(o -> o.key().equals("petition"))) {
+                petition(player, npc, peerage, peer, key.substring(9));
+            }
+            return;
+        }
         if (view.options().stream().noneMatch(o -> o.key().equals(key))) {
+            return;
+        }
+        if (key.equals("petition")) {
+            // Going on from "Which one?" opens the map to pick on (the client's DialogueScreen, by the "map:" key).
+            ConquestNetwork.sendTalk(player, List.of(new View(view.entity(), view.name(), view.title(), view.colour(), view.accent(),
+                    List.of(Dialogue.say("noble.which")), List.of(new Option("map:" + npc.person(), "Continue")))));
             return;
         }
         if (key.equals("enlist")) {
@@ -236,6 +255,23 @@ public final class Talk {
             peer.liege = -1;
             peerage.changed();
             player.sendSystemMessage(Component.literal(Dialogue.say("noble.renounced", "speaker", npc.getName().getString())));
+        } else if (key.equals("replace")) {
+            // Creative only (the view offers it to no one else): the player takes the noble's place, with their hold,
+            // liege and vassals; the noble's traits and bonds are theirs through peer.persona.
+            BaseMap map = ConquestRuntime.map();
+            if (map == null) {
+                return;
+            }
+            Person p = map.realm().people().get(npc.person());
+            int seat = p.hold().province();
+            rafasconquest.core.TitleMap.Tier rank = map.titles().rank(seat);
+            peerage.release(player.getUUID());
+            peerage.grant(player.getUUID(), seat, p.liege(), "replaced");
+            peer.title = rank == null ? NobleTitle.COUNT : NobleTitle.of(rank);
+            peer.persona = npc.person();
+            peer.vassals.addAll(map.realm().vassals(npc.person()));
+            PeerageSync.toAll(player.server);
+            player.sendSystemMessage(Component.literal(Dialogue.say("noble.replaced", "speaker", p.name(), "player", Names.player(peer.name, peer.title))));
         } else if (key.equals("land")) {
             land(player, npc, peerage, peer);
         } else if (key.equals("camp")) {
@@ -250,6 +286,27 @@ public final class Talk {
         if (!key.equals("bye")) {
             open(player, npc); // the conversation goes on, with what is left to say
         }
+    }
+
+    /** The noble grants the title the player picked, whoever held it, and takes the player as their vassal. */
+    private static void petition(ServerPlayer player, Recruiter npc, Peerage peerage, Peerage.Peer peer, String picked) {
+        BaseMap map = ConquestRuntime.map();
+        int seat;
+        try {
+            seat = Integer.parseInt(picked);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        rafasconquest.core.TitleMap.Tier tier = map == null ? null : map.titles().seatOf(seat);
+        if (tier == null || !LandGrants.petition(map, npc.person(), tier, s -> peerage.heldBy(s) != null).contains(seat)) {
+            return;
+        }
+        peerage.grant(player.getUUID(), seat, npc.person(), map.realm().holderOf(seat) >= 0 ? "dismissed" : null);
+        peer.title = NobleTitle.of(tier);
+        PeerageSync.toAll(player.server);
+        player.sendSystemMessage(Component.literal(Dialogue.say("noble.petition_granted", "speaker", npc.getName().getString(),
+                "title", map.titleName(tier, seat), "player", Names.player(peer.name, peer.title))));
+        open(player, npc);
     }
 
     private static void land(ServerPlayer player, Recruiter npc, Peerage peerage, Peerage.Peer peer) {

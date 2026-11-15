@@ -49,6 +49,11 @@ public final class PlayerStats {
         } else {
             rows.add(new String[]{"Land", "None"});
         }
+        if (map != null && peer.persona >= 0 && peer.persona < map.realm().people().size()) {
+            rafasconquest.people.Person was = map.realm().people().get(peer.persona);
+            rows.add(new String[]{"In the place of", was.name()});
+            rows.add(new String[]{"Traits", String.join(", ", was.traits().stream().map(rafasconquest.people.Personality::title).toList())});
+        }
         rows.add(new String[]{"Job in battle", ranks.job(player.getUUID()).title()});
         if (map != null) {
             if (peer.hold < 0 && peer.liege >= 0 && peer.liege < map.realm().people().size()) {

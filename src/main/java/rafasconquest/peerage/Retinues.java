@@ -63,9 +63,9 @@ public final class Retinues {
         };
     }
 
-    /** A player's standing: none 0, knight 1, count 2. */
+    /** A player's standing: none 0, knight 1, count 2, duke 3, king and emperor {@link #TOP}. */
     public static int level(NobleTitle title) {
-        return title.ordinal();
+        return Math.min(TOP, title.ordinal());
     }
 
     /** How many a retinue holds at a standing: 1 at the bottom, 12 at the top, in a line between. */

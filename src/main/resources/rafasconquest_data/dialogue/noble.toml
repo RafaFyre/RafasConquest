@@ -13,8 +13,14 @@ sworn = "You kneel and swear fealty to {speaker}. You are their vassal."
 renounced = "You renounce your fealty to {speaker}."
 no_land = "{speaker}: I have no land to give you now."
 land_granted = "{speaker} {way}: the county of {county}. You are now {player}."
+which = "Which one?"
+petition_granted = "{speaker} grants you the {title}, and takes you as their vassal. You are now {player}."
+replaced = "You take the place of {speaker}: their titles, traits and relations are yours. You are now {player}."
 
 [options]
+# §d is Minecraft's bright purple, §r back to the usual colour.
+replace = "§dCREATIVE ONLY:§r Replace you"
+petition = "Petition {name} to govern one of {their} territories"
 kneel = "Kneel to be knighted"
 land = "Ask for land"
 release = "Release them from your fealty"

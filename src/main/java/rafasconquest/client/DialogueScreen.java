@@ -334,6 +334,10 @@ public class DialogueScreen extends Screen {
             onClose();
             return;
         }
+        if (key.startsWith("map:")) { // "Which one?": the answer is picked on the map
+            minecraft.setScreen(new rafasconquest.client.map.PetitionScreen(view.entity(), Integer.parseInt(key.substring(4)), view.name()));
+            return;
+        }
         ConquestNetwork.choose(view.entity(), key);
         if (key.equals("bye") || key.equals("camp")) { // the camp: they are sent away
             onClose();

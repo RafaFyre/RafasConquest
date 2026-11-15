@@ -61,6 +61,11 @@ class PeerageTest {
         assertTrue(LandGrants.under(t, 3, 2), "a county's seat (2) doesn't hold its own county");
         assertFalse(LandGrants.under(t, 0, 2), "a count holds land in another county");
         assertFalse(LandGrants.under(t, 0, 3), "a province with no seat holds land");
+        // The emperor at 0 can be petitioned for the other county, never for a title seated at their own seat.
+        assertEquals(java.util.List.of(2), LandGrants.petition(t, 0, TitleMap.Tier.COUNTY));
+        assertTrue(LandGrants.petition(t, 0, TitleMap.Tier.EMPIRE).isEmpty());
+        assertTrue(LandGrants.petition(t, 2, TitleMap.Tier.COUNTY).isEmpty(), "a count gives away their own county");
+        assertEquals(NobleTitle.DUKE, NobleTitle.of(TitleMap.Tier.DUCHY));
     }
 
     @Test
