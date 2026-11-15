@@ -83,6 +83,8 @@ public final class Peerage extends SavedData {
     private final Map<UUID, Peer> peers = new HashMap<>();
     private final Map<Integer, UUID> heldBy = new HashMap<>();
     private final Map<Integer, String> fates = new HashMap<>();
+    /** Each city's army, by its seat province: raised (at random) the first time it is asked for. */
+    private final Map<Integer, Garrison> garrisons = new HashMap<>();
 
     public static Peerage get(MinecraftServer server) {
         return rafasconquest.data.SaveGuard.get(server, NAME, Peerage::new, Peerage::load);
@@ -112,6 +114,15 @@ public final class Peerage extends SavedData {
 
     public Map<Integer, String> fates() {
         return fates;
+    }
+
+    public Garrison garrison(int province, net.minecraft.util.RandomSource random) {
+        Garrison g = garrisons.get(province);
+        if (g == null) {
+            garrisons.put(province, g = Garrison.raise(random));
+            setDirty();
+        }
+        return g;
     }
 
     /** A player takes a county; the character who held it (if any) is gone, as {@code fate} says. */
@@ -225,6 +236,9 @@ public final class Peerage extends SavedData {
         CompoundTag gone = new CompoundTag();
         fates.forEach((province, fate) -> gone.putString(Integer.toString(province), fate));
         tag.put("fates", gone);
+        CompoundTag armies = new CompoundTag();
+        garrisons.forEach((province, g) -> armies.put(Integer.toString(province), g.save()));
+        tag.put("garrisons", armies);
         return tag;
     }
 
@@ -280,6 +294,10 @@ public final class Peerage extends SavedData {
         CompoundTag gone = tag.getCompound("fates");
         for (String key : gone.getAllKeys()) {
             data.fates.put(Integer.parseInt(key), gone.getString(key));
+        }
+        CompoundTag armies = tag.getCompound("garrisons");
+        for (String key : armies.getAllKeys()) {
+            data.garrisons.put(Integer.parseInt(key), Garrison.load(armies.getCompound(key)));
         }
         return data;
     }

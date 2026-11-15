@@ -70,16 +70,42 @@ public final class ClothRenderer {
         @Nullable
         Matrix4d atTick;
         long seen;
+        final Object key;
 
-        Live(Kind kind, Level level) {
+        Live(Kind kind, Level level, Object key) {
             this.cloth = kind.make();
             this.kind = kind;
             this.level = level;
+            this.key = key;
         }
     }
 
     /** A cloth an entity carries, by where it is carried. */
     public record Carried(int entity, Object where) {
+    }
+
+    /**
+     * A carrier drawn far off and {@code scale} times its size (the grand strategy map's marcher): its cloth moves at
+     * any distance, under gravity and a steady {@code wind} (blocks/s² at full size) both scaled with it, so it moves
+     * as a life-size cloth would on screen.
+     */
+    public record Far(double scale, double[] wind) {
+    }
+
+    private static final Map<Integer, Far> FAR = new HashMap<>();
+
+    /** Marks an entity as carried far (null: no longer). */
+    public static void far(int entity, @Nullable Far far) {
+        if (far == null) {
+            FAR.remove(entity);
+        } else {
+            FAR.put(entity, far);
+        }
+    }
+
+    @Nullable
+    private static Far farOf(Object key) {
+        return key instanceof Carried c ? FAR.get(c.entity()) : null;
     }
 
     private static final Map<Object, Live> LIVE = new HashMap<>();
@@ -131,15 +157,23 @@ public final class ClothRenderer {
             live.atTick.set(live.now);
             Cloth c = live.cloth;
             Fabric fabric = live.kind.fabric();
-            Wind.at(live.level, c.x[0], c.y[0], c.z[0], fabric.flutter(), fabric.wind(), wind);
+            Far far = farOf(live.key);
+            c.stretch = far == null ? 1 : far.scale();
+            if (far != null) {
+                for (int k = 0; k < 3; k++) {
+                    wind[k] = far.wind()[k] * far.scale();
+                }
+            } else {
+                Wind.at(live.level, c.x[0], c.y[0], c.z[0], fabric.flutter(), fabric.wind(), wind);
+            }
             if (live.kind.onBack()) {
                 offTheBack(live.atTick, wind);
             }
             Level level = live.level;
-            Cloth.Solid solid = live.kind.blocks()
+            Cloth.Solid solid = live.kind.blocks() && far == null // far off, the blocks under it are not where it is drawn
                     ? (x, y, z) -> level.getBlockState(at.set(x, y, z)).isCollisionShapeFullBlock(level, at)
                     : null;
-            c.step(0.05, GRAVITY, wind, fabric.aero(), ITERATIONS, fabric.keep(), live.atTick, carry, solid);
+            c.step(0.05, GRAVITY * (far == null ? 1 : far.scale()), wind, fabric.aero(), ITERATIONS, fabric.keep(), live.atTick, carry, solid);
         }
     }
 
@@ -207,13 +241,13 @@ public final class ClothRenderer {
         Matrix4d frame = new Matrix4d().translate(cam.x, cam.y, cam.z).rotate(new Quaternionf(camera.rotation()))
                 .mul(new Matrix4d(modelView)).mul(new Matrix4d(pose.last().pose()));
         Vector3d anchor = frame.transformPosition(new Vector3d());
-        if (anchor.distanceSquared(cam.x, cam.y, cam.z) > RANGE * RANGE
-                || near != null && anchor.distanceSquared(near.x, near.y, near.z) > NEAR * NEAR) {
+        if (farOf(key) == null && (anchor.distanceSquared(cam.x, cam.y, cam.z) > RANGE * RANGE
+                || near != null && anchor.distanceSquared(near.x, near.y, near.z) > NEAR * NEAR)) {
             return null;
         }
         Live live = LIVE.get(key);
         if (live == null || live.kind != kind || live.level != mc.level) {
-            live = new Live(kind, mc.level);
+            live = new Live(kind, mc.level, key);
             live.cloth.place(frame);
             LIVE.put(key, live);
         }

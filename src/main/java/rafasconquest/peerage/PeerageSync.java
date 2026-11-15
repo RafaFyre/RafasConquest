@@ -26,6 +26,6 @@ public final class PeerageSync {
             Peerage.Peer peer = peerage.of(e.getValue());
             holders.put(e.getKey(), Names.player(peer.name, peer.title));
         }
-        ConquestNetwork.sendPeerage(player, holders, new HashMap<>(peerage.fates()));
+        ConquestNetwork.sendPeerage(player, holders, new HashMap<>(peerage.fates()), new HashMap<>(peerage.holdings()));
     }
 }

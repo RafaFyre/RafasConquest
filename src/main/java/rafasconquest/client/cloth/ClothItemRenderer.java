@@ -37,7 +37,7 @@ public class ClothItemRenderer extends BlockEntityWithoutLevelRenderer {
                 carrier == null ? null : new ClothRenderer.Carried(carrier.getId(), context),
                 BannerArt.STANDING,
                 cape ? BannerArt.plain(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor()))
-                        : BannerArt.arms(standard ? BattleStandardItem.nation(stack) : null),
+                        : BannerArt.arms(BattleStandardItem.nation(stack)), // a banner handed a nation's arms flies them too
                 carrier == null ? null : carrier.position());
         pose.popPose();
     }

@@ -66,7 +66,7 @@ final class CourtView {
     private float drawnScale;
     private int focus = -1;
 
-    private record Figure(int person, CourtSet.Seat seat, @Nullable AbstractRecruitEntity entity) {
+    private record Figure(int person, CourtSet.Seat seat, @Nullable net.minecraft.world.entity.LivingEntity entity) {
     }
 
     private static final class Camera {
@@ -95,9 +95,38 @@ final class CourtView {
         Minecraft mc = Minecraft.getInstance();
         for (int i = 0; i < Math.min(people.size(), set.seats.size()); i++) {
             int person = people.get(i);
-            figures.add(new Figure(person, set.seats.get(i), Portraits.model(mc, base, person)));
+            figures.add(new Figure(person, set.seats.get(i), standIn(mc, base, person)));
         }
         goal.set(now);
+    }
+
+    /**
+     * Who stands on a person's podium: the player holding their hold now (a copy, in their skin and armour, so turning
+     * it never turns the real player), else the person's own model.
+     */
+    @Nullable
+    private static net.minecraft.world.entity.LivingEntity standIn(Minecraft mc, BaseMap base, int person) {
+        Person p = base.realm().people().get(person);
+        java.util.UUID id = ClientPeerage.replaced(p) ? ClientPeerage.holderId(p.hold().province()) : null;
+        if (id == null || mc.level == null) {
+            return Portraits.model(mc, base, person);
+        }
+        net.minecraft.world.entity.player.Player online = mc.level.getPlayerByUUID(id);
+        var copy = new net.minecraft.client.player.RemotePlayer(mc.level,
+                online != null ? online.getGameProfile() : new com.mojang.authlib.GameProfile(id, "Player"));
+        if (online != null) {
+            // Their armour, and in hand the weapon in their first hotbar slot (the client knows only its own player's
+            // inventory; another player shows what they hold).
+            for (net.minecraft.world.entity.EquipmentSlot slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+                if (slot.isArmor()) {
+                    copy.setItemSlot(slot, online.getItemBySlot(slot).copy());
+                }
+            }
+            copy.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                    (online == mc.player ? online.getInventory().getItem(0) : online.getMainHandItem()).copy());
+        }
+        copy.setPos(0, -10_000, 0); // far from the camera, so no name tag floats over the podium
+        return copy;
     }
 
     /** A nation's court: its ruler, then its nobles, most powerful first, as many as there is room for. */
@@ -256,7 +285,7 @@ final class CourtView {
         entities.setRenderShadow(false);
         Lighting.setupForEntityInInventory();
         for (Figure f : figures) {
-            AbstractRecruitEntity e = f.entity();
+            net.minecraft.world.entity.LivingEntity e = f.entity();
             if (e == null) {
                 continue;
             }

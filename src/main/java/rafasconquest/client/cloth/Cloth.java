@@ -117,6 +117,9 @@ public final class Cloth {
         return s + 1;
     }
 
+    /** How many times its rest lengths the threads are, for cloth drawn bigger than life (the strategy map's marcher). */
+    public double stretch = 1;
+
     /** Boxes in local units ({minX, minY, minZ, maxX, maxY, maxZ} each) the cloth is kept out of. */
     public Cloth keepOut(double[]... boxes) {
         this.boxes = boxes;
@@ -230,12 +233,12 @@ public final class Cloth {
         double dz = z[a] - z[b];
         double len2 = dx * dx + dy * dy + dz * dz;
         if (len2 != 0) {
-            double k = stickHalf[s] / Math.sqrt(len2);
+            double k = stickHalf[s] * stretch / Math.sqrt(len2);
             dx *= k;
             dy *= k;
             dz *= k;
         } else {
-            dz = stickHalf[s];
+            dz = stickHalf[s] * stretch;
         }
         double k = stickK[s];
         if (freeA) {

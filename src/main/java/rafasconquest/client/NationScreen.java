@@ -231,8 +231,14 @@ public class NationScreen extends Screen {
         }
         Person p = base.realm().people().get(person);
         String hint = person == court.focus() ? "Click to see their page" : "Holds " + base.names().get(p.hold().province()) + " (click)";
-        g.renderComponentTooltip(font, List.of(Component.literal(CharacterScreen.styled(base, p)),
+        g.renderComponentTooltip(font, List.of(Component.literal(styled(p)),
                 Component.literal(hint).withStyle(net.minecraft.ChatFormatting.GRAY)), mouseX, mouseY);
+    }
+
+    /** A person's style ("Count Aldric of ..."), or the player's who holds their hold now ("Count Steve"). */
+    private String styled(Person p) {
+        String player = ClientPeerage.replaced(p) ? ClientPeerage.holder(p.hold().province()) : null;
+        return player != null ? player : CharacterScreen.styled(base, p);
     }
 
     /** Who the camera is on, beside them: their style, hold, liege, vassals and traits, and how to see more. */
@@ -243,7 +249,7 @@ public class NationScreen extends Screen {
         int y = (int) (height * 0.22);
         int w = Math.min(260, width - x - 16);
         List<String> lines = new ArrayList<>();
-        lines.add(p.name() + ", " + p.age());
+        lines.add(ClientPeerage.replaced(p) ? "In place of " + p.name() : p.name() + ", " + p.age());
         lines.add("Holds " + base.names().get(p.hold().province()));
         if (p.liege() >= 0) {
             lines.add("Sworn to " + realm.people().get(p.liege()).name());
@@ -253,7 +259,7 @@ public class NationScreen extends Screen {
             lines.add(vassals + " vassal" + (vassals == 1 ? "" : "s"));
         }
         lines.add(p.traits().stream().map(rafasconquest.people.Personality::title).collect(Collectors.joining(", ")));
-        List<net.minecraft.util.FormattedCharSequence> head = font.split(Component.literal(CharacterScreen.styled(base, p)), w - 16);
+        List<net.minecraft.util.FormattedCharSequence> head = font.split(Component.literal(styled(p)), w - 16);
         int h = 12 + head.size() * 10 + 6 + lines.size() * 11 + 18;
         Portraits.box(g, x, y, w, h);
         int ty = y + 8;

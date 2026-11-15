@@ -34,7 +34,7 @@ public class BackBannerLayer<T extends LivingEntity, M extends HumanoidModel<T>>
         pose.pushPose();
         getParentModel().body.translateAndRotate(pose);
         // In model space +z is behind the body and +y is down; the head-worn banner sits a quarter block up from the neck.
-        pose.translate(0, 0.05, 0.3);
+        pose.translate(0, 0.05 - BackBanners.lift(entity), 0.3); // model space: up is −y
         pose.mulPose(Axis.YP.rotationDegrees(180));
         pose.scale(0.625F, -0.625F, -0.625F);
         items.renderItem(entity, banner, ItemDisplayContext.HEAD, false, pose, buffers, light);

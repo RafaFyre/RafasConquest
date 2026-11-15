@@ -23,11 +23,25 @@ public final class BackBanners {
         return BANNERS.get(entity.getId());
     }
 
+    /** How far above the usual place (blocks) an entity's back banner sits. */
+    private static final Map<Integer, Float> LIFT = new HashMap<>();
+
+    public static void put(int entityId, ItemStack banner, float lift) {
+        BANNERS.put(entityId, banner);
+        LIFT.put(entityId, lift);
+    }
+
+    public static float lift(Entity entity) {
+        return LIFT.getOrDefault(entity.getId(), 0F);
+    }
+
     public static void remove(int entityId) {
         BANNERS.remove(entityId);
+        LIFT.remove(entityId);
     }
 
     public static void clear() {
         BANNERS.clear();
+        LIFT.clear();
     }
 }

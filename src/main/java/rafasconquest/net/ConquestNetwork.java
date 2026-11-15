@@ -256,6 +256,21 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(GarrisonOrder.class, 39, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.op());
+                    b.writeVarInt(m.arg());
+                    b.writeDouble(m.x());
+                    b.writeDouble(m.z());
+                })
+                .decoder(b -> new GarrisonOrder(b.readVarInt(), b.readVarInt(), b.readDouble(), b.readDouble()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.peerage.GrandStrategy.order(player, m.op(), m.arg(), m.x(), m.z());
+                    }
+                })
+                .add();
         CHANNEL.messageBuilder(Streets.class, 37, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> b.writeCollection(m.walks(), (o, w) -> {
                     o.writeDouble(w.x0());
@@ -452,24 +467,27 @@ public final class ConquestNetwork {
     }
 
     /** Server → client: the counties players hold (seat province → "Count Steve"), and what befell those they replaced. */
-    public record PeerageView(java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
+    public record PeerageView(java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates,
+                              java.util.Map<Integer, java.util.UUID> ids) {
         void write(FriendlyByteBuf buf) {
             buf.writeMap(holders, (b, k) -> b.writeVarInt(k), (b, v) -> b.writeUtf(v));
             buf.writeMap(fates, (b, k) -> b.writeVarInt(k), (b, v) -> b.writeUtf(v));
+            buf.writeMap(ids, (b, k) -> b.writeVarInt(k), (b, v) -> b.writeUUID(v));
         }
 
         static PeerageView read(FriendlyByteBuf buf) {
             return new PeerageView(buf.readMap(b -> b.readVarInt(), b -> b.readUtf()),
-                    buf.readMap(b -> b.readVarInt(), b -> b.readUtf()));
+                    buf.readMap(b -> b.readVarInt(), b -> b.readUtf()), buf.readMap(b -> b.readVarInt(), b -> b.readUUID()));
         }
     }
 
-    public static void sendPeerage(ServerPlayer player, java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates) {
-        CHANNEL.send(player, new PeerageView(holders, fates));
+    public static void sendPeerage(ServerPlayer player, java.util.Map<Integer, String> holders, java.util.Map<Integer, String> fates,
+                                   java.util.Map<Integer, java.util.UUID> ids) {
+        CHANNEL.send(player, new PeerageView(holders, fates, ids));
     }
 
     private static void handlePeerageView(PeerageView msg, IPayloadContext context) {
-        rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates());
+        rafasconquest.client.ClientPeerage.set(msg.holders(), msg.fates(), msg.ids());
     }
 
     /**
@@ -619,11 +637,26 @@ public final class ConquestNetwork {
             buf.writeInt(view.seat());
             buf.writeInt(view.nation());
             buf.writeLong(view.day());
+            buf.writeVarIntArray(view.army());
+            buf.writeDouble(view.fromX());
+            buf.writeDouble(view.fromZ());
+            buf.writeDouble(view.toX());
+            buf.writeDouble(view.toZ());
+            buf.writeLong(view.start());
         }
 
         static GrandStrategyView read(FriendlyByteBuf buf) {
-            return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong()));
+            return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong(),
+                    buf.readVarIntArray(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readLong()));
         }
+    }
+
+    /** Client → server: the player orders their hold's army ({@link rafasconquest.peerage.GrandStrategy#order}). */
+    public record GarrisonOrder(int op, int arg, double x, double z) {
+    }
+
+    public static void orderGarrison(int op, int arg, double x, double z) {
+        CHANNEL.sendToServer(new GarrisonOrder(op, arg, x, z));
     }
 
     public static void sendGrandStrategy(ServerPlayer player, rafasconquest.peerage.GrandStrategy.View view) {

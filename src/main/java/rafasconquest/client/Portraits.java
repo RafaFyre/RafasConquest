@@ -70,7 +70,7 @@ public final class Portraits {
     }
 
     /** Ages a figure that never ticks by the clock, so animated models breathe and blink; returns the partial tick to draw it at. */
-    static float animate(net.minecraft.world.entity.Entity entity) {
+    public static float animate(net.minecraft.world.entity.Entity entity) {
         long ms = net.minecraft.Util.getMillis();
         entity.tickCount = (int) (ms / 50);
         return (ms % 50) / 50F;

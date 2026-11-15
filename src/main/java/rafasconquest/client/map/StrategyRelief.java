@@ -243,6 +243,7 @@ public final class StrategyRelief {
                 com.mojang.blaze3d.vertex.VertexSorting.DISTANCE_TO_ORIGIN);
         net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         labels.renderGround(pose, camera.getPosition(), map, mapScale, buffers);
+        GrandStrategyScreen.renderMarcher(pose, camera.getPosition(), buffers);
         buffers.endBatch(); // under the far plane set above
         RenderSystem.setProjectionMatrix(projection, sorting);
     }

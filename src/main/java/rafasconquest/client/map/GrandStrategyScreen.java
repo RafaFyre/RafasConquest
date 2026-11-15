@@ -14,7 +14,16 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import com.talhanation.recruits.init.ModEntityTypes;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.EquipmentSlot;
 import rafasconquest.client.CityManagerScreen;
+import rafasconquest.gear.Armoury;
+import rafasconquest.peerage.Garrison;
 import rafasconquest.client.DistantHorizonsLink;
 import rafasconquest.client.NationScreen;
 import rafasconquest.client.Portraits;
@@ -70,9 +79,16 @@ public class GrandStrategyScreen extends FactionMapScreen {
         }
     }
 
-    private final GrandStrategy.View fief;
+    private GrandStrategy.View fief;
+    private final CityPanel panel = new CityPanel();
+    /** The hold's army on the map: a soldier holding the nation's battle banner; made on first need. */
+    @Nullable
+    private com.talhanation.recruits.entities.AbstractRecruitEntity bearer;
+    private int bearerNation = -2;
     @Nullable
     private SeatCities.City summary;
+    /** The army in the field is selected (a click on its marcher). */
+    private boolean armyPicked;
     @Nullable
     private SeatCities.City menu;
     private int menuX;
@@ -96,6 +112,180 @@ public class GrandStrategyScreen extends FactionMapScreen {
     public GrandStrategyScreen(GrandStrategy.View fief) {
         super(null, Component.translatable("gui.rafasconquest.grand_strategy"));
         this.fief = fief;
+    }
+
+    /** The server's answer to an army order: the same fief, its army as it now stands. */
+    public void refresh(GrandStrategy.View fief) {
+        this.fief = fief;
+    }
+
+    /** Where the hold's army stands now (x, z), or null while it is home in its city. */
+    @Nullable
+    private double[] army() {
+        return minecraft == null || minecraft.level == null ? null
+                : Garrison.at(fief.fromX(), fief.fromZ(), fief.toX(), fief.toZ(), fief.start(), minecraft.level.getGameTime() + minecraft.getTimer().getGameTimeDeltaPartialTick(false)); // between ticks too, so he glides
+    }
+
+    /**
+     * The marcher, the army out of its city: a knight of the nation with its banner on his back, made once; each call
+     * also walks his legs (while the army moves) and turns him the way it marches. Null while the army is home.
+     */
+    @Nullable
+    private com.talhanation.recruits.entities.AbstractRecruitEntity marcher() {
+        double[] at = army();
+        if (at == null || minecraft.level == null) {
+            return null;
+        }
+        // His nation: the one holding the hold the army is raised from (the player may serve none), else the player's.
+        BaseMap base = ClientMapCache.map();
+        int n = base != null && fief.seat() >= 0 && fief.seat() < base.holders().length && base.holders()[fief.seat()] >= 0
+                ? base.holders()[fief.seat()] : fief.nation();
+        if (bearer == null || bearer.level() != minecraft.level || bearerNation != n) {
+            bearer = ModEntityTypes.RECRUIT.get().create(minecraft.level);
+            if (bearer == null) {
+                return null;
+            }
+            // A knight of his nation: its officers' harness, crest and weapon in its land's style (Epic Knights; iron and a
+            // sword without it), and its banner on his back.
+            java.util.UUID nation = base != null && n >= 0 && n < base.nations().size() ? base.nations().get(n).id() : null;
+            if (nation != null && Armoury.available()) {
+                Armoury.dress(bearer, Armoury.Kit.GENERAL, base, nation);
+            } else {
+                bearer.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+                bearer.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+                bearer.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+                bearer.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+                bearer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+            }
+            // A battle banner (cloth that moves) with the nation's arms.
+            ItemStack banner = new ItemStack(rafasconquest.content.ConquestContent.BATTLE_BANNER_ITEM.get());
+            if (nation != null) {
+                net.minecraft.world.item.component.CustomData.update(net.minecraft.core.component.DataComponents.CUSTOM_DATA, banner,
+                        tag -> tag.putUUID("nation", nation));
+            }
+            rafasconquest.client.BackBanners.put(bearer.getId(), banner, 1.5F);
+            bearer.setOnGround(true);
+            bearerNation = n;
+            walkedAt = Util.getMillis();
+        }
+        boolean moving = Math.hypot(fief.toX() - at[0], fief.toZ() - at[1]) > 0.5;
+        long now = Util.getMillis();
+        for (; walkedAt + 50 <= now; walkedAt += 50) { // the walk animation's ticks since the last frame
+            bearer.walkAnimation.update(moving ? 1F : 0F, 0.4F);
+        }
+        Portraits.animate(bearer);
+        float yaw = (float) Math.toDegrees(Math.atan2(-(fief.toX() - fief.fromX()), fief.toZ() - fief.fromZ()));
+        bearer.yBodyRot = bearer.yBodyRotO = yaw;
+        bearer.setYRot(yaw);
+        bearer.yRotO = yaw;
+        bearer.yHeadRot = bearer.yHeadRotO = yaw;
+        bearer.setXRot(0);
+        bearer.xRotO = 0;
+        // Fresh Animations (through EMF) only animates models near the camera: he stands at it, drawn where the army is.
+        Vec3 eye = minecraft.gameRenderer.getMainCamera().getPosition();
+        bearer.setPos(eye.x, eye.y, eye.z);
+        bearer.setOldPosAndRot();
+        return bearer;
+    }
+
+    /** The marcher's box on screen (x0, y0, x1, y1, GUI pixels), or null if he is not on the map. */
+    @Nullable
+    private double[] marcherBox() {
+        double[] at = army();
+        if (at == null) {
+            return null;
+        }
+        double[] feet = camera == null ? new double[]{view.screenX(at[0]), view.screenY(at[1])} : project(at[0], at[1]);
+        double[] east = camera == null ? new double[]{view.screenX(at[0] + 100), feet[1]} : project(at[0] + 100, at[1]);
+        if (feet == null || east == null) {
+            return null;
+        }
+        double block = Math.abs(east[0] - feet[0]) / 100; // GUI pixels a block there
+        double half = Math.max(5, MARCHER_HEIGHT * 0.3 * block);
+        double tall = Math.max(12, MARCHER_HEIGHT * 1.3 * block); // with the banner over his head
+        return new double[]{feet[0] - half, feet[1] - tall, feet[0] + half, feet[1] + 2};
+    }
+
+    private boolean onMarcher(double mx, double my) {
+        double[] b = marcherBox();
+        return b != null && mx >= b[0] && mx < b[2] && my >= b[1] && my < b[3];
+    }
+
+    private long walkedAt;
+    /** How tall the marcher stands on the map, in blocks (banner aside): fixed to the land, as the user approved it. */
+    private static final double MARCHER_HEIGHT = 80;
+    /** The marcher's banner's breeze, blocks/s² at life size: Wind's least breeze, a little more. */
+    private static final double BREEZE = 3;
+
+    /** On the flat map, the marcher drawn as a figure over it (the 3D map has him in the world: {@link #renderMarcher}). */
+    private void renderArmy(GuiGraphics g) {
+        double[] at = camera == null ? army() : null;
+        var e = at == null ? null : marcher();
+        if (e == null) {
+            return;
+        }
+        e.yBodyRot = e.yBodyRotO = e.yHeadRot = e.yHeadRotO = 160; // three-quarters to the screen, looking down on him
+        rafasconquest.client.cloth.ClothRenderer.far(e.getId(), null); // a picture over the flat map: his banner hangs at rest
+        float scale = (float) (MARCHER_HEIGHT / e.getBbHeight() * view.scale); // GUI pixels a block of him
+        float feet = (float) view.screenY(at[1]);
+        InventoryScreen.renderEntityInInventory(g, (float) view.screenX(at[0]), feet - e.getBbHeight() * scale / 2, scale / e.getScale(),
+                new Vector3f(0, e.getBbHeight() / 2, 0), new Quaternionf().rotateZ((float) Math.PI), null, e);
+    }
+
+    /**
+     * The 3D map's marcher: an entity standing on the world's ground where the army is, walking toward its goal, drawn
+     * {@link #MARCHER_HEIGHT} blocks tall, so he grows and shrinks with the land as the map zooms. Called while the world is drawn.
+     */
+    static void renderMarcher(PoseStack pose, Vec3 cam, MultiBufferSource buffers) {
+        if (!(Minecraft.getInstance().screen instanceof GrandStrategyScreen s) || s.camera == null) {
+            return;
+        }
+        double[] at = s.army();
+        var e = at == null ? null : s.marcher();
+        BaseMap base = ClientMapCache.map();
+        if (e == null || base == null) {
+            return;
+        }
+        double y = StrategyRelief.groundAt(base, at[0], at[1]);
+        float k = (float) (MARCHER_HEIGHT / e.getBbHeight());
+        pose.pushPose();
+        pose.translate(at[0] - cam.x, y - cam.y, at[1] - cam.z);
+        pose.scale(k, k, k);
+        // His banner's cloth moves though he is far and big: a mild breeze from the left and from the top of the screen
+        // (the camera looks north), so it flows a little toward the camera and to the right, swelling and easing.
+        double t = Util.getMillis() / 1000.0;
+        double[] breeze = {BREEZE * (1 + 0.35 * Math.sin(t * 0.9)), 0, BREEZE * 0.7 * (1 + 0.35 * Math.sin(t * 1.3 + 1))};
+        rafasconquest.client.cloth.ClothRenderer.far(e.getId(), new rafasconquest.client.cloth.ClothRenderer.Far(k, breeze));
+        rafasconquest.client.cloth.ClothRenderer.setCurrent(e);
+        // Through the dispatcher, not his renderer alone: EMF (Fresh Animations) learns which entity it animates there;
+        // skipped, he took the last-drawn entity's walk and age, and stood still or jittered.
+        var entities = Minecraft.getInstance().getEntityRenderDispatcher();
+        entities.setRenderShadow(false);
+        entities.render(e, 0, 0, 0, e.getYRot(), Portraits.animate(e), pose, buffers, LightTexture.FULL_BRIGHT);
+        entities.setRenderShadow(Minecraft.getInstance().options.entityShadows().get());
+        rafasconquest.client.cloth.ClothRenderer.setCurrent(null);
+        pose.popPose();
+    }
+
+    /**
+     * The ground (x, z) under a point on screen: the flat map's, or through the 3D camera onto sea level; null over the sky.
+     * shortcut: the 3D map's ground is taken as sea level, so a march aimed at a mountain lands a little off; fine from high up.
+     */
+    @Nullable
+    private double[] unproject(double mx, double my) {
+        if (camera == null) {
+            return new double[]{view.worldX(mx), view.worldZ(my)};
+        }
+        double pitch = Math.toRadians(PITCH);
+        double focal = height / 2.0 / Math.tan(Math.toRadians(fov()) / 2);
+        double k = (height / 2.0 - my) / focal; // up / ahead, as project() has it
+        double vy = ground() - camera.getY();
+        double vz = -vy * (k * Math.sin(pitch) + Math.cos(pitch)) / (k * Math.cos(pitch) - Math.sin(pitch));
+        double ahead = -vy * Math.sin(pitch) - vz * Math.cos(pitch);
+        if (ahead <= 1 || !Double.isFinite(ahead)) {
+            return null;
+        }
+        return new double[]{camera.getX() + (mx - width / 2.0) / focal * ahead, camera.getZ() + vz};
     }
 
     @Override
@@ -306,6 +496,10 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     @Override
     public void removed() {
+        if (bearer != null) {
+            rafasconquest.client.cloth.ClothRenderer.far(bearer.getId(), null);
+            rafasconquest.client.BackBanners.remove(bearer.getId());
+        }
         leave3d();
         super.removed();
     }
@@ -331,7 +525,20 @@ public class GrandStrategyScreen extends FactionMapScreen {
                 g.renderOutline((int) s[0] - 7, (int) s[1] - 7, 14, 14, GOLD);
             }
         }
+        renderArmy(g);
+        double[] box = marcherBox();
+        if (box != null && (armyPicked || menu == null && onMarcher(mouseX, mouseY))) { // picked, or under the mouse
+            g.renderOutline((int) box[0], (int) box[1], (int) (box[2] - box[0]), (int) (box[3] - box[1]), armyPicked ? GOLD : 0x80E0C060);
+        }
         g.disableScissor();
+        armyPicked &= box != null;
+        if (summary != null) {
+            panel.open(false);
+        } else if (armyPicked) {
+            panel.open(true);
+        } else {
+            panel.close();
+        }
         SeatCities.City hovered = menu == null && !overHud(mouseX, mouseY) ? seatAt(mouseX, mouseY) : null;
         List<Spot> spots = spots();
         renderHud(g, spots, mouseX, mouseY);
@@ -340,6 +547,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (summary != null) {
             renderSummary(g, summary);
         }
+        panel.render(g, font, width, height, fief, mouseX, mouseY);
         if (menu != null) {
             renderMenu(g, mouseX, mouseY);
         } else if (hovered != null) {
@@ -557,7 +765,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     /** Over the HUD's bars and panels, where the map takes no clicks, drags or scrolls. */
     private boolean overHud(double x, double y) {
-        return y < 19 && x >= width - 186
+        return panel.over(x, y, width, height)
+                || y < 19 && x >= width - 186
                 || x >= width - 21 && y < 24 + 9 * 22
                 || x < 135 && y >= height - 52
                 || x < 17 && y >= height - 92
@@ -576,6 +785,17 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
             return true;
         }
+        if (button == 0 && panel.click(mouseX, mouseY, width, height, fief)) {
+            return true;
+        }
+        if (panel.mode == CityPanel.Mode.MARCH && !overHud(mouseX, mouseY)) { // the march's goal; a right-click calls it off
+            double[] to = button == 0 ? unproject(mouseX, mouseY) : null;
+            if (to != null) {
+                ConquestNetwork.orderGarrison(GrandStrategy.MARCH, 0, to[0], to[1]);
+            }
+            panel.mode = CityPanel.Mode.NONE;
+            return true;
+        }
         if (overHud(mouseX, mouseY)) {
             if (button == 0 && minecraft != null) {
                 for (Spot s : spots()) {
@@ -587,6 +807,12 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
             return true;
         }
+        if (button == 0 && onMarcher(mouseX, mouseY)) { // the army in the field, picked: Muster and March
+            armyPicked = true;
+            summary = null;
+            return true;
+        }
+        armyPicked = false;
         SeatCities.City city = ownedAt(mouseX, mouseY);
         if (city == null) {
             summary = null;
