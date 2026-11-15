@@ -408,10 +408,10 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/MapContext.java": {
-    "mtime": 1793324197.0433886,
-    "seen": 1793865705.7986274,
-    "ast_hash": "f85dfc5e959e5aa5aa59c8b9012bc9eb",
-    "semantic_hash": "f85dfc5e959e5aa5aa59c8b9012bc9eb"
+    "mtime": 1794723693.794352,
+    "seen": 1794723778.4828608,
+    "ast_hash": "ef1e7d32af3e63e5cf7c62803216a83b",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/MapLayer.java": {
     "mtime": 1793081785.516366,
@@ -738,10 +738,10 @@
     "semantic_hash": "71ed7b6d6c918bf5b2ebcd620b8c1e51"
   },
   "src/main/java/rafasconquest/map/TitleStyle.java": {
-    "mtime": 1793324196.6803024,
-    "seen": 1793865705.798684,
-    "ast_hash": "a45b3d18ba3c3d8f337bd8690bc2ded7",
-    "semantic_hash": "a45b3d18ba3c3d8f337bd8690bc2ded7"
+    "mtime": 1794723711.2779276,
+    "seen": 1794723778.4829934,
+    "ast_hash": "8703469cbe9972e3cf8c08d401daa782",
+    "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
     "mtime": 1794684423.3043132,
@@ -2040,9 +2040,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/GrandStrategyScreen.java": {
-    "mtime": 1794722761.518551,
-    "seen": 1794722826.596009,
-    "ast_hash": "ec26dc0841881b63f468da24001f8c2f",
+    "mtime": 1794723461.6569846,
+    "seen": 1794723538.221648,
+    "ast_hash": "0982844380e737b70ad31623061c318e",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GrandStrategyBlock.java": {
@@ -3882,9 +3882,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/StrategyRelief.java": {
-    "mtime": 1794722789.3556917,
-    "seen": 1794722826.5960224,
-    "ast_hash": "29664085090444e0afc0329ec0698c20",
+    "mtime": 1794723743.2181916,
+    "seen": 1794723778.482872,
+    "ast_hash": "c6fc1759017fc9926f41a0bd59fa367d",
     "semantic_hash": ""
   }
 }

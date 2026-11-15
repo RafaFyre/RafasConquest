@@ -8,10 +8,10 @@ import rafasconquest.core.TitleMap;
  * heavy dark red one between empires. One ARGB pixel per map pixel, transparent elsewhere.
  */
 public final class TitleStyle {
-    static final int COUNTY = 0x50402A1A;
-    static final int DUCHY = 0x9A402A1A;
-    static final int KINGDOM = 0xD0402A1A;
-    static final int EMPIRE = 0xF0701818;
+    public static final int COUNTY = 0x50402A1A;
+    public static final int DUCHY = 0x9A402A1A;
+    public static final int KINGDOM = 0xD0402A1A;
+    public static final int EMPIRE = 0xF0701818;
 
     private TitleStyle() {
     }
@@ -57,6 +57,32 @@ public final class TitleStyle {
             }
         }
         return out;
+    }
+
+    /**
+     * The borders as edges, for the 3D map's shader to draw as thin lines: red is the border's level (1 county to
+     * 4 empire, times 64) along each pixel's right side, green along its bottom side; opaque black where none.
+     */
+    public static int[] edges(BaseMap map) {
+        int w = map.width();
+        int h = map.height();
+        int[] provinces = map.provinces();
+        TitleMap t = map.titles();
+        int[] out = new int[w * h];
+        for (int z = 0; z < h; z++) {
+            for (int x = 0; x < w; x++) {
+                int i = z * w + x;
+                int p = provinces[i];
+                int right = x + 1 < w ? edge(t, p, provinces[i + 1]) : 0;
+                int below = z + 1 < h ? edge(t, p, provinces[i + w]) : 0;
+                out[i] = 0xFF000000 | right * 64 << 16 | below * 64 << 8;
+            }
+        }
+        return out;
+    }
+
+    private static int edge(TitleMap t, int p, int q) {
+        return p < 0 || q < 0 || p == q ? 0 : level(t, p, q);
     }
 
     /** 1 if two provinces are in different counties, 2 different duchies, 3 kingdoms, 4 empires; 0 the same county. */

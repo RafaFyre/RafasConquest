@@ -255,7 +255,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (minecraft.getCameraEntity() != camera) {
             minecraft.setCameraEntity(camera);
         }
-        StrategyRelief.show(view.centerX, view.centerZ, span * 1.2, view.scale, labels, map, colouredMap); // the tilted view sees past the screen's width north
+        StrategyRelief.show(view.scale, labels, map, colouredMap);
     }
 
     private void leave3d() {

@@ -27,6 +27,8 @@ public final class MapContext implements AutoCloseable {
     public static final ResourceLocation BASE_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/base");
     public static final ResourceLocation TERRITORY_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/territory");
     public static final ResourceLocation TITLES_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/titles");
+    /** The title borders as pixel edges ({@link rafasconquest.map.TitleStyle#edges}), for the 3D map's thin lines. */
+    public static final ResourceLocation EDGES_TEXTURE = ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "map/edges");
 
     public final BaseMap base;
     public final List<FactionInfo> factions;
@@ -52,6 +54,8 @@ public final class MapContext implements AutoCloseable {
         upload(BASE_TEXTURE, image(political.parchment()));
         upload(TERRITORY_TEXTURE, image(political.territory()));
         upload(TITLES_TEXTURE, image(rafasconquest.map.TitleStyle.borders(base)));
+        upload(EDGES_TEXTURE, image(rafasconquest.map.TitleStyle.edges(base)));
+        Minecraft.getInstance().getTextureManager().getTexture(EDGES_TEXTURE).setFilter(false, false); // read exactly
     }
 
     /** Where a realm's name goes, or null if it holds no land on the map. */
@@ -99,5 +103,6 @@ public final class MapContext implements AutoCloseable {
         Minecraft.getInstance().getTextureManager().release(BASE_TEXTURE);
         Minecraft.getInstance().getTextureManager().release(TERRITORY_TEXTURE);
         Minecraft.getInstance().getTextureManager().release(TITLES_TEXTURE);
+        Minecraft.getInstance().getTextureManager().release(EDGES_TEXTURE);
     }
 }
