@@ -104,6 +104,7 @@ public final class ClientEvents {
             ArrowVolleys.render(event.getPoseStack(), event.getCamera(), event.getFrustum());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             BattleScreen.renderSelection(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            rafasconquest.client.map.StrategyRelief.render(event.getPoseStack(), event.getCamera());
         }
     }
 

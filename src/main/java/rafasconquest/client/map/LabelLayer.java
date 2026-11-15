@@ -39,6 +39,11 @@ public class LabelLayer implements MapLayer {
 
     private final Consumer<UUID> openFaction;
     private final List<Hit> hits = new ArrayList<>();
+    /** False while laying names out on the 3D map without drawing them (they are drawn on its ground). */
+    private boolean ink = true;
+    /** The faction whose name is under the cursor on the 3D map, or null. */
+    @org.jetbrains.annotations.Nullable
+    private UUID hovered;
 
     /** Where a drawn name is: centre, turn, and half its size, in screen pixels. */
     private record Hit(UUID faction, double x, double y, double angle, double halfWidth, double halfHeight) {
@@ -73,6 +78,117 @@ public class LabelLayer implements MapLayer {
                 drawCityState(g, font, view, f, mouseX, mouseY);
             }
         }
+    }
+
+    /**
+     * Where the names fall on the 3D map, for hovering and double-clicking them (they are drawn on the ground by
+     * {@link #renderGround}): each laid out as on the flat map about where its middle falls on screen, at the map's
+     * scale there. {@code project} gives a world (x, z)'s screen point and pixels per block, or null if behind the camera.
+     */
+    void render3d(GuiGraphics g, MapContext map, int mouseX, int mouseY, java.util.function.BiFunction<Double, Double, double[]> project) {
+        Font font = Minecraft.getInstance().font;
+        hits.clear();
+        ink = false;
+        for (FactionInfo f : map.factions) {
+            PoliticalStyle.LabelShape shape = map.label(f.id());
+            if (shape == null) {
+                continue;
+            }
+            boolean empire = f.type() == FactionType.EMPIRE;
+            double wx = empire ? shape.centerX() : f.origin().getX();
+            double wz = empire ? shape.centerZ() : f.origin().getZ();
+            double[] at = project.apply(wx, wz);
+            if (at == null || at[2] <= 0) {
+                continue;
+            }
+            // A flat map that puts this name's middle where the camera sees it.
+            MapView local = new MapView();
+            local.setViewport(0, 0, g.guiWidth(), g.guiHeight());
+            local.scale = at[2];
+            local.centerX = wx - (at[0] - local.width() / 2.0) / local.scale;
+            local.centerZ = wz - (at[1] - local.height() / 2.0) / local.scale;
+            if (empire) {
+                drawEmpire(g, font, local, f, shape, mouseX, mouseY);
+            } else {
+                drawCityState(g, font, local, f, mouseX, mouseY);
+            }
+        }
+        ink = true;
+        hovered = null;
+        for (int i = hits.size() - 1; i >= 0 && hovered == null; i--) {
+            if (hits.get(i).contains(mouseX, mouseY)) {
+                hovered = hits.get(i).faction();
+            }
+        }
+    }
+
+    /**
+     * The names painted on the 3D map's ground, as Crusader Kings paints its realms': each letter lies flat on the land
+     * at the ground under it, laid out as on the flat map at {@code mapScale} (screen pixels per block at the view's
+     * middle), so the names keep their flat-map size there and grow and shrink with the land around it.
+     */
+    void renderGround(com.mojang.blaze3d.vertex.PoseStack pose, net.minecraft.world.phys.Vec3 cam, MapContext map, double mapScale,
+                      net.minecraft.client.renderer.MultiBufferSource buffers) {
+        Font font = Minecraft.getInstance().font;
+        for (FactionInfo f : map.factions) {
+            PoliticalStyle.LabelShape shape = map.label(f.id());
+            if (shape == null) {
+                continue;
+            }
+            int color = f.id().equals(hovered) ? HOVER : INK;
+            if (f.type() != FactionType.EMPIRE) {
+                // Small, under the city, as on the flat map.
+                ground(pose, cam, map, font, buffers, f.name(), f.origin().getX(),
+                        f.origin().getZ() + (10 + font.lineHeight * CITY_STATE_SCALE / 2) / mapScale, 0, CITY_STATE_SCALE / mapScale, color);
+                continue;
+            }
+            String name = f.name().toUpperCase(Locale.ROOT);
+            double target = SPAN * shape.length() * mapScale;
+            int plain = font.width(name);
+            float scale = Mth.clamp((float) (target / plain), MIN_SCALE, MAX_EMPIRE_SCALE);
+            float spacing = 0;
+            if (name.length() > 1 && plain * scale < target) {
+                float average = (float) plain / name.length();
+                spacing = Math.min(MAX_SPACING * average, (float) ((target / scale - plain) / (name.length() - 1)));
+            }
+            double angle = shape.elongated() ? Mth.clamp(shape.angle(), -MAX_ANGLE, MAX_ANGLE) : 0;
+            double k = scale / mapScale; // blocks per letter pixel
+            float cursor = -(plain + spacing * (name.length() - 1)) / 2;
+            for (int i = 0; i < name.length(); i++) {
+                String letter = name.substring(i, i + 1);
+                float w = font.width(letter);
+                double along = (cursor + w / 2) * k;
+                ground(pose, cam, map, font, buffers, letter, shape.centerX() + Math.cos(angle) * along,
+                        shape.centerZ() + Math.sin(angle) * along, angle, k, color);
+                cursor += w + spacing;
+            }
+        }
+    }
+
+    /** One piece of text lying on the 3D map's ground, centred on world (x, z), turned {@code angle} from east toward south. */
+    private static void ground(com.mojang.blaze3d.vertex.PoseStack pose, net.minecraft.world.phys.Vec3 cam, MapContext map, Font font,
+                               net.minecraft.client.renderer.MultiBufferSource buffers, String text, double x, double z, double angle,
+                               double blocksPerPixel, int color) {
+        double y = StrategyRelief.groundAt(map.base, x, z) + 3 * StrategyRelief.STRETCH;
+        pose.pushPose();
+        pose.translate(x - cam.x, y - cam.y, z - cam.z);
+        pose.mulPose(Axis.YP.rotation((float) -angle));
+        pose.mulPose(Axis.XP.rotationDegrees(90)); // the text's down runs south, so it reads from the camera looking north
+        pose.scale((float) blocksPerPixel, (float) blocksPerPixel, (float) blocksPerPixel);
+        org.joml.Matrix4f m = pose.last().pose();
+        net.minecraft.util.FormattedCharSequence seq = Component.literal(text).getVisualOrderText();
+        float x0 = -font.width(text) / 2F;
+        float y0 = -font.lineHeight / 2F;
+        // Font's outline draws on the depth buffer; see-through draws over the land, which isn't in it.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx != 0 || dy != 0) {
+                    font.drawInBatch(seq, x0 + dx, y0 + dy, OUTLINE, false, m, buffers, Font.DisplayMode.SEE_THROUGH, 0, 0xF000F0);
+                }
+            }
+        }
+        font.drawInBatch(seq, x0, y0, color, false, m, buffers, Font.DisplayMode.SEE_THROUGH, 0, 0xF000F0);
+        pose.popPose();
     }
 
     private void drawEmpire(GuiGraphics g, Font font, MapView view, FactionInfo f, PoliticalStyle.LabelShape shape, int mouseX, int mouseY) {
@@ -128,7 +244,10 @@ public class LabelLayer implements MapLayer {
     }
 
     /** Dark ink with a pale outline, so names read over any colour. */
-    private static void draw(GuiGraphics g, Font font, String text, float x, float y, int color) {
+    private void draw(GuiGraphics g, Font font, String text, float x, float y, int color) {
+        if (!ink) {
+            return;
+        }
         font.drawInBatch8xOutline(Component.literal(text).getVisualOrderText(), x, y, color, OUTLINE,
                 g.pose().last().pose(), g.bufferSource(), 0xF000F0);
         g.flush();

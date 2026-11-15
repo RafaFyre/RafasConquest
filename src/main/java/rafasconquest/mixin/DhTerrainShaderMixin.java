@@ -16,5 +16,6 @@ public class DhTerrainShaderMixin {
     @Inject(method = "fillUniformData", at = @At("TAIL"))
     private void rafasconquest$swell(CallbackInfo ci) {
         WaterSwell.upload();
+        rafasconquest.client.map.StrategyRelief.upload();
     }
 }

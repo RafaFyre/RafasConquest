@@ -49,6 +49,25 @@ final class DistantHorizonsQuality {
         }
     }
 
+    /** Distant Horizons' LOD-only mode, set as an override while on and cleared back to the player's own setting after. */
+    static void lodOnly(boolean on) {
+        IDhApiConfig configs = DhApi.Delayed.configs;
+        if (configs == null) {
+            return;
+        }
+        if (on) {
+            configs.graphics().lodOnlyMode().setValue(true);
+        } else {
+            configs.graphics().lodOnlyMode().clearValue();
+        }
+    }
+
+    static int reach() {
+        IDhApiConfig configs = DhApi.Delayed.configs;
+        Integer chunks = configs == null ? null : configs.graphics().chunkRenderDistance().getValue();
+        return chunks == null ? 0 : chunks * 16;
+    }
+
     static void clear() {
         IDhApiConfig configs = DhApi.Delayed.configs;
         if (configs != null) {

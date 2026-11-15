@@ -81,6 +81,16 @@ public class FactionMapScreen extends Screen {
         return false;
     }
 
+    /** Whether the realms are drawn in their colours; a screen built on this one may let the player turn them off. */
+    protected boolean territory() {
+        return true;
+    }
+
+    /** True while a screen built on this one shows the world itself (Distant Horizons' terrain) instead of the flat map. */
+    protected boolean world3d() {
+        return false;
+    }
+
     @Override
     protected void init() {
         if (hud()) {
@@ -130,7 +140,7 @@ public class FactionMapScreen extends Screen {
         }
     }
 
-    private void openFaction(UUID faction) {
+    protected void openFaction(UUID faction) {
         if (minecraft != null) {
             toFactionInfo = true;
             minecraft.setScreen(new FactionInfoScreen(this, faction));
@@ -139,6 +149,9 @@ public class FactionMapScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (world3d() && map != null) {
+            return; // the world is the view; the flat layers don't line up with it
+        }
         g.fill(0, 0, width, height, FRAME);
         g.drawString(font, title, MARGIN + 2, 6, 0xF4EEDC, false);
         if (map == null) {
@@ -149,6 +162,10 @@ public class FactionMapScreen extends Screen {
         } else {
             g.enableScissor(view.left, view.top, view.right, view.bottom);
             for (MapLayer layer : layers) {
+                if (layer instanceof TerritoryLayer && !territory()) {
+                    BaseMapLayer.drawStormWall(g, view, map); // the realms' colours off, the storm wall kept
+                    continue;
+                }
                 layer.render(g, view, map, mouseX, mouseY);
             }
             overlay(g, map, mouseX, mouseY);
@@ -204,7 +221,7 @@ public class FactionMapScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
-        if (map == null || !view.contains(mouseX, mouseY)) {
+        if (map == null || world3d() || !view.contains(mouseX, mouseY)) {
             return false;
         }
         long now = Util.getMillis();

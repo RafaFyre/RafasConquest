@@ -61,6 +61,19 @@ public final class DistantHorizonsLink {
     public static void leftWorld() {
         if (linked) {
             DistantHorizonsQuality.clear();
+            DistantHorizonsQuality.lodOnly(false);
+        }
+    }
+
+    /** How far (in blocks) Distant Horizons draws terrain about the player, or 0 if it isn't installed. */
+    public static int reach() {
+        return linked ? DistantHorizonsQuality.reach() : 0;
+    }
+
+    /** The city view: only Distant Horizons' terrain is drawn while it is open, none of the vanilla chunks. */
+    public static void lodOnly(boolean on) {
+        if (linked) {
+            DistantHorizonsQuality.lodOnly(on);
         }
     }
 }

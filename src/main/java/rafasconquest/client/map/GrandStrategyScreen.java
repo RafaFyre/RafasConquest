@@ -5,6 +5,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Marker;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -13,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import rafasconquest.client.CityManagerScreen;
+import rafasconquest.client.DistantHorizonsLink;
 import rafasconquest.client.NationScreen;
 import rafasconquest.client.Portraits;
 import rafasconquest.client.TechTreeScreen;
@@ -56,6 +59,9 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private static final int CULTURE = 16;
     private static final int FAITH = 17;
     private static final int SKILLS = 18;
+    private static final int COLOURED = 19;
+    /** The realms drawn in their colours (on by default); static, so it stays as set the next time the map opens. */
+    private static boolean colouredMap = true;
 
     /** Something on the HUD: its box, what it is (hover), and what a click does (null: nothing yet). */
     private record Spot(int x, int y, int w, int h, List<Component> tip, @Nullable Runnable click) {
@@ -75,6 +81,17 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private SeatCities.City lastClicked;
     private long lastClick;
     private long lastHoldClick;
+    /** Looks down on Distant Horizons' terrain while the map is shown in 3D; null on the flat map. */
+    @Nullable
+    private Marker camera;
+    private boolean hidGui;
+    /** The flat map's titles layer, for its double-click on a hold, worked from the 3D map. */
+    private final TitleLayer titles = new TitleLayer();
+    /** The flat map's nation names, drawn on the 3D map where each realm's middle falls. */
+    private final LabelLayer labels = new LabelLayer(this::openFaction);
+    private long lastNameClick;
+    /** Degrees the 3D camera looks down: Total War's campaign tilt. */
+    private static final double PITCH = 55;
 
     public GrandStrategyScreen(GrandStrategy.View fief) {
         super(null, Component.translatable("gui.rafasconquest.grand_strategy"));
@@ -110,7 +127,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
     @Nullable
     private SeatCities.City ownedAt(double mouseX, double mouseY) {
         for (SeatCities.City c : owned()) {
-            if (Math.hypot(view.screenX(c.x()) - mouseX, view.screenY(c.z()) - mouseY) < REACH) {
+            double[] s = at(c);
+            if (s != null && Math.hypot(s[0] - mouseX, s[1] - mouseY) < REACH) {
                 return c;
             }
         }
@@ -175,6 +193,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
         spots.add(new Spot(76, height - 28, 25, 25, tip(culture == null ? "Culture" : "Culture: " + culture, NOT_BUILT), null));
         spots.add(new Spot(104, height - 28, 25, 25, tip(faith == null ? "Faith" : "Faith: " + faith, NOT_BUILT), null));
         spots.add(new Spot(92, height - 51, 21, 21, tip("Skills", NOT_BUILT), null));
+        spots.add(new Spot(139, height - 25, 20, 20, tip("Coloured map", colouredMap ? "On: the realms in their colours" : "Off: the land as it is"),
+                () -> colouredMap = !colouredMap));
         return spots;
     }
 
@@ -191,15 +211,128 @@ public class GrandStrategyScreen extends FactionMapScreen {
     }
 
     @Override
+    protected boolean territory() {
+        return colouredMap;
+    }
+
+    @Override
+    protected boolean world3d() {
+        return camera != null;
+    }
+
+    /**
+     * Zoomed in near enough, and inside the ground Distant Horizons draws about the player, the map gives way to the
+     * world itself: a camera high over the map's middle, looking north and down, as a Total War campaign map. Zoomed out
+     * past that, or with no Distant Horizons, it is the flat map again.
+     */
+    private void update3d() {
+        LocalPlayer p = minecraft == null ? null : minecraft.player;
+        int reach = DistantHorizonsLink.reach();
+        double span = view.width() / view.scale;
+        // 3D up to four times Distant Horizons' reach across, so the camera climbs high; the middle must stay on its terrain.
+        boolean want = map != null && p != null && minecraft.level.dimension() == Level.OVERWORLD && span <= 4.0 * reach
+                && Math.hypot(view.centerX - p.getX(), view.centerZ - p.getZ()) <= reach;
+        if (want && (camera == null || camera.level() != minecraft.level)) {
+            if (camera == null) {
+                hidGui = minecraft.options.hideGui;
+            }
+            camera = new Marker(EntityType.MARKER, minecraft.level);
+            minecraft.options.hideGui = true;
+            DistantHorizonsLink.lodOnly(true);
+        } else if (!want && camera != null) {
+            leave3d();
+        }
+        if (camera == null) {
+            return;
+        }
+        // Far enough back that the map's own scale holds at the middle of the screen.
+        double d = view.height() / view.scale / 2 / Math.tan(Math.toRadians(fov()) / 2);
+        double pitch = Math.toRadians(PITCH);
+        camera.setPos(view.centerX, ground() + d * Math.sin(pitch), view.centerZ + d * Math.cos(pitch));
+        camera.setYRot(180); // north
+        camera.setXRot((float) PITCH);
+        camera.setOldPosAndRot(); // moved every frame, so no blur between ticks
+        if (minecraft.getCameraEntity() != camera) {
+            minecraft.setCameraEntity(camera);
+        }
+        StrategyRelief.show(view.centerX, view.centerZ, span * 1.2, view.scale, labels, map, colouredMap); // the tilted view sees past the screen's width north
+    }
+
+    private void leave3d() {
+        if (camera != null && minecraft != null) {
+            camera = null;
+            minecraft.setCameraEntity(minecraft.player);
+            minecraft.options.hideGui = hidGui;
+            DistantHorizonsLink.lodOnly(false);
+            StrategyRelief.hide();
+        }
+    }
+
+    private double fov() {
+        return minecraft.options.fov().get();
+    }
+
+    /** shortcut: the camera sits over sea level, not the ground under it; fine thousands of blocks up, not when zoomed right in. */
+    private double ground() {
+        return minecraft.level.getSeaLevel();
+    }
+
+    /** A city on screen (GUI pixels): on the flat map, or on the world through the camera; null if behind it. */
+    @Nullable
+    private double[] at(SeatCities.City c) {
+        if (camera == null) {
+            return new double[]{view.screenX(c.x()), view.screenY(c.z())};
+        }
+        return project(c.x() + 0.5, c.z() + 0.5);
+    }
+
+    /** The ground at world (x, z) on screen through the 3D camera (GUI pixels), or null if behind it. */
+    @Nullable
+    private double[] project(double x, double z) {
+        double pitch = Math.toRadians(PITCH);
+        BaseMap base = ClientMapCache.map();
+        double vx = x - camera.getX();
+        double vy = (base == null ? ground() : StrategyRelief.groundAt(base, x, z)) - camera.getY();
+        double vz = z - camera.getZ();
+        // The camera looks north and down: forward (0, -sin, -cos), right east, up (0, cos, -sin).
+        double ahead = -vy * Math.sin(pitch) - vz * Math.cos(pitch);
+        if (ahead <= 1) {
+            return null;
+        }
+        double up = vy * Math.cos(pitch) - vz * Math.sin(pitch);
+        double focal = height / 2.0 / Math.tan(Math.toRadians(fov()) / 2);
+        return new double[]{width / 2.0 + vx / ahead * focal, height / 2.0 - up / ahead * focal};
+    }
+
+    @Override
+    public void removed() {
+        leave3d();
+        super.removed();
+    }
+
+    @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        update3d();
         super.render(g, mouseX, mouseY, partialTick);
         g.enableScissor(view.left, view.top, view.right, view.bottom);
+        if (camera != null) {
+            renderSeats3d(g);
+            if (map != null) {
+                labels.render3d(g, map, mouseX, mouseY, (x, z) -> {
+                    double[] at = project(x, z);
+                    double[] east = project(x + 100, z); // pixels per block there, along the unforeshortened east-west
+                    return at == null || east == null ? null : new double[]{at[0], at[1], (east[0] - at[0]) / 100};
+                });
+            }
+        }
         for (SeatCities.City c : owned()) {
-            int x = (int) view.screenX(c.x());
-            int y = (int) view.screenY(c.z());
-            g.renderOutline(x - 7, y - 7, 14, 14, GOLD);
+            double[] s = at(c);
+            if (s != null) {
+                g.renderOutline((int) s[0] - 7, (int) s[1] - 7, 14, 14, GOLD);
+            }
         }
         g.disableScissor();
+        SeatCities.City hovered = menu == null && !overHud(mouseX, mouseY) ? seatAt(mouseX, mouseY) : null;
         List<Spot> spots = spots();
         renderHud(g, spots, mouseX, mouseY);
         g.pose().pushPose();
@@ -209,6 +342,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
         }
         if (menu != null) {
             renderMenu(g, mouseX, mouseY);
+        } else if (hovered != null) {
+            g.renderComponentTooltip(font, seatTip(hovered), mouseX, mouseY);
         } else {
             for (Spot s : spots) {
                 if (s.over(mouseX, mouseY)) {
@@ -217,6 +352,55 @@ public class GrandStrategyScreen extends FactionMapScreen {
             }
         }
         g.pose().popPose();
+    }
+
+    /** Every seat city on the 3D map: a square sized and coloured by its highest title, as on the flat map. */
+    private void renderSeats3d(GuiGraphics g) {
+        BaseMap base = ClientMapCache.map();
+        if (base == null) {
+            return;
+        }
+        for (SeatCities.City c : base.cities()) {
+            double[] at = at(c);
+            if (at == null || !view.near(at[0], at[1], 8)) {
+                continue;
+            }
+            int s = TitleLayer.SEAT_SIZE[c.tier().ordinal()];
+            int x = (int) at[0];
+            int y = (int) at[1];
+            g.fill(x - s - 1, y - s - 1, x + s + 1, y + s + 1, TitleLayer.OUTLINE);
+            g.fill(x - s, y - s, x + s, y + s, TitleLayer.SEAT_COLOR[c.tier().ordinal()]);
+        }
+    }
+
+    /** The seat city under the cursor on the 3D map (the flat map's layers have their own), or null. */
+    @Nullable
+    private SeatCities.City seatAt(double mouseX, double mouseY) {
+        BaseMap base = ClientMapCache.map();
+        if (camera == null || base == null) {
+            return null;
+        }
+        SeatCities.City best = null;
+        double near = REACH;
+        for (SeatCities.City c : base.cities()) {
+            double[] at = at(c);
+            double d = at == null ? Double.MAX_VALUE : Math.hypot(at[0] - mouseX, at[1] - mouseY);
+            if (d < near) {
+                near = d;
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    /** A seat's tooltip on the 3D map: its titles and holder, as on the flat map, then what a click does on it. */
+    private List<Component> seatTip(SeatCities.City c) {
+        BaseMap base = ClientMapCache.map();
+        List<Component> lines = new ArrayList<>(TitleLayer.tip(base, TitleLayer.names(base, c.province(), c.tier().ordinal()), c.province()));
+        if (owned().contains(c)) {
+            lines.add(Component.literal("Click: summary. Double-click or right-click: " + MANAGE.toLowerCase()).withColor(0xE0C060));
+        }
+        return lines;
     }
 
     private void renderHud(GuiGraphics g, List<Spot> spots, int mouseX, int mouseY) {
@@ -259,6 +443,16 @@ public class GrandStrategyScreen extends FactionMapScreen {
         Portraits.diamond(g, 116, height - 16, 12, spots.get(FAITH).over(mouseX, mouseY) ? 0xFFFFE680 : 0xFFF5D040, HUD_EDGE);
         Portraits.circle(g, 102, height - 41, 10, HUD_EDGE);
         Portraits.circle(g, 102, height - 41, 9, spots.get(SKILLS).over(mouseX, mouseY) ? 0xFFE0E0E0 : 0xFFFFFFFF);
+        // The coloured map toggle, beside the panel: a menu button, edged in gold while on.
+        Spot toggle = spots.get(COLOURED);
+        g.fill(toggle.x(), toggle.y(), toggle.x() + toggle.w(), toggle.y() + toggle.h(), colouredMap ? GOLD : HUD_EDGE);
+        g.fill(toggle.x() + 1, toggle.y() + 1, toggle.x() + toggle.w() - 1, toggle.y() + toggle.h() - 1,
+                toggle.over(mouseX, mouseY) ? HUD_HOVER : HUD);
+        g.pose().pushPose();
+        g.pose().translate(toggle.x() + 2, toggle.y() + 2, 0);
+        g.pose().scale((toggle.w() - 4) / 16F, (toggle.w() - 4) / 16F, 1);
+        g.renderItem(new ItemStack(Items.FILLED_MAP), 0, 0);
+        g.pose().popPose();
         // The date, bottom right.
         String date = date(fief.day());
         int w = font.width(date) + 12;
@@ -317,8 +511,12 @@ public class GrandStrategyScreen extends FactionMapScreen {
         }
         w += 12;
         int h = ROW * (lines.size() + 1) + 6;
-        int x = (int) view.screenX(city.x()) + 10;
-        int y = (int) view.screenY(city.z()) + 10;
+        double[] s = at(city);
+        if (s == null) {
+            return;
+        }
+        int x = (int) s[0] + 10;
+        int y = (int) s[1] + 10;
         g.fill(x, y, x + w, y + h, PANEL_BACK);
         g.renderOutline(x, y, w, h, EDGE);
         g.drawString(font, name(city), x + 6, y + 4, GOLD, false);
@@ -363,6 +561,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
                 || x >= width - 21 && y < 24 + 9 * 22
                 || x < 135 && y >= height - 52
                 || x < 17 && y >= height - 92
+                || x >= 139 && x < 159 && y >= height - 25 && y < height - 5
                 || y >= height - 18 && x >= width - font.width(date(fief.day())) - 13;
     }
 
@@ -391,6 +590,26 @@ public class GrandStrategyScreen extends FactionMapScreen {
         SeatCities.City city = ownedAt(mouseX, mouseY);
         if (city == null) {
             summary = null;
+            SeatCities.City seat = seatAt(mouseX, mouseY);
+            if (seat != null && button == 0 && map != null) {
+                // The flat map's double-click on a hold (its holder's page), worked as if the seat's mark there were clicked.
+                long now = Util.getMillis();
+                boolean twice = seat == lastClicked && now - lastClick < DOUBLE_CLICK_MS;
+                lastClicked = seat;
+                lastClick = now;
+                if (twice) {
+                    titles.mouseClicked(view, map, view.screenX(seat.x()), view.screenY(seat.z()), 0, true);
+                }
+                return true;
+            }
+            if (camera != null && map != null) {
+                long now = Util.getMillis();
+                boolean twice = now - lastNameClick < DOUBLE_CLICK_MS;
+                lastNameClick = now;
+                if (labels.mouseClicked(view, map, mouseX, mouseY, button, twice)) {
+                    return true; // a nation's name: twice opens its Faction Info
+                }
+            }
             return super.mouseClicked(mouseX, mouseY, button);
         }
         if (button == 1) {

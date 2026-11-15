@@ -13,6 +13,6 @@ import rafasconquest.client.WaterSwell;
 public class DhShaderLoaderMixin {
     @Inject(method = "loadFile", at = @At("RETURN"), cancellable = true)
     private static void rafasconquest$swell(String path, boolean absolute, CallbackInfoReturnable<String> cir) {
-        cir.setReturnValue(WaterSwell.patchDh(path, cir.getReturnValue()));
+        cir.setReturnValue(rafasconquest.client.map.StrategyRelief.patchDh(path, WaterSwell.patchDh(path, cir.getReturnValue())));
     }
 }

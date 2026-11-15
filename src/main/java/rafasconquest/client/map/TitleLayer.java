@@ -18,9 +18,9 @@ import java.util.List;
  * square, outlined in the colour of its highest title.
  */
 public class TitleLayer implements MapLayer {
-    private static final int[] SEAT_SIZE = {2, 3, 4, 5};
-    private static final int[] SEAT_COLOR = {0xFF6B5A44, 0xFF8C6A2F, 0xFFC9A13A, 0xFFB0302A};
-    private static final int OUTLINE = 0xFF1E1A16;
+    static final int[] SEAT_SIZE = {2, 3, 4, 5};
+    static final int[] SEAT_COLOR = {0xFF6B5A44, 0xFF8C6A2F, 0xFFC9A13A, 0xFFB0302A};
+    static final int OUTLINE = 0xFF1E1A16;
     /** The countryside shows from this zoom (screen pixels per block) in. */
     private static final double COUNTRY_MIN_SCALE = 0.05;
 
@@ -171,23 +171,28 @@ public class TitleLayer implements MapLayer {
             }
         }
         if (hovered != null) {
-            List<Component> lines = new ArrayList<>(List.of(Component.literal(hovered)));
-            int holder = hoveredProvince < 0 ? -1 : map.base.realm().holderOf(hoveredProvince);
-            String player = hoveredProvince < 0 ? null : rafasconquest.client.ClientPeerage.holder(hoveredProvince);
-            if (player != null) {
-                lines.add(Component.literal("Held by " + player).withStyle(net.minecraft.ChatFormatting.GOLD));
-            } else if (holder >= 0) {
-                rafasconquest.people.Person p = map.base.realm().people().get(holder);
-                int nation = capitalOf(map.base, p);
-                lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(map.base, p)
-                        + (nation >= 0 ? "" : " (double-click)")).withStyle(net.minecraft.ChatFormatting.GRAY));
-                if (nation >= 0) {
-                    lines.add(Component.literal("Capital of " + map.base.nations().get(nation).name() + " (double-click)")
-                            .withStyle(net.minecraft.ChatFormatting.GRAY));
-                }
-            }
-            g.renderComponentTooltip(Minecraft.getInstance().font, lines, mouseX, mouseY);
+            g.renderComponentTooltip(Minecraft.getInstance().font, tip(map.base, hovered, hoveredProvince), mouseX, mouseY);
         }
+    }
+
+    /** A hovered mark's tooltip: its name, and for a hold (province, else -1) who holds it. */
+    static List<Component> tip(BaseMap base, String hovered, int province) {
+        List<Component> lines = new ArrayList<>(List.of(Component.literal(hovered)));
+        int holder = province < 0 ? -1 : base.realm().holderOf(province);
+        String player = province < 0 ? null : rafasconquest.client.ClientPeerage.holder(province);
+        if (player != null) {
+            lines.add(Component.literal("Held by " + player).withStyle(net.minecraft.ChatFormatting.GOLD));
+        } else if (holder >= 0) {
+            rafasconquest.people.Person p = base.realm().people().get(holder);
+            int nation = capitalOf(base, p);
+            lines.add(Component.literal("Held by " + rafasconquest.client.CharacterScreen.styled(base, p)
+                    + (nation >= 0 ? "" : " (double-click)")).withStyle(net.minecraft.ChatFormatting.GRAY));
+            if (nation >= 0) {
+                lines.add(Component.literal("Capital of " + base.nations().get(nation).name() + " (double-click)")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
+        }
+        return lines;
     }
 
     /** Draws a settlement's mark centred on (x, y); returns its half size. */
@@ -314,7 +319,7 @@ public class TitleLayer implements MapLayer {
     }
 
     /** Every title seated in a province, highest first. */
-    private static String names(BaseMap base, int province, int tier) {
+    static String names(BaseMap base, int province, int tier) {
         List<String> names = new ArrayList<>();
         for (int t = tier; t >= 0; t--) {
             names.add(base.titleName(TitleMap.Tier.values()[t], province));
