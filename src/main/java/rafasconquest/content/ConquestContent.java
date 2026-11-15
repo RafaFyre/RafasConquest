@@ -137,9 +137,25 @@ public final class ConquestContent {
     public static final DeferredHolder<Item, Item> BIG_BATTLE_BANNER_ITEM = ITEMS.register("big_battle_banner",
             () -> new net.minecraft.world.item.StandingAndWallBlockItem(BIG_BATTLE_BANNER.get(), BIG_BATTLE_WALL_BANNER.get(),
                     new Item.Properties().stacksTo(16), net.minecraft.core.Direction.DOWN));
+    /** Flags, small to huge: a banner's cloth flown sideways from a pole, size × 2·size blocks. */
+    public static final java.util.List<DeferredHolder<Block, Block>> FLAGS = new java.util.ArrayList<>();
+    public static final java.util.List<DeferredHolder<Item, Item>> FLAG_ITEMS = new java.util.ArrayList<>();
+
+    static {
+        String[] names = {"small_flag", "medium_flag", "large_flag", "huge_flag"};
+        for (int i = 0; i < names.length; i++) {
+            int size = i + 1;
+            DeferredHolder<Block, Block> flag = BLOCKS.register(names[i], () -> new FlagBlock(bannerProperties(), size));
+            FLAGS.add(flag);
+            FLAG_ITEMS.add(ITEMS.register(names[i], () -> new BlockItem(flag.get(), new Item.Properties().stacksTo(16))));
+        }
+    }
+
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<BattleBannerBlockEntity>> BATTLE_BANNER_ENTITY =
             BLOCK_ENTITIES.register("battle_banner", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
-                    .of(BattleBannerBlockEntity::new, BATTLE_BANNER.get(), BATTLE_WALL_BANNER.get(), BIG_BATTLE_BANNER.get(), BIG_BATTLE_WALL_BANNER.get())
+                    .of(BattleBannerBlockEntity::new, java.util.stream.Stream.concat(
+                            java.util.stream.Stream.of(BATTLE_BANNER, BATTLE_WALL_BANNER, BIG_BATTLE_BANNER, BIG_BATTLE_WALL_BANNER),
+                            FLAGS.stream()).map(DeferredHolder::get).toArray(Block[]::new))
                     .build(null));
     /** The battle standard: a battle banner twice the size, held or worn on a mob's head. */
     public static final DeferredHolder<Item, Item> BATTLE_STANDARD = ITEMS.register("battle_standard",
@@ -178,6 +194,7 @@ public final class ConquestContent {
                 output.accept(BATTLE_BANNER_ITEM.get());
                 output.accept(BIG_BATTLE_BANNER_ITEM.get());
                 output.accept(BATTLE_STANDARD.get());
+                FLAG_ITEMS.forEach(flag -> output.accept(flag.get()));
                 output.accept(CAPE.get());
                 if (GATE_PLANKS_ITEM != null) {
                     output.accept(GATE_PLANKS_ITEM.get());

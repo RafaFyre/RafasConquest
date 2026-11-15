@@ -125,6 +125,67 @@ public final class BannerArt {
         pose.popPose();
     }
 
+    /** A flag's pole half-width in blocks: thicker for the bigger flags. */
+    private static double poleRadius(int size) {
+        return (1 + size) / 32.0;
+    }
+
+    /**
+     * Flags, small to huge: the banner's grid in blocks (size across, 2·size along), pinned down the pole and kept
+     * out of it, so it wraps round the pole rather than through it. Hung flags (held by a block) have no pole.
+     */
+    private static final ClothRenderer.Kind[] FLAGS = new ClothRenderer.Kind[4];
+    private static final ClothRenderer.Kind[] HUNG_FLAGS = new ClothRenderer.Kind[4];
+
+    static {
+        for (int s = 1; s <= 4; s++) {
+            double r = poleRadius(s);
+            FLAGS[s - 1] = new ClothRenderer.Kind(9, 17, s / 8.0, s / 8.0, 0, BANNER_WOOL, true, false,
+                    new double[]{-s * 0.5 - 0.1 - E, -2 * r - E, -r - E, 100, 0, r + E});
+            HUNG_FLAGS[s - 1] = new ClothRenderer.Kind(9, 17, s / 8.0, s / 8.0, 0, BANNER_WOOL, true, false);
+        }
+    }
+
+    /**
+     * A flag of {@code size} (1–4) on its own pole {@code poleHeight} blocks tall, the pose at the pole's foot: the
+     * cloth flown sideways toward +x from its top (the banner's top edge along the pole).
+     */
+    public static void flagOnPole(PoseStack pose, MultiBufferSource buffers, int light, int overlay, int size, double poleHeight,
+                                  @Nullable Object key, List<ClothRenderer.Layer> layers, @Nullable Vec3 near) {
+        if (pole == null) {
+            ModelPart root = Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.BANNER);
+            pole = root.getChild("pole");
+            bar = root.getChild("bar");
+        }
+        double r = poleRadius(size);
+        pose.pushPose();
+        // Vanilla's pole spans y −30..12 px and 2 px across: stretched from the foot to the top.
+        pose.scale((float) (16 * r), (float) (poleHeight / (42 / 16.0)), (float) (16 * r));
+        pose.translate(0, 30 / 16.0, 0);
+        pole.render(pose, ModelBakery.BANNER_BASE.buffer(buffers, RenderType::entitySolid), light, overlay);
+        pose.popPose();
+        pose.pushPose();
+        pose.translate(r, poleHeight - 0.1, 0);
+        flagCloth(pose, buffers, light, overlay, size, FLAGS[size - 1], key, layers, near);
+        pose.popPose();
+    }
+
+    /** A flag held by a block, no pole: the pose at the top of its pinned edge, the cloth toward +x. */
+    public static void flagHung(PoseStack pose, MultiBufferSource buffers, int light, int overlay, int size,
+                                @Nullable Object key, List<ClothRenderer.Layer> layers) {
+        flagCloth(pose, buffers, light, overlay, size, HUNG_FLAGS[size - 1], key, layers, null);
+    }
+
+    /** The cloth from the top of its pinned edge down: the pinned row runs down (local x), the cloth out (local y). */
+    private static void flagCloth(PoseStack pose, MultiBufferSource buffers, int light, int overlay, int size, ClothRenderer.Kind kind,
+                                  @Nullable Object key, List<ClothRenderer.Layer> layers, @Nullable Vec3 near) {
+        pose.pushPose();
+        pose.translate(0, -size * 0.5, 0);
+        pose.mulPose(Axis.ZP.rotationDegrees(-90));
+        ClothRenderer.draw(key, kind, pose, buffers, light, overlay, layers, near);
+        pose.popPose();
+    }
+
     /** A nation's arms as dye layers over the cloth (plain white without a nation). */
     public static List<ClothRenderer.Layer> arms(@Nullable UUID nation) {
         Level level = Minecraft.getInstance().level;
