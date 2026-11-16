@@ -59,6 +59,13 @@ public final class BattleSounds {
     private static final SoundEvent DIN = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.din"));
     private static final SoundEvent OARS = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.oars"));
     private static final SoundEvent SHOUT = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.shout"));
+    private static final SoundEvent TREBUCHET = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.trebuchet"));
+
+    /** A far trebuchet's shot release where it stands, heard up to 128 blocks off (volume 8). */
+    static void trebuchet(double x, double y, double z) {
+        Minecraft.getInstance().getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
+                TREBUCHET, SoundSource.NEUTRAL, 8F, 1F, RANDOM, x, y, z));
+    }
     /** A clip lasts 10 s, fading for the last second: the next starts 8 to 9 s after the last. */
     private static final int CLIP_EVERY = 160;
     private static final int CLIP_JITTER = 20;

@@ -354,8 +354,14 @@ public final class DistantArmyRenderer {
                 continue;
             }
             FigureMotion.Placed p = placed.get(i);
-            float[] motion = shape == null && engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal()
-                    ? RecruitFigures.trebuchet(formation.fighting(), Math.floorMod(formation.id() * 31 + i * 17, 100) / 100F) : STILL;
+            boolean trebuchet = engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal();
+            float phase = Math.floorMod(formation.id() * 31 + i * 17, 100) / 100F;
+            float[] motion = shape == null && trebuchet ? RecruitFigures.trebuchet(formation.fighting(), phase) : STILL;
+            // its shot heard where the far one is drawn; nearer, the real one is the game's
+            if (trebuchet && !glow && formation.fighting() && RecruitFigures.trebuchetSoundDue(formation.id() * 1024L + i, phase)
+                    && eye.distanceToSqr(p.x(), p.y(), p.z()) > handover * handover) {
+                BattleSounds.trebuchet(p.x(), p.y(), p.z());
+            }
             engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, motion, eye, renderBlocks, lit, glow);
         }
     }

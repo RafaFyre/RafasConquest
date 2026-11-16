@@ -480,11 +480,32 @@ final class RecruitFigures {
             return new float[]{1, 0, PLAYED};
         }
         double shot = SHOT_TICKS / 20.0, reload = RELOAD_TICKS / 20.0;
-        double period = Math.max(Machine.TREBUCHET.reload, shot + reload);
-        double t = (net.minecraft.Util.getMillis() / 1000.0 + phase * period) % period;
+        double t = trebuchetTime(phase, 0);
         double frame = t < shot ? t / shot * (SHOT_FRAMES - 1)
                 : t < shot + reload ? SHOT_FRAMES + (t - shot) / reload * (PLAYED_FRAMES - SHOT_FRAMES - 1) : PLAYED_FRAMES - 1;
         return new float[]{(float) (frame / (PLAYED_FRAMES - 1)), 0, PLAYED};
+    }
+
+    /** How long (s) before a trebuchet's shot frames begin its shot sound starts. */
+    private static final double SHOT_SOUND_LEAD = 0.25;
+
+    /** How far (s) a shooting trebuchet is through its turn, {@code lead} seconds ahead; {@code phase} (0..1) sets where it starts. */
+    private static double trebuchetTime(float phase, double lead) {
+        double period = Math.max(Machine.TREBUCHET.reload, (SHOT_TICKS + RELOAD_TICKS) / 20.0);
+        return (net.minecraft.Util.getMillis() / 1000.0 + lead + phase * period) % period;
+    }
+
+    /** Each shooting trebuchet's turn time (sound lead added) when last asked, by its key. */
+    private static final Map<Long, Double> TREBUCHET_TIMES = new HashMap<>();
+
+    /** Whether the trebuchet {@code key}'s shot sound is due: its turn, {@link #SHOT_SOUND_LEAD} ahead, wrapped round since last asked. */
+    static boolean trebuchetSoundDue(long key, float phase) {
+        double t = trebuchetTime(phase, SHOT_SOUND_LEAD);
+        Double last = TREBUCHET_TIMES.put(key, t);
+        if (TREBUCHET_TIMES.size() > 4096) {
+            TREBUCHET_TIMES.clear(); // shortcut: ended battles leave keys behind; a clear only skips one shot's sound
+        }
+        return last != null && t < last;
     }
 
     /** Each tower's last spot, its wheels' travel forward and when its bridge began to come down (0: up), by formation. */

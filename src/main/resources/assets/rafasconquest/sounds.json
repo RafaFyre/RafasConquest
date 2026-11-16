@@ -42,6 +42,7 @@
   "battle.order.move": {"sounds": ["rafasconquest:battle/order_move"]},
   "battle.order.attack": {"sounds": ["rafasconquest:battle/order_attack"]},
   "battle.army_charge": {"sounds": ["rafasconquest:battle/army_charge"]},
+  "battle.trebuchet": {"sounds": ["rafasconquest:battle/trebuchet"]},
   "music.to_shores_distant": {
     "sounds": [{"name": "rafasconquest:music/to_shores_distant", "stream": true}]
   },
