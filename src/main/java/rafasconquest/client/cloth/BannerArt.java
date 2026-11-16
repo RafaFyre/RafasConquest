@@ -180,7 +180,8 @@ public final class BannerArt {
     private static void flagCloth(PoseStack pose, MultiBufferSource buffers, int light, int overlay, int size, ClothRenderer.Kind kind,
                                   @Nullable Object key, List<ClothRenderer.Layer> layers, @Nullable Vec3 near) {
         pose.pushPose();
-        pose.translate(0, -size * 0.5, 0);
+        // A hair off the pole's (or holding block's) face: the cloth's pinned rim lay in it and z-fought.
+        pose.translate(0.01, -size * 0.5, 0);
         pose.mulPose(Axis.ZP.rotationDegrees(-90));
         ClothRenderer.draw(key, kind, pose, buffers, light, overlay, layers, near);
         pose.popPose();

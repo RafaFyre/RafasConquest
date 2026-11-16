@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.Material;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -27,7 +28,8 @@ import java.util.Map;
 
 /**
  * Draws cloth, and keeps the cloth that moves: each banner, cape or standard in sight has its own {@link Cloth},
- * stepped every client tick and forgotten five seconds after it was last drawn. Cloth farther than 64 blocks, in a
+ * stepped every client tick and forgotten five seconds after it was last drawn (past 64 blocks more cheaply, through
+ * blocks). Cloth farther than 512 blocks, in a
  * menu, on the ground or in a frame is drawn hanging at rest.
  * <p>
  * The cloth is simulated in world blocks. Each draw gives its frame (pose to world); between steps the cloth is
@@ -70,6 +72,8 @@ public final class ClothRenderer {
         @Nullable
         Matrix4d atTick;
         long seen;
+        /** Past {@link #RANGE}: stepped cheaply, through blocks. */
+        boolean distant;
         final Object key;
 
         Live(Kind kind, Level level, Object key) {
@@ -110,6 +114,9 @@ public final class ClothRenderer {
 
     private static final Map<Object, Live> LIVE = new HashMap<>();
     private static final double RANGE = 64;
+    /** Out to here cloth still moves, with {@link #FAR_ITERATIONS}; past it, it hangs at rest. */
+    private static final double FAR_RANGE = 512;
+    private static final int FAR_ITERATIONS = 6;
     /** How far a carried cloth's frame may be from its carrier before it is taken for a menu's picture of it. */
     private static final double NEAR = 8;
     private static final double GRAVITY = 9.81;
@@ -170,10 +177,11 @@ public final class ClothRenderer {
                 offTheBack(live.atTick, wind);
             }
             Level level = live.level;
-            Cloth.Solid solid = live.kind.blocks() && far == null // far off, the blocks under it are not where it is drawn
+            Cloth.Solid solid = live.kind.blocks() && far == null && !live.distant // far off, the blocks under it are not where it is drawn
                     ? (x, y, z) -> level.getBlockState(at.set(x, y, z)).isCollisionShapeFullBlock(level, at)
                     : null;
-            c.step(0.05, GRAVITY * (far == null ? 1 : far.scale()), wind, fabric.aero(), ITERATIONS, fabric.keep(), live.atTick, carry, solid);
+            c.step(0.05, GRAVITY * (far == null ? 1 : far.scale()), wind, fabric.aero(), live.distant ? FAR_ITERATIONS : ITERATIONS,
+                    fabric.keep(), live.atTick, carry, solid);
         }
     }
 
@@ -241,7 +249,9 @@ public final class ClothRenderer {
         Matrix4d frame = new Matrix4d().translate(cam.x, cam.y, cam.z).rotate(new Quaternionf(camera.rotation()))
                 .mul(new Matrix4d(modelView)).mul(new Matrix4d(pose.last().pose()));
         Vector3d anchor = frame.transformPosition(new Vector3d());
-        if (farOf(key) == null && (anchor.distanceSquared(cam.x, cam.y, cam.z) > RANGE * RANGE
+        double away = anchor.distanceSquared(cam.x, cam.y, cam.z);
+        boolean marcher = farOf(key) != null;
+        if (!marcher && (away > FAR_RANGE * FAR_RANGE
                 || near != null && anchor.distanceSquared(near.x, near.y, near.z) > NEAR * NEAR)) {
             return null;
         }
@@ -252,6 +262,7 @@ public final class ClothRenderer {
             LIVE.put(key, live);
         }
         live.now.set(frame);
+        live.distant = !marcher && away > RANGE * RANGE;
         if (live.atTick == null) {
             live.atTick = new Matrix4d(frame);
         }
@@ -358,10 +369,10 @@ public final class ClothRenderer {
                 for (int e = 0; e < rim.length; e++) {
                     int a = rim[e];
                     int b = e < 2 * (w - 1) ? a + 1 : a + w;
-                    vertex(vc, pose, front, nx, ny, nz, 1, a, w, h, argb, light, overlay);
-                    vertex(vc, pose, front, nx, ny, nz, 1, b, w, h, argb, light, overlay);
-                    vertex(vc, pose, back, nx, ny, nz, 1, b, w, h, argb, light, overlay);
-                    vertex(vc, pose, back, nx, ny, nz, 1, a, w, h, argb, light, overlay);
+                    vertex(vc, pose, front, nx, ny, nz, 1, a, w, h, argb, light, overlay, 0.5F);
+                    vertex(vc, pose, front, nx, ny, nz, 1, b, w, h, argb, light, overlay, 0.5F);
+                    vertex(vc, pose, back, nx, ny, nz, 1, b, w, h, argb, light, overlay, 0.5F);
+                    vertex(vc, pose, back, nx, ny, nz, 1, a, w, h, argb, light, overlay, 0.5F);
                 }
             }
         }
@@ -377,8 +388,17 @@ public final class ClothRenderer {
 
     private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
                                int side, int p, int w, int h, int argb, int light, int overlay) {
-        float u = (1 + 20F * (p % w) / (w - 1)) / 64F;
-        float v = (1 + 40F * (p / w) / (h - 1)) / 64F;
+        vertex(vc, pose, at, nx, ny, nz, side, p, w, h, argb, light, overlay, 0);
+    }
+
+    /**
+     * {@code inset} pixels in from the flag's edge: the rim, sampled right on the edge, flickered between the flag's
+     * pixel and the clear one outside it.
+     */
+    private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
+                               int side, int p, int w, int h, int argb, int light, int overlay, float inset) {
+        float u = Mth.clamp(1 + 20F * (p % w) / (w - 1), 1 + inset, 21 - inset) / 64F;
+        float v = Mth.clamp(1 + 40F * (p / w) / (h - 1), 1 + inset, 41 - inset) / 64F;
         vc.addVertex(pose, at[0][p], at[1][p], at[2][p]).setColor(argb).setUv(u, v).setOverlay(overlay).setLight(light)
                 .setNormal(pose, nx[p] * side, ny[p] * side, nz[p] * side);
     }

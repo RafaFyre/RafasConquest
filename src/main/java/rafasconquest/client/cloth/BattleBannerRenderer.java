@@ -50,6 +50,12 @@ public class BattleBannerRenderer implements BlockEntityRenderer<BattleBannerBlo
         pose.popPose();
     }
 
+    /** Seen as far as sails are, not vanilla's 64 blocks (the chunk must still be loaded). */
+    @Override
+    public int getViewDistance() {
+        return 512;
+    }
+
     /** The cloth blows well outside the block, the big one twice as far. */
     @Override
     public AABB getRenderBoundingBox(BattleBannerBlockEntity banner) {

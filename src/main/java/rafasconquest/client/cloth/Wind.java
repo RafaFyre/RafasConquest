@@ -19,6 +19,13 @@ public final class Wind {
     private static final double GUSTS = 16;
     /** The least wind there ever is, blocks/s² (a fifth of gravity: cloth leans about 11°). */
     private static final double BREEZE = 2;
+    /**
+     * The wind over a battle, blocks/s² before a fabric's share: wool banners take half, and only 40% of that pushes
+     * evenly, so this flies them well out from the pole whatever the weather.
+     */
+    private static final double BATTLE = 80;
+    /** How far (flat, blocks) from any formation of a battle its wind blows. */
+    private static final double BATTLE_REACH = 400;
 
     private Wind() {
     }
@@ -44,6 +51,9 @@ public final class Wind {
         double jitter = NOISE.noise(x / 4, z / 4, ticks / 2 + 71);
         double force = Mth.clamp((big * 0.5 + 0.5) * 0.7 + near * 0.125 + (jitter * 0.5 + 0.5) * 0.05, 0, 1);
         double push = Math.max(BREEZE, force * strength * PUSH * share);
+        if (rafasconquest.client.DistantArmies.near(x, z, BATTLE_REACH)) {
+            push = Math.max(push, BATTLE * (0.75 + 0.25 * force) * share);
+        }
         out[0] = Math.sin(angle) * push;
         out[2] = Math.cos(angle) * push;
         // Gusts: a direction changing every few seconds, a strength fluttering faster.

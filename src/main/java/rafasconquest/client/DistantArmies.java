@@ -145,6 +145,17 @@ public final class DistantArmies {
         };
     }
 
+    /** Whether any formation of a battle stands within {@code reach} blocks (flat) of x, z. */
+    public static boolean near(double x, double z, double reach) {
+        for (FormationSnapshot f : to.values()) {
+            double dx = f.x() - x, dz = f.z() - z;
+            if (dx * dx + dz * dz < reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void clear() {
         from = new HashMap<>();
         to = new HashMap<>();
