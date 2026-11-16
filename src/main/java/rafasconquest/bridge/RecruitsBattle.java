@@ -2977,6 +2977,13 @@ public final class RecruitsBattle {
                 }
             }
         }
+        // An army without infantry (a grand strategy army of shooters and engines): any fighting block will do.
+        for (FieldBlock b : pool.isEmpty() ? army.blocks() : List.<FieldBlock>of()) {
+            if (b.alive() > 0 && b.task() == FieldBlock.Task.NONE && !taken.contains(b)
+                    && b.duty() != Duty.GENERAL && b.duty() != Duty.GUARD && b.duty() != Duty.BEARER) {
+                pool.add(b);
+            }
+        }
         Comparator<FieldBlock> order = Comparator.comparingDouble(b -> {
             Point at = BattlePlan.offset(army.origin(), army.facingX(), army.facingZ(), b.line());
             return role == BattleRole.FLANKER ? -Math.abs(at.x()) + Math.abs(at.z()) * 0.5 : Math.abs(at.x()) + Math.abs(at.z()) * 0.5;
