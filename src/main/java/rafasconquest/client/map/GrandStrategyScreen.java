@@ -117,6 +117,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     @Nullable
     private Marker camera;
     private boolean hidGui;
+    private net.minecraft.client.CameraType cameraType = net.minecraft.client.CameraType.FIRST_PERSON;
     /** The flat map's titles layer, for its double-click on a hold, worked from the 3D map. */
     private final TitleLayer titles = new TitleLayer();
     /** The flat map's nation names, drawn on the 3D map where each realm's middle falls. */
@@ -478,6 +479,10 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (want && (camera == null || camera.level() != minecraft.level)) {
             if (camera == null) {
                 hidGui = minecraft.options.hideGui;
+                // Shoulder Surfing's third person aims the camera itself (decoupled), not by the camera entity's turn:
+                // the land would be seen from its pitch while markers and marchers are placed for ours.
+                cameraType = minecraft.options.getCameraType();
+                minecraft.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
             }
             camera = new Marker(EntityType.MARKER, minecraft.level);
             minecraft.options.hideGui = true;
@@ -506,6 +511,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
             camera = null;
             minecraft.setCameraEntity(minecraft.player);
             minecraft.options.hideGui = hidGui;
+            minecraft.options.setCameraType(cameraType);
             DistantHorizonsLink.lodOnly(false);
             StrategyRelief.hide();
         }
