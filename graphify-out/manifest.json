@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1794794069.8438985,
-    "seen": 1794794112.1464875,
-    "ast_hash": "aa78662e6e41b886d6333ca5eaa4f3b5",
+    "mtime": 1794794517.5424569,
+    "seen": 1794794907.145547,
+    "ast_hash": "942a5540e0e5df9c00c65483a1d14694",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794791495.8278916,
-    "seen": 1794791640.5409114,
-    "ast_hash": "5f08ca75e60bdb8961f307e463e07761",
+    "mtime": 1794814091.8061244,
+    "seen": 1794814140.8281057,
+    "ast_hash": "055b2c6b0bba14bc2ed77e2dde060de7",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -2868,8 +2868,8 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SiegeWorks.java": {
-    "mtime": 1794761463.4138477,
-    "seen": 1794761727.0071595,
+    "mtime": 1794794869.8404553,
+    "seen": 1794794907.1455584,
     "ast_hash": "5139d5384a9a0e09ae91c23322a2b5a7",
     "semantic_hash": ""
   },
@@ -3216,9 +3216,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/RecruitFigures.java": {
-    "mtime": 1794761503.5395281,
-    "seen": 1794761727.0072465,
-    "ast_hash": "2ca858ce9ae7bacb8c8c3db6ced847de",
+    "mtime": 1794814078.539503,
+    "seen": 1794814140.828141,
+    "ast_hash": "affa97a38e4f98b7ac5e38aa52e140fb",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/RecruitFiguresTest.java": {

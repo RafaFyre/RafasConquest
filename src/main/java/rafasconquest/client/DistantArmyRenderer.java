@@ -338,10 +338,14 @@ public final class DistantArmyRenderer {
      */
     private static void engines(Minecraft mc, FormationSnapshot formation, FormationSnapshot.Engine engine, List<FigureMotion.Placed> placed,
                                 int[] palette, Vec3 eye, double renderBlocks, int lit, boolean glow) {
-        SoldierFigure.Shape shape = SoldierFigure.Shape.engine(engine.kind(), engine.up());
+        // The real Siegeworks model where it could be captured (ladders aren't one), else the box one.
+        SoldierFigure.Shape shape = engine.kind() != FormationSnapshot.LADDER && RecruitFigures.engine(engine.kind(), engine.up())
+                ? null : SoldierFigure.Shape.engine(engine.kind(), engine.up());
         float size = SoldierFigure.engineSize(engine.kind());
         if (!engine.withCrew()) {
-            engine(mc, shape, palette, engine.x(), engine.y(), engine.z(), engine.facingX(), engine.facingZ(), size, eye, renderBlocks, lit, glow);
+            float[] motion = shape == null && engine.kind() == rafasconquest.battle.Machine.SIEGE_TOWER.ordinal()
+                    ? RecruitFigures.tower(formation.id(), engine.x(), engine.z(), engine.facingX(), engine.facingZ(), engine.up()) : STILL;
+            engine(mc, shape, palette, engine.x(), engine.y(), engine.z(), engine.facingX(), engine.facingZ(), size, motion, eye, renderBlocks, lit, glow);
             return;
         }
         int engines = engine.kind() == FormationSnapshot.LADDER ? 1 : rafasconquest.battle.Machine.values()[engine.kind()].inBlock(formation.id());
@@ -350,12 +354,16 @@ public final class DistantArmyRenderer {
                 continue;
             }
             FigureMotion.Placed p = placed.get(i);
-            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, eye, renderBlocks, lit, glow);
+            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, STILL, eye, renderBlocks, lit, glow);
         }
     }
 
-    private static void engine(Minecraft mc, SoldierFigure.Shape shape, int[] palette, double x, double y, double z, double fx, double fz,
-                               float size, Vec3 eye, double renderBlocks, int lit, boolean glow) {
+    /** An engine standing still: no walk swing, amount or flags. */
+    private static final float[] STILL = new float[3];
+
+    /** One engine where it stands: {@code shape} in boxes, or (null) the real model {@link RecruitFigures#engine} last named, moving as {@code motion} ({@link RecruitFigures#tower}). */
+    private static void engine(Minecraft mc, @javax.annotation.Nullable SoldierFigure.Shape shape, int[] palette, double x, double y, double z, double fx, double fz,
+                               float size, float[] motion, Vec3 eye, double renderBlocks, int lit, boolean glow) {
         double dx = x - eye.x;
         double dy = y - eye.y;
         double dz = z - eye.z;
@@ -365,6 +373,12 @@ public final class DistantArmyRenderer {
         }
         double scale = DistantOcclusion.scale(distance, renderBlocks);
         double back = glow ? 1 + HALO_BEHIND / Math.max(distance, 1) : 1;
+        if (shape == null) { // its own model is its own size
+            RecruitFigures.add((float) (dx * scale * back), (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
+                    (float) scale * (glow ? HALO_GROWTH : 1), (float) fx, (float) fz, motion[0], motion[1], lit,
+                    (int) motion[2] | (glow ? RecruitFigures.GLOW : 0), 0);
+            return;
+        }
         FigureBatches.add(shape, palette, (float) (dx * scale * back), (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
                 (float) scale * size * (glow ? HALO_GROWTH : 1), (float) fx, (float) fz, lit, glow);
     }

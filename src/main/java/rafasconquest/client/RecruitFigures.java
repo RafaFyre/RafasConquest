@@ -52,6 +52,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import rafasconquest.RafasConquest;
 import rafasconquest.battle.FormationSnapshot;
+import rafasconquest.battle.Machine;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -87,6 +88,8 @@ final class RecruitFigures {
     static final int RIGHT_HAND = 8;
     static final int LEFT_HAND = 16;
     static final int RIDING = 32;
+    /** A siege tower's bridge coming down: its walk swing is how far down (0..1), its frames the bridge's. */
+    static final int BRIDGE = 64;
     private static final int TEXTURE_UNIT = 0;
     private static final int SKINS = 20;
     private static final int BODY = 0, HEAD = 1, RIGHT_ARM = 2, LEFT_ARM = 3, RIGHT_LEG = 4, LEFT_LEG = 5;
@@ -305,6 +308,8 @@ final class RecruitFigures {
     static void clear() {
         LOOKS.clear();
         TOWNSFOLK.clear();
+        ENGINES.clear();
+        TOWERS.clear();
         HORSES.values().removeAll(FILMING);
         FILMING.clear();
     }
@@ -323,6 +328,123 @@ final class RecruitFigures {
                 new Look(null, 0, List.of(new Layer(bodyMesh(), texture(recruits("human/human_" + s)), -1)), 0)));
         RUNS.add(new int[]{count, 0});
         return true;
+    }
+
+    /** Siege engines' looks, by kind and bridge: the real Siegeworks models; no layers where one can't be captured. */
+    private static final Map<Integer, Look> ENGINES = new HashMap<>();
+
+    /**
+     * The next figures {@link #add}ed are Siegeworks engines of {@link Machine} {@code kind} (a tower {@code up}: its
+     * bridge down), until the next call; added unmoving ({@code amount} 0). False if it can't be drawn here.
+     */
+    static boolean engine(int kind, boolean up) {
+        if (!usable || !ready() || kind >= Machine.values().length || Minecraft.getInstance().level == null) {
+            return false;
+        }
+        Machine machine = Machine.values()[kind];
+        boolean bridge = up && machine == Machine.SIEGE_TOWER;
+        Look look = ENGINES.computeIfAbsent(kind * 2 + (bridge ? 1 : 0), k -> engineLook(machine, bridge));
+        if (look.layers.isEmpty()) {
+            return false;
+        }
+        RUN_LOOKS.add(look);
+        RUNS.add(new int[]{count, 0});
+        return true;
+    }
+
+    /** The engine as the game draws it, through its own (GeckoLib) renderer, standing still: one layer per texture it drew. */
+    private static Look engineLook(Machine machine, boolean bridge) {
+        Minecraft mc = Minecraft.getInstance();
+        List<Layer> layers = new ArrayList<>();
+        try {
+            net.minecraft.world.entity.Entity e = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                    .getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, machine.id)).map(type -> type.create(mc.level)).orElse(null);
+            if (e != null && machine == Machine.SIEGE_TOWER) {
+                layers.addAll(filmTower(mc, e, bridge));
+            } else if (e != null) {
+                for (Capture c : film(mc, e).values()) {
+                    if (c.texture != null && c.size > 0) {
+                        layers.add(new Layer(upload(c), texture(c.texture), c.argb));
+                    }
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
+            RafasConquest.LOGGER.warn("[figures] can't capture a {}: {}", machine.id, ex.toString());
+        }
+        RafasConquest.LOGGER.info("[figures] {}{}: {} layers from its own model{}", machine.id, bridge ? " (bridge down)" : "",
+                layers.size(), layers.isEmpty() ? ", drawn as boxes" : "");
+        return new Look(null, 0, layers, 0);
+    }
+
+    /** A tower's wheels turn 72 degrees a block it rolls forward (Siegeworks' {@code updateTowerWheelRotation}): a turn in 5. */
+    private static final double WHEEL_TURN = 5;
+    /** Its bridge drops all the way in 160 ticks ({@code TowerBridgeController.PROGRESS_STEP} 0.00625 a tick). */
+    private static final double BRIDGE_MILLIS = 8000;
+    /** Frames of a bridge coming down, after the first (it down). */
+    private static final int BRIDGE_FRAMES = GAITS.length * STEPS;
+
+    /**
+     * A siege tower filmed as the horse is, all in one frame (Siegeworks poses it from its fields each render; GeckoLib
+     * only re-poses it on a new tick, so each shot is a tick on). Bridge up: frame 0 then {@link #STEPS} shots over a
+     * turn of its wheels, the shader's walk frames. Bridge down: frame 0 down, then {@link #BRIDGE_FRAMES} shots of it
+     * coming down from up, read by {@link #BRIDGE} progress.
+     */
+    private static List<Layer> filmTower(Minecraft mc, net.minecraft.world.entity.Entity tower, boolean bridge) throws ReflectiveOperationException {
+        java.lang.reflect.Field field = tower.getClass().getDeclaredField("bridge");
+        field.setAccessible(true);
+        Object controller = field.get(tower);
+        java.lang.reflect.Method progress = controller.getClass().getDeclaredMethod("setProgress", float.class); // private
+        progress.setAccessible(true);
+        java.lang.reflect.Field wheels = tower.getClass().getField("wheelRotation");
+        progress.invoke(controller, bridge ? 1F : 0F);
+        Map<String, Capture> first = film(mc, tower);
+        List<Map<String, Capture>> shots = new ArrayList<>();
+        shots.add(first);
+        for (int k = 0; k < (bridge ? BRIDGE_FRAMES : STEPS); k++) {
+            if (bridge) {
+                progress.invoke(controller, k / (BRIDGE_FRAMES - 1F));
+            } else {
+                wheels.setFloat(tower, Math.floorMod(-k * 360 / STEPS, 360)); // rolling forward winds them back
+            }
+            tower.tickCount++;
+            shots.add(film(mc, tower));
+        }
+        List<Layer> layers = new ArrayList<>();
+        for (Map.Entry<String, Capture> layer : first.entrySet()) {
+            Capture c = layer.getValue();
+            if (c.texture != null && c.size > 0) {
+                float[] packed = pack(c, shots.stream().map(shot -> shot.get(layer.getKey())).toList());
+                layers.add(new Layer(upload(c), texture(c.texture), c.argb, frameBuffer(packed)));
+                RafasConquest.LOGGER.info("[figures] siege tower layer {}{}: {} frames, moves {} blocks at most", c.texture,
+                        bridge ? " (bridge)" : " (wheels)", shots.size(), spread(packed, c.triangles().length / VERTEX_FLOATS));
+            }
+        }
+        return layers;
+    }
+
+    /** Each tower's last spot, its wheels' travel forward and when its bridge began to come down (0: up), by formation. */
+    private static final Map<Integer, double[]> TOWERS = new HashMap<>();
+
+    /**
+     * How a tower of formation {@code id} at ({@code x}, {@code z}) moves this frame, for {@link #add}: walk swing,
+     * amount and flags. Bridge up, its wheels roll as far as it went; down, its bridge comes down over
+     * {@link #BRIDGE_MILLIS} from when it was first seen down (all the way, if it was down when first seen).
+     */
+    static float[] tower(int id, double x, double z, double fx, double fz, boolean up) {
+        long now = net.minecraft.Util.getMillis();
+        double[] t = TOWERS.computeIfAbsent(id, k -> new double[]{x, z, 0, up ? now - BRIDGE_MILLIS : 0});
+        double forward = (x - t[0]) * fx + (z - t[1]) * fz;
+        t[2] += Math.abs(forward) < 4 ? forward : 0; // a jump (a new battle under the same id) doesn't spin them
+        t[0] = x;
+        t[1] = z;
+        if (!up) {
+            t[3] = 0;
+            return new float[]{(float) (t[2] / WHEEL_TURN * STRIDE), 0.3F, 0};
+        }
+        if (t[3] == 0) {
+            t[3] = now;
+        }
+        return new float[]{(float) Math.min(1, (now - t[3]) / BRIDGE_MILLIS), 0, BRIDGE};
     }
 
     private static Mesh bodyMesh() {
@@ -522,7 +644,7 @@ final class RecruitFigures {
      * What the game draws of a horse now, by texture, in the model's frame. Drawn through the entity dispatcher, where
      * Entity Texture Features tells Entity Model Features which entity it draws: a renderer called alone isn't animated.
      */
-    private static Map<String, Capture> film(Minecraft mc, Horse horse) {
+    private static Map<String, Capture> film(Minecraft mc, net.minecraft.world.entity.Entity horse) {
         if (mc.player != null) { // where Entity Model Features animates in full, not at its distant rate
             horse.setPos(mc.player.position());
         }
@@ -1065,10 +1187,15 @@ final class RecruitFigures {
                 mat3 m = rotZ(r.z) * rotY(r.y) * rotX(r.x);
                 vec3 pos = Pos;
                 vec3 nrm = Normal;
-                if (Framed > 0) { // a horse: its frame for the gait and the point in its stride, blended to the next
+                if (Framed > 0) { // a horse (or a tower's wheels): its frame for the gait and the point in its stride, blended to the next
                     int f0 = 0, f1 = 0;
                     float w = 0.0;
-                    if (Walk.w > 0.05) {
+                    if ((f & 64u) != 0u) { // a tower's bridge coming down: frame 1 up, the last down
+                        float t = clamp(Walk.z, 0.0, 1.0) * float(STEPS * 3 - 1);
+                        f0 = 1 + int(t);
+                        f1 = min(f0 + 1, STEPS * 3);
+                        w = fract(t);
+                    } else if (Walk.w > 0.05) {
                         int gait = Walk.w < 0.5 ? 0 : Walk.w < 0.9 ? 1 : 2;
                         float t = mod(Walk.z, STRIDE) / STRIDE * float(STEPS);
                         int k = int(t) % STEPS;
