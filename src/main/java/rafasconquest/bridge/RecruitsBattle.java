@@ -3044,59 +3044,6 @@ public final class RecruitsBattle {
         };
     }
 
-    /**
-     * Soldier i of a block is given to a player: remade as their job's kind of soldier if it isn't one already (where
-     * it stands, with the health it has), and given their job's kit. Returns the soldier, or null if it couldn't be.
-     */
-    @Nullable
-    private AbstractRecruitEntity enlistSoldier(Live l, int i, AbstractRecruitEntity s, Enlisted e) {
-        if (e.rank.officer() && l.block != e.home) {
-            return s; // an officer's other formations stay the archers, cavalry or infantry they are
-        }
-        Side side = sides[l.block.side()];
-        EntityType<? extends AbstractRecruitEntity> type = jobType(e.job);
-        AbstractRecruitEntity soldier = s;
-        if (s.getType() != type) {
-            float health = s.getHealth();
-            Point at = new Point(s.getX(), s.getZ());
-            float yaw = s.getYRot();
-            makeNumbers(l, i);
-            soldier = spawn(type, side, i == l.block.captain() ? Role.LEADER : Role.SOLDIER, at, yaw);
-            if (soldier == null) {
-                return null;
-            }
-            soldier.setHealth(Math.min(health, soldier.getMaxHealth()));
-            l.soldiers[i] = soldier;
-            byEntity.put(soldier.getId(), l);
-        }
-        boolean leader = i == l.block.captain();
-        switch (e.job) {
-            case FOOTMAN -> equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
-            case SHIELDMAN -> equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
-            case HEAVY_INFANTRY -> {
-                equip(soldier, EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-                equip(soldier, EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
-                equip(soldier, EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-                if (!leader) {
-                    equip(soldier, EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)); // the captain keeps the banner
-                }
-                equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
-                equip(soldier, EquipmentSlot.OFFHAND, bannerShield(side));
-                wear(soldier, side, rafasconquest.gear.Armoury.Kit.ZWEIHANDLER);
-                if (leader) {
-                    equip(soldier, EquipmentSlot.HEAD, side.banner.copy()); // the captain keeps the banner
-                }
-            }
-            default -> {
-            }
-        }
-        ItemStack glaive = e.role == BattleRole.SUPPORT && e.job != Job.ARCHER && e.job != Job.CAVALRY ? rafasconquest.gear.Armoury.glaive() : null;
-        if (glaive != null) {
-            equip(soldier, EquipmentSlot.MAINHAND, glaive); // support fights with glaives
-        }
-        return soldier;
-    }
-
     private static net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> enchantment(ServerLevel level,
             net.minecraft.resources.ResourceKey<net.minecraft.world.item.enchantment.Enchantment> key) {
         return level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT).getHolderOrThrow(key);
@@ -3411,8 +3358,8 @@ public final class RecruitsBattle {
                 if (e.given.size() >= e.quota) {
                     return any;
                 }
-                s = enlistSoldier(l, i, s, e);
-                if (s != null && commanded.add(s.getId())) {
+                // Given as the army made them: the player's rank sets how many, never what they are.
+                if (commanded.add(s.getId())) {
                     e.given.add(s.getId());
                     any = true;
                     s.setOwnerUUID(Optional.of(e.player));
@@ -3690,7 +3637,7 @@ public final class RecruitsBattle {
             }
         }
         if (RecruitEvents.recruitsGroupsManager != null) {
-            RecruitsGroup group = new RecruitsGroup(capitalised(e.job.title()) + " " + u.number, player, 0);
+            RecruitsGroup group = new RecruitsGroup(capitalised(u.block.arm().name().toLowerCase(Locale.ROOT).replace('_', ' ')) + " " + u.number, player, 0);
             RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
             u.group = group.getUUID();
         }
