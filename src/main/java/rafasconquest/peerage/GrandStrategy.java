@@ -35,10 +35,14 @@ public final class GrandStrategy {
 
     /**
      * An army on the map: its id ({@link #HOLD}, or a spawned army's), nation (index, -1: none), general ("": the best at
-     * war), card cap (0: none), cards ({@link BattlePlan.Arm} ordinals), march, and the army it marches to attack.
+     * war), card cap (0: none), cards ({@link BattlePlan.Arm} ordinals) and each card's soldiers, march, and the army it
+     * marches to attack.
      */
-    public record Army(int id, int nation, String general, int cap, int[] units, double fromX, double fromZ, double toX, double toZ,
+    public record Army(int id, int nation, String general, int cap, int[] units, int[] men, double fromX, double fromZ, double toX, double toZ,
                        long start, int target) {
+        public int soldiers() {
+            return java.util.Arrays.stream(men).sum();
+        }
     }
 
     /** The seat province of the held county (-1: no fief), the nation the player serves (-1: none), the day, and the armies. */
@@ -74,7 +78,7 @@ public final class GrandStrategy {
 
     private static Army army(int id, Garrison g, int hold) {
         return new Army(id, nationOf(g, hold), g.general, g.cap, g.units.stream().mapToInt(Integer::intValue).toArray(),
-                g.fromX, g.fromZ, g.toX, g.toZ, g.start, g.target);
+                g.men.stream().mapToInt(Integer::intValue).toArray(), g.fromX, g.fromZ, g.toX, g.toZ, g.start, g.target);
     }
 
     /** An army's nation: a spawned army's own, the hold's army's its holder's. */
@@ -138,13 +142,13 @@ public final class GrandStrategy {
         long now = player.server.overworld().getGameTime();
         switch (op) {
             case MUSTER -> {
-                if (arg >= 0 && arg < BattlePlan.Arm.values().length && BattlePlan.Arm.values()[arg].roster() && (g.cap == 0 || g.units.size() < g.cap)) {
-                    g.units.add(arg);
+                if (arg >= 0 && arg < BattlePlan.Arm.values().length && BattlePlan.Arm.values()[arg].roster()) {
+                    g.add(arg);
                 }
             }
             case DISMISS -> {
                 if (arg >= 0 && arg < g.units.size()) {
-                    g.units.remove(arg);
+                    g.remove(arg);
                 }
             }
             case MARCH, ATTACK -> {
@@ -203,10 +207,16 @@ public final class GrandStrategy {
         double uz = len < 1 ? 0 : dz / len;
         try {
             // The line of battle runs across the attacker's march, as /pve battle lays it across the caller's look.
-            RecruitsBattle.start(player.server.overworld(), a, attacker.units.size() * Garrison.MEN, d,
-                    defender.units.size() * Garrison.MEN, new BattlePlan.Point(at[0], at[1]), -uz, ux,
+            RecruitsBattle.start(player.server.overworld(), a, attacker.soldiers(), d,
+                    defender.soldiers(), new BattlePlan.Point(at[0], at[1]), -uz, ux,
                     attacker.general.isEmpty() ? null : attacker.general, defender.general.isEmpty() ? null : defender.general,
                     BattleType.LAND, 0, line -> {
+                        RecruitsBattle fought = RecruitsBattle.current();
+                        if (fought != null) {
+                            Garrison[] armies = {attacker, defender};
+                            int[][] started = {perArm(fought.field().army(0), false), perArm(fought.field().army(1), false)};
+                            fought.whenOver(outcome -> aftermath(player.server, fought, armies, started, outcome.winner(), at, ux, uz));
+                        }
                         toBattle(player);
                         String url = rafasconquest.dev.BattleMap.open(player.server);
                         player.sendSystemMessage(Component.literal(line + ". The armies are deploying: ")
@@ -217,6 +227,70 @@ public final class GrandStrategy {
             player.sendSystemMessage(Component.literal("The armies are surveying the ground..."));
         } catch (IllegalStateException e) {
             player.sendSystemMessage(Component.literal(e.getMessage()).withStyle(ChatFormatting.RED));
+        }
+    }
+
+    /** How far a beaten army falls back from the field, in blocks. */
+    private static final double RETREAT = 1500;
+
+    /** An army's soldiers in the field by arm (ordinal): those it started with, or those still alive. */
+    private static int[] perArm(rafasconquest.battle.FieldArmy army, boolean alive) {
+        int[] n = new int[BattlePlan.Arm.values().length];
+        for (rafasconquest.battle.FieldBlock b : army.blocks()) {
+            n[b.arm().ordinal()] += alive ? b.alive() : b.started();
+        }
+        return n;
+    }
+
+    /**
+     * The battle over: each army's cards lose what its arms lost in the field, an army left without any is gone, and
+     * the beaten one falls back from the field, away from the victor (the attacker the way it came).
+     */
+    private static void aftermath(net.minecraft.server.MinecraftServer server, RecruitsBattle fought, Garrison[] armies,
+                                  int[][] started, int winner, double[] at, double ux, double uz) {
+        Peerage peerage = Peerage.get(server);
+        long now = server.overworld().getGameTime();
+        for (int side = 0; side < 2; side++) {
+            int[] alive = perArm(fought.field().army(side), true);
+            double[] kept = new double[alive.length];
+            int all = 0;
+            int left = 0;
+            for (int a = 0; a < alive.length; a++) {
+                kept[a] = started[side][a] > 0 ? alive[a] / (double) started[side][a] : -1;
+                all += started[side][a];
+                left += alive[a];
+            }
+            Garrison g = armies[side];
+            g.survive(kept, left / (double) Math.max(1, all));
+            double away = side == 0 ? -1 : 1; // the attacker came along +u
+            boolean beaten = winner == 1 - side;
+            g.fromX = at[0];
+            g.fromZ = at[1];
+            g.toX = beaten ? at[0] + ux * away * RETREAT : at[0];
+            g.toZ = beaten ? at[1] + uz * away * RETREAT : at[1];
+            g.start = now;
+            g.target = NO_TARGET;
+        }
+        for (Garrison g : armies) {
+            if (g.units.isEmpty()) {
+                disband(peerage, g);
+            }
+        }
+        peerage.setDirty();
+    }
+
+    /** A spawned army wiped out leaves the map; the ids after it close up, and whoever marched on it stops. */
+    private static void disband(Peerage peerage, Garrison gone) {
+        int id = peerage.spawned.indexOf(gone);
+        if (id < 0) {
+            gone.fromX = gone.fromZ = gone.toX = gone.toZ = Double.NaN; // a hold's army stays, empty, home in its city to muster anew
+            return;
+        }
+        peerage.spawned.remove(id);
+        List<Garrison> all = new ArrayList<>(peerage.spawned);
+        all.addAll(peerage.garrisons.values());
+        for (Garrison g : all) {
+            g.target = g.target == id ? NO_TARGET : g.target > id ? g.target - 1 : g.target;
         }
     }
 

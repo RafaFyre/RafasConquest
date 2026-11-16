@@ -137,8 +137,11 @@ class BattlePlanTest {
         }
         assertEquals(List.of(Machine.TOWER_CROSSBOW), Machine.allowed(steel, plains, BattleType.SIEGE, true));
         assertTrue(Machine.allowed(gunpowder, plains, BattleType.OCEAN, false).isEmpty(), "none at sea");
-        assertEquals(4, Machine.CULVERIN.perBlock());
-        assertEquals(1, Machine.TREBUCHET.perBlock());
+        assertEquals(1.5, Machine.CULVERIN.perBlock(), 1e-9);
+        assertEquals(30, java.util.stream.IntStream.range(0, 20).map(Machine.CULVERIN::inBlock).sum(), "15 a unit, blocks numbered in a row");
+        assertEquals(2, java.util.stream.IntStream.range(0, 10).map(Machine.MONS_MEG::inBlock).sum());
+        assertEquals(3, java.util.stream.IntStream.range(0, 20).filter(i -> Machine.works(i, 3, 20)).count());
+        assertEquals(0.6, Machine.TREBUCHET.perBlock(), 1e-9);
     }
 
     @Test

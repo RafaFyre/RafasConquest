@@ -109,12 +109,12 @@ final class FaceOffScreen extends Screen implements GrandStrategyScreen.OverMap 
             int cx = x0 + i % cols * (CityPanel.CARD_W + 3);
             int cy = top + 34 + i / cols * (CityPanel.CARD_H + 4);
             boolean over = mouseX >= cx && mouseX < cx + CityPanel.CARD_W && mouseY >= cy && mouseY < cy + CityPanel.CARD_H;
-            CityPanel.card(g, font, cx, cy, a.units()[i], over ? GOLD : 0xFFC8C8C8);
+            CityPanel.card(g, font, cx, cy, a.units()[i], a.men()[i], over ? GOLD : 0xFFC8C8C8);
             if (over) {
-                tip = CityPanel.tip(a.units()[i], null);
+                tip = CityPanel.tip(a.units()[i], a.men()[i], null);
             }
         }
-        String men = a.units().length + " units, " + String.format("%,d", a.units().length * Garrison.MEN) + " soldiers";
+        String men = a.units().length + " units, " + String.format("%,d", a.soldiers()) + " soldiers";
         g.drawCenteredString(font, men, x + w / 2, bottom - 12, GREY);
         return tip;
     }

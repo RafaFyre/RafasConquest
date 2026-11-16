@@ -115,6 +115,29 @@ public final class DistantArmyRenderer {
         if (FigureBatches.dump) {
             FigureBatches.dump = false;
             dump(formations, seen, light, flat);
+            heightsUntil = net.minecraft.Util.getMillis() + 120_000; // the strategy view takes no commands: keep logging a while
+        }
+        long now = net.minecraft.Util.getMillis();
+        if (now < heightsUntil && now >= heightsNext) {
+            heightsNext = now + 2000;
+            // Heights: what the server sent, the client's own ground there (NaN: no chunk), and where its figures stand.
+            rafasconquest.RafasConquest.LOGGER.info("[heights] eye {}", eye);
+            for (int f = 0, logged = 0; f < formations.size() && logged < 40; f++) {
+                if (!seen[f] || figures.get(f).isEmpty()) {
+                    continue;
+                }
+                logged++;
+                FormationSnapshot s = formations.get(f);
+                double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+                int real = 0;
+                for (FigureMotion.Placed p : figures.get(f)) {
+                    lo = Math.min(lo, p.y());
+                    hi = Math.max(hi, p.y());
+                    real += p.real() ? 1 : 0;
+                }
+                rafasconquest.RafasConquest.LOGGER.info("[heights] block {} at {}, {}: sent {}, client ground {}, figures {}..{} ({} real of {}), seen {}",
+                        s.id(), Math.round(s.x()), Math.round(s.z()), s.y(), ground(s.x(), s.z(), s.y()), lo, hi, real, figures.get(f).size(), seen[f]);
+            }
         }
         pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, null);
         Set<Integer> selected = BattleScreen.selectedFormations();
@@ -122,6 +145,10 @@ public final class DistantArmyRenderer {
             pass(mc, pose, eye, rightX, rightZ, renderBlocks, formations, figures, seen, light, flat, selected);
         }
     }
+
+    /** Debug: after {@code /pvefigures}, heights are logged every 2 s until this time. Render thread only. */
+    private static long heightsUntil;
+    private static long heightsNext;
 
     /** For {@code /pvefigures}: what each block on screen is coloured from this frame, to the log. */
     private static void dump(List<FormationSnapshot> formations, boolean[] seen, int[] light, boolean[] flat) {
@@ -317,8 +344,11 @@ public final class DistantArmyRenderer {
             engine(mc, shape, palette, engine.x(), engine.y(), engine.z(), engine.facingX(), engine.facingZ(), size, eye, renderBlocks, lit, glow);
             return;
         }
-        int crew = engine.kind() == FormationSnapshot.LADDER ? placed.size() : rafasconquest.battle.Machine.values()[engine.kind()].crew;
-        for (int i = 0; i < placed.size(); i += Math.max(1, crew)) {
+        int engines = engine.kind() == FormationSnapshot.LADDER ? 1 : rafasconquest.battle.Machine.values()[engine.kind()].inBlock(formation.id());
+        for (int i = 0; i < placed.size(); i++) {
+            if (!rafasconquest.battle.Machine.works(i, engines, placed.size())) {
+                continue;
+            }
             FigureMotion.Placed p = placed.get(i);
             engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, eye, renderBlocks, lit, glow);
         }
@@ -447,6 +477,9 @@ public final class DistantArmyRenderer {
         }
         // MOTION_BLOCKING: the no-leaves map is server-only, so step down through any canopy ourselves.
         int y = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, bx, bz);
+        if (y <= mc.level.getMinBuildHeight()) {
+            return Double.NaN; // a chunk the client holds empty (no heightmap yet): unknown, so the server's height stands
+        }
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(bx, y - 1, bz);
         for (int i = 0; i < 32 && y > mc.level.getMinBuildHeight(); i++, y--, at.setY(y - 1)) {
             net.minecraft.world.level.block.state.BlockState below = mc.level.getBlockState(at);

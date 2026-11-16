@@ -250,6 +250,7 @@ public final class PveCommands {
                                                                                         IntegerArgumentType.getInteger(ctx, "attackers"),
                                                                                         StringArgumentType.getString(ctx, "defender"),
                                                                                         IntegerArgumentType.getInteger(ctx, "defenders"), battleType(ctx)))))))))
+                                .then(Commands.literal("ground").executes(ctx -> say(ctx, RecruitsBattle.debugGround())))
                                 .then(Commands.literal("start").executes(ctx -> {
                                     String line = RecruitsBattle.startFighting();
                                     ctx.getSource().sendSuccess(() -> Component.literal(line), true);

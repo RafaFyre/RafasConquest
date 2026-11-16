@@ -84,7 +84,7 @@ public final class Peerage extends SavedData {
     private final Map<Integer, UUID> heldBy = new HashMap<>();
     private final Map<Integer, String> fates = new HashMap<>();
     /** Each city's army, by its seat province: raised (at random) the first time it is asked for. */
-    private final Map<Integer, Garrison> garrisons = new HashMap<>();
+    final Map<Integer, Garrison> garrisons = new HashMap<>();
     /** Armies spawned on the grand strategy map in creative; an army's id is its index here. */
     final List<Garrison> spawned = new java.util.ArrayList<>();
 

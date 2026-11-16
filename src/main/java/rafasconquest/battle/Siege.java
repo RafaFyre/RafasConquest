@@ -857,8 +857,8 @@ public final class Siege {
                 climbs.get(i % climbs.size()).crews.add(f.foot.get(i));
             }
         }
-        for (int i = 0; i < f.shooters.size() && i / Machine.MANTLET.perBlock() < f.mantlets.size(); i++) {
-            FieldBlock m = f.mantlets.get(i / Machine.MANTLET.perBlock());
+        for (int i = 0; i < f.shooters.size() && i / (int) Machine.MANTLET.perBlock() < f.mantlets.size(); i++) {
+            FieldBlock m = f.mantlets.get(i / (int) Machine.MANTLET.perBlock());
             screens.computeIfAbsent(m, k -> new ArrayList<>()).add(f.shooters.get(i));
             screenOf.put(f.shooters.get(i), m);
         }

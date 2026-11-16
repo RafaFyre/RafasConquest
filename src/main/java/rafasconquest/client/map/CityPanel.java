@@ -44,8 +44,8 @@ final class CityPanel {
     private static final int BUTTON_W = 50;
     static final int CARD_W = 22;
     static final int CARD_H = 34;
-    private static final int H = TAB_H + CARD_H + TAB_H + 12;
-    private static final int SHOP_H = CARD_H + 22;
+    private static final int H = TAB_H + CARD_H + TAB_H + 16; // 4 for the cards' scrollbar
+    private static final int SHOP_H = CARD_H + 26; // 4 for the cards' scrollbar
     private static final long SLIDE_MS = 200;
 
     private int tab = 1;
@@ -56,6 +56,10 @@ final class CityPanel {
     private int left;
     private int right;
     private int top;
+    /** How far each row of cards is scrolled, in pixels: the army's, the muster shop's. */
+    private final double[] scroll = new double[2];
+    /** The row whose scrollbar is being dragged, or -1. */
+    private int dragging = -1;
 
     void open(boolean field) {
         if (this.field != field) {
@@ -114,6 +118,84 @@ final class CityPanel {
         return xs;
     }
 
+    /** How far a row of {@code n} cards runs past the box, in pixels (0: they fit). */
+    private int overflow(int n) {
+        return Math.max(0, n * (CARD_W + 3) - 3 - (right - left - 12));
+    }
+
+    private int thumb(int over) {
+        int span = right - left - 12;
+        return Math.max(12, span * span / (span + over));
+    }
+
+    /** Row {@code row}'s cards (0: the army's, 1: the muster shop's): centred when they fit, else side by side from its scroll. */
+    private int[] rowXs(int n, int row) {
+        int over = overflow(n);
+        scroll[row] = Math.max(0, Math.min(over, scroll[row]));
+        if (over == 0) {
+            return cardXs(n);
+        }
+        int[] xs = new int[n];
+        for (int i = 0; i < n; i++) {
+            xs[i] = left + 6 - (int) scroll[row] + i * (CARD_W + 3);
+        }
+        return xs;
+    }
+
+    /** The top of row {@code row}'s cards. */
+    private int rowY(int row) {
+        return row == 0 ? top + TAB_H + 4 : top - SHOP_H - 2 + 16;
+    }
+
+    private static int count(int row, GrandStrategy.Army army) {
+        return row == 0 ? army.units().length : SHOP.length;
+    }
+
+    /** {@link #cardAt} for a row, only within the box's clip. */
+    private int rowAt(int[] xs, int y, double mx, double my) {
+        return mx >= left + 5 && mx < right - 5 ? cardAt(xs, y, mx, my) : -1;
+    }
+
+    /** Draws row {@code row}'s scrollbar under its cards, if they overflow. */
+    private void scrollbar(GuiGraphics g, int row, int n, int mouseX, int mouseY) {
+        int over = overflow(n);
+        if (over == 0) {
+            return;
+        }
+        int span = right - left - 12;
+        int thumb = thumb(over);
+        int tx = left + 6 + (int) ((span - thumb) * scroll[row] / over);
+        int ty = rowY(row) + CARD_H + 3;
+        g.fill(left + 6, ty, right - 6, ty + 3, 0xFF2A2620);
+        g.fill(tx, ty, tx + thumb, ty + 3, dragging == row || mouseY >= ty - 2 && mouseY < ty + 5 && mouseX >= tx && mouseX < tx + thumb ? GOLD : EDGE);
+    }
+
+    /** The mouse wheel over the panel scrolls the row it is over: the shop above, the army's below (true: taken). */
+    boolean scrolled(double mx, double my, double delta, int width, int height) {
+        if (!over(mx, my, width, height)) {
+            return false;
+        }
+        scroll[my < top ? 1 : 0] -= delta * (CARD_W + 3); // clamped on the next render
+        return true;
+    }
+
+    /** A drag on a scrollbar (begun by a click on it) moves its row. */
+    boolean dragged(double mx, int width, int height, GrandStrategy.Army army) {
+        if (dragging < 0 || !shown()) {
+            return false;
+        }
+        layout(width, height);
+        int over = overflow(count(dragging, army));
+        int span = right - left - 12;
+        int thumb = thumb(over);
+        scroll[dragging] = over == 0 ? 0 : Math.max(0, Math.min(over, (mx - left - 6 - thumb / 2.0) / (span - thumb) * over));
+        return true;
+    }
+
+    void released() {
+        dragging = -1;
+    }
+
     /** The card under the mouse in a row at {@code y}: the topmost (last drawn), or -1. */
     private int cardAt(int[] xs, int y, double mx, double my) {
         if (my < y || my >= y + CARD_H) {
@@ -149,15 +231,18 @@ final class CityPanel {
             g.drawCenteredString(font, tab == 0 ? "City upgrades: not built yet" : "Intrigue: not built yet", (left + right) / 2, body + CARD_H / 2, 0xFFA8A49C);
         } else {
             int[] units = army.units();
-            int[] xs = cardXs(units.length);
-            int hovered = cardAt(xs, body, mouseX, mouseY);
+            int[] xs = rowXs(units.length, 0);
+            int hovered = rowAt(xs, body, mouseX, mouseY);
+            g.enableScissor(left + 5, body - 1, right - 5, body + CARD_H + 1);
             for (int i = 0; i < units.length; i++) {
-                card(g, font, xs[i], body, units[i], i == hovered ? (mode == Mode.DISMISS ? RED : GOLD) : 0xFFC8C8C8);
+                card(g, font, xs[i], body, units[i], army.men()[i], i == hovered ? (mode == Mode.DISMISS ? RED : GOLD) : 0xFFC8C8C8);
             }
+            g.disableScissor();
+            scrollbar(g, 0, units.length, mouseX, mouseY);
             if (hovered >= 0) {
-                tip = tip(units[hovered], mode == Mode.DISMISS ? "Click: dismiss" : null);
+                tip = tip(units[hovered], army.men()[hovered], mode == Mode.DISMISS ? "Click: dismiss" : null);
             }
-            String count = units.length + (army.cap() > 0 ? " / " + army.cap() : "") + " units, " + String.format("%,d", units.length * Garrison.MEN) + " soldiers";
+            String count = units.length + " units, " + String.format("%,d", army.soldiers()) + " soldiers";
             g.drawString(font, count, right - 6 - font.width(count), top + 5, 0xFFA8A49C, false);
             int by = height - TAB_H - 4;
             Mode[] buttons = buttons(army);
@@ -174,13 +259,16 @@ final class CityPanel {
                 g.fill(left, shopTop, right, top - 2, BACK);
                 g.renderOutline(left, shopTop, right - left, SHOP_H, EDGE);
                 g.drawString(font, "Muster: click a card to raise " + Garrison.MEN + " soldiers", left + 6, shopTop + 4, GOLD, false);
-                int[] shop = cardXs(SHOP.length);
-                int over = cardAt(shop, shopTop + 16, mouseX, mouseY);
+                int[] shop = rowXs(SHOP.length, 1);
+                int over = rowAt(shop, shopTop + 16, mouseX, mouseY);
+                g.enableScissor(left + 5, shopTop + 15, right - 5, shopTop + 17 + CARD_H);
                 for (int i = 0; i < SHOP.length; i++) {
-                    card(g, font, shop[i], shopTop + 16, SHOP[i], i == over ? GOLD : 0xFFC8C8C8);
+                    card(g, font, shop[i], shopTop + 16, SHOP[i], Garrison.MEN, i == over ? GOLD : 0xFFC8C8C8);
                 }
+                g.disableScissor();
+                scrollbar(g, 1, SHOP.length, mouseX, mouseY);
                 if (over >= 0) {
-                    tip = tip(SHOP[over], "Click: muster");
+                    tip = tip(SHOP[over], Garrison.MEN, "Click: muster");
                 }
             } else if (mode == Mode.MARCH) {
                 String hint = "Click the map to march there; right-click to stop";
@@ -192,19 +280,19 @@ final class CityPanel {
         }
     }
 
-    static List<Component> tip(int arm, @Nullable String click) {
+    static List<Component> tip(int arm, int soldiers, @Nullable String click) {
         Component name = Component.literal(NAMES[arm]);
-        Component men = Component.literal(Garrison.MEN + " soldiers").withColor(0xA8A49C);
+        Component men = Component.literal(soldiers + (soldiers < Garrison.MEN ? " / " + Garrison.MEN : "") + " soldiers").withColor(0xA8A49C);
         return click == null ? List.of(name, men) : List.of(name, men, Component.literal(click).withColor(0xE0C060));
     }
 
     /** A unit card: its arm's icon and name, and its soldiers, on the battle screen's card colours. */
-    static void card(GuiGraphics g, Font font, int x, int y, int arm, int edge) {
+    static void card(GuiGraphics g, Font font, int x, int y, int arm, int soldiers, int edge) {
         g.fill(x - 1, y - 1, x + CARD_W + 1, y + CARD_H + 1, edge);
         g.fill(x, y, x + CARD_W, y + CARD_H, 0xFFFFF2B0);
         g.renderItem(new ItemStack(ICONS[Math.floorMod(arm, ICONS.length)]), x + 3, y + 4);
         g.fill(x, y + CARD_H - 10, x + CARD_W, y + CARD_H - 9, 0xFFE0D090);
-        String men = String.valueOf(Garrison.MEN);
+        String men = String.valueOf(soldiers);
         g.pose().pushPose();
         g.pose().translate(x + CARD_W / 2F, y + CARD_H - 7, 0);
         g.pose().scale(0.6F, 0.6F, 1);
@@ -238,13 +326,21 @@ final class CityPanel {
                 return true;
             }
         }
+        for (int row = 0; row < (mode == Mode.MUSTER ? 2 : 1); row++) {
+            int ty = rowY(row) + CARD_H + 3;
+            if (overflow(count(row, army)) > 0 && my >= ty - 2 && my < ty + 5 && mx >= left + 6 && mx < right - 6) {
+                dragging = row;
+                dragged(mx, width, height, army);
+                return true;
+            }
+        }
         if (mode == Mode.MUSTER) {
-            int shop = cardAt(cardXs(SHOP.length), top - SHOP_H - 2 + 16, mx, my);
+            int shop = rowAt(rowXs(SHOP.length, 1), rowY(1), mx, my);
             if (shop >= 0) {
                 ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, SHOP[shop], 0, 0);
             }
         } else if (mode == Mode.DISMISS) {
-            int card = cardAt(cardXs(army.units().length), top + TAB_H + 4, mx, my);
+            int card = rowAt(rowXs(army.units().length, 0), top + TAB_H + 4, mx, my);
             if (card >= 0) {
                 ConquestNetwork.orderGarrison(army.id(), GrandStrategy.DISMISS, card, 0, 0);
             }

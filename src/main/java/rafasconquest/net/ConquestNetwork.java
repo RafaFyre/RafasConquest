@@ -661,6 +661,7 @@ public final class ConquestNetwork {
                 b.writeUtf(a.general());
                 b.writeVarInt(a.cap());
                 b.writeVarIntArray(a.units());
+                b.writeVarIntArray(a.men());
                 b.writeDouble(a.fromX());
                 b.writeDouble(a.fromZ());
                 b.writeDouble(a.toX());
@@ -673,7 +674,7 @@ public final class ConquestNetwork {
         static GrandStrategyView read(FriendlyByteBuf buf) {
             return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong(),
                     buf.readList(b -> new rafasconquest.peerage.GrandStrategy.Army(b.readInt(), b.readInt(), b.readUtf(), b.readVarInt(),
-                            b.readVarIntArray(), b.readDouble(), b.readDouble(), b.readDouble(), b.readDouble(), b.readLong(), b.readInt()))));
+                            b.readVarIntArray(), b.readVarIntArray(), b.readDouble(), b.readDouble(), b.readDouble(), b.readDouble(), b.readLong(), b.readInt()))));
         }
     }
 
@@ -1081,21 +1082,25 @@ public final class ConquestNetwork {
         }
     }
 
-    /** Server → client: volleys, each from formation {@code from[i]} at formation {@code to[i]}, {@code shots[i]} arrows. */
-    public record Volleys(int[] from, int[] to, int[] shots) {
+    /**
+     * Server → client: volleys, each from formation {@code from[i]} at formation {@code to[i]}, {@code shots[i]} shots,
+     * by shooters of arm {@code arms[i]} ({@link rafasconquest.battle.BattlePlan.Arm} ordinal: arrows, shot, stones...).
+     */
+    public record Volleys(int[] from, int[] to, int[] shots, int[] arms) {
         void write(FriendlyByteBuf buf) {
             buf.writeVarIntArray(from);
             buf.writeVarIntArray(to);
             buf.writeVarIntArray(shots);
+            buf.writeVarIntArray(arms);
         }
 
         static Volleys read(FriendlyByteBuf buf) {
-            return new Volleys(buf.readVarIntArray(), buf.readVarIntArray(), buf.readVarIntArray());
+            return new Volleys(buf.readVarIntArray(), buf.readVarIntArray(), buf.readVarIntArray(), buf.readVarIntArray());
         }
     }
 
     private static void handleVolleys(Volleys msg, IPayloadContext context) {
-        rafasconquest.client.ArrowVolleys.receive(msg.from(), msg.to(), msg.shots());
+        rafasconquest.client.ArrowVolleys.receive(msg.from(), msg.to(), msg.shots(), msg.arms());
     }
 
     /** Tells players where every formation of the battle stands now; an empty list means the battle is gone. */

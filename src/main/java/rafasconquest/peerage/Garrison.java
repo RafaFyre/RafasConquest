@@ -20,6 +20,8 @@ public final class Garrison {
     public static final double PACE = 20000.0 / DayClock.TICKS_PER_DAY;
 
     public final List<Integer> units = new ArrayList<>();
+    /** Each card's soldiers left, alongside {@link #units}: {@link #MEN} when mustered, fewer after a battle. */
+    public final List<Integer> men = new ArrayList<>();
     public double fromX = Double.NaN;
     public double fromZ = Double.NaN;
     public double toX = Double.NaN;
@@ -44,7 +46,48 @@ public final class Garrison {
     void fill(int cards, RandomSource random) {
         BattlePlan.Arm[] roster = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster).toArray(BattlePlan.Arm[]::new);
         while (units.size() < cards) {
-            units.add(roster[random.nextInt(roster.length)].ordinal());
+            add(roster[random.nextInt(roster.length)].ordinal());
+        }
+    }
+
+    /** Musters a full card of {@code arm}. */
+    void add(int arm) {
+        units.add(arm);
+        men.add(MEN);
+    }
+
+    void remove(int card) {
+        units.remove(card);
+        men.remove(card);
+    }
+
+    public int soldiers() {
+        return men.stream().mapToInt(Integer::intValue).sum();
+    }
+
+    /**
+     * A battle's losses: of each arm's soldiers, the share {@code kept[arm]} lives on (an arm the battle didn't field,
+     * share below 0, keeps {@code otherwise}), filling its cards first to last; a card left with none is gone.
+     */
+    void survive(double[] kept, double otherwise) {
+        int[] left = new int[BattlePlan.Arm.values().length];
+        for (int i = 0; i < units.size(); i++) {
+            left[units.get(i)] += men.get(i);
+        }
+        for (int a = 0; a < left.length; a++) {
+            double share = a < kept.length && kept[a] >= 0 ? kept[a] : otherwise;
+            left[a] = (int) Math.round(left[a] * Math.max(0, Math.min(1, share)));
+        }
+        for (int i = 0; i < units.size(); i++) {
+            int a = units.get(i);
+            int n = Math.min(men.get(i), left[a]);
+            men.set(i, n);
+            left[a] -= n;
+        }
+        for (int i = units.size() - 1; i >= 0; i--) {
+            if (men.get(i) == 0) {
+                remove(i);
+            }
         }
     }
 
@@ -65,6 +108,7 @@ public final class Garrison {
     CompoundTag save() {
         CompoundTag t = new CompoundTag();
         t.putIntArray("units", units.stream().mapToInt(Integer::intValue).toArray());
+        t.putIntArray("men", men.stream().mapToInt(Integer::intValue).toArray());
         t.putDouble("fromX", fromX);
         t.putDouble("fromZ", fromZ);
         t.putDouble("toX", toX);
@@ -79,8 +123,11 @@ public final class Garrison {
 
     static Garrison load(CompoundTag t) {
         Garrison g = new Garrison();
-        for (int u : t.getIntArray("units")) {
-            g.units.add(u);
+        int[] units = t.getIntArray("units");
+        int[] men = t.getIntArray("men");
+        for (int i = 0; i < units.length; i++) {
+            g.units.add(units[i]);
+            g.men.add(men.length == units.length ? men[i] : MEN); // older saves: every card whole
         }
         g.fromX = t.getDouble("fromX");
         g.fromZ = t.getDouble("fromZ");

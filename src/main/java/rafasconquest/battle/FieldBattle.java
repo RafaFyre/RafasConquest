@@ -284,7 +284,7 @@ public final class FieldBattle {
             if (b.arm.engine()) {
                 b.machine = allowed.isEmpty() ? null : byUnit.computeIfAbsent(b.platoon, p -> allowed.get(random.nextInt(allowed.size())));
                 b.arm = b.machine == null ? Arm.ENGINES : Arm.of(b.machine); // a shooting engine's crews are its own unit
-                b.arrows = b.machine == null || !b.machine.shoots() ? 0 : b.machine.perBlock() * Machine.SHOTS_EACH;
+                b.arrows = b.machine == null || !b.machine.shoots() ? 0 : (int) Math.round(b.machine.perBlock() * Machine.SHOTS_EACH);
             }
         }
     }
@@ -3830,9 +3830,9 @@ public final class FieldBattle {
                 * (siege == null ? 1 : siege.arrowFactor(foe)));
     }
 
-    /** A train block's shots this second: each engine still crewed shoots once a reload, rounded at random. */
+    /** A train block's shots this second: its share of the unit's engines, as many as its crew still works, each once a reload, rounded at random. */
     private int engineShots(FieldBlock b) {
-        double expected = Math.ceil((double) b.alive / b.machine.crew) / b.machine.reload;
+        double expected = b.alive / b.machine.crew / b.machine.reload;
         return (int) expected + (random.nextDouble() < expected % 1 ? 1 : 0);
     }
 

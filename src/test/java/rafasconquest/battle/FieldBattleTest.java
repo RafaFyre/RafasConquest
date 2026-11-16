@@ -453,7 +453,7 @@ class FieldBattleTest {
             for (FieldBlock b : train) {
                 assertNotNull(b.machine());
                 assertEquals(b.machine() == Machine.TREBUCHET ? Arm.TREBUCHETS : Arm.ONAGERS, b.arm(), "each engine its own unit");
-                assertEquals(b.machine().perBlock() * Machine.SHOTS_EACH, b.arrows);
+                assertEquals(Math.round(b.machine().perBlock() * Machine.SHOTS_EACH), b.arrows);
                 assertTrue(train.stream().filter(o -> o.platoon() == b.platoon()).allMatch(o -> o.machine() == b.machine()), "a unit works one kind");
             }
             boolean farShot = false;

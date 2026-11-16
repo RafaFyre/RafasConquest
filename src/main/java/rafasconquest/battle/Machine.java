@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * Siegeworks' engines that armies bring in their siege train ({@link BattlePlan.Arm#ENGINES}): each its own unit, its
- * blocks crewing {@code BattlePlan.SOLDIERS_PER_FORMATION / crew} engines each. An engine fights from {@code age} on, in
+ * {@link BattlePlan#PLATOON_SOLDIERS} soldiers working {@code perUnit} engines, shared out over its blocks. An engine fights from {@code age} on, in
  * the battles it is {@code field}, siege {@code attack} or siege {@code defence} gear for, and, if it has a
  * {@code homeland}, for that land's nations only. In the numbers each engine shoots once every {@code reload} seconds
  * as far as {@code reach}, each shot (misses included) doing {@code damage} health; first-pass figures from Siegeworks'
@@ -18,25 +18,25 @@ import java.util.List;
  * and mantlet shoot nothing: their crews bring them to the gate, the wall, or before the shooters ({@link Siege}).
  */
 public enum Machine implements net.minecraft.util.StringRepresentable {
-    CULVERIN("culverin", 5, Age.GUNPOWDER, null, true, false, true, 120, 15, 42, 0,
+    CULVERIN("culverin", 15, Age.GUNPOWDER, null, true, false, true, 120, 15, 42, 0,
             "black_powder", 64, "cannon_ball", 16, "ramrod", 1),
-    SERPENTINE("serpentine", 10, Age.GUNPOWDER, null, true, false, true, 140, 19, 63, 0,
+    SERPENTINE("serpentine", 15, Age.GUNPOWDER, null, true, false, true, 140, 19, 63, 0,
             "black_powder", 64, "cannon_ball", 16, "ramrod", 1),
-    MONS_MEG("mons_meg", 20, Age.GUNPOWDER, null, false, true, false, 160, 34, 84, 2,
+    MONS_MEG("mons_meg", 2, Age.GUNPOWDER, null, false, true, false, 160, 34, 84, 2,
             "black_powder", 64, "giant_cannon_ball", 6, "ramrod", 1),
-    HWACHA("hwacha", 5, Age.GUNPOWDER, Homeland.JUNGLE, true, false, false, 90, 35, 84, 0,
+    HWACHA("hwacha", 12, Age.GUNPOWDER, Homeland.JUNGLE, true, false, false, 90, 35, 84, 0,
             "so_singijeon", 64),
-    ARCBALLISTA("arcballista", 5, Age.STEEL, null, true, false, false, 80, 7, 21, 0,
+    ARCBALLISTA("arcballista", 15, Age.STEEL, null, true, false, false, 80, 7, 21, 0,
             "arcballista_bolt", 32),
-    ONAGER("onager", 10, Age.STEEL, null, true, true, false, 90, 13, 63, 0.5,
+    ONAGER("onager", 6, Age.STEEL, null, true, true, false, 90, 13, 63, 0.5,
             "minecraft:stone", 64),
-    TREBUCHET("trebuchet", 20, Age.STEEL, null, false, true, false, 150, 24, 84, 1,
+    TREBUCHET("trebuchet", 6, Age.STEEL, null, false, true, false, 150, 24, 84, 1,
             "minecraft:stone", 64),
-    TOWER_CROSSBOW("tower_crossbow", 10, Age.STEEL, null, false, false, true, 80, 11, 21, 0,
+    TOWER_CROSSBOW("tower_crossbow", 15, Age.STEEL, null, false, false, true, 80, 11, 21, 0,
             "tower_crossbow_bolt", 32),
-    BATTERING_RAM("battering_ram", 20, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
-    SIEGE_TOWER("siege_tower", 20, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
-    MANTLET("mantlet", 5, Age.STEEL, null, false, true, false, 0, 0, 0, 0);
+    BATTERING_RAM("battering_ram", 10, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
+    SIEGE_TOWER("siege_tower", 10, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
+    MANTLET("mantlet", 40, Age.STEEL, null, false, true, false, 0, 0, 0, 0);
 
     /** Siegeworks' mod id; its items and engines are named under it unless an id says otherwise. */
     public static final String MOD = "siegeworks";
@@ -45,8 +45,9 @@ public enum Machine implements net.minecraft.util.StringRepresentable {
 
     /** Its entity's id, under {@link #MOD}. */
     public final String id;
-    /** Soldiers to an engine: 5 light, 10 medium, 20 heavy. */
-    public final int crew;
+    /** Engines a full unit works, and so soldiers to an engine (a fraction: a Mons Meg's 100 span five blocks). */
+    public final int perUnit;
+    public final double crew;
     public final Age age;
     @Nullable
     public final Homeland homeland;
@@ -60,10 +61,11 @@ public enum Machine implements net.minecraft.util.StringRepresentable {
     /** Item ids (bare ones under {@link #MOD}) and counts, in pairs. */
     private final Object[] ammo;
 
-    Machine(String id, int crew, Age age, @Nullable Homeland homeland, boolean field, boolean attack, boolean defence,
+    Machine(String id, int perUnit, Age age, @Nullable Homeland homeland, boolean field, boolean attack, boolean defence,
            double reach, double reload, double damage, double batter, Object... ammo) {
         this.id = id;
-        this.crew = crew;
+        this.perUnit = perUnit;
+        this.crew = BattlePlan.PLATOON_SOLDIERS / (double) perUnit;
         this.age = age;
         this.homeland = homeland;
         this.field = field;
@@ -92,9 +94,22 @@ public enum Machine implements net.minecraft.util.StringRepresentable {
         return this != BATTERING_RAM && this != SIEGE_TOWER;
     }
 
-    /** How many of it a block of crew works. */
-    public int perBlock() {
-        return Math.max(1, BattlePlan.SOLDIERS_PER_FORMATION / crew);
+    /** How many of it a block of crew works, on average (a fraction for the heavy ones). */
+    public double perBlock() {
+        return BattlePlan.SOLDIERS_PER_FORMATION / crew;
+    }
+
+    /**
+     * How many of it block {@code id} has to show: {@link #perBlock} shared out over blocks numbered in a row, so the
+     * fractions add up (a Mons Meg in every fifth block, three culverins in every other block, two in the rest).
+     */
+    public int inBlock(int id) {
+        return (int) (Math.floor((id + 1) * perBlock() + 1e-9) - Math.floor(id * perBlock() + 1e-9));
+    }
+
+    /** Whether soldier {@code i} of {@code soldiers} works one of a block's {@code engines}: spread evenly, the first first. */
+    public static boolean works(int i, int engines, int soldiers) {
+        return engines > 0 && soldiers > 0 && (long) i * engines % soldiers < engines;
     }
 
     /** The ammunition its crew carry: full item id, count. */

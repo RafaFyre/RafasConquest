@@ -1099,7 +1099,8 @@ public final class RecruitsBattle {
         if (role == Role.SOLDIER || role == Role.LEADER) {
             kitFor(soldier, side, block.afloat() && block.arm().mounted() ? Arm.SKIRMISHERS : block.arm(), role);
         }
-        if (block.machine() != null && block.machine().ridden() && i % block.machine().crew == 0 && !block.afloat()) {
+        if (block.machine() != null && block.machine().ridden() && !block.afloat()
+                && rafasconquest.battle.Machine.works(i, block.machine().inBlock(block.id()), BattlePlan.SOLDIERS_PER_FORMATION)) {
             work(soldier, block.machine(), yaw);
         }
         if (block.afloat()) {
@@ -2742,6 +2743,41 @@ public final class RecruitsBattle {
             passOnOrders(l);
         }
         switchLive();
+    }
+
+    /**
+     * {@code /pve debug battle ground}: for up to 10 blocks drawn from the numbers on ground the server hasn't loaded,
+     * to the log: the height last sent, the cached generator reading for its chunk, the survey's, and the generator's
+     * own at the spot (ocean floor and surface).
+     */
+    public static String debugGround() {
+        RecruitsBattle battle = current;
+        if (battle == null) {
+            return "No battle";
+        }
+        ServerLevel level = battle.level;
+        var generator = level.getChunkSource().getGenerator();
+        var random = level.getChunkSource().randomState();
+        int shown = 0;
+        for (int side = 0; side < 2 && shown < 10; side++) {
+            for (FieldBlock block : battle.field.army(side).blocks()) {
+                Point p = block.pos();
+                int bx = Mth.floor(p.x());
+                int bz = Mth.floor(p.z());
+                if (block.alive() == 0 || block.afloat() || battle.live.containsKey(block) || level.hasChunk(bx >> 4, bz >> 4)) {
+                    continue;
+                }
+                RafasConquest.LOGGER.info("[ground] block {} at {}, {}: sent {}, cached {}, surveyed {}, generator floor {} surface {}",
+                        block.id(), bx, bz, battle.lastGround.get(block.id()), battle.groundCache.get(ChunkPos.asLong(bx >> 4, bz >> 4)),
+                        battle.terrain == null ? null : battle.terrain.surveyed(p.x(), p.z()),
+                        generator.getBaseHeight(bx, bz, Heightmap.Types.OCEAN_FLOOR_WG, level, random),
+                        generator.getBaseHeight(bx, bz, Heightmap.Types.WORLD_SURFACE_WG, level, random));
+                if (++shown == 10) {
+                    break;
+                }
+            }
+        }
+        return shown + " far blocks' heights logged as [ground]";
     }
 
     /** Starts the fighting of the battle being prepared. */
@@ -4804,21 +4840,25 @@ public final class RecruitsBattle {
         int[] from = new int[volleys.size()];
         int[] to = new int[volleys.size()];
         int[] shots = new int[volleys.size()];
+        int[] arms = new int[volleys.size()];
         int n = 0;
         for (FieldBattle.Volley v : volleys) {
             FieldBlock archers = v.archers();
             int figures = archers.alive() - (archers.live() ? archers.real() : 0);
-            int drawn = archers.alive() == 0 ? 0 : (int) Math.round(v.shots() * (double) figures / archers.alive());
+            // An engine's few shots are drawn whole unless its crew is all real (then Siegeworks itself shoots).
+            int drawn = archers.alive() == 0 ? 0 : archers.machine() != null ? (figures > 0 ? v.shots() : 0)
+                    : (int) Math.round(v.shots() * (double) figures / archers.alive());
             if (drawn > 0) {
                 from[n] = archers.id();
                 to[n] = v.target().id();
                 shots[n] = drawn;
+                arms[n] = (archers.machine() != null ? BattlePlan.Arm.of(archers.machine()) : archers.arm()).ordinal();
                 n++;
             }
         }
         if (n > 0) {
             ConquestNetwork.sendVolleys(level.players(), new ConquestNetwork.Volleys(java.util.Arrays.copyOf(from, n),
-                    java.util.Arrays.copyOf(to, n), java.util.Arrays.copyOf(shots, n)));
+                    java.util.Arrays.copyOf(to, n), java.util.Arrays.copyOf(shots, n), java.util.Arrays.copyOf(arms, n)));
         }
     }
 
@@ -5037,6 +5077,17 @@ public final class RecruitsBattle {
         victory(outcome);
         rafasconquest.politics.Wars.battleOver(sides[0].faction.id(), sides[1].faction.id(), outcome.winner(),
                 field.army(0).alive() / (double) Math.max(1, field.army(0).started()), field.army(1).alive() / (double) Math.max(1, field.army(1).started()));
+        if (whenOver != null) {
+            whenOver.accept(outcome);
+        }
+    }
+
+    /** Told the outcome once the battle is over: the grand strategy map's armies take their losses. */
+    @Nullable
+    private Consumer<FieldBattle.Outcome> whenOver;
+
+    public void whenOver(Consumer<FieldBattle.Outcome> then) {
+        whenOver = then;
     }
 
     /**

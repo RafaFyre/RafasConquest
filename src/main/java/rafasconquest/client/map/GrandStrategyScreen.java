@@ -678,7 +678,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     private List<Component> armyTip(GrandStrategy.Army a) {
         List<Component> lines = new ArrayList<>(tip(FaceOffScreen.nation(a), FaceOffScreen.general(a)));
-        lines.add(Component.literal(a.units().length + " units, " + String.format("%,d", a.units().length * Garrison.MEN) + " soldiers").withColor(0xA8A49C));
+        lines.add(Component.literal(a.units().length + " units, " + String.format("%,d", a.soldiers()) + " soldiers").withColor(0xA8A49C));
         lines.add(Component.literal(picked == GrandStrategy.NO_TARGET || a.id() == picked ? "Click: select" : "Click: attack it").withColor(0xE0C060));
         return lines;
     }
@@ -1037,11 +1037,18 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
-        return overHud(mouseX, mouseY) || super.mouseDragged(mouseX, mouseY, button, dx, dy);
+        GrandStrategy.Army shown = panelArmy();
+        return shown != null && panel.dragged(mouseX, width, height, shown) || overHud(mouseX, mouseY) || super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        panel.released();
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
-        return overHud(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, scrollX, delta);
+        return panel.scrolled(mouseX, mouseY, delta, width, height) || overHud(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, scrollX, delta);
     }
 }
