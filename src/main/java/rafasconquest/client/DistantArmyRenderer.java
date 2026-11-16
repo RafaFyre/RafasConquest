@@ -464,16 +464,22 @@ public final class DistantArmyRenderer {
     }
 
     /**
-     * The ground a figure stands on at ({@code x}, {@code z}): the top that blocks motion, under any leaves; NaN where
-     * the client lacks the chunk (out on Distant Horizons' terrain).
-     * shortcut: no ground beyond the game's own chunks, figures there keep their block's height; read DH heights if they float.
+     * The ground a figure stands on at ({@code x}, {@code z}): the top that blocks motion, under any leaves. Where the
+     * client lacks the chunk, or only Distant Horizons' terrain is on screen, it is that terrain's ground (else a whole
+     * block stood at its middle's height, sunk into any slope); NaN where neither is known.
      */
     private static double ground(double x, double z, double near) {
         Minecraft mc = Minecraft.getInstance();
         int bx = net.minecraft.util.Mth.floor(x);
         int bz = net.minecraft.util.Mth.floor(z);
-        if (mc == null || mc.level == null || !mc.level.hasChunk(bx >> 4, bz >> 4)) { // no game: tests
+        if (mc == null || mc.level == null) { // no game: tests
             return Double.NaN;
+        }
+        if (DistantHorizonsLink.lodOnly() || !mc.level.hasChunk(bx >> 4, bz >> 4)) {
+            double lod = DistantHorizonsLink.ground(bx, bz);
+            if (!Double.isNaN(lod) || !mc.level.hasChunk(bx >> 4, bz >> 4)) {
+                return lod;
+            }
         }
         // MOTION_BLOCKING: the no-leaves map is server-only, so step down through any canopy ourselves.
         int y = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, bx, bz);

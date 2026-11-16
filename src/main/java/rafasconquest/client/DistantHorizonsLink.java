@@ -57,6 +57,18 @@ public final class DistantHorizonsLink {
         return linked ? DistantHorizonsArmies.raycast(from, dir, reach) : null;
     }
 
+    /** The ground at a column as Distant Horizons' terrain has it; NaN if it isn't installed or hasn't it (yet). */
+    public static double ground(int x, int z) {
+        return linked ? DistantHorizonsArmies.ground(x, z) : Double.NaN;
+    }
+
+    /** Whether only Distant Horizons' terrain is on screen (the city and strategy views). */
+    public static boolean lodOnly() {
+        return lodOnly;
+    }
+
+    private static boolean lodOnly;
+
     /** The player left the world: Distant Horizons' quality goes back to their own setting. */
     public static void leftWorld() {
         if (linked) {
@@ -72,6 +84,7 @@ public final class DistantHorizonsLink {
 
     /** The city view: only Distant Horizons' terrain is drawn while it is open, none of the vanilla chunks. */
     public static void lodOnly(boolean on) {
+        lodOnly = linked && on;
         if (linked) {
             DistantHorizonsQuality.lodOnly(on);
         }

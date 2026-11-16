@@ -72,6 +72,87 @@ final class DistantHorizonsArmies {
         }
     }
 
+    /** Ground heights read from Distant Horizons' terrain, by column ({@link #column}); NaN where it had none. */
+    private static final java.util.Map<Long, Float> GROUND = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Set<Long> ASKED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Its own thread: a queue of columns must not hold up the map's raycasts, which wait only 100 ms. */
+    private static final java.util.concurrent.ExecutorService GROUND_READS = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "RafasConquest DH ground");
+        t.setDaemon(true);
+        return t;
+    });
+    private static volatile com.seibel.distanthorizons.api.interfaces.data.IDhApiTerrainDataCache groundCache;
+    private static volatile long groundAged;
+    private static final long GROUND_AGE_MS = 10_000;
+
+    private static long column(int x, int z) {
+        return (long) x << 32 | (z & 0xFFFFFFFFL);
+    }
+
+    /**
+     * The ground (top that blocks motion, under any leaves) at a column as Distant Horizons' terrain has it, or NaN
+     * while it is being read or it has none. Reads go to a background thread and are kept; every ten seconds the
+     * misses are forgotten, so columns whose terrain arrives later are read again.
+     */
+    static double ground(int x, int z) {
+        long now = System.currentTimeMillis();
+        if (now - groundAged > GROUND_AGE_MS) {
+            groundAged = now;
+            GROUND.values().removeIf(y -> y.isNaN());
+            if (GROUND.size() > 200_000) {
+                GROUND.clear(); // shortcut: dropped whole when big, not least-recently-used; fine at a few battles' columns
+            }
+            groundCache = null; // a fresh cache picks up terrain Distant Horizons has built since
+        }
+        long key = column(x, z);
+        Float y = GROUND.get(key);
+        if (y != null) {
+            return y;
+        }
+        if (ASKED.size() < 4096 && ASKED.add(key)) {
+            GROUND_READS.execute(() -> {
+                try {
+                    GROUND.put(key, groundNow(x, z));
+                } finally {
+                    ASKED.remove(key);
+                }
+            });
+        }
+        return Double.NaN;
+    }
+
+    private static float groundNow(int x, int z) {
+        try {
+            com.seibel.distanthorizons.api.interfaces.world.IDhApiLevelWrapper level = DhApi.Delayed.worldProxy.getSinglePlayerLevel();
+            com.seibel.distanthorizons.api.interfaces.data.IDhApiTerrainDataRepo repo = DhApi.Delayed.terrainRepo;
+            if (level == null || repo == null) {
+                return Float.NaN;
+            }
+            com.seibel.distanthorizons.api.interfaces.data.IDhApiTerrainDataCache cache = groundCache;
+            if (cache == null) {
+                groundCache = cache = repo.createSoftCache(); // without a cache Distant Horizons fails every column
+            }
+            DhApiResult<com.seibel.distanthorizons.api.objects.data.DhApiTerrainDataPoint[]> col = repo.getColumnDataAtBlockPos(level, x, z, cache);
+            if (!col.success || col.payload == null) {
+                return Float.NaN;
+            }
+            int top = Integer.MIN_VALUE;
+            for (com.seibel.distanthorizons.api.objects.data.DhApiTerrainDataPoint p : col.payload) {
+                if (p == null || p.blockStateWrapper == null || p.blockStateWrapper.isAir()) {
+                    continue;
+                }
+                if (p.blockStateWrapper.getWrappedMcObject() instanceof net.minecraft.world.level.block.state.BlockState s
+                        && (s.is(net.minecraft.tags.BlockTags.LEAVES) || !s.blocksMotion() && !s.liquid())) {
+                    continue; // canopy, grass and flowers: figures stand under them
+                }
+                top = Math.max(top, p.topYBlockPos); // as in raycastNow: a point's top is the ground on it
+            }
+            return top == Integer.MIN_VALUE ? Float.NaN : top;
+        } catch (RuntimeException e) {
+            return Float.NaN; // Distant Horizons has no world loaded yet
+        }
+    }
+
     /** Fails (with a linkage error) if the installed Distant Horizons has no render proxy in its API. */
     static void register() {
         DhApi.Delayed.class.getName();
