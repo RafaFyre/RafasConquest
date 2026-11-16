@@ -445,4 +445,20 @@ class BattlePlanTest {
         int[] dark = BattlePlan.uniformColors(black, black);
         assertTrue((dark[1] & 255) > (black & 255), "too dark to darken, so it lightens");
     }
+
+    @Test
+    void aMixDeploysExactlyItsArms() {
+        int[] mix = new int[Arm.values().length];
+        mix[Arm.HEAVY_INFANTRY.ordinal()] = 50;
+        mix[Arm.ARCHERS.ordinal()] = 50;
+        mix[Arm.ONAGERS.ordinal()] = 50;
+        mix[Arm.TREBUCHETS.ordinal()] = 10;
+        mix[Arm.CAVALRY.ordinal()] = 40;
+        int blocks = java.util.Arrays.stream(mix).sum();
+        int[] got = new int[mix.length];
+        for (Slot s : BattlePlan.deployment(blocks, false, new double[]{0.3, 0.4, 0.3}, false, 0, mix)) {
+            got[s.arm().ordinal()]++;
+        }
+        assertArrayEquals(mix, got);
+    }
 }

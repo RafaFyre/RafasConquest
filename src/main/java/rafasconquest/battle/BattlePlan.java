@@ -498,6 +498,41 @@ public final class BattlePlan {
      * wings: a siege's attackers, before the one wall they storm, rather than spread across a field.
      */
     public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles) {
+        return deployment(blocks, greatShield, wingShares, levyFront, maxFiles, null);
+    }
+
+    /**
+     * The same, of exactly {@code mix} blocks of each arm (by ordinal: a grand strategy army's cards) rather than the
+     * usual shares; null: the shares. With a mix, {@code blocks} is its sum.
+     */
+    public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles,
+                                        @org.jetbrains.annotations.Nullable int[] mix) {
+        if (mix != null) {
+            int engines = 0;
+            for (Arm a : Arm.values()) {
+                engines += a.engine() ? mix[a.ordinal()] : 0;
+            }
+            int[] foot = {mix[Arm.LEVY.ordinal()], mix[Arm.HEAVY_INFANTRY.ordinal()], mix[Arm.SKIRMISHERS.ordinal()],
+                    mix[Arm.ZWEIHANDLERS.ordinal()], mix[Arm.HALBERDIERS.ordinal()]};
+            int[] shot = {mix[Arm.ARCHERS.ordinal()], mix[Arm.MUSKETEERS.ordinal()], engines};
+            int[] horse = {mix[Arm.CAVALRY.ordinal()], mix[Arm.HEAVY_CAVALRY.ordinal()]};
+            List<Slot> slots = deployment(blocks, greatShield, wingShares, levyFront, maxFiles, foot, shot, horse);
+            // The train's slots take the army's own engines, each kind in turn.
+            List<Arm> train = new ArrayList<>();
+            for (Arm a : Arm.values()) {
+                for (int i = a.engine() ? mix[a.ordinal()] : 0; i > 0; i--) {
+                    train.add(a);
+                }
+            }
+            int next = 0;
+            for (int i = 0; i < slots.size(); i++) {
+                Slot s = slots.get(i);
+                if (s.arm() == Arm.ENGINES && next < train.size()) {
+                    slots.set(i, new Slot(train.get(next++), s.right(), s.back(), s.line(), s.file(), s.files(), s.wing(), s.band()));
+                }
+            }
+            return slots;
+        }
         boolean musketeers = musketeers();
         int archers = Math.round(blocks * (float) (ARCHER_SHARE + (musketeers ? MUSKETEER_SHARE / 2 : 0))); // archers and musketeers
         int cavalry = Math.round(blocks * (float) (CAVALRY_SHARE + HEAVY_CAVALRY_SHARE));
@@ -512,16 +547,29 @@ public final class BattlePlan {
         }
         boolean engines = engines();
         archers += engines ? Math.round(blocks * (float) TRAIN_SHARE) : 0; // the siege train, on top, stands with them
+        // Each kind shared out army-wide first, so the army holds its exact shares, then dealt out to the wings.
+        return deployment(blocks, greatShield, wingShares, levyFront, maxFiles, share(infantry, footShares(musketeers), 0),
+                share(archers, shotShares(musketeers, engines), 0), share(cavalry, HORSE_SHARES, 0));
+    }
+
+    /**
+     * Lays out an army of {@code foot} blocks of infantry (levy, heavy, skirmishers, zweihandlers, halberdiers),
+     * {@code shot} of shooters (archers, musketeers, siege train) and {@code horse} of cavalry (light, heavy).
+     */
+    private static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles,
+                                         int[] foot, int[] shot, int[] horse) {
+        int infantry = foot[0] + foot[1] + foot[2] + foot[3] + foot[4];
+        int archers = shot[0] + shot[1] + shot[2];
+        int cavalry = horse[0] + horse[1];
         int soldiers = blocks * SOLDIERS_PER_FORMATION;
         boolean winged = maxFiles == 0 && soldiers > WINGS_OVER && infantry >= 3;
         double[] shares = winged ? wingShares : new double[]{0, 1, 0};
         int[] wingInfantry = share(infantry, shares, winged ? 1 : 0);
         int[] wingArchers = share(archers, shares, 0);
         int[] wingCavalry = share(cavalry, shares, 0);
-        // Each kind shared out army-wide first, so the army holds its exact shares, then dealt out to the wings.
-        int[][] wingFoot = deal(share(infantry, footShares(musketeers), 0), wingInfantry);
-        int[][] wingShot = deal(share(archers, shotShares(musketeers, engines), 0), wingArchers);
-        int[][] wingHorse = deal(share(cavalry, HORSE_SHARES, 0), wingCavalry);
+        int[][] wingFoot = deal(foot, wingInfantry);
+        int[][] wingShot = deal(shot, wingArchers);
+        int[][] wingHorse = deal(horse, wingCavalry);
         int stackFiles = stackFiles(blocks, greatShield);
         int depth = stackDepth(blocks, greatShield);
         int files = greatShield ? SHIELD_FILES : FILE_WIDTH;

@@ -62,6 +62,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private static final int DOUBLE_CLICK_MS = 350;
     private static final String MANAGE = "Manage city";
     private static final String SPAWN = "Spawn army";
+    private static final String DELETE = "Delete army";
     private static final String NOT_BUILT = "Not built yet";
     private static final String[] SEASONS = {"Spring", "Summer", "Autumn", "Winter"};
     /** The HUD's spots in {@link #spots()} order: 3 resources, 9 realm menus, 3 left buttons, then these. */
@@ -102,6 +103,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
     /** Where creative's right-click menu would spawn an army (x, z), or null while it is not open. */
     @Nullable
     private double[] spawnAt;
+    /** The army creative's right-click menu would delete, or {@link GrandStrategy#NO_TARGET} while it is not open. */
+    private int deleting = GrandStrategy.NO_TARGET;
     @Nullable
     private SeatCities.City menu;
     private int menuX;
@@ -673,7 +676,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     }
 
     private boolean menuOpen() {
-        return menu != null || spawnAt != null;
+        return menu != null || spawnAt != null || deleting != GrandStrategy.NO_TARGET;
     }
 
     private List<Component> armyTip(GrandStrategy.Army a) {
@@ -892,7 +895,7 @@ public class GrandStrategyScreen extends FactionMapScreen {
     }
 
     private String menuRow() {
-        return menu != null ? MANAGE : SPAWN;
+        return menu != null ? MANAGE : deleting != GrandStrategy.NO_TARGET ? DELETE : SPAWN;
     }
 
     private int menuWidth() {
@@ -939,11 +942,16 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (menuOpen()) { // any click closes the menu; one on its row also does it
             SeatCities.City city = menu;
             double[] at = spawnAt;
+            int doomed = deleting;
             boolean onRow = button == 0 && inManageRow(mouseX, mouseY);
             menu = null;
             spawnAt = null;
+            deleting = GrandStrategy.NO_TARGET;
             if (onRow && city != null) {
                 manage(city);
+            } else if (onRow && doomed != GrandStrategy.NO_TARGET) {
+                ConquestNetwork.orderGarrison(doomed, GrandStrategy.DELETE, 0, 0, 0);
+                picked = GrandStrategy.NO_TARGET; // the armies after it close up their ids
             } else if (onRow) {
                 openOver(new ArmySpawnScreen(this, at[0], at[1], fief.nation()));
             }
@@ -970,6 +978,13 @@ public class GrandStrategyScreen extends FactionMapScreen {
                     }
                 }
             }
+            return true;
+        }
+        GrandStrategy.Army doomed = button == 1 && minecraft.player != null && minecraft.player.isCreative() ? armyAt(mouseX, mouseY) : null;
+        if (doomed != null) { // creative: Delete army
+            deleting = doomed.id();
+            menuX = (int) mouseX + 4;
+            menuY = (int) mouseY + 4;
             return true;
         }
         GrandStrategy.Army clicked = button == 0 ? armyAt(mouseX, mouseY) : null;

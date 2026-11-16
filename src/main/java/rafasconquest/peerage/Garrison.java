@@ -61,6 +61,20 @@ public final class Garrison {
         men.remove(card);
     }
 
+    /** Its cards as blocks of soldiers per arm (by ordinal), the mix it fights a battle with. */
+    public int[] mix() {
+        int[] men = new int[BattlePlan.Arm.values().length];
+        for (int i = 0; i < units.size(); i++) {
+            men[units.get(i)] += this.men.get(i);
+        }
+        int[] blocks = new int[men.length];
+        for (int a = 0; a < men.length; a++) {
+            blocks[a] = Math.round(men[a] / (float) BattlePlan.SOLDIERS_PER_FORMATION);
+        }
+        return java.util.Arrays.stream(blocks).sum() > 0 ? blocks : null; // too few for a block: the usual shares
+
+    }
+
     public int soldiers() {
         return men.stream().mapToInt(Integer::intValue).sum();
     }

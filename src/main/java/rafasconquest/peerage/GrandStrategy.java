@@ -27,6 +27,8 @@ public final class GrandStrategy {
     public static final int ATTACK = 3;
     /** Fight army {@code arg} for real, where it stands. */
     public static final int BATTLE = 4;
+    /** Creative: the army is gone (a hold's own army is emptied, to muster anew). */
+    public static final int DELETE = 5;
     /** The hold's own army's id; spawned armies are 0 and up. */
     public static final int HOLD = -1;
     public static final int NO_TARGET = -2;
@@ -174,6 +176,14 @@ public final class GrandStrategy {
                 }
                 return; // no fresh view: the player has left the map for the battle, and a view would reopen it
             }
+            case DELETE -> {
+                if (!player.isCreative()) {
+                    return;
+                }
+                g.units.clear();
+                g.men.clear();
+                disband(peerage, g);
+            }
             default -> {
                 return;
             }
@@ -210,7 +220,7 @@ public final class GrandStrategy {
             RecruitsBattle.start(player.server.overworld(), a, attacker.soldiers(), d,
                     defender.soldiers(), new BattlePlan.Point(at[0], at[1]), -uz, ux,
                     attacker.general.isEmpty() ? null : attacker.general, defender.general.isEmpty() ? null : defender.general,
-                    BattleType.LAND, 0, line -> {
+                    BattleType.LAND, 0, null, null, attacker.mix(), defender.mix(), line -> {
                         RecruitsBattle fought = RecruitsBattle.current();
                         if (fought != null) {
                             Garrison[] armies = {attacker, defender};

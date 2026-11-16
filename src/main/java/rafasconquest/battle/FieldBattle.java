@@ -96,7 +96,7 @@ public final class FieldBattle {
         // endlessly deep), not a field army's three wings spread far past it, each with its own camp.
         FieldArmy a = armies[0];
         int files = Math.max(BattlePlan.MAX_FRONT, (int) (3 * plan.wallLength() / BattlePlan.pitch(BattlePlan.FILE_WIDTH)));
-        armies[0] = deploy(0, firstBlocks, a.origin, a.facingX, a.facingZ, a.plan, levyFront(a.plan, random), byUnits, files);
+        armies[0] = deploy(0, firstBlocks, a.origin, a.facingX, a.facingZ, a.plan, levyFront(a.plan, random), byUnits, files, mixes[0]);
         if (trains.containsKey(0)) {
             equip(0, trains.get(0));
         }
@@ -282,7 +282,9 @@ public final class FieldBattle {
         java.util.Map<Integer, Machine> byUnit = new java.util.HashMap<>();
         for (FieldBlock b : armies[side].blocks) {
             if (b.arm.engine()) {
-                b.machine = allowed.isEmpty() ? null : byUnit.computeIfAbsent(b.platoon, p -> allowed.get(random.nextInt(allowed.size())));
+                // An engine's own arm (a grand strategy army's card) keeps its engine; the siege train's units get one picked.
+                b.machine = allowed.isEmpty() ? null : b.machine == null && b.arm.machine() != null ? b.arm.machine()
+                        : byUnit.computeIfAbsent(b.platoon, p -> allowed.get(random.nextInt(allowed.size())));
                 b.arm = b.machine == null ? Arm.ENGINES : Arm.of(b.machine); // a shooting engine's crews are its own unit
                 b.arrows = b.machine == null || !b.machine.shoots() ? 0 : (int) Math.round(b.machine.perBlock() * Machine.SHOTS_EACH);
             }
@@ -894,6 +896,18 @@ public final class FieldBattle {
 
     public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
                        FieldRules.Rates rates, WarPlan first, WarPlan second) {
+        this(firstBlocks, secondBlocks, centre, axisX, axisZ, seed, rates, first, second, null, null);
+    }
+
+    /**
+     * The same, each army of exactly its mix of blocks per arm (by ordinal; null: the usual shares), as a grand strategy
+     * army's cards say. A side with a mix is as many blocks as its mix holds.
+     */
+    public FieldBattle(int firstBlocks, int secondBlocks, Point centre, double axisX, double axisZ, long seed,
+                       FieldRules.Rates rates, WarPlan first, WarPlan second, @Nullable int[] firstMix, @Nullable int[] secondMix) {
+        mixes = new int[][]{firstMix, secondMix};
+        firstBlocks = firstMix == null ? firstBlocks : java.util.Arrays.stream(firstMix).sum();
+        secondBlocks = secondMix == null ? secondBlocks : java.util.Arrays.stream(secondMix).sum();
         this.rates = rates;
         this.random = new Random(seed);
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
@@ -901,10 +915,17 @@ public final class FieldBattle {
         byUnits = (firstBlocks + secondBlocks) * BattlePlan.SOLDIERS_PER_FORMATION > FieldRules.UNIT_TACTICS_OVER;
         this.firstBlocks = firstBlocks;
         armies = new FieldArmy[]{
-                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random), byUnits, 0),
-                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random), byUnits, 0)};
+                deploy(0, firstBlocks, fronts[0], axisX, axisZ, first, levyFront(first, random), byUnits, 0, mixes[0]),
+                deploy(1, secondBlocks, fronts[1], -axisX, -axisZ, second, levyFront(second, random), byUnits, 0, mixes[1])};
     }
 
+    /** Each side's blocks per arm (null: the usual shares), for a siege's redeployment. */
+    private final int[][] mixes;
+
+    /** Whether a side deployed by its own mix of arms rather than the usual shares. */
+    public boolean mixed(int side) {
+        return mixes[side] != null;
+    }
     /** Whether the generals move their armies unit by unit; and the attacker's blocks, for a siege's redeployment. */
     private final boolean byUnits;
     private final int firstBlocks;
@@ -935,7 +956,7 @@ public final class FieldBattle {
     }
 
     private static FieldArmy deploy(int side, int blocks, Point front, double facingX, double facingZ, WarPlan plan, boolean levyFront,
-                                    boolean byUnits, int maxFiles) {
+                                    boolean byUnits, int maxFiles, @Nullable int[] mix) {
         FieldArmy army = new FieldArmy(side, facingX, facingZ, plan);
         army.origin = front;
         army.stackFiles = BattlePlan.stackFiles(blocks, plan.has(Formation.GREAT_SHIELD));
@@ -943,7 +964,7 @@ public final class FieldBattle {
         boolean shield = plan.has(Formation.GREAT_SHIELD);
         boolean spear = plan.has(Formation.GREAT_SPEAR);
         boolean unrelenting = plan.has(Strategy.UNRELENTING_CHARGE);
-        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront, maxFiles);
+        List<BattlePlan.Slot> slots = BattlePlan.deployment(blocks, shield, plan.wingShares(), levyFront, maxFiles, mix);
         int files = (int) slots.stream().filter(s -> s.arm().infantry() && s.line() == 0).count();
         army.front = new FieldBlock[files];
         army.baitFiles = new boolean[files];

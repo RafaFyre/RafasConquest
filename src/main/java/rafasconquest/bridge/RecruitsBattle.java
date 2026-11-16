@@ -627,6 +627,18 @@ public final class RecruitsBattle {
                              Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
                              BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, @Nullable SiegeSurvey.Result survey,
                              Consumer<String> ready, Consumer<String> failed) {
+        start(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, firstGeneral, secondGeneral, type,
+                harbourShips, secondTeam, survey, null, null, ready, failed);
+    }
+
+    /**
+     * As above, each side of exactly its {@code mix} of blocks per arm (by ordinal; null: the usual shares): a grand
+     * strategy army's cards.
+     */
+    public static void start(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
+                             Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
+                             BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, @Nullable SiegeSurvey.Result survey,
+                             @Nullable int[] firstMix, @Nullable int[] secondMix, Consumer<String> ready, Consumer<String> failed) {
         if (survey != null && type == BattleType.SIEGE) {
             double[] axis = survey.plan().axis();
             centre = survey.plan().battleCentre();
@@ -636,12 +648,13 @@ public final class RecruitsBattle {
             survey = null;
         }
         startAt(level, first, firstSoldiers, second, secondSoldiers, centre, axisX, axisZ, firstGeneral, secondGeneral, type,
-                harbourShips, secondTeam, survey, ready, failed);
+                harbourShips, secondTeam, survey, firstMix, secondMix, ready, failed);
     }
 
     private static void startAt(ServerLevel level, Faction first, int firstSoldiers, Faction second, int secondSoldiers,
                                 Point centre, double axisX, double axisZ, @Nullable String firstGeneral, @Nullable String secondGeneral,
                                 BattleType type, int harbourShips, @Nullable PlayerTeam secondTeam, @Nullable SiegeSurvey.Result survey,
+                                @Nullable int[] firstMix, @Nullable int[] secondMix,
                                 Consumer<String> ready, Consumer<String> failed) {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
@@ -663,10 +676,11 @@ public final class RecruitsBattle {
                         officersA.general(), officersA.marshals(), officersA.traits()),
                 new Side(second, teamB, uniforms[1], markColor(second), banner(level, second), horn(second),
                         officersB.general(), officersB.marshals(), officersB.traits())};
-        int blocksA = BattlePlan.blocks(firstSoldiers);
-        int blocksB = BattlePlan.blocks(secondSoldiers);
+        int blocksA = firstMix == null ? BattlePlan.blocks(firstSoldiers) : java.util.Arrays.stream(firstMix).sum();
+        int blocksB = secondMix == null ? BattlePlan.blocks(secondSoldiers) : java.util.Arrays.stream(secondMix).sum();
         long seed = level.random.nextLong();
-        FieldBattle laidOut = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
+        FieldBattle laidOut = new FieldBattle(blocksA, blocksB, centre, axisX, axisZ, seed, rafasconquest.battle.FieldRules.RATES,
+                sides[0].general.plan(), sides[1].general.plan(), firstMix, secondMix);
         // Moved over the land, by the world map, so no part of an army is cut off by a river or the sea; a sea battle
         // the other way round, over open water so no ship of either fleet lies on land.
         BaseMap map = ConquestRuntime.map();
@@ -677,7 +691,8 @@ public final class RecruitsBattle {
                 : BattleSite.shift(siteParts(laidOut), type == BattleType.OCEAN ? mapLand(map) : mapWater(map));
         Point site = centre.plus(shift.x(), shift.z());
         FieldBattle field = shift.x() == 0 && shift.z() == 0 ? laidOut
-                : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, sides[0].general.plan(), sides[1].general.plan());
+                : new FieldBattle(blocksA, blocksB, site, axisX, axisZ, seed, rafasconquest.battle.FieldRules.RATES,
+                sides[0].general.plan(), sides[1].general.plan(), firstMix, secondMix);
         field.setType(type);
         equipTrains(field, sides, survey == null ? null : survey.plan().engines());
         if (survey != null) {
@@ -6107,13 +6122,26 @@ public final class RecruitsBattle {
      */
     private void regroup() {
         int[] survivors = new int[2];
+        int[][] byArm = new int[2][BattlePlan.Arm.values().length];
         for (int side = 0; side < 2; side++) {
             for (FieldBlock b : field.army(side).blocks()) {
                 // The general, their guard and the standard come back as they are; the rest are regrouped.
                 Duty home = b.homeDuty();
                 if (home != Duty.GENERAL && home != Duty.GUARD && home != Duty.BEARER) {
                     survivors[side] += b.alive();
+                    byArm[side][b.arm().ordinal()] += b.alive();
                 }
+            }
+        }
+        // An army that came with its own mix of arms (a grand strategy army) regroups into the same arms.
+        int[][] mixes = new int[2][];
+        for (int side = 0; side < 2; side++) {
+            if (field.mixed(side)) {
+                mixes[side] = new int[byArm[side].length];
+                for (int a = 0; a < byArm[side].length; a++) {
+                    mixes[side][a] = Math.round(byArm[side][a] / (float) BattlePlan.SOLDIERS_PER_FORMATION);
+                }
+                mixes[side] = java.util.Arrays.stream(mixes[side]).sum() > 0 ? mixes[side] : null;
             }
         }
         for (Live l : live.values()) {
@@ -6126,7 +6154,8 @@ public final class RecruitsBattle {
         dismissEnlisted();
         BattleType type = field.type();
         field = new FieldBattle(BattlePlan.blocks(survivors[0]), BattlePlan.blocks(survivors[1]), centre, axisX, axisZ,
-                level.random.nextLong(), sides[0].general.plan(), sides[1].general.plan());
+                level.random.nextLong(), rafasconquest.battle.FieldRules.RATES, sides[0].general.plan(), sides[1].general.plan(),
+                mixes[0], mixes[1]);
         field.setType(type); // a sea battle stays at sea the next day
         equipTrains(field, sides, survey == null ? null : survey.plan().engines());
         handCamps(); // the camps stand where they were; a night there mends the shattered
