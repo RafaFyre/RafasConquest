@@ -88,8 +88,8 @@ final class RecruitFigures {
     static final int RIGHT_HAND = 8;
     static final int LEFT_HAND = 16;
     static final int RIDING = 32;
-    /** A siege tower's bridge coming down: its walk swing is how far down (0..1), its frames the bridge's. */
-    static final int BRIDGE = 64;
+    /** Frames played by progress, not stride: its walk swing is how far (0..1) through them (a tower's bridge coming down, a trebuchet's shot). */
+    static final int PLAYED = 64;
     private static final int TEXTURE_UNIT = 0;
     private static final int SKINS = 20;
     private static final int BODY = 0, HEAD = 1, RIGHT_ARM = 2, LEFT_ARM = 3, RIGHT_LEG = 4, LEFT_LEG = 5;
@@ -361,6 +361,8 @@ final class RecruitFigures {
                     .getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, machine.id)).map(type -> type.create(mc.level)).orElse(null);
             if (e != null && machine == Machine.SIEGE_TOWER) {
                 layers.addAll(filmTower(mc, e, bridge));
+            } else if (e != null && machine == Machine.TREBUCHET) {
+                layers.addAll(filmTrebuchet(mc, e));
             } else if (e != null) {
                 for (Capture c : film(mc, e).values()) {
                     if (c.texture != null && c.size > 0) {
@@ -380,14 +382,14 @@ final class RecruitFigures {
     private static final double WHEEL_TURN = 5;
     /** Its bridge drops all the way in 160 ticks ({@code TowerBridgeController.PROGRESS_STEP} 0.00625 a tick). */
     private static final double BRIDGE_MILLIS = 8000;
-    /** Frames of a bridge coming down, after the first (it down). */
-    private static final int BRIDGE_FRAMES = GAITS.length * STEPS;
+    /** Frames {@link #PLAYED} by progress, after the first: as many as a horse's gaits, the shader has it written in. */
+    private static final int PLAYED_FRAMES = GAITS.length * STEPS;
 
     /**
      * A siege tower filmed as the horse is, all in one frame (Siegeworks poses it from its fields each render; GeckoLib
      * only re-poses it on a new tick, so each shot is a tick on). Bridge up: frame 0 then {@link #STEPS} shots over a
-     * turn of its wheels, the shader's walk frames. Bridge down: frame 0 down, then {@link #BRIDGE_FRAMES} shots of it
-     * coming down from up, read by {@link #BRIDGE} progress.
+     * turn of its wheels, the shader's walk frames. Bridge down: frame 0 down, then {@link #PLAYED_FRAMES} shots of it
+     * coming down from up, {@link #PLAYED}.
      */
     private static List<Layer> filmTower(Minecraft mc, net.minecraft.world.entity.Entity tower, boolean bridge) throws ReflectiveOperationException {
         java.lang.reflect.Field field = tower.getClass().getDeclaredField("bridge");
@@ -400,26 +402,89 @@ final class RecruitFigures {
         Map<String, Capture> first = film(mc, tower);
         List<Map<String, Capture>> shots = new ArrayList<>();
         shots.add(first);
-        for (int k = 0; k < (bridge ? BRIDGE_FRAMES : STEPS); k++) {
+        for (int k = 0; k < (bridge ? PLAYED_FRAMES : STEPS); k++) {
             if (bridge) {
-                progress.invoke(controller, k / (BRIDGE_FRAMES - 1F));
+                progress.invoke(controller, k / (PLAYED_FRAMES - 1F));
             } else {
                 wheels.setFloat(tower, Math.floorMod(-k * 360 / STEPS, 360)); // rolling forward winds them back
             }
             tower.tickCount++;
             shots.add(film(mc, tower));
         }
+        return framed(shots, bridge ? "siege tower (bridge)" : "siege tower (wheels)");
+    }
+
+    /** Filmed shots as layers, one per texture the first drew, each moving through its frames on the card. */
+    private static List<Layer> framed(List<Map<String, Capture>> shots, String what) {
         List<Layer> layers = new ArrayList<>();
-        for (Map.Entry<String, Capture> layer : first.entrySet()) {
+        for (Map.Entry<String, Capture> layer : shots.get(0).entrySet()) {
             Capture c = layer.getValue();
             if (c.texture != null && c.size > 0) {
                 float[] packed = pack(c, shots.stream().map(shot -> shot.get(layer.getKey())).toList());
                 layers.add(new Layer(upload(c), texture(c.texture), c.argb, frameBuffer(packed)));
-                RafasConquest.LOGGER.info("[figures] siege tower layer {}{}: {} frames, moves {} blocks at most", c.texture,
-                        bridge ? " (bridge)" : " (wheels)", shots.size(), spread(packed, c.triangles().length / VERTEX_FLOATS));
+                RafasConquest.LOGGER.info("[figures] {} layer {}: {} frames, moves {} blocks at most", what, c.texture,
+                        shots.size(), spread(packed, c.triangles().length / VERTEX_FLOATS));
             }
         }
         return layers;
+    }
+
+    /** Siegeworks' trebuchet animations, in ticks: {@code shoot} ({@code SHOOT_ANIMATION_TICKS}), then {@code reload} at speed 1 (its 16.17 s). */
+    private static final int SHOT_TICKS = 65, RELOAD_TICKS = 323;
+    /** Of the {@link #PLAYED_FRAMES}, the first this many are the shot, the rest the reload ending loaded. */
+    private static final int SHOT_FRAMES = 12;
+
+    /**
+     * A trebuchet filmed through its own GeckoLib animations, which GeckoLib times by the entity's tick count: loaded
+     * first (frame 0), then its {@code shoot} triggered and {@link #SHOT_FRAMES} shots over it, then (ammo in and
+     * winding, as Siegeworks' controller asks) its {@code reload} over the other frames, ending loaded again.
+     */
+    private static List<Layer> filmTrebuchet(Minecraft mc, net.minecraft.world.entity.Entity treb) throws ReflectiveOperationException {
+        Class<?> base = treb.getClass().getSuperclass(); // AbstractSiegeEntity
+        java.lang.reflect.Field weaponField = base.getDeclaredField("weapon");
+        weaponField.setAccessible(true);
+        Object weapon = weaponField.get(treb);
+        weapon.getClass().getMethod("setWindingTotal", int.class).invoke(weapon, RELOAD_TICKS); // reload at speed 1
+        java.lang.reflect.Method ammo = treb.getClass().getMethod("setAmmoLoaded", String.class);
+        java.lang.reflect.Method winding = treb.getClass().getMethod("setWindingTime", int.class);
+        ammo.invoke(treb, "minecraft:stone");
+        winding.invoke(treb, 0);
+        List<Map<String, Capture>> shots = new ArrayList<>();
+        shots.add(film(mc, treb)); // loaded
+        treb.tickCount++;
+        treb.getClass().getMethod("triggerAnim", String.class, String.class).invoke(treb, "anim_controller", "shoot");
+        shots.add(film(mc, treb)); // the shot begins on this tick
+        int start = treb.tickCount;
+        for (int k = 1; k < SHOT_FRAMES; k++) {
+            treb.tickCount = start + Math.round(k * (float) SHOT_TICKS / (SHOT_FRAMES - 1));
+            shots.add(film(mc, treb));
+        }
+        treb.tickCount = start + SHOT_TICKS + 5; // the shot done, back to the controller's choice: reload
+        winding.invoke(treb, 1);
+        film(mc, treb);
+        start = treb.tickCount;
+        int reloads = PLAYED_FRAMES - SHOT_FRAMES;
+        for (int k = 0; k < reloads; k++) {
+            treb.tickCount = start + 1 + Math.round(k * (float) RELOAD_TICKS / (reloads - 1));
+            shots.add(film(mc, treb));
+        }
+        return framed(shots, "trebuchet");
+    }
+
+    /**
+     * How a trebuchet moves this frame, for {@link #add}: shooting, it throws then winds back, once every
+     * {@code Machine.TREBUCHET.reload} seconds, {@code phase} (0..1) through its turn; otherwise it stands loaded.
+     */
+    static float[] trebuchet(boolean shooting, float phase) {
+        if (!shooting) {
+            return new float[]{1, 0, PLAYED};
+        }
+        double shot = SHOT_TICKS / 20.0, reload = RELOAD_TICKS / 20.0;
+        double period = Math.max(Machine.TREBUCHET.reload, shot + reload);
+        double t = (net.minecraft.Util.getMillis() / 1000.0 + phase * period) % period;
+        double frame = t < shot ? t / shot * (SHOT_FRAMES - 1)
+                : t < shot + reload ? SHOT_FRAMES + (t - shot) / reload * (PLAYED_FRAMES - SHOT_FRAMES - 1) : PLAYED_FRAMES - 1;
+        return new float[]{(float) (frame / (PLAYED_FRAMES - 1)), 0, PLAYED};
     }
 
     /** Each tower's last spot, its wheels' travel forward and when its bridge began to come down (0: up), by formation. */
@@ -444,7 +509,7 @@ final class RecruitFigures {
         if (t[3] == 0) {
             t[3] = now;
         }
-        return new float[]{(float) Math.min(1, (now - t[3]) / BRIDGE_MILLIS), 0, BRIDGE};
+        return new float[]{(float) Math.min(1, (now - t[3]) / BRIDGE_MILLIS), 0, PLAYED};
     }
 
     private static Mesh bodyMesh() {
@@ -1190,7 +1255,7 @@ final class RecruitFigures {
                 if (Framed > 0) { // a horse (or a tower's wheels): its frame for the gait and the point in its stride, blended to the next
                     int f0 = 0, f1 = 0;
                     float w = 0.0;
-                    if ((f & 64u) != 0u) { // a tower's bridge coming down: frame 1 up, the last down
+                    if ((f & 64u) != 0u) { // played by progress: a tower's bridge coming down, a trebuchet's shot
                         float t = clamp(Walk.z, 0.0, 1.0) * float(STEPS * 3 - 1);
                         f0 = 1 + int(t);
                         f1 = min(f0 + 1, STEPS * 3);

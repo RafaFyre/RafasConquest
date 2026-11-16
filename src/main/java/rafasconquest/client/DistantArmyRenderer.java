@@ -354,7 +354,9 @@ public final class DistantArmyRenderer {
                 continue;
             }
             FigureMotion.Placed p = placed.get(i);
-            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, STILL, eye, renderBlocks, lit, glow);
+            float[] motion = shape == null && engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal()
+                    ? RecruitFigures.trebuchet(formation.fighting(), Math.floorMod(formation.id() * 31 + i * 17, 100) / 100F) : STILL;
+            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, motion, eye, renderBlocks, lit, glow);
         }
     }
 

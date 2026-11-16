@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1794814091.8061244,
-    "seen": 1794814140.8281057,
-    "ast_hash": "055b2c6b0bba14bc2ed77e2dde060de7",
+    "mtime": 1794815318.0229845,
+    "seen": 1794815346.2751467,
+    "ast_hash": "7624ae7cbf7aec42c670ddf46667e0bb",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -3216,9 +3216,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/RecruitFigures.java": {
-    "mtime": 1794814078.539503,
-    "seen": 1794814140.828141,
-    "ast_hash": "affa97a38e4f98b7ac5e38aa52e140fb",
+    "mtime": 1794815306.3909051,
+    "seen": 1794815346.2751825,
+    "ast_hash": "bc1e14f3a1944ad6c186d7918ffc92b1",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/RecruitFiguresTest.java": {
