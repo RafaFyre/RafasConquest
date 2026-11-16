@@ -210,11 +210,6 @@ public final class GrandStrategy {
             player.sendSystemMessage(Component.literal("Both armies need soldiers to fight").withStyle(ChatFormatting.RED));
             return;
         }
-        // The battle enlists only players on a side's team: the player fights for the army they sent in (a creative
-        // army's nation is often not theirs), joined before the battle is set up so its deployment takes them.
-        if (!Talk.serves(player, a) && !Talk.serves(player, d) && !server.recruits().join(player, a)) {
-            player.sendSystemMessage(Component.literal("Couldn't join " + a.name() + " for the battle").withStyle(ChatFormatting.RED));
-        }
         double dx = at[0] - from[0];
         double dz = at[1] - from[1];
         double len = Math.hypot(dx, dz);
