@@ -133,6 +133,24 @@ public final class ClothRenderer {
         current = entity;
     }
 
+    private static final Matrix4f UPRIGHT = new Matrix4f();
+
+    /**
+     * As {@link #setCurrent}, with the pose at its feet and its body's turn: its held flags stand upright in that
+     * frame, at life size, whatever its arm does.
+     */
+    public static void setCurrent(LivingEntity entity, Matrix4f feet, float bodyYaw) {
+        current = entity;
+        UPRIGHT.set(feet).rotateY((float) Math.toRadians(180 - bodyYaw));
+        Vector3f s = UPRIGHT.getScale(new Vector3f());
+        UPRIGHT.scale(1 / s.x, 1 / s.y, 1 / s.z);
+    }
+
+    /** The current entity's upright frame (its translation is its feet's). */
+    public static Matrix4f upright() {
+        return UPRIGHT;
+    }
+
     @Nullable
     public static LivingEntity current() {
         return current;

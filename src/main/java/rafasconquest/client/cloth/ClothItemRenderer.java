@@ -30,11 +30,13 @@ public class ClothItemRenderer extends BlockEntityWithoutLevelRenderer {
                     || context == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND ? ClothRenderer.current() : null;
             pose.pushPose();
             if (holder != null) {
-                // In a hand: life size about the hand (undoing the held item's 3/8), the pole's foot half a block
+                // In a hand: upright and life size about the hand whatever the arm does, the pole's foot half a block
                 // below it and its top size + 1.7 above, so the cloth flies clear over the holder's head.
-                float shrink = pose.last().pose().getScale(new org.joml.Vector3f()).x;
                 pose.translate(0.5, 0.5, 0.5);
-                pose.scale(1 / shrink, 1 / shrink, 1 / shrink);
+                org.joml.Matrix4f hand = pose.last().pose();
+                org.joml.Vector3f at = hand.getTranslation(new org.joml.Vector3f());
+                hand.set(ClothRenderer.upright()).setTranslation(at);
+                pose.last().normal().set(hand);
                 pose.translate(0, -0.5, 0);
                 BannerArt.flagOnPole(pose, buffers, light, overlay, flag.size(), flag.size() + 2.2,
                         new ClothRenderer.Carried(holder.getId(), context), arms, holder.position());

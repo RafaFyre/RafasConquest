@@ -93,6 +93,7 @@ public final class ClientEvents {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SKY) {
             WaterSwell.prepare();
             DistantArmyRenderer.prepare(event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            FarFlags.beginFrame();
         } else if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_TRIPWIRE_BLOCKS) {
             DistantOcclusion.begin();
             DistantArmyRenderer.render(event.getPoseStack(), event.getCamera(), event.getFrustum(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
@@ -101,6 +102,7 @@ public final class ClientEvents {
             OarFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             SailFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             DistantOcclusion.end();
+            FarFlags.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             ArrowVolleys.render(event.getPoseStack(), event.getCamera(), event.getFrustum());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             BattleScreen.renderSelection(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
@@ -159,7 +161,10 @@ public final class ClientEvents {
                 || event.getEntity() == mc.player && mc.screen instanceof CityManagerScreen) {
             event.setCanceled(true);
         } else {
-            rafasconquest.client.cloth.ClothRenderer.setCurrent(event.getEntity()); // its held and worn cloth moves with it
+            var e = event.getEntity(); // its held and worn cloth moves with it
+            rafasconquest.client.cloth.ClothRenderer.setCurrent(e, event.getPoseStack().last().pose(),
+                    net.minecraft.util.Mth.rotLerp(event.getPartialTick(), e.yBodyRotO, e.yBodyRot));
+            FarFlags.drawn(e);
         }
     }
 
