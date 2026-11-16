@@ -102,6 +102,7 @@ public final class DistantArmyRenderer {
         }
 
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
+        FarFlags.figures(formations, figures);
         boolean[] seen = new boolean[formations.size()];
         int[] light = new int[formations.size()];
         boolean[] flat = new boolean[formations.size()];

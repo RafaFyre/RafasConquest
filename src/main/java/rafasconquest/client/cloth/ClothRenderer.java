@@ -184,6 +184,7 @@ public final class ClothRenderer {
             Fabric fabric = live.kind.fabric();
             Far far = farOf(live.key);
             c.stretch = far == null ? 1 : far.scale();
+            c.tethered = live.distant;
             if (far != null) {
                 for (int k = 0; k < 3; k++) {
                     wind[k] = far.wind()[k] * far.scale();

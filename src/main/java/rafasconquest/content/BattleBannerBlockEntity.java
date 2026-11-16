@@ -42,13 +42,40 @@ public class BattleBannerBlockEntity extends BlockEntity {
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
+        listed();
+    }
+
+    /** Puts it on {@link PlacedBanners}' list, so clients far off are told of it. */
+    private void listed() {
+        if (level instanceof net.minecraft.server.level.ServerLevel server && PlacedBanners.kept(getBlockState().getBlock())) {
+            PlacedBanners.put(server, worldPosition, getBlockState(), nation);
+        }
+    }
+
+    /** Its chunk is going: the banner is still there, so it stays listed. */
+    private boolean unloading;
+
+    @Override
+    public void onChunkUnloaded() {
+        super.onChunkUnloaded();
+        unloading = true;
+    }
+
+    @Override
+    public void setRemoved() {
+        super.setRemoved();
+        if (!unloading && level instanceof net.minecraft.server.level.ServerLevel server) {
+            PlacedBanners.remove(server, worldPosition);
+        }
     }
 
     @Override
     public void onLoad() {
         super.onLoad();
+        unloading = false;
         BaseMap map = ConquestRuntime.map();
         if (settled || level == null || level.isClientSide || map == null) {
+            listed();
             return; // without a map yet, it tries again next load
         }
         int province = map.provinceIndexAt(worldPosition.getX(), worldPosition.getZ());
@@ -58,6 +85,7 @@ public class BattleBannerBlockEntity extends BlockEntity {
         nation = builder == null ? null : builder.id();
         settled = true;
         setChanged();
+        listed();
     }
 
     /** The nation a player serves (their team is the nation's), or null. */

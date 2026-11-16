@@ -151,6 +151,7 @@ public final class ConquestEvents {
         rafasconquest.peerage.QuestProgress.tick(event.getServer());
         rafasconquest.politics.Wars.tick(event.getServer());
         PlaceMusic.tick(event.getServer());
+        rafasconquest.content.PlacedBanners.tick(event.getServer());
     }
 
     @SubscribeEvent

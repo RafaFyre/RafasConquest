@@ -300,6 +300,40 @@ public final class ConquestNetwork {
                         i.readDouble(), i.readDouble(), false))))
                 .consumerMainThread((m, context) -> rafasconquest.client.ClientTownsfolk.set(m.walks()))
                 .add();
+        CHANNEL.messageBuilder(FarBanners.class, 41, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.where().size());
+                    for (int i = 0; i < m.where().size(); i++) {
+                        b.writeBlockPos(m.where().get(i));
+                        b.writeVarInt(net.minecraft.world.level.block.Block.getId(m.what().get(i).state()));
+                        java.util.UUID nation = m.what().get(i).nation();
+                        b.writeBoolean(nation != null);
+                        if (nation != null) {
+                            b.writeUUID(nation);
+                        }
+                    }
+                })
+                .decoder(b -> {
+                    int n = b.readVarInt();
+                    List<net.minecraft.core.BlockPos> where = new ArrayList<>(n);
+                    List<rafasconquest.content.PlacedBanners.Banner> what = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        where.add(b.readBlockPos());
+                        what.add(new rafasconquest.content.PlacedBanners.Banner(net.minecraft.world.level.block.Block.stateById(b.readVarInt()),
+                                b.readBoolean() ? b.readUUID() : null));
+                    }
+                    return new FarBanners(where, what);
+                })
+                .consumerMainThread((m, context) -> rafasconquest.client.FarFlags.banners(m.where(), m.what()))
+                .add();
+    }
+
+    /** Server → client: the battle banners and flags about the player's camera, out past its own chunks ({@link rafasconquest.content.PlacedBanners}). */
+    public record FarBanners(List<net.minecraft.core.BlockPos> where, List<rafasconquest.content.PlacedBanners.Banner> what) {
+    }
+
+    public static void sendFarBanners(ServerPlayer player, List<net.minecraft.core.BlockPos> where, List<rafasconquest.content.PlacedBanners.Banner> what) {
+        CHANNEL.send(player, new FarBanners(where, what));
     }
 
     /** Server → client: the townsfolk's stretches of road in the districts near the player, which the client walks and draws. */

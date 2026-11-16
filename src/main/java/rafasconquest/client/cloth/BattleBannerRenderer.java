@@ -19,21 +19,30 @@ public class BattleBannerRenderer implements BlockEntityRenderer<BattleBannerBlo
     public BattleBannerRenderer(BlockEntityRendererProvider.Context context) {
     }
 
+    /** Where banners were drawn by the game this frame; the rest the server told of are drawn by FarFlags. */
+    public static final java.util.Set<Long> DRAWN = new java.util.HashSet<>();
+
     @Override
     public void render(BattleBannerBlockEntity banner, float partialTick, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        BlockState state = banner.getBlockState();
+        DRAWN.add(banner.getBlockPos().asLong());
+        draw(banner.getBlockState(), banner, banner.nation(), pose, buffers, light, overlay);
+    }
+
+    /** A banner of {@code state} at the pose's origin (its block's corner); {@code key} keeps its cloth moving. */
+    public static void draw(BlockState state, Object key, @org.jetbrains.annotations.Nullable java.util.UUID nation, PoseStack pose,
+                            MultiBufferSource buffers, int light, int overlay) {
         if (state.getBlock() instanceof FlagBlock flag) {
             Direction facing = state.getValue(FlagBlock.FACING);
             pose.pushPose();
             pose.translate(0.5, 0, 0.5);
             if (facing == Direction.UP) {
                 pose.mulPose(Axis.YP.rotationDegrees(-RotationSegment.convertToDegrees(state.getValue(BattleBannerBlock.ROTATION))));
-                BannerArt.flagOnPole(pose, buffers, light, overlay, flag.size(), 3 * flag.size(), banner, BannerArt.arms(banner.nation()), null);
+                BannerArt.flagOnPole(pose, buffers, light, overlay, flag.size(), 3 * flag.size(), key, BannerArt.arms(nation), null);
             } else {
                 // +x along facing; the edge on the holder's face (or in at its post), its top at the block's top
                 pose.mulPose(Axis.YP.rotationDegrees(270 - facing.toYRot()));
                 pose.translate(-0.5 - state.getValue(FlagBlock.MOUNT).inset, 0.5, 0);
-                BannerArt.flagHung(pose, buffers, light, overlay, flag.size(), banner, BannerArt.arms(banner.nation()));
+                BannerArt.flagHung(pose, buffers, light, overlay, flag.size(), key, BannerArt.arms(nation));
             }
             pose.popPose();
             return;
@@ -45,8 +54,8 @@ public class BattleBannerRenderer implements BlockEntityRenderer<BattleBannerBlo
         } else if (state.getBlock() instanceof BattleWallBannerBlock wall) {
             BannerArt.wall(pose, state.getValue(BattleWallBannerBlock.FACING), wall.big());
         }
-        BannerArt.draw(pose, buffers, light, overlay, standing, true, banner, standing ? BannerArt.STANDING : BannerArt.WALL,
-                BannerArt.arms(banner.nation()), null);
+        BannerArt.draw(pose, buffers, light, overlay, standing, true, key, standing ? BannerArt.STANDING : BannerArt.WALL,
+                BannerArt.arms(nation), null);
         pose.popPose();
     }
 

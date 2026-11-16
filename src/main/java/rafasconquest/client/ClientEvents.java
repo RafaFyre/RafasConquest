@@ -101,8 +101,9 @@ public final class ClientEvents {
             DistantArmyRenderer.renderShips(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             OarFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             SailFigures.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
-            DistantOcclusion.end();
+            // Inside the distant pass: figures' flags share their depth and far plane.
             FarFlags.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
+            DistantOcclusion.end();
             ArrowVolleys.render(event.getPoseStack(), event.getCamera(), event.getFrustum());
             BattleSpotRing.render(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));
             BattleScreen.renderSelection(event.getPoseStack(), event.getCamera(), event.getPartialTick().getGameTimeDeltaPartialTick(false));

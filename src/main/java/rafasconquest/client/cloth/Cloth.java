@@ -120,6 +120,13 @@ public final class Cloth {
     /** How many times its rest lengths the threads are, for cloth drawn bigger than life (the strategy map's marcher). */
     public double stretch = 1;
 
+    /**
+     * Whether each point is held within its column's rest length of the pinned row ({@link #tether}): for cloth stepped
+     * with few relaxations, which would otherwise stretch. It also stiffens the sheet against sideways shear, so near
+     * cloth (approved as it moves) goes without.
+     */
+    public boolean tethered;
+
     /** Boxes in local units ({minX, minY, minZ, maxX, maxY, maxZ} each) the cloth is kept out of. */
     public Cloth keepOut(double[]... boxes) {
         this.boxes = boxes;
@@ -208,12 +215,36 @@ public final class Cloth {
             for (int s = 0; s < stickA.length; s++) {
                 relax(s);
             }
+            if (tethered) {
+                tether();
+            }
             if (inverse != null) {
                 keepOutOfBoxes(frame, inverse, v);
             }
         }
         if (solid != null) {
             keepOutOfBlocks(solid);
+        }
+    }
+
+    /**
+     * No point further from its column's pinned point than the column's rest length to it: relaxations alone spread
+     * a pull down the sheet slowly, so in a strong wind (or with few relaxations) the sheet would stretch like rubber.
+     */
+    private void tether() {
+        for (int p = w; p < x.length; p++) {
+            int a = p % w;
+            double dx = x[p] - x[a];
+            double dy = y[p] - y[a];
+            double dz = z[p] - z[a];
+            double most = Math.abs(ly[p] - ly[a]) * stretch;
+            double len2 = dx * dx + dy * dy + dz * dz;
+            if (len2 > most * most) {
+                double k = most / Math.sqrt(len2);
+                x[p] = x[a] + dx * k;
+                y[p] = y[a] + dy * k;
+                z[p] = z[a] + dz * k;
+            }
         }
     }
 
