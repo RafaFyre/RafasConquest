@@ -91,6 +91,9 @@ public final class BattleScreen extends Screen {
     /** The camera's chunk as last sent to the server. */
     private long sentChunk = Long.MIN_VALUE;
     private boolean hidGui;
+    private net.minecraft.client.CameraType cameraType = net.minecraft.client.CameraType.FIRST_PERSON;
+    /** How far Q and E turn the camera a tick, degrees (90 a second). */
+    private static final float TURN_A_TICK = 4.5F;
     private double camX;
     private double camY;
     private double camZ;
@@ -211,7 +214,12 @@ public final class BattleScreen extends Screen {
             units.forEach(u -> selected.add(u.number()));
         }
         if (camera == null || camera.level() != minecraft.level) {
-            hidGui = minecraft.options.hideGui;
+            if (camera == null) {
+                hidGui = minecraft.options.hideGui;
+                // Shoulder Surfing's third person aims the camera itself (decoupled), ignoring this camera's turn.
+                cameraType = minecraft.options.getCameraType();
+                minecraft.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+            }
             minecraft.options.hideGui = true;
             camera = new Marker(EntityType.MARKER, minecraft.level);
             yaw = minecraft.player.getYRot();
@@ -226,6 +234,9 @@ public final class BattleScreen extends Screen {
             minecraft.setCameraEntity(camera);
         }
         camera.setOldPosAndRot();
+        long window = minecraft.getWindow().getWindow();
+        yaw += ((InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_E) ? 1 : 0)
+                - (InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_Q) ? 1 : 0)) * TURN_A_TICK; // E right, Q left
         fly();
         camera.setPos(camX, camY, camZ);
         camera.setYRot(yaw);
@@ -272,6 +283,7 @@ public final class BattleScreen extends Screen {
             sentChunk = Long.MIN_VALUE;
             minecraft.setCameraEntity(minecraft.player);
             minecraft.options.hideGui = hidGui;
+            minecraft.options.setCameraType(cameraType);
             camera = null;
         }
     }

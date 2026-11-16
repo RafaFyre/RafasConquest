@@ -2094,9 +2094,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/BattleScreen.java": {
-    "mtime": 1794761530.0344548,
-    "seen": 1794761727.0071828,
-    "ast_hash": "9396f391a3c8c822517aef5b825a21b5",
+    "mtime": 1794822059.6764205,
+    "seen": 1794822247.7076418,
+    "ast_hash": "8e56c684ff3a5ba72a9747cba0ffd1a4",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/StrategyBoardBlock.java": {
