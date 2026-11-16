@@ -42,6 +42,8 @@ public final class ArrowVolleys {
     private static final int MAX_PUFFS = 2500;
     /** Of a musket volley, only this many shots make smoke: a line's smoke is one bank anyway. */
     private static final int MAX_PUFFS_PER_VOLLEY = 8;
+    /** Of an engine volley, only this many shots are heard: the rest would drown in them. */
+    private static final int MAX_SOUNDS_PER_VOLLEY = 4;
     private static final double MIN_FLIGHT = 0.6;
     /** The smallest a round shot is drawn (radius, blocks per block away), and a smoke puff. */
     private static final double MIN_BALL_PER_BLOCK = 0.004;
@@ -150,13 +152,19 @@ public final class ArrowVolleys {
                 continue;
             }
             AIMS.put(from[v], new long[]{to[v], now});
-            Kind kind = Kind.of(v < arms.length ? arms[v] : -1);
+            int arm = v < arms.length ? arms[v] : -1;
+            Kind kind = Kind.of(arm);
+            BattleSounds.Shot sound = arm < 0 || arm >= BattlePlan.Arm.values().length ? null : BattleSounds.shot(BattlePlan.Arm.values()[arm]);
             List<FormationSnapshot.Sprite> figures = archers.layout();
             int fired = Math.min(shots[v], MAX_PER_VOLLEY);
             for (int i = 0; i < fired; i++) {
                 FormationSnapshot.Sprite s = figures.get(RANDOM.nextInt(figures.size()));
                 Vec3 start = new Vec3(s.x(), s.y() + 1.4, s.z());
-                long when = now + RANDOM.nextInt(1000);
+                // a recorded shot starts now; the shot leaves as its release comes
+                long when = now + RANDOM.nextInt(1000) + (sound == null ? 0 : sound.releaseMillis());
+                if (sound != null && i < MAX_SOUNDS_PER_VOLLEY) {
+                    BattleSounds.queue(sound, start, when - sound.releaseMillis());
+                }
                 Vec3 aim = null;
                 for (int k = 0; k < kind.perShot && ARROWS.size() < MAX_IN_FLIGHT; k++) {
                     double right = (RANDOM.nextDouble() * 2 - 1) * Math.max(1, target.halfWidth());

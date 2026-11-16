@@ -66,6 +66,36 @@ public final class BattleSounds {
         Minecraft.getInstance().getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
                 TREBUCHET, SoundSource.NEUTRAL, 8F, 1F, RANDOM, x, y, z));
     }
+
+    /** A shooting engine's recorded shot, and how far (ms) into it the release (the bang, the arm's slam) comes. */
+    record Shot(SoundEvent sound, long releaseMillis) {
+    }
+
+    private static final Shot ONAGER = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.onager")), 1880);
+    private static final Shot CULVERIN = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.culverin")), 20);
+    private static final Shot MONS_MEG = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.mons_meg")), 280);
+
+    /** The recorded shot of an engine of this arm; null if it has none. */
+    @javax.annotation.Nullable
+    static Shot shot(rafasconquest.battle.BattlePlan.Arm arm) {
+        return switch (arm) {
+            case ONAGERS -> ONAGER;
+            case CULVERINS -> CULVERIN;
+            case MONS_MEGS -> MONS_MEG;
+            default -> null;
+        };
+    }
+
+    /** A shot's sound waiting to start: where, and when ({@code Util.getMillis}). */
+    private record Queued(SoundEvent sound, Vec3 at, long when) {
+    }
+
+    private static final List<Queued> QUEUED = new ArrayList<>();
+
+    /** Plays {@code shot} where it is fired, starting at {@code when}; heard up to 128 blocks off (volume 8). */
+    static void queue(Shot shot, Vec3 at, long when) {
+        QUEUED.add(new Queued(shot.sound(), at, when));
+    }
     /** A clip lasts 10 s, fading for the last second: the next starts 8 to 9 s after the last. */
     private static final int CLIP_EVERY = 160;
     private static final int CLIP_JITTER = 20;
@@ -204,6 +234,17 @@ public final class BattleSounds {
         if (mc.level == null || mc.isPaused()) {
             return;
         }
+        long now = net.minecraft.Util.getMillis();
+        QUEUED.removeIf(q -> {
+            if (q.when() > now) {
+                return false;
+            }
+            if (now - q.when() < 1000) { // much later and it would come after its shot
+                mc.getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
+                        q.sound(), SoundSource.NEUTRAL, 8F, 1F, RANDOM, q.at().x, q.at().y, q.at().z));
+            }
+            return true;
+        });
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
         if (ticks++ % 20 == 0) {
             List<FormationSnapshot> formations = DistantArmies.now();

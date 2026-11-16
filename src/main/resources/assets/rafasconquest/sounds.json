@@ -43,6 +43,9 @@
   "battle.order.attack": {"sounds": ["rafasconquest:battle/order_attack"]},
   "battle.army_charge": {"sounds": ["rafasconquest:battle/army_charge"]},
   "battle.trebuchet": {"sounds": ["rafasconquest:battle/trebuchet"]},
+  "battle.onager": {"sounds": ["rafasconquest:battle/onager"]},
+  "battle.culverin": {"sounds": ["rafasconquest:battle/culverin"]},
+  "battle.mons_meg": {"sounds": ["rafasconquest:battle/mons_meg"]},
   "music.to_shores_distant": {
     "sounds": [{"name": "rafasconquest:music/to_shores_distant", "stream": true}]
   },
