@@ -61,19 +61,19 @@ public final class BattleSounds {
     private static final SoundEvent SHOUT = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.shout"));
     private static final SoundEvent TREBUCHET = SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.trebuchet"));
 
-    /** A far trebuchet's shot release where it stands, heard up to 128 blocks off (volume 8). */
+    /** A far trebuchet's shot release where it stands, heard up to 256 blocks off (volume 16; Minecraft caps loudness, volume sets the reach). */
     static void trebuchet(double x, double y, double z) {
         Minecraft.getInstance().getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
-                TREBUCHET, SoundSource.NEUTRAL, 8F, 1F, RANDOM, x, y, z));
+                TREBUCHET, SoundSource.NEUTRAL, 16F, 1F, RANDOM, x, y, z));
     }
 
-    /** A shooting engine's recorded shot, and how far (ms) into it the release (the bang, the arm's slam) comes. */
-    record Shot(SoundEvent sound, long releaseMillis) {
+    /** A shooting engine's recorded shot, how far (ms) into it the release (the bang, the arm's slam) comes, and its volume (16 blocks a unit). */
+    record Shot(SoundEvent sound, long releaseMillis, float volume) {
     }
 
-    private static final Shot ONAGER = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.onager")), 1880);
-    private static final Shot CULVERIN = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.culverin")), 20);
-    private static final Shot MONS_MEG = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.mons_meg")), 280);
+    private static final Shot ONAGER = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.onager")), 1880, 8F);
+    private static final Shot CULVERIN = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.culverin")), 20, 16F);
+    private static final Shot MONS_MEG = new Shot(SoundEvent.createVariableRangeEvent(ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "battle.mons_meg")), 280, 16F);
 
     /** The recorded shot of an engine of this arm; null if it has none. */
     @javax.annotation.Nullable
@@ -87,14 +87,14 @@ public final class BattleSounds {
     }
 
     /** A shot's sound waiting to start: where, and when ({@code Util.getMillis}). */
-    private record Queued(SoundEvent sound, Vec3 at, long when) {
+    private record Queued(Shot shot, Vec3 at, long when) {
     }
 
     private static final List<Queued> QUEUED = new ArrayList<>();
 
-    /** Plays {@code shot} where it is fired, starting at {@code when}; heard up to 128 blocks off (volume 8). */
+    /** Plays {@code shot} where it is fired, starting at {@code when}. */
     static void queue(Shot shot, Vec3 at, long when) {
-        QUEUED.add(new Queued(shot.sound(), at, when));
+        QUEUED.add(new Queued(shot, at, when));
     }
     /** A clip lasts 10 s, fading for the last second: the next starts 8 to 9 s after the last. */
     private static final int CLIP_EVERY = 160;
@@ -241,7 +241,7 @@ public final class BattleSounds {
             }
             if (now - q.when() < 1000) { // much later and it would come after its shot
                 mc.getSoundManager().play(new net.minecraft.client.resources.sounds.SimpleSoundInstance(
-                        q.sound(), SoundSource.NEUTRAL, 8F, 1F, RANDOM, q.at().x, q.at().y, q.at().z));
+                        q.shot().sound(), SoundSource.NEUTRAL, q.shot().volume(), 1F, RANDOM, q.at().x, q.at().y, q.at().z));
             }
             return true;
         });
