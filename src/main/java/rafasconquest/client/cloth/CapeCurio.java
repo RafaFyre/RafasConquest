@@ -18,7 +18,7 @@ import rafasconquest.content.ConquestContent;
 /** The cape in its Curios slot: moving cloth of its dyed colour, hung from the wearer's shoulders. Needs Curios. */
 public final class CapeCurio implements ICurioRenderer {
     public static void register() {
-        CuriosRendererRegistry.register(ConquestContent.CAPE.get(), CapeCurio::new);
+        ConquestContent.capes().forEach(cape -> CuriosRendererRegistry.register(cape, CapeCurio::new));
     }
 
     @Override
@@ -33,9 +33,9 @@ public final class CapeCurio implements ICurioRenderer {
         pose.pushPose();
         model.body.translateAndRotate(pose);
         boolean armoured = !wearer.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).isEmpty();
-        ClothRenderer.draw(new ClothRenderer.Carried(wearer.getId(), "cape"), armoured ? BannerArt.CAPE_ON_ARMOUR : BannerArt.CAPE,
+        ClothRenderer.draw(new ClothRenderer.Carried(wearer.getId(), "cape"), BannerArt.cape(stack.getItem(), armoured),
                 pose, buffers, light,
-                OverlayTexture.NO_OVERLAY, BannerArt.plain(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor())),
+                OverlayTexture.NO_OVERLAY, BannerArt.capeCloth(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor())),
                 wearer.position());
         pose.popPose();
     }

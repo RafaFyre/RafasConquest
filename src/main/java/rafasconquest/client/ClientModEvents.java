@@ -39,7 +39,8 @@ public final class ClientModEvents {
         };
         event.registerItem(cloth, rafasconquest.content.ConquestContent.BATTLE_BANNER_ITEM.get(),
                 rafasconquest.content.ConquestContent.BIG_BATTLE_BANNER_ITEM.get(),
-                rafasconquest.content.ConquestContent.BATTLE_STANDARD.get(), rafasconquest.content.ConquestContent.CAPE.get());
+                rafasconquest.content.ConquestContent.BATTLE_STANDARD.get());
+        rafasconquest.content.ConquestContent.capes().forEach(cape -> event.registerItem(cloth, cape));
         for (var flag : rafasconquest.content.ConquestContent.FLAG_ITEMS) {
             event.registerItem(cloth, flag.get());
         }

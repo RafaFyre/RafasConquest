@@ -49,7 +49,7 @@ public class ClothItemRenderer extends BlockEntityWithoutLevelRenderer {
             pose.popPose();
             return;
         }
-        boolean cape = stack.is(ConquestContent.CAPE.get());
+        boolean cape = ConquestContent.isCape(stack);
         boolean standard = stack.is(ConquestContent.BATTLE_STANDARD.get());
         boolean big = standard || stack.is(ConquestContent.BIG_BATTLE_BANNER_ITEM.get());
         boolean carried = context.firstPerson() || context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
@@ -61,7 +61,7 @@ public class ClothItemRenderer extends BlockEntityWithoutLevelRenderer {
         BannerArt.draw(pose, buffers, light, overlay, !cape, !cape,
                 carrier == null ? null : new ClothRenderer.Carried(carrier.getId(), context),
                 BannerArt.STANDING,
-                cape ? BannerArt.plain(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor()))
+                cape ? BannerArt.capeCloth(DyedItemColor.getOrDefault(stack, DyeColor.WHITE.getTextureDiffuseColor()))
                         : BannerArt.arms(BattleStandardItem.nation(stack)), // a banner handed a nation's arms flies them too
                 carrier == null ? null : carrier.position());
         pose.popPose();

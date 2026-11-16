@@ -125,6 +125,11 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private long lastNameClick;
     /** Degrees the 3D camera looks down: Total War's campaign tilt. */
     private static final double PITCH = 55;
+    /** How fast Q and E turn the 3D camera, radians a second. */
+    private static final double TURN_SPEED = Math.toRadians(90);
+    /** Which way the 3D camera looks, turned from north toward east (radians). */
+    private double heading;
+    private long turnedAt;
 
     public GrandStrategyScreen(GrandStrategy.View fief) {
         super(null, Component.translatable("gui.rafasconquest.grand_strategy"));
@@ -308,7 +313,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
         // His banner's cloth moves though he is far and big: a mild breeze from the left and from the top of the screen
         // (the camera looks north), so it flows a little toward the camera and to the right, swelling and easing.
         double t = Util.getMillis() / 1000.0;
-        double[] breeze = {BREEZE * (1 + 0.35 * Math.sin(t * 0.9)), 0, BREEZE * 0.7 * (1 + 0.35 * Math.sin(t * 1.3 + 1))};
+        double[] flow = s.turned(BREEZE * (1 + 0.35 * Math.sin(t * 0.9)), BREEZE * 0.7 * (1 + 0.35 * Math.sin(t * 1.3 + 1)));
+        double[] breeze = {flow[0], 0, flow[1]};
         rafasconquest.client.cloth.ClothRenderer.far(e.getId(), new rafasconquest.client.cloth.ClothRenderer.Far(k, breeze));
         rafasconquest.client.cloth.ClothRenderer.setCurrent(e);
         // Through the dispatcher, not his renderer alone: EMF (Fresh Animations) learns which entity it animates there;
@@ -339,7 +345,18 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (ahead <= 1 || !Double.isFinite(ahead)) {
             return null;
         }
-        return new double[]{camera.getX() + (mx - width / 2.0) / focal * ahead, camera.getZ() + vz};
+        double[] w = turned((mx - width / 2.0) / focal * ahead, vz);
+        return new double[]{camera.getX() + w[0], camera.getZ() + w[1]};
+    }
+
+    /** A flat offset as seen by the 3D camera (x right, z toward it) in the world; as is on the flat map. */
+    private double[] turned(double x, double z) {
+        if (camera == null) {
+            return new double[]{x, z};
+        }
+        double cos = Math.cos(heading);
+        double sin = Math.sin(heading);
+        return new double[]{x * cos - z * sin, x * sin + z * cos};
     }
 
     @Override
@@ -495,9 +512,18 @@ public class GrandStrategyScreen extends FactionMapScreen {
         }
         // Far enough back that the map's own scale holds at the middle of the screen.
         double d = view.height() / view.scale / 2 / Math.tan(Math.toRadians(fov()) / 2);
+        // Q and E turn the camera left and right about the middle of the screen while held.
+        long now = Util.getMillis();
+        double dt = turnedAt == 0 ? 0 : Math.min(0.1, (now - turnedAt) / 1000.0);
+        turnedAt = now;
+        long window = minecraft.getWindow().getWindow();
+        int turn = (com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_E) ? 1 : 0)
+                - (com.mojang.blaze3d.platform.InputConstants.isKeyDown(window, org.lwjgl.glfw.GLFW.GLFW_KEY_Q) ? 1 : 0);
+        heading += turn * TURN_SPEED * dt;
         double pitch = Math.toRadians(PITCH);
-        camera.setPos(view.centerX, ground() + d * Math.sin(pitch), view.centerZ + d * Math.cos(pitch));
-        camera.setYRot(180); // north
+        double back = d * Math.cos(pitch);
+        camera.setPos(view.centerX - Math.sin(heading) * back, ground() + d * Math.sin(pitch), view.centerZ + Math.cos(heading) * back);
+        camera.setYRot((float) (180 + Math.toDegrees(heading))); // 180: north
         camera.setXRot((float) PITCH);
         camera.setOldPosAndRot(); // moved every frame, so no blur between ticks
         if (minecraft.getCameraEntity() != camera) {
@@ -540,9 +566,12 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private double[] project(double x, double z) {
         double pitch = Math.toRadians(PITCH);
         BaseMap base = ClientMapCache.map();
-        double vx = x - camera.getX();
+        double wx = x - camera.getX();
         double vy = (base == null ? ground() : StrategyRelief.groundAt(base, x, z)) - camera.getY();
-        double vz = z - camera.getZ();
+        double wz = z - camera.getZ();
+        // Into the camera's turn: as if it looked north (vx east, vz south of it).
+        double vx = wx * Math.cos(heading) + wz * Math.sin(heading);
+        double vz = -wx * Math.sin(heading) + wz * Math.cos(heading);
         // The camera looks north and down: forward (0, -sin, -cos), right east, up (0, cos, -sin).
         double ahead = -vy * Math.sin(pitch) - vz * Math.cos(pitch);
         if (ahead <= 1) {
@@ -1059,7 +1088,8 @@ public class GrandStrategyScreen extends FactionMapScreen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
         GrandStrategy.Army shown = panelArmy();
-        return shown != null && panel.dragged(mouseX, width, height, shown) || overHud(mouseX, mouseY) || super.mouseDragged(mouseX, mouseY, button, dx, dy);
+        double[] d = turned(dx, dy); // the land follows the mouse however the camera is turned
+        return shown != null && panel.dragged(mouseX, width, height, shown) || overHud(mouseX, mouseY) || super.mouseDragged(mouseX, mouseY, button, d[0], d[1]);
     }
 
     @Override
@@ -1070,6 +1100,17 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
-        return panel.scrolled(mouseX, mouseY, delta, width, height) || overHud(mouseX, mouseY) || super.mouseScrolled(mouseX, mouseY, scrollX, delta);
+        // Zooms toward the land under the mouse: its offset from the middle, turned as the camera is.
+        double midX = view.screenX(view.centerX);
+        double midY = view.screenY(view.centerZ);
+        double[] o = turned(mouseX - midX, mouseY - midY);
+        if (panel.scrolled(mouseX, mouseY, delta, width, height) || overHud(mouseX, mouseY)) {
+            return true;
+        }
+        if (map != null && view.contains(mouseX, mouseY)) {
+            view.zoomAt(midX + o[0], midY + o[1], Math.pow(1.25, delta)); // as the flat map's scroll does
+            return true;
+        }
+        return false;
     }
 }

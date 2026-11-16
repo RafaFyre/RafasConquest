@@ -54,11 +54,29 @@ public final class BannerArt {
      * A cape on a body (model units are blocks, y down, +z behind the back): 10 × 16 pixels like vanilla's, hanging
      * behind the back with its inner face on it, kept out of the body and legs.
      */
-    public static final ClothRenderer.Kind CAPE = new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8, 1.0 / 12, 0.16, CAPE_WOOL, false, true,
-            new double[]{-0.35, -0.2, -0.25, 0.35, 1.6, 0.155});
+    public static final ClothRenderer.Kind CAPE = cape(1, 1, false);
     /** The cape over a chestplate: armour stands a pixel off the body (3 px behind the spine), so the cape hangs past it. */
-    public static final ClothRenderer.Kind CAPE_ON_ARMOUR = new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8, 1.0 / 12, 0.235, CAPE_WOOL, false, true,
-            new double[]{-0.4, -0.2, -0.3, 0.4, 1.6, 0.23});
+    public static final ClothRenderer.Kind CAPE_ON_ARMOUR = cape(1, 1, true);
+    /** By cape (plain, long, wide, big), bare and over armour: the long ones a fifth longer, the wide a fifth wider. */
+    private static final ClothRenderer.Kind[][] CAPES = {
+            {CAPE, CAPE_ON_ARMOUR}, {cape(1, 1.2, false), cape(1, 1.2, true)},
+            {cape(1.2, 1, false), cape(1.2, 1, true)}, {cape(1.2, 1.2, false), cape(1.2, 1.2, true)}};
+
+    private static ClothRenderer.Kind cape(double wide, double longer, boolean armoured) {
+        return new ClothRenderer.Kind(9, 13, 10 / 16.0 / 8 * wide, 1.0 / 12 * longer, armoured ? 0.235 : 0.16, CAPE_WOOL, false, true,
+                armoured ? new double[]{-0.4, -0.2, -0.3, 0.4, 1.6, 0.23} : new double[]{-0.35, -0.2, -0.25, 0.35, 1.6, 0.155});
+    }
+
+    /** The cloth of a cape item, worn over armour or not. */
+    public static ClothRenderer.Kind cape(net.minecraft.world.item.Item item, boolean armoured) {
+        int i = rafasconquest.content.ConquestContent.capes().indexOf(item);
+        return CAPES[Math.max(i, 0)][armoured ? 1 : 0];
+    }
+
+    /** A cape's cloth: the bed's sheet (its foot's top), in the cape's dye. */
+    public static List<ClothRenderer.Layer> capeCloth(int rgb) {
+        return List.of(new ClothRenderer.Layer(Sheets.BED_TEXTURES[DyeColor.WHITE.getId()], 0xFF000000 | rgb, true, 6, 28, 22, 44));
+    }
 
     @Nullable
     private static ModelPart pole;

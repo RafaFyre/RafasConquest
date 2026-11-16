@@ -163,6 +163,24 @@ public final class ConquestContent {
     /** The cape: battle-banner cloth on the wearer's back (a Curios slot), one dyed colour (tag minecraft:dyeable). */
     public static final DeferredHolder<Item, Item> CAPE = ITEMS.register("cape",
             () -> new Item(new Item.Properties().stacksTo(1)));
+    /** The cape a fifth longer. */
+    public static final DeferredHolder<Item, Item> LONG_CAPE = ITEMS.register("long_cape",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+    /** The cape a fifth wider. */
+    public static final DeferredHolder<Item, Item> WIDE_CAPE = ITEMS.register("wide_cape",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+    /** The cape a fifth longer and a fifth wider. */
+    public static final DeferredHolder<Item, Item> BIG_CAPE = ITEMS.register("big_cape",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+
+    /** Every cape, plain first. */
+    public static java.util.List<Item> capes() {
+        return java.util.List.of(CAPE.get(), LONG_CAPE.get(), WIDE_CAPE.get(), BIG_CAPE.get());
+    }
+
+    public static boolean isCape(net.minecraft.world.item.ItemStack stack) {
+        return capes().contains(stack.getItem());
+    }
 
     private static BlockBehaviour.Properties bannerProperties() {
         return BlockBehaviour.Properties.of().mapColor(net.minecraft.world.level.material.MapColor.WOOD).forceSolidOn()
@@ -195,7 +213,7 @@ public final class ConquestContent {
                 output.accept(BIG_BATTLE_BANNER_ITEM.get());
                 output.accept(BATTLE_STANDARD.get());
                 FLAG_ITEMS.forEach(flag -> output.accept(flag.get()));
-                output.accept(CAPE.get());
+                capes().forEach(output::accept);
                 if (GATE_PLANKS_ITEM != null) {
                     output.accept(GATE_PLANKS_ITEM.get());
                 }

@@ -36,8 +36,14 @@ import java.util.Map;
  * carried along with that frame, so a running wearer's cape stays on their shoulders.
  */
 public final class ClothRenderer {
-    /** One textured pass over the cloth: the cloth itself (solid), then each dye layer on top. */
-    public record Layer(Material material, int argb, boolean solid) {
+    /**
+     * One textured pass over the cloth: the cloth itself (solid), then each dye layer on top. The cloth spans the
+     * texture's pixels {@code u0}–{@code u1}, {@code v0}–{@code v1} (of 64), the banner's flag unless said.
+     */
+    public record Layer(Material material, int argb, boolean solid, float u0, float v0, float u1, float v1) {
+        public Layer(Material material, int argb, boolean solid) {
+            this(material, argb, solid, 1, 1, 21, 41);
+        }
     }
 
     /**
@@ -376,38 +382,37 @@ public final class ClothRenderer {
             VertexConsumer vc = layer.solid()
                     ? layer.material().buffer(buffers, RenderType::entityCutoutNoCull)
                     : layer.material().buffer(buffers, RenderType::entityNoOutline);
-            int argb = layer.argb();
             for (int j = 0; j < h - 1; j++) {
                 for (int i = 0; i < w - 1; i++) {
                     int p = j * w + i;
-                    quad(vc, pose, front, nx, ny, nz, 1, w, h, argb, light, overlay, p, p + w, p + w + 1, p + 1);
-                    quad(vc, pose, back, nx, ny, nz, -1, w, h, argb, light, overlay, p + 1, p + w + 1, p + w, p);
+                    quad(vc, pose, front, nx, ny, nz, 1, w, h, layer, light, overlay, p, p + w, p + w + 1, p + 1);
+                    quad(vc, pose, back, nx, ny, nz, -1, w, h, layer, light, overlay, p + 1, p + w + 1, p + w, p);
                 }
             }
             if (l < 2 && thick > 0) { // the cloth and its base colour; dye patterns stay on the faces
                 for (int e = 0; e < rim.length; e++) {
                     int a = rim[e];
                     int b = e < 2 * (w - 1) ? a + 1 : a + w;
-                    vertex(vc, pose, front, nx, ny, nz, 1, a, w, h, argb, light, overlay, 0.5F);
-                    vertex(vc, pose, front, nx, ny, nz, 1, b, w, h, argb, light, overlay, 0.5F);
-                    vertex(vc, pose, back, nx, ny, nz, 1, b, w, h, argb, light, overlay, 0.5F);
-                    vertex(vc, pose, back, nx, ny, nz, 1, a, w, h, argb, light, overlay, 0.5F);
+                    vertex(vc, pose, front, nx, ny, nz, 1, a, w, h, layer, light, overlay, 0.5F);
+                    vertex(vc, pose, front, nx, ny, nz, 1, b, w, h, layer, light, overlay, 0.5F);
+                    vertex(vc, pose, back, nx, ny, nz, 1, b, w, h, layer, light, overlay, 0.5F);
+                    vertex(vc, pose, back, nx, ny, nz, 1, a, w, h, layer, light, overlay, 0.5F);
                 }
             }
         }
     }
 
     private static void quad(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz, int side,
-                             int w, int h, int argb, int light, int overlay, int a, int b, int c, int d) {
-        vertex(vc, pose, at, nx, ny, nz, side, a, w, h, argb, light, overlay);
-        vertex(vc, pose, at, nx, ny, nz, side, b, w, h, argb, light, overlay);
-        vertex(vc, pose, at, nx, ny, nz, side, c, w, h, argb, light, overlay);
-        vertex(vc, pose, at, nx, ny, nz, side, d, w, h, argb, light, overlay);
+                             int w, int h, Layer layer, int light, int overlay, int a, int b, int c, int d) {
+        vertex(vc, pose, at, nx, ny, nz, side, a, w, h, layer, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, b, w, h, layer, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, c, w, h, layer, light, overlay);
+        vertex(vc, pose, at, nx, ny, nz, side, d, w, h, layer, light, overlay);
     }
 
     private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
-                               int side, int p, int w, int h, int argb, int light, int overlay) {
-        vertex(vc, pose, at, nx, ny, nz, side, p, w, h, argb, light, overlay, 0);
+                               int side, int p, int w, int h, Layer layer, int light, int overlay) {
+        vertex(vc, pose, at, nx, ny, nz, side, p, w, h, layer, light, overlay, 0);
     }
 
     /**
@@ -415,10 +420,10 @@ public final class ClothRenderer {
      * pixel and the clear one outside it.
      */
     private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
-                               int side, int p, int w, int h, int argb, int light, int overlay, float inset) {
-        float u = Mth.clamp(1 + 20F * (p % w) / (w - 1), 1 + inset, 21 - inset) / 64F;
-        float v = Mth.clamp(1 + 40F * (p / w) / (h - 1), 1 + inset, 41 - inset) / 64F;
-        vc.addVertex(pose, at[0][p], at[1][p], at[2][p]).setColor(argb).setUv(u, v).setOverlay(overlay).setLight(light)
+                               int side, int p, int w, int h, Layer layer, int light, int overlay, float inset) {
+        float u = Mth.clamp(layer.u0() + (layer.u1() - layer.u0()) * (p % w) / (w - 1), layer.u0() + inset, layer.u1() - inset) / 64F;
+        float v = Mth.clamp(layer.v0() + (layer.v1() - layer.v0()) * (p / w) / (h - 1), layer.v0() + inset, layer.v1() - inset) / 64F;
+        vc.addVertex(pose, at[0][p], at[1][p], at[2][p]).setColor(layer.argb()).setUv(u, v).setOverlay(overlay).setLight(light)
                 .setNormal(pose, nx[p] * side, ny[p] * side, nz[p] * side);
     }
 }
