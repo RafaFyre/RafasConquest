@@ -349,6 +349,7 @@ public final class DistantArmyRenderer {
             return;
         }
         int engines = engine.kind() == FormationSnapshot.LADDER ? 1 : rafasconquest.battle.Machine.values()[engine.kind()].inBlock(formation.id());
+        FormationSnapshot target = ArrowVolleys.aim(formation.id()); // shooting engines each turn to face what they shoot at
         for (int i = 0; i < placed.size(); i++) {
             if (!rafasconquest.battle.Machine.works(i, engines, placed.size())) {
                 continue;
@@ -362,8 +363,45 @@ public final class DistantArmyRenderer {
                     && eye.distanceToSqr(p.x(), p.y(), p.z()) > handover * handover) {
                 BattleSounds.trebuchet(p.x(), p.y(), p.z());
             }
-            engine(mc, shape, palette, p.x(), p.y(), p.z(), formation.facingX(), formation.facingZ(), size, motion, eye, renderBlocks, lit, glow);
+            double fx = formation.facingX();
+            double fz = formation.facingZ();
+            double tx = target == null ? 0 : target.x() - p.x();
+            double tz = target == null ? 0 : target.z() - p.z();
+            double t = Math.hypot(tx, tz);
+            if (t > 1) {
+                fx = tx / t;
+                fz = tz / t;
+            }
+            boolean heavy = engine.kind() == rafasconquest.battle.Machine.MONS_MEG.ordinal()
+                    || engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal();
+            double angle = swing(((long) formation.id() << 16) | i, Math.atan2(fz, fx), heavy ? SWING_PER_SECOND / 2 : SWING_PER_SECOND);
+            engine(mc, shape, palette, p.x(), p.y(), p.z(), Math.cos(angle), Math.sin(angle), size, motion, eye, renderBlocks, lit, glow);
         }
+    }
+
+    /** Each crewed engine's facing (radians) and when it was last drawn, by formation id and engine index. */
+    private static final java.util.Map<Long, double[]> SWINGS = new java.util.HashMap<>();
+    /** How fast an engine's crew swing it round, in radians a second; the Mons Meg and trebuchet at half that. */
+    private static final double SWING_PER_SECOND = Math.toRadians(45);
+    /** An engine not drawn for this long is set straight at its aim when next seen. */
+    private static final long SWING_FORGET_MILLIS = 2000;
+
+    /** Engine {@code key}'s facing this frame, swung from its last toward {@code want} (radians) by at most {@code perSecond}. */
+    private static double swing(long key, double want, double perSecond) {
+        long now = net.minecraft.Util.getMillis();
+        double[] s = SWINGS.get(key);
+        if (s == null || now - s[1] > SWING_FORGET_MILLIS) {
+            if (SWINGS.size() > 4096) {
+                SWINGS.values().removeIf(old -> now - old[1] > SWING_FORGET_MILLIS); // formations long gone
+            }
+            SWINGS.put(key, new double[]{want, now});
+            return want;
+        }
+        double step = perSecond * (now - s[1]) / 1000.0;
+        double turn = Math.IEEEremainder(want - s[0], Math.PI * 2); // the short way round
+        s[0] += Math.max(-step, Math.min(step, turn));
+        s[1] = now;
+        return s[0];
     }
 
     /** An engine standing still: no walk swing, amount or flags. */

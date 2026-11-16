@@ -46,8 +46,11 @@ public final class ArrowVolleys {
     /** The smallest a round shot is drawn (radius, blocks per block away), and a smoke puff. */
     private static final double MIN_BALL_PER_BLOCK = 0.004;
     private static final double MIN_PUFF_PER_BLOCK = 0.008;
-    /** How long a shot's muzzle flash shows in its smoke, in seconds. */
-    private static final double FLASH = 0.15;
+    /** A muzzle flash shows this long, plus this much more for each block of its radius, in seconds. */
+    private static final double FLASH = 0.08;
+    private static final double FLASH_PER_BLOCK = 0.05;
+    /** The smallest a flash is drawn: this share of its distance for each block of its radius. */
+    private static final double MIN_FLASH_PER_BLOCK = 0.003;
     private static final int SHAFT = 0x8B6B4A;
     private static final int FLETCHING = 0xE8E8E8;
     private static final int HEAD = 0x9A9A9A;
@@ -56,7 +59,8 @@ public final class ArrowVolleys {
     private static final int STONE = 0x7A766E;
     private static final int FIRE = 0xFFA030;
     private static final int SMOKE = 0xD8D8D4;
-    private static final int FLASH_COLOUR = 0xFFE090;
+    private static final int FLASH_COLOUR = 0xFFB040;
+    private static final int FLASH_CORE = 0xFFF8E0;
     /** A thrown stone's dust trail: how many quads, over how many seconds of its flight, and its colour. */
     private static final int TRAIL_STEPS = 4;
     private static final double TRAIL_SECONDS = 0.6;
@@ -66,27 +70,29 @@ public final class ArrowVolleys {
      * How a kind of shot flies and looks: its speed over the ground (blocks a second), arc (rise over its middle as a
      * share of the distance, and at most), streak length and width share (0: a round shot of {@code ball} radius), how
      * long it is drawn at the least for its distance; how many are drawn for each shot fired, and the smoke where it is
-     * fired (puff radius 0: none; how many puffs, how long they hang).
+     * fired (puff radius 0: none; how many puffs, how long they hang) and the radius of its muzzle flash (0: none).
      */
     private enum Kind {
-        ARROW(30, 0.18, 25, 0.8, 0.015, 0.08, 0, 1, 0, 0, 0),
-        SHOT(160, 0.01, 2, 0.5, 0.01, 0.06, 0, 1, 0.6, 1, 3),
-        BOLT(50, 0.08, 10, 2.0, 0.03, 0.06, 0, 1, 0, 0, 0),
+        ARROW(30, 0.18, 25, 0.8, 0.015, 0.08, 0, 1, 0, 0, 0, 0),
+        SHOT(160, 0.01, 2, 0.5, 0.01, 0.06, 0, 1, 0.6, 1, 3, 0.5),
+        BOLT(50, 0.08, 10, 2.0, 0.03, 0.06, 0, 1, 0, 0, 0, 0),
         /** A hwacha fires a hundred-odd fire arrows at once. */
-        ROCKET(40, 0.15, 20, 1.0, 0.02, 0.1, 0, 16, 2.5, 3, 6),
-        BALL(90, 0.04, 8, 0, 0, 0, 0.3, 1, 3, 3, 7),
-        BIG_BALL(70, 0.06, 12, 0, 0, 0, 0.7, 1, 5, 4, 9),
-        ROCK(25, 0.3, 40, 0, 0, 0, 0.6, 1, 0, 0, 0),
-        BIG_ROCK(22, 0.35, 50, 0, 0, 0, 1.0, 1, 0, 0, 0);
+        ROCKET(40, 0.15, 20, 1.0, 0.02, 0.1, 0, 16, 2.5, 3, 6, 0.8),
+        BALL(90, 0.04, 8, 0, 0, 0, 0.3, 1, 3, 3, 7, 1.5),
+        /** The Mons Meg's blast: a flash several blocks across. */
+        BIG_BALL(70, 0.06, 12, 0, 0, 0, 0.7, 1, 5, 4, 9, 5),
+        ROCK(25, 0.3, 40, 0, 0, 0, 0.6, 1, 0, 0, 0, 0),
+        BIG_ROCK(22, 0.35, 50, 0, 0, 0, 1.0, 1, 0, 0, 0, 0);
 
         final double speed, arc, maxRise, length, minLength, width, ball;
         final int perShot;
         final double smoke;
         final int puffs;
         final double smokeSeconds;
+        final double flash;
 
         Kind(double speed, double arc, double maxRise, double length, double minLength, double width, double ball, int perShot,
-             double smoke, int puffs, double smokeSeconds) {
+             double smoke, int puffs, double smokeSeconds, double flash) {
             this.speed = speed;
             this.arc = arc;
             this.maxRise = maxRise;
@@ -98,6 +104,7 @@ public final class ArrowVolleys {
             this.smoke = smoke;
             this.puffs = puffs;
             this.smokeSeconds = smokeSeconds;
+            this.flash = flash;
         }
 
         static Kind of(int arm) {
@@ -119,12 +126,16 @@ public final class ArrowVolleys {
     private record Arrow(Kind kind, Vec3 from, Vec3 to, double rise, long start, double seconds) {
     }
 
-    /** Smoke where a shot was fired: where, from when, for how long, how big at the start. */
-    private record Puff(double x, double y, double z, long start, double seconds, double size) {
+    /** Smoke where a shot was fired, or its muzzle flash: where, from when, for how long, how big at the start. */
+    private record Puff(double x, double y, double z, long start, double seconds, double size, boolean flash) {
     }
 
     private static final List<Arrow> ARROWS = new ArrayList<>();
     private static final List<Puff> PUFFS = new ArrayList<>();
+    /** Each shooting formation's last target: its formation id and when it was last shot at. */
+    private static final java.util.Map<Integer, long[]> AIMS = new java.util.HashMap<>();
+    /** A formation that hasn't shot in this long has stopped aiming. */
+    private static final long AIM_MILLIS = 6000;
     private static final Random RANDOM = new Random();
 
     private ArrowVolleys() {
@@ -138,6 +149,7 @@ public final class ArrowVolleys {
             if (archers == null || target == null || archers.alive() <= 0) {
                 continue;
             }
+            AIMS.put(from[v], new long[]{to[v], now});
             Kind kind = Kind.of(v < arms.length ? arms[v] : -1);
             List<FormationSnapshot.Sprite> figures = archers.layout();
             int fired = Math.min(shots[v], MAX_PER_VOLLEY);
@@ -163,23 +175,37 @@ public final class ArrowVolleys {
         }
     }
 
-    /** The smoke of one shot: puffs from the muzzle a little way toward the target. */
+    /** The flash and smoke of one shot: a flash at the muzzle, then puffs from it a little way toward the target. */
     private static void smoke(Kind kind, Vec3 start, Vec3 aim, long when) {
         double dx = aim.x - start.x;
         double dz = aim.z - start.z;
         double d = Math.max(1e-3, Math.hypot(dx, dz));
+        double flashSeconds = FLASH + FLASH_PER_BLOCK * kind.flash;
+        if (kind.flash > 0 && PUFFS.size() < MAX_PUFFS) {
+            PUFFS.add(new Puff(start.x + dx / d * kind.flash * 0.5, start.y, start.z + dz / d * kind.flash * 0.5,
+                    when, flashSeconds, kind.flash, true));
+        }
+        when += (long) (flashSeconds * 500); // the smoke billows out as the flash dies
         for (int p = 0; p < kind.puffs && PUFFS.size() < MAX_PUFFS; p++) {
             double out = p * kind.smoke * 0.8;
             PUFFS.add(new Puff(start.x + dx / d * out + (RANDOM.nextDouble() - 0.5) * kind.smoke,
                     start.y - 0.4 + RANDOM.nextDouble() * kind.smoke * 0.5,
                     start.z + dz / d * out + (RANDOM.nextDouble() - 0.5) * kind.smoke,
-                    when, kind.smokeSeconds * (0.8 + RANDOM.nextDouble() * 0.4), kind.smoke * (1 - 0.15 * p)));
+                    when, kind.smokeSeconds * (0.8 + RANDOM.nextDouble() * 0.4), kind.smoke * (1 - 0.15 * p), false));
         }
+    }
+
+    /** The formation that {@code shooter} is shooting at, where it is drawn now; null if it hasn't shot lately. */
+    @javax.annotation.Nullable
+    public static FormationSnapshot aim(int shooter) {
+        long[] aim = AIMS.get(shooter);
+        return aim == null || Util.getMillis() - aim[1] > AIM_MILLIS ? null : DistantArmies.at((int) aim[0]);
     }
 
     public static void clear() {
         ARROWS.clear();
         PUFFS.clear();
+        AIMS.clear();
     }
 
     /**
@@ -281,7 +307,7 @@ public final class ArrowVolleys {
         mc.gameRenderer.lightTexture().turnOnLightLayer();
         draw(buffer, drawn);
 
-        // The smoke, see-through, after the solid shots: soft discs that swell, rise and fade; a flash as it is fired.
+        // The smoke, see-through, after the solid shots: a flash as it is fired, then soft discs that swell, rise and fade.
         BufferBuilder smoke = Tesselator.getInstance().begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR_LIGHTMAP);
         int puffs = 0;
         for (Arrow a : ARROWS) { // a thrown stone's dust trail: a few fading quads along its own arc, nothing stored
@@ -296,7 +322,7 @@ public final class ArrowVolleys {
                 continue;
             }
             double u = age / p.seconds();
-            double y = p.y() + age * 0.4;
+            double y = p.flash() ? p.y() : p.y() + age * 0.4;
             double hx = p.x() - eye.x;
             double hy = y - eye.y;
             double hz = p.z() - eye.z;
@@ -305,17 +331,23 @@ public final class ArrowVolleys {
                 continue;
             }
             double scale = DistantDepth.drawDistance(distance, renderBlocks) / distance;
-            double r = Math.max(p.size() * (0.5 + 1.1 * Math.sqrt(u)), distance * MIN_PUFF_PER_BLOCK) * scale;
+            double r = p.flash() ? Math.max(p.size(), distance * MIN_FLASH_PER_BLOCK * p.size()) * (0.6 + 0.4 * u) * scale
+                    : Math.max(p.size() * (0.5 + 1.1 * Math.sqrt(u)), distance * MIN_PUFF_PER_BLOCK) * scale;
             double px = hx * scale;
             double py = hy * scale;
             double pz = hz * scale;
             if (!visible(frustum, eye, px, py, pz, r)) {
                 continue;
             }
-            boolean flash = age < FLASH;
-            float alpha = flash ? 0.9F : (float) (0.55 * Math.pow(1 - u, 1.5));
-            disc(smoke, matrix, left, up, px, py, pz, flash ? r * 0.6 : r, flash ? FLASH_COLOUR : SMOKE, alpha, 0,
-                    flash ? LightTexture.FULL_BRIGHT : lightAt(mc, pos.set(p.x(), y, p.z())));
+            if (p.flash()) { // an orange blast round a white-hot core, bright whatever the light
+                float alpha = (float) (1 - u * u);
+                disc(smoke, matrix, left, up, px, py, pz, r, FLASH_COLOUR, alpha, 0, LightTexture.FULL_BRIGHT);
+                disc(smoke, matrix, left, up, px, py, pz, r * 0.45, FLASH_CORE, alpha, 0.3F, LightTexture.FULL_BRIGHT);
+                puffs += 2;
+                continue;
+            }
+            float alpha = (float) (0.55 * Math.pow(1 - u, 1.5));
+            disc(smoke, matrix, left, up, px, py, pz, r, SMOKE, alpha, 0, lightAt(mc, pos.set(p.x(), y, p.z())));
             puffs++;
         }
         RenderSystem.enableBlend();
