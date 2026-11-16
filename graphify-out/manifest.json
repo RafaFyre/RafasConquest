@@ -2052,9 +2052,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/GrandStrategy.java": {
-    "mtime": 1794792869.007479,
-    "seen": 1794792910.840378,
-    "ast_hash": "3e67016271cf928a3a0b8a47b17473b0",
+    "mtime": 1794793255.6380706,
+    "seen": 1794793316.2126617,
+    "ast_hash": "2533dae65e1b837b6ae8acf11b0882ea",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/blockstates/grand_strategy.json": {
