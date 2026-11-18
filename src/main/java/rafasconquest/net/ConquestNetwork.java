@@ -212,6 +212,17 @@ public final class ConquestNetwork {
                 .decoder(b -> new SeaSwell(b.readBoolean()))
                 .consumerMainThread((m, c) -> rafasconquest.core.Swell.calm(!m.on()))
                 .add();
+        CHANNEL.messageBuilder(Unhindered.class, 43, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeBoolean(m.strong());
+                    b.writeBoolean(m.hardy());
+                })
+                .decoder(b -> new Unhindered(b.readBoolean(), b.readBoolean()))
+                .consumerMainThread((m, c) -> {
+                    rafasconquest.peerage.WeaponSkills.localUnhindered = m.strong();
+                    rafasconquest.peerage.WeaponSkills.localHardy = m.hardy();
+                })
+                .add();
         CHANNEL.messageBuilder(GateView.class, 31, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(GateView::write)
                 .decoder(GateView::read)
@@ -413,6 +424,15 @@ public final class ConquestNetwork {
 
     public static void sendSeaSwell(ServerPlayer player, boolean on) {
         CHANNEL.send(player, new SeaSwell(on));
+    }
+
+    /** Server → client: whether the player is strong enough to ignore Epic Knights' penalties ({@link rafasconquest.peerage.WeaponSkills#unhindered}). */
+    public record Unhindered(boolean strong, boolean hardy) {
+    }
+
+    public static void sendUnhindered(ServerPlayer player) {
+        CHANNEL.send(player, new Unhindered(rafasconquest.peerage.WeaponSkills.unhindered(player),
+                rafasconquest.peerage.WeaponSkills.joustUnslowed(player)));
     }
 
     /** Server → client: the music of the place the player stands in, and whether it is a city ({@link rafasconquest.PlaceMusic}). */

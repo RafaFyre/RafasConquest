@@ -24,6 +24,7 @@ import java.util.Map;
  * dyed the side's colour, and surcoats and shields carry its banner. Without Epic Knights every kit is empty, and the callers keep their
  * vanilla gear. Epic Knights is never needed to build or run: its items are looked up by name.
  */
+@net.neoforged.fml.common.EventBusSubscriber(modid = RafasConquest.MOD_ID)
 public final class Armoury {
     static final String MOD = "magistuarmory";
     /** Epic Knights: Addon, optional on top: its looks join each land's, and characters' taste draws on all its pieces. */
@@ -601,6 +602,9 @@ public final class Armoury {
         }
         if (r.nextInt(5) < 2) { // a preferred blade, or a sword for an unarmed noble
             put(slots, EquipmentSlot.MAINHAND, stack(pick(r, TASTE_WEAPONS, addon.weapons()), -1));
+            if (twoHanded(slots.get(EquipmentSlot.MAINHAND))) {
+                slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+            }
         }
         int trim = r.nextBoolean() ? colour : TRIM_COLOURS[r.nextInt(TRIM_COLOURS.length)];
         for (int n = r.nextInt(4); n > 0; n--) {
@@ -798,11 +802,56 @@ public final class Armoury {
     /** A weapon, and a shield bearing the banner. */
     private static void hold(Map<EquipmentSlot, ItemStack> slots, @Nullable String weapon, @Nullable String shield, @Nullable ItemStack banner) {
         put(slots, EquipmentSlot.MAINHAND, stack(weapon, -1));
+        if (twoHanded(slots.get(EquipmentSlot.MAINHAND))) {
+            slots.put(EquipmentSlot.OFFHAND, ItemStack.EMPTY); // both hands on the weapon: no shield
+            return;
+        }
         ItemStack s = stack(shield, -1);
         if (s != null) {
             herald(s, banner);
         }
         put(slots, EquipmentSlot.OFFHAND, s);
+    }
+
+    private static Class<?> weaponClass;
+    private static java.lang.reflect.Field weaponType;
+    private static java.lang.reflect.Method twoHandedLevel;
+
+    /** Whether Epic Knights marks this weapon Two-Handed (I or II): nothing may be held in the other hand. */
+    public static boolean twoHanded(@Nullable ItemStack stack) {
+        if (stack == null || stack.isEmpty() || !available()) {
+            return false;
+        }
+        try {
+            if (weaponClass == null) {
+                weaponType = Class.forName("com.magistuarmory.item.MedievalWeaponItem").getField("type");
+                twoHandedLevel = weaponType.getType().getMethod("getTwoHanded");
+                weaponClass = weaponType.getDeclaringClass();
+            }
+            return weaponClass.isInstance(stack.getItem()) && (int) twoHandedLevel.invoke(weaponType.get(stack.getItem())) > 0;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /**
+     * A player holding a two-handed weapon has their off-hand item put back in their pack (dropped when it is full),
+     * unless their Strength is high enough to hold it in one hand.
+     */
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onPlayerTick(net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) {
+        if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) || player.tickCount % 5 != 0
+                || player.getOffhandItem().isEmpty() || !twoHanded(player.getMainHandItem())
+                || rafasconquest.peerage.WeaponSkills.unhindered(player)) {
+            return;
+        }
+        ItemStack off = player.getOffhandItem();
+        player.setItemInHand(net.minecraft.world.InteractionHand.OFF_HAND, ItemStack.EMPTY);
+        if (!player.getInventory().add(off)) {
+            player.drop(off, false);
+        }
+        player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                player.getMainHandItem().getHoverName().getString() + " takes both hands"), true);
     }
 
     /** An Epic Knights decoration on the piece worn in {@code slot} (a plume on a helmet, a rondel on a chest), dyed the side's colour. */

@@ -82,6 +82,7 @@ public final class ConquestEvents {
         if (event.getEntity() instanceof ServerPlayer player) {
             rafasconquest.net.ConquestNetwork.sendWorldStretch(player, rafasconquest.worldgen.HorizontalStretch.current());
             rafasconquest.net.ConquestNetwork.sendSeaSwell(player, !rafasconquest.core.Swell.calm());
+            rafasconquest.net.ConquestNetwork.sendUnhindered(player);
             rafasconquest.net.ConquestNetwork.sendUnitCards(player); // before anything numbering cards
             rafasconquest.peerage.PeerageSync.to(player);
             rafasconquest.politics.PoliticsSync.to(player);

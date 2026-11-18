@@ -9,7 +9,10 @@
     "ChunkMapCameraMixin",
     "CityVegetationMixin",
     "TrackedEntityCameraMixin",
-    "RecruitsArrowCleanerMixin"
+    "RecruitsArrowCleanerMixin",
+    "EpicKnightsTwoHandedMixin",
+    "EpicKnightsSlownessMixin",
+    "EpicKnightsJoustingMixin"
   ],
   "client": [
     "ClientChunkWindowMixin",

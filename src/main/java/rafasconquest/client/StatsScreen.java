@@ -35,7 +35,23 @@ public class StatsScreen extends Screen {
     }
 
     private int height() {
-        return 30 + view.rows().size() * ROW + 10;
+        return 30 + view.rows().size() * ROW + 10 + section();
+    }
+
+    /** The player-only section: a heading, then the attributes and weapon skills side by side, each boxed. */
+    private int section() {
+        return 8 + ROW + Math.max(view.attributes().size(), view.weapons().size()) * ROW + 12;
+    }
+
+    private void box(GuiGraphics g, int x, int y, int w, int h, java.util.List<String[]> rows, String suffix) {
+        g.fill(x - 1, y - 1, x + w + 1, y + h + 1, BORDER);
+        g.fill(x, y, x + w, y + h, PANEL);
+        int row = y + 5;
+        for (String[] r : rows) {
+            g.drawString(font, r[0] + suffix, x + 6, row, LABEL, false);
+            g.drawString(font, r[1], x + w - 6 - font.width(r[1]), row, TEXT, false);
+            row += ROW;
+        }
     }
 
     private int left() {
@@ -68,6 +84,14 @@ public class StatsScreen extends Screen {
             g.drawString(font, font.plainSubstrByWidth(r[1], WIDTH - 120), x + 110, row, TEXT, false);
             row += ROW;
         }
+        row += 8;
+        g.fill(x + 10, row - 4, x + WIDTH - 10, row - 3, BORDER);
+        g.drawCenteredString(font, "Attributes and Weapon Skills", x + WIDTH / 2, row, GOLD);
+        row += ROW;
+        int boxH = Math.max(view.attributes().size(), view.weapons().size()) * ROW + 4;
+        int half = (WIDTH - 30) / 2;
+        box(g, x + 10, row, half, boxH, view.attributes(), "");
+        box(g, x + 20 + half, row, half, boxH, view.weapons(), " Wep.");
         for (net.minecraft.client.gui.components.Renderable widget : renderables) { // the widgets only: 1.21 Screen.render would paint the background over what is drawn above
             widget.render(g, mouseX, mouseY, partialTick);
         }

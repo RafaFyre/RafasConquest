@@ -90,6 +90,15 @@ public final class PveCommands {
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .then(Commands.argument("rank", IntegerArgumentType.integer(1, 8))
                                                 .executes(ctx -> rankSet(ctx, EntityArgument.getPlayer(ctx, "player"), IntegerArgumentType.getInteger(ctx, "rank")))))))
+                .then(Commands.literal("stat")
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.argument("stat", StringArgumentType.word())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
+                                                java.util.Arrays.stream(rafasconquest.peerage.PlayerStats.ATTRIBUTES),
+                                                java.util.Arrays.stream(rafasconquest.peerage.PlayerStats.WEAPONS)), builder))
+                                        .then(Commands.argument("value", IntegerArgumentType.integer(0, 1000))
+                                                .executes(ctx -> statSet(ctx, EntityArgument.getPlayer(ctx, "player"),
+                                                        StringArgumentType.getString(ctx, "stat"), IntegerArgumentType.getInteger(ctx, "value")))))))
                 .then(Commands.literal("noble").requires(source -> source.hasPermission(2))
                         .then(Commands.argument("player", EntityArgument.player())
                                 .then(Commands.argument("noble", com.mojang.brigadier.arguments.BoolArgumentType.bool())
@@ -655,6 +664,19 @@ public final class PveCommands {
         rafasconquest.style.CharacterMarkers.character(player.serverLevel(), map, person, net.minecraft.core.BlockPos.containing(ahead), player.getYRot() + 180);
         String name = rafasconquest.peerage.Names.styled(map, map.realm().people().get(person));
         ctx.getSource().sendSuccess(() -> Component.literal(name + " stands before you"), true);
+        return 1;
+    }
+
+    /** Sets one of a player's attributes or weapon skills (for testing until the level system raises them). */
+    private static int statSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, String stat, int value) {
+        String name = java.util.stream.Stream.concat(java.util.Arrays.stream(rafasconquest.peerage.PlayerStats.ATTRIBUTES),
+                java.util.Arrays.stream(rafasconquest.peerage.PlayerStats.WEAPONS)).filter(s -> s.equalsIgnoreCase(stat)).findFirst().orElse(null);
+        if (name == null) {
+            ctx.getSource().sendFailure(Component.literal("No stat called " + stat));
+            return 0;
+        }
+        rafasconquest.peerage.PlayerStats.setScore(player, name, value);
+        ctx.getSource().sendSuccess(() -> Component.literal(player.getName().getString() + "'s " + name + " is now " + value), true);
         return 1;
     }
 
