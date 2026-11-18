@@ -392,7 +392,7 @@ public final class BattleScreen extends Screen {
     private static boolean onHull(Vec3 at, FormationSnapshot ship) {
         return rafasconquest.battle.FieldBattle.onHull(new rafasconquest.battle.BattlePlan.Point(at.x, at.z),
                 new rafasconquest.battle.BattlePlan.Point(ship.x(), ship.z()), ship.facingX(), ship.facingZ(),
-                rafasconquest.core.SeaLanes.Size.values()[ship.ship().hull()]);
+                rafasconquest.core.SeaLanes.Size.get(ship.ship().hull()));
     }
 
     /** One of the player's units aboard the ship whose hull is at {@code at}, or null. */
@@ -1280,7 +1280,7 @@ public final class BattleScreen extends Screen {
             if (s == null || !outlined.add(s.id())) {
                 continue;
             }
-            rafasconquest.core.SeaLanes.Size hull = rafasconquest.core.SeaLanes.Size.values()[s.ship().hull()];
+            rafasconquest.core.SeaLanes.Size hull = rafasconquest.core.SeaLanes.Size.get(s.ship().hull());
             double len = Math.max(1e-6, Math.hypot(s.facingX(), s.facingZ()));
             double fx = s.facingX() / len;
             double fz = s.facingZ() / len;

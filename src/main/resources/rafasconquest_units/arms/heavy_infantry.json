@@ -1,0 +1,29 @@
+{
+  "name": "Heavy infantry",
+  "icon": "minecraft:shield",
+  "kind": "foot",
+  "hits": 1.3,
+  "takes": 0.7,
+  "pace": 0.9,
+  "nerve": 1.3,
+  "traits": [
+    "shielded"
+  ],
+  "missile": "none",
+  "recruit": "recruits:recruit_shieldman",
+  "kit": "heavy_infantry",
+  "gear": {
+    "head": "minecraft:chainmail_helmet",
+    "chest": "minecraft:chainmail_chestplate",
+    "legs": "minecraft:chainmail_leggings",
+    "feet": "minecraft:chainmail_boots",
+    "mainhand": "minecraft:iron_sword",
+    "offhand": "banner_shield"
+  },
+  "figure": "heavy_infantry",
+  "front": 1,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": ""
+}

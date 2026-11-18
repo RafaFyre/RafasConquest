@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldBattleTest {
@@ -730,7 +731,7 @@ class FieldBattleTest {
                     .map(FieldBlock::pos).sorted(java.util.Comparator.comparingDouble(Point::z)).toList();
             for (int i = 1; i < ships.size(); i++) {
                 assertEquals(ships.get(0).x(), ships.get(i).x(), 1e-6, "not in one line abreast");
-                assertEquals(FieldBattle.FLEET_SPACING, ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not FLEET_SPACING apart");
+                assertEquals(FieldBattle.fleetSpacing(), ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not FLEET_SPACING apart");
             }
             double facing = battle.army(side).facingX();
             for (FieldBlock camp : battle.army(side).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.CAMP).toList()) {
@@ -747,7 +748,7 @@ class FieldBattleTest {
         battle.setType(BattleType.OCEAN);
         java.util.List<FieldBlock> ships = battle.army(0).blocks().stream().filter(b -> battle.holder(b) == b).toList();
         battle.place(ships.get(1), ships.get(0).pos());
-        assertTrue(ships.get(1).pos().distanceTo(ships.get(0).pos()) >= FieldBattle.SHIP_LENGTH - 1e-6, "placed on top of another ship");
+        assertTrue(ships.get(1).pos().distanceTo(ships.get(0).pos()) >= FieldBattle.shipLength() - 1e-6, "placed on top of another ship");
         for (FieldBlock aboard : battle.crew(ships.get(1))) {
             assertEquals(ships.get(1).pos(), aboard.pos(), "left behind when its ship was placed");
         }
@@ -781,6 +782,51 @@ class FieldBattleTest {
                     assertEquals(battle.holder(b).pos(), b.pos(), "a block left its ship");
                 }
             }
+        }
+    }
+
+    @Test
+    void aGunshipLiesOffSideOnAndFiresBroadsides() {
+        rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        List<String> right = gunship.gunsRight;
+        List<String> left = gunship.gunsLeft;
+        gunship.gunsRight = List.of("culverin", "culverin", "culverin", "culverin", "culverin");
+        gunship.gunsLeft = gunship.gunsRight;
+        try {
+            int[] mine = new int[BattlePlan.Arm.values().length];
+            mine[BattlePlan.Arm.GUNSHIP.ordinal()] = 20;
+            mine[BattlePlan.Arm.HEAVY_INFANTRY.ordinal()] = 20;
+            int[] theirs = new int[BattlePlan.Arm.values().length];
+            theirs[BattlePlan.Arm.HEAVY_INFANTRY.ordinal()] = 40;
+            FieldBattle battle = new FieldBattle(0, 0, new Point(0, 0), 1, 0, 3, FieldRules.RATES, WarPlan.NONE, WarPlan.NONE, mine, theirs);
+            battle.setType(BattleType.OCEAN);
+            List<FieldBlock> guns = battle.army(0).blocks().stream()
+                    .filter(b -> b.arm() == BattlePlan.Arm.GUNSHIP && battle.holder(b) == b).toList();
+            assertFalse(guns.isEmpty());
+            for (FieldBlock g : guns) {
+                assertEquals(FieldBlock.ShipKind.GUNSHIP, g.ship());
+                assertSame(gunship, g.hull(), "a gunship card sails its own ship card");
+            }
+            assertTrue(battle.army(0).blocks().stream().filter(b -> b.arm() == BattlePlan.Arm.HEAVY_INFANTRY)
+                    .noneMatch(b -> b.ship() == FieldBlock.ShipKind.GUNSHIP), "the rest still board");
+            int before = battle.army(1).standing();
+            boolean sideOn = false;
+            for (int s = 0; s < 240 && guns.stream().allMatch(g -> g.lashed().isEmpty()); s++) {
+                battle.second();
+                for (FieldBlock g : guns) {
+                    if (g.prey() != null && g.pos().distanceTo(g.prey().pos()) <= FieldBattle.gunRange(g) + 10) {
+                        double dx = g.prey().pos().x() - g.pos().x();
+                        double dz = g.prey().pos().z() - g.pos().z();
+                        double d = Math.hypot(dx, dz);
+                        sideOn |= Math.abs((g.settleX * dx + g.settleZ * dz) / d) < 0.1;
+                    }
+                }
+            }
+            assertTrue(sideOn, "never turned its beam to its mark at gun range");
+            assertTrue(battle.army(1).standing() < before, "its broadsides hit nobody before anyone boarded it");
+        } finally {
+            gunship.gunsRight = right;
+            gunship.gunsLeft = left;
         }
     }
 

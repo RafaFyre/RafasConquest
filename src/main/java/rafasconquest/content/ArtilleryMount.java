@@ -65,8 +65,8 @@ public class ArtilleryMount extends BlockEntity {
     }
 
     private void make(ServerLevel level, BlockState state, ServerSubLevel ship, Vec3 top) {
-        Machine weapon = state.getValue(ArtilleryBlock.WEAPON);
-        Entity e = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, weapon.id))
+        Machine weapon = state.getValue(ArtilleryBlock.WEAPON).machine();
+        Entity e = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.parse(weapon.entity()))
                 .map(t -> t.create(level)).orElse(null);
         made = true;
         setChanged();
@@ -79,6 +79,9 @@ public class ArtilleryMount extends BlockEntity {
         e.moveTo(top.x, top.y, top.z, yaw, 0);
         level.addFreshEntity(e);
         engine = e.getUUID();
+        if (rafasconquest.bridge.SableLink.battleShip(ship)) {
+            return; // a battle gunship: its gunners are the battle's soldiers at its Character Markers (RecruitsBattle.manGun)
+        }
         var crew = com.talhanation.recruits.init.ModEntityTypes.SIEGE_ENGINEER.get().create(level);
         if (crew != null) {
             crew.moveTo(top.x, top.y, top.z, yaw, 0);

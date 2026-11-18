@@ -140,7 +140,8 @@ public final class FieldBattle {
                 }
                 boolean command = b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER;
                 if (!command) {
-                    b.ship = kinds.computeIfAbsent(b.platoon, p -> b.arm.engine() || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
+                    b.ship = kinds.computeIfAbsent(b.platoon, p -> b.arm.ship() != null && b.arm.ship().gunship() ? FieldBlock.ShipKind.GUNSHIP
+                            : b.arm.engine() || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
                             : b.arm.shoots() ? FieldBlock.ShipKind.ARCHERS
                             : b.arm.shielded() ? FieldBlock.ShipKind.SWORDSMEN
                             : swordsmen[0]++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN);
@@ -150,11 +151,14 @@ public final class FieldBattle {
             for (List<FieldBlock> crew : byShip.values()) {
                 crew.sort(Comparator.comparingInt((FieldBlock b) -> b.duty == Duty.GENERAL ? 0 : 1).thenComparingInt(b -> b.id));
                 boolean flagship = crew.get(0).duty == Duty.GENERAL || crew.get(0).duty == Duty.GUARD || crew.get(0).duty == Duty.BEARER;
+                rafasconquest.core.SeaLanes.Size named = crew.get(0).arm.ship(); // the ship its card sails, if it names one
                 for (int i = 0; i < crew.size(); i++) {
                     FieldBlock b = crew.get(i);
                     b.shipId = crew.get(0).id;
                     b.berth = i;
-                    b.hull = flagship ? rafasconquest.core.SeaLanes.Size.XLARGE : rafasconquest.core.SeaLanes.Size.XXLARGE;
+                    b.hull = flagship ? rafasconquest.core.SeaLanes.Size.battle("flagship", rafasconquest.core.SeaLanes.Size.XLARGE)
+                            : named != null ? named
+                            : crew.get(0).ship == FieldBlock.ShipKind.CAMP ? rafasconquest.core.SeaLanes.Size.battle("cargo", rafasconquest.core.SeaLanes.Size.unitShip()) : rafasconquest.core.SeaLanes.Size.unitShip();
                 }
                 crews.put(crew.get(0).id, crew);
             }
@@ -263,7 +267,7 @@ public final class FieldBattle {
     /** The middle of block {@code b}'s section of its ship's deck, {right, back} of the ship's middle. */
     public Point deckSection(FieldBlock b) {
         int crew = crew(b).size();
-        int abreast = b.hull.width >= rafasconquest.core.SeaLanes.Size.XXLARGE.width ? 2 : 1;
+        int abreast = b.hull.width >= rafasconquest.core.SeaLanes.Size.unitShip().width ? 2 : 1;
         int rows = (crew + abreast - 1) / abreast;
         return new Point((b.berth % abreast - (abreast - 1) / 2.0) * (DECK_FILES + 0.3) * DECK_SPACING,
                 (b.berth / abreast - (rows - 1) / 2.0) * DECK_RANKS * DECK_SPACING);
@@ -292,7 +296,9 @@ public final class FieldBattle {
     }
 
     /** A fleet deploys in one line abreast, its ships this far apart, centre to centre. */
-    public static final double FLEET_SPACING = 26;
+    public static double fleetSpacing() {
+        return 2.0 * rafasconquest.core.SeaLanes.Size.unitShip().width;
+    }
 
     /** The camp's supply ships deploy this far astern of the fleet's line. */
     public static final double CAMP_ASTERN = 80;
@@ -301,29 +307,31 @@ public final class FieldBattle {
      * A fleet's line stands this far behind its army's front, half a unit's ship, so the two fleets' bows start as far apart as
      * the armies' fronts would (well out of grapple-hook reach).
      */
-    public static final double FLEET_BACK = rafasconquest.core.SeaLanes.Size.XXLARGE.length / 2.0;
+    public static double fleetBack() {
+        return rafasconquest.core.SeaLanes.Size.unitShip().length / 2.0;
+    }
 
     /** In a sea battle the two fleets start this much further apart than the armies' fronts would. */
     public static final double FLEETS_APART = 100;
 
     /**
-     * A fleet deploys in one line abreast across its army's front, {@link #FLEET_SPACING} apart, its ships in the order
-     * they stood from left to right, {@code extra} further back than {@link #FLEET_BACK}; the camp's supply ships keep
+     * A fleet deploys in one line abreast across its army's front, {@link #fleetSpacing} apart, its ships in the order
+     * they stood from left to right, {@code extra} further back than {@link #fleetBack}; the camp's supply ships keep
      * well back, in a line of their own {@link #CAMP_ASTERN} behind it.
      */
     private static void spreadShips(FieldArmy army, double extra) {
         List<FieldBlock> fleet = army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
                 .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
                 .toList();
-        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + extra);
-        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), FLEET_BACK + extra + CAMP_ASTERN);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), fleetBack() + extra);
+        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), fleetBack() + extra + CAMP_ASTERN);
     }
 
     /** Ships in one line abreast, centred on the army's front, {@code back} behind it. */
     private static void lineAbreast(FieldArmy army, List<FieldBlock> ships, double back) {
         for (int i = 0; i < ships.size(); i++) {
             FieldBlock b = ships.get(i);
-            b.pos = BattlePlan.place(army.origin, army.facingX, army.facingZ, (i - (ships.size() - 1) / 2.0) * FLEET_SPACING, back);
+            b.pos = BattlePlan.place(army.origin, army.facingX, army.facingZ, (i - (ships.size() - 1) / 2.0) * fleetSpacing(), back);
             b.line = b.pos;
             b.deployed = b.pos;
             b.facingX = army.facingX; // bows toward the enemy, and so they lie whenever they keep their places
@@ -341,8 +349,8 @@ public final class FieldBattle {
                 double gap = (p.pos.x() - b.pos.x()) * army.facingX + (p.pos.z() - b.pos.z()) * army.facingZ;
                 double across = (b.pos.x() - p.pos.x()) * -army.facingZ + (b.pos.z() - p.pos.z()) * army.facingX;
                 // The slack: a ship dropped exactly a length astern mustn't read as a hair short and be dropped again forever.
-                if (p != b && Math.abs(across) < SHIP_BEAM && Math.abs(gap) < SHIP_LENGTH - 1e-6) {
-                    b.pos = b.pos.plus(-army.facingX * (SHIP_LENGTH - gap), -army.facingZ * (SHIP_LENGTH - gap));
+                if (p != b && Math.abs(across) < shipBeam() && Math.abs(gap) < shipLength() - 1e-6) {
+                    b.pos = b.pos.plus(-army.facingX * (shipLength() - gap), -army.facingZ * (shipLength() - gap));
                     fouled = true;
                 }
             }
@@ -352,10 +360,14 @@ public final class FieldBattle {
     }
 
     /** The room a battle ship needs abeam: its beam (a unit's ship, the widest) and a few blocks clear. */
-    static final double SHIP_BEAM = rafasconquest.core.SeaLanes.Size.XXLARGE.width + 3;
+    static double shipBeam() {
+        return rafasconquest.core.SeaLanes.Size.unitShip().width + 3;
+    }
 
     /** A battle ship's length, the room it needs fore and aft (a unit's ship, the longest, and a little room). */
-    public static final double SHIP_LENGTH = rafasconquest.core.SeaLanes.Size.XXLARGE.length + 2;
+    public static double shipLength() {
+        return rafasconquest.core.SeaLanes.Size.unitShip().length + 2;
+    }
     /** Shock ships sail this much faster than the others. */
     static final double SHOCK_PACE = 1.6;
     /**
@@ -436,9 +448,52 @@ public final class FieldBattle {
         return e.hull.length / 2.0 - 2;
     }
 
+    /** A gunship keeps this share of its shortest gun's reach from its mark. */
+    static final double GUN_STANDOFF = 0.8;
+
+    /** How far off its mark a gunship lies: within its shortest gun's reach (bow range with no guns). */
+    static double gunRange(FieldBlock b) {
+        double reach = java.util.stream.Stream.concat(b.hull.gunsRight.stream(), b.hull.gunsLeft.stream())
+                .map(Machine::byId).filter(java.util.Objects::nonNull).mapToDouble(m -> m.reach).min().orElse(0);
+        return reach > 0 ? reach * GUN_STANDOFF : ARCHER_STANDOFF;
+    }
+
+    /**
+     * A gunship that is only numbers fires the guns on the side its mark lies (its mark within 45 degrees of its beam),
+     * each in reach once a reload, at random; its shot falls on the mark's unit as arrows do. A real one's guns are
+     * Siegeworks engines its gunners work themselves.
+     * shortcut: guns fire while any of the unit lives, whoever stands at them; scale by gunners left if that matters.
+     */
+    private void broadside(FieldBlock b, List<FieldBlock> targets, List<Double> damages) {
+        FieldBlock foe = b.prey;
+        if (foe == null || foe.alive == 0 || !foe.afloat || foe.side == b.side) {
+            return;
+        }
+        double dx = foe.pos.x() - b.pos.x();
+        double dz = foe.pos.z() - b.pos.z();
+        double along = dx * b.facingX + dz * b.facingZ;
+        double right = dx * -b.facingZ + dz * b.facingX;
+        if (Math.abs(along) > Math.abs(right)) {
+            return; // ahead or astern: no gun bears
+        }
+        double d = Math.hypot(dx, dz);
+        double damage = 0;
+        for (String id : right >= 0 ? b.hull.gunsRight : b.hull.gunsLeft) {
+            Machine m = Machine.byId(id);
+            if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
+                damage += m.damage;
+            }
+        }
+        if (damage > 0) {
+            FieldBlock hit = spread(b, crew(foe));
+            targets.add(hit);
+            damages.add(damage * hit.arm.takes());
+        }
+    }
+
     /** How many blocks a second a formation's ship sails. */
     public static double shipSpeed(FieldBlock block) {
-        return block.ship == FieldBlock.ShipKind.SHOCK ? SHIP_SPEED * SHOCK_PACE : SHIP_SPEED;
+        return (block.ship == FieldBlock.ShipKind.SHOCK ? SHIP_SPEED * SHOCK_PACE : SHIP_SPEED) * block.hull.speed;
     }
 
     /** Two enemy ships grapple: their soldiers may now board each other's decks (and only now, at sea, fight hand to hand). */
@@ -526,7 +581,8 @@ public final class FieldBattle {
                         if (b.ledTarget.afloat && b.ship != null && b.ship != FieldBlock.ShipKind.CAMP) {
                             // The player's order, whatever the ship is for: board it abreast, or ram it if told to.
                             ordered = previous;
-                            kind = b.ledRam ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
+                            kind = b.ship == FieldBlock.ShipKind.GUNSHIP ? FieldBlock.ShipKind.GUNSHIP // sent at a ship: it engages it with its guns
+                                    : b.ledRam ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN;
                         }
                     }
                 }
@@ -555,6 +611,19 @@ public final class FieldBattle {
                     case ARCHERS -> {
                         b.line = standOff(b, foe, ARCHER_STANDOFF);
                         b.prey = mark(b, enemy, previous);
+                    }
+                    case GUNSHIP -> {
+                        // Lies off its mark at gun range and turns its side to it, the nearer way round.
+                        FieldBlock e = ordered != null ? ordered
+                                : previous != null && previous.side != b.side && previous.alive > 0 && previous.afloat ? previous : foe;
+                        b.prey = e;
+                        b.line = standOff(b, e, gunRange(b));
+                        double d = Math.max(1e-6, b.pos.distanceTo(e.pos));
+                        double px = -(e.pos.z() - b.pos.z()) / d;
+                        double pz = (e.pos.x() - b.pos.x()) / d;
+                        double turn = px * b.facingX + pz * b.facingZ < 0 ? -1 : 1;
+                        b.settleX = turn * px;
+                        b.settleZ = turn * pz;
                     }
                     case SWORDSMEN -> {
                         Target t = claim(b, ordered != null ? List.of(ordered) : boardable, previous, taken);
@@ -3572,7 +3641,7 @@ public final class FieldBattle {
                     if (siege != null) {
                         damage *= siege.meleeFactor(block, foe);
                     }
-                    if (block.arm == Arm.HALBERDIERS && foe.arm.mounted()) {
+                    if (block.arm.has("anti_horse") && foe.arm.mounted()) {
                         damage *= FieldRules.HALBERDS_VS_HORSE;
                     }
                     if (block.braced && foe.arm.mounted() && sideOf(block, foe) == FieldRules.Side.FRONT) {
@@ -3586,6 +3655,9 @@ public final class FieldBattle {
                 block.contactFoe = null;
                 if (block.arm.shoots() && block.arrows > 0) {
                     shoot(army, block, enemy, targets, damages);
+                }
+                if (block.ship == FieldBlock.ShipKind.GUNSHIP && block.afloat && block == holder(block) && !block.live) {
+                    broadside(block, targets, damages);
                 }
             }
         }
@@ -3839,14 +3911,14 @@ public final class FieldBattle {
             foe = spread(archers, crew(foe)); // shooting at a ship: its unit's blocks take the arrows, the general last
         }
         int shots = (int) Math.min(archers.arrows, machine != null ? engineShots(archers)
-                : Math.ceil(archers.alive * (archers.arm == Arm.MUSKETEERS ? FieldRules.SHOTS_PER_SECOND : FieldRules.ARROWS_PER_SECOND)));
+                : Math.ceil(archers.alive * (archers.arm.missile() == Arm.Missile.SHOT ? FieldRules.SHOTS_PER_SECOND : FieldRules.ARROWS_PER_SECOND)));
         archers.arrows -= shots;
         if (shots > 0) {
             volleys.add(new Volley(archers, foe, shots));
         }
         targets.add(foe);
         damages.add((machine != null ? shots * machine.damage * foe.arm.takes() // no shield stops shot or stone
-                : archers.arm == Arm.MUSKETEERS ? shots * FieldRules.shotDamage(foe.arm)
+                : archers.arm.missile() == Arm.Missile.SHOT ? shots * FieldRules.shotDamage(archers.arm, foe.arm)
                 : shots * rates.arrowDamage() * FieldRules.arrowFactor(sideOf(foe, archers), foe.arm))
                 * (siege == null ? 1 : siege.arrowFactor(foe)));
     }

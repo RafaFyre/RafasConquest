@@ -1,0 +1,26 @@
+{
+  "name": "Culverin",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 15,
+  "age": "gunpowder",
+  "homeland": null,
+  "field": true,
+  "attack": false,
+  "defence": true,
+  "reach": 120,
+  "reload": 15,
+  "damage": 42,
+  "batter": 0,
+  "ammo": {
+    "black_powder": 64,
+    "cannon_ball": 16,
+    "ramrod": 1
+  },
+  "projectile": "ball",
+  "sound": "rafasconquest:battle.culverin",
+  "body": "cannon",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

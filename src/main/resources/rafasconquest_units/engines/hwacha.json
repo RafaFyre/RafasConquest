@@ -1,0 +1,24 @@
+{
+  "name": "Hwacha",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 12,
+  "age": "gunpowder",
+  "homeland": "jungle",
+  "field": true,
+  "attack": false,
+  "defence": false,
+  "reach": 90,
+  "reload": 35,
+  "damage": 84,
+  "batter": 0,
+  "ammo": {
+    "so_singijeon": 64
+  },
+  "projectile": "rocket",
+  "sound": "",
+  "body": "hwacha",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

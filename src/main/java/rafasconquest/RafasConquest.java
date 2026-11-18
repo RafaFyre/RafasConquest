@@ -37,5 +37,8 @@ public class RafasConquest {
         rafasconquest.battle.BattlePlan.zweihandlers = rafasconquest.gear.Armoury.available(); // they need Epic Knights' swords
         rafasconquest.battle.BattlePlan.muskets = net.neoforged.fml.ModList.get().isLoaded("musketmod"); // Recruits' crossbowmen fire its muskets
         rafasconquest.battle.BattlePlan.siegeworks = net.neoforged.fml.ModList.get().isLoaded("siegeworks"); // the siege train's engines
+        rafasconquest.battle.BattlePlan.mods = id -> net.neoforged.fml.ModList.get().isLoaded(id); // for cards that need a mod
+        rafasconquest.battle.UnitCards.load(net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("mods").resolve("RafasConquest").resolve("units"));
+        rafasconquest.style.ShipHulls.load(net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("mods").resolve("RafasConquest").resolve("units").resolve("ships"));
     }
 }

@@ -49,6 +49,7 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.animal.horse.Horse;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
@@ -1120,7 +1121,8 @@ public final class RecruitsBattle {
         }
         if (block.afloat()) {
             Point spot = deckSpot(block, i);
-            soldier.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z()); // onto its ship's deck, not the sea floor
+            soldier.teleportTo(spot.x(), deckY(block, i), spot.z()); // onto its ship's deck, not the sea floor
+            manGun(soldier, block, i);
         }
         if (block.champion()) {
             makeChampion(soldier);
@@ -1145,8 +1147,8 @@ public final class RecruitsBattle {
             List<rafasconquest.battle.Machine> allowed = new ArrayList<>(rafasconquest.battle.Machine.allowed(rafasconquest.core.WorldFeatures.ages().first(),
                     rafasconquest.gear.Armoury.homeland(ConquestRuntime.map(), sides[s].faction().id()), field.type(), s == 1));
             if (strategems != null) {
-                allowed.removeIf(m -> m == rafasconquest.battle.Machine.SIEGE_TOWER && !strategems.contains(rafasconquest.battle.Siege.Engine.TOWERS)
-                        || m == rafasconquest.battle.Machine.BATTERING_RAM && !strategems.contains(rafasconquest.battle.Siege.Engine.RAMS));
+                allowed.removeIf(m -> m.role() == rafasconquest.battle.Machine.Role.TOWER && !strategems.contains(rafasconquest.battle.Siege.Engine.TOWERS)
+                        || m.role() == rafasconquest.battle.Machine.Role.RAM && !strategems.contains(rafasconquest.battle.Siege.Engine.RAMS));
             }
             field.equip(s, allowed);
         }
@@ -1160,7 +1162,7 @@ public final class RecruitsBattle {
      */
     private void work(AbstractRecruitEntity soldier, rafasconquest.battle.Machine machine, float yaw) {
         Entity engine = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
-                .getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(rafasconquest.battle.Machine.MOD, machine.id))
+                .getOptional(net.minecraft.resources.ResourceLocation.parse(machine.entity()))
                 .map(t -> t.create(level)).orElse(null);
         if (engine == null) {
             return; // Siegeworks is gone, or renamed it
@@ -1276,6 +1278,9 @@ public final class RecruitsBattle {
                     if (!real && health[i] <= 0) {
                         continue;
                     }
+                    if (block.afloat() && block.ship() == FieldBlock.ShipKind.GUNSHIP && post(block, i) == null) {
+                        continue; // a gunship's crew are real only at its posts; the rest stay below decks, numbers
+                    }
                     Point at = real ? new Point(s.getX(), s.getZ()) : slot(block, front, i);
                     double distance = Double.MAX_VALUE;
                     for (Point w : watchers) {
@@ -1357,18 +1362,15 @@ public final class RecruitsBattle {
 
     // ---- the soldiers ----
 
+    /** A card's soldiers' entity, as its file names it; a name that isn't a recruit's gives plain recruits (horsemen if mounted). */
+    @SuppressWarnings("unchecked")
     private static EntityType<? extends AbstractRecruitEntity> type(Arm arm) {
-        if (arm.engine()) {
-            return ModEntityTypes.SIEGE_ENGINEER.get();
+        ResourceLocation id = ResourceLocation.tryParse(arm.recruit());
+        EntityType<?> type = id == null ? null : net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
+        if (type != null && type.getBaseClass() != null && AbstractRecruitEntity.class.isAssignableFrom(type.getBaseClass())) {
+            return (EntityType<? extends AbstractRecruitEntity>) type;
         }
-        return switch (arm) {
-            case LEVY, SKIRMISHERS, ZWEIHANDLERS, HALBERDIERS -> ModEntityTypes.RECRUIT.get();
-            case HEAVY_INFANTRY -> ModEntityTypes.RECRUIT_SHIELDMAN.get();
-            case ARCHERS -> ModEntityTypes.BOWMAN.get();
-            case MUSKETEERS -> ModEntityTypes.CROSSBOWMAN.get();
-            case CAVALRY, HEAVY_CAVALRY -> ModEntityTypes.HORSEMAN.get();
-            default -> ModEntityTypes.SIEGE_ENGINEER.get();
-        };
+        return arm.engine() ? ModEntityTypes.SIEGE_ENGINEER.get() : arm.mounted() ? ModEntityTypes.HORSEMAN.get() : ModEntityTypes.RECRUIT.get();
     }
 
     /** The slots a figure shows, in {@link ConquestNetwork.BattleSnapshot#gear}'s order (the horse's armour last). */
@@ -1404,7 +1406,7 @@ public final class RecruitsBattle {
                 item(gear, s, sample.getItemBySlot(SHOWN[s]));
             }
             if (mountedAshore) {
-                boolean iron = block.duty() == Duty.GUARD || block.duty() == Duty.GENERAL || block.arm() == Arm.HEAVY_CAVALRY;
+                boolean iron = block.duty() == Duty.GUARD || block.duty() == Duty.GENERAL || block.arm().has("barded");
                 item(gear, SHOWN.length, horseArmour(side, iron));
             }
             sample.discard();
@@ -1518,7 +1520,7 @@ public final class RecruitsBattle {
                 horse.moveTo(soldier.getX(), soldier.getY(), soldier.getZ(), yaw, 0);
                 horse.setTamed(true);
                 horse.equipSaddle(new ItemStack(Items.SADDLE), null);
-                horse.getSlot(401).set(horseArmour(side, arm == Arm.HEAVY_CAVALRY)); // 401: the horse's armour slot
+                horse.getSlot(401).set(horseArmour(side, arm.has("barded"))); // 401: the horse's armour slot
                 freeze(horse, yaw);
                 level.addFreshEntity(horse);
                 soldier.startRiding(horse, true);
@@ -1528,7 +1530,7 @@ public final class RecruitsBattle {
         at += 15 - 4;
         for (rafasconquest.battle.Machine machine : rafasconquest.battle.Machine.values()) {
             EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(
-                    net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(rafasconquest.battle.Machine.MOD, machine.id)).orElse(null);
+                    net.minecraft.resources.ResourceLocation.parse(machine.entity())).orElse(null);
             Entity engine = type == null ? null : type.create(level);
             if (engine == null) {
                 continue; // no Siegeworks
@@ -1616,60 +1618,37 @@ public final class RecruitsBattle {
     }
 
     /**
-     * A block's soldier armed and armoured for its kind, over its dyed leather ({@link #dress}): vanilla gear, then
-     * Epic Knights' kit where it is installed. A captain keeps the banner on its head. Vanilla has no spear (1.21.1),
-     * so vanilla levies carry stone swords and the vanilla spearmen iron ones.
+     * A block's soldier armed and armoured as its card's file says, over its dyed leather ({@link #dress}): its vanilla
+     * gear, then its Epic Knights kit where that is installed. A captain keeps the banner on its head. Vanilla has no
+     * spear (1.21.1), so vanilla levies carry stone swords and the vanilla spearmen iron ones.
      */
     private static void kitFor(AbstractRecruitEntity soldier, Side side, Arm arm, Role role) {
         ItemStack head = soldier.getItemBySlot(EquipmentSlot.HEAD).copy();
-        arm = arm.engine() ? Arm.ENGINES : arm; // every engine's crews dress alike
-        switch (arm) {
-            case LEVY -> hand(soldier, Items.STONE_SWORD, null);
-            case HEAVY_INFANTRY -> {
-                armour(soldier, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
-                hand(soldier, Items.IRON_SWORD, bannerShield(side));
-            }
-            case SKIRMISHERS, ZWEIHANDLERS -> {
-                armour(soldier, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
-                hand(soldier, Items.IRON_SWORD, ItemStack.EMPTY);
-            }
-            case CAVALRY -> {
-                armour(soldier, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
-                hand(soldier, Items.IRON_SWORD, bannerShield(side));
-            }
-            case HEAVY_CAVALRY -> {
-                armour(soldier, Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS);
-                hand(soldier, Items.DIAMOND_SWORD, bannerShield(side));
-            }
-            case ARCHERS -> {
-            }
-            case MUSKETEERS -> {
-                equip(soldier, EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)); // over the dyed leather
-                ItemStack musket = rafasconquest.gear.Armoury.musket();
-                if (musket != null) {
-                    hand(soldier, musket.getItem(), ItemStack.EMPTY);
-                }
-            }
-            case HALBERDIERS -> {
-                armour(soldier, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
-                hand(soldier, Items.IRON_AXE, ItemStack.EMPTY);
-            }
-            default -> {
+        EquipmentSlot[] worn = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+        for (int i = 0; i < worn.length; i++) {
+            ItemStack piece = gear(arm.gear(i), side);
+            if (piece != null) {
+                equip(soldier, worn[i], piece);
             }
         }
-        wear(soldier, side, switch (arm) {
-            case LEVY -> rafasconquest.gear.Armoury.Kit.LEVY;
-            case HEAVY_INFANTRY -> rafasconquest.gear.Armoury.Kit.HEAVY_INFANTRY;
-            case SKIRMISHERS -> rafasconquest.gear.Armoury.Kit.SKIRMISHER;
-            case ZWEIHANDLERS -> rafasconquest.gear.Armoury.Kit.ZWEIHANDLER;
-            case ARCHERS -> rafasconquest.gear.Armoury.Kit.ARCHER;
-            case MUSKETEERS -> rafasconquest.gear.Armoury.Kit.MUSKETEER;
-            case HALBERDIERS -> rafasconquest.gear.Armoury.Kit.HALBERDIER;
-            case CAVALRY -> rafasconquest.gear.Armoury.Kit.CAVALRY;
-            case HEAVY_CAVALRY -> rafasconquest.gear.Armoury.Kit.HEAVY_CAVALRY;
-            default -> rafasconquest.gear.Armoury.Kit.ARCHER; // crews in the archers' gambesons, their own tools in hand
-        });
-        ItemStack halberd = arm == Arm.HEAVY_CAVALRY && soldier.getRandom().nextBoolean() ? rafasconquest.gear.Armoury.halberd() : null;
+        ItemStack weapon = gear(arm.gear(4), side);
+        if (weapon != null || arm.gear(4).isEmpty()) { // a weapon it can't have (no Musket Mod): its hands as they were
+            if (weapon != null) {
+                equip(soldier, EquipmentSlot.MAINHAND, weapon);
+            }
+            ItemStack offhand = gear(arm.gear(5), side);
+            if (offhand != null) {
+                equip(soldier, EquipmentSlot.OFFHAND, offhand);
+            }
+        }
+        rafasconquest.gear.Armoury.Kit kit;
+        try {
+            kit = rafasconquest.gear.Armoury.Kit.valueOf(arm.kit().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            kit = rafasconquest.gear.Armoury.Kit.ARCHER; // in the archers' gambesons
+        }
+        wear(soldier, side, kit);
+        ItemStack halberd = arm.has("halberd_sometimes") && soldier.getRandom().nextBoolean() ? rafasconquest.gear.Armoury.halberd() : null;
         if (halberd != null) {
             equip(soldier, EquipmentSlot.MAINHAND, halberd);
         }
@@ -1678,19 +1657,23 @@ public final class RecruitsBattle {
         }
     }
 
-    private static void armour(AbstractRecruitEntity soldier, Item head, Item chest, Item legs, Item feet) {
-        equip(soldier, EquipmentSlot.HEAD, new ItemStack(head));
-        equip(soldier, EquipmentSlot.CHEST, new ItemStack(chest));
-        equip(soldier, EquipmentSlot.LEGS, new ItemStack(legs));
-        equip(soldier, EquipmentSlot.FEET, new ItemStack(feet));
-    }
-
-    /** A weapon, and in the other hand {@code offhand} (null leaves what it has). */
-    private static void hand(AbstractRecruitEntity soldier, Item weapon, @Nullable ItemStack offhand) {
-        equip(soldier, EquipmentSlot.MAINHAND, new ItemStack(weapon));
-        if (offhand != null) {
-            equip(soldier, EquipmentSlot.OFFHAND, offhand);
-        }
+    /**
+     * A piece of a card's gear: an item id, "banner_shield" (a shield in the side's banner), "musket" (Musket Mod's),
+     * "none" (an empty hand); null to leave the slot as it is ("", or an item not installed).
+     */
+    @Nullable
+    private static ItemStack gear(String spec, Side side) {
+        return switch (spec) {
+            case "" -> null;
+            case "none" -> ItemStack.EMPTY;
+            case "banner_shield" -> bannerShield(side);
+            case "musket" -> rafasconquest.gear.Armoury.musket();
+            default -> {
+                ResourceLocation id = ResourceLocation.tryParse(spec);
+                Item item = id == null ? null : net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+                yield item == null ? null : new ItemStack(item);
+            }
+        };
     }
 
     /** Puts on an Epic Knights kit in the side's land's style, colour and banner (nothing, without Epic Knights). */
@@ -2199,7 +2182,7 @@ public final class RecruitsBattle {
     private void armourHorses(Live l) {
         for (AbstractRecruitEntity rider : l.living()) {
             if (rider.getVehicle() instanceof Horse horse && ours.add(horse.getUUID())) {
-                boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL || l.block.arm() == Arm.HEAVY_CAVALRY;
+                boolean iron = l.block.duty() == Duty.GUARD || l.block.duty() == Duty.GENERAL || l.block.arm().has("barded");
                 horse.getSlot(401).set(horseArmour(sides[l.block.side()], iron)); // 401: the horse's armour slot
             }
         }
@@ -2267,7 +2250,10 @@ public final class RecruitsBattle {
     }
 
     /** A soldier sent aboard starts this far above the sea, to drop onto the deck (the keel sits a block under it). */
-    private static final int DECK_DROP = rafasconquest.style.ShipHulls.DECK + 2;
+    /** Onto a ship's deck from just above it: its card's deck height and a little. */
+    private static int deckDrop(FieldBlock block) {
+        return block.hull().deck + 2;
+    }
     /** A ship that has put its soldiers ashore stays moored where it landed this long, in battle seconds, then goes. */
     private static final int MOORED_SECONDS = 30;
 
@@ -2520,8 +2506,49 @@ public final class RecruitsBattle {
         Point centre = ship == null ? block.pos() : new Point(ship[0], ship[1]);
         double dirX = ship == null ? block.facingX() : ship[2];
         double dirZ = ship == null ? block.facingZ() : ship[3];
-        Point spot = field.deckSpot(block, i);
+        rafasconquest.core.SeaLanes.Size.Post post = post(block, i);
+        // A hull's right (seen from astern) is its -x, and astern its -z.
+        Point spot = post != null ? new Point(-post.x(), -post.z()) : field.deckSpot(block, i);
         return BattlePlan.place(centre, dirX, dirZ, spot.x(), spot.z());
+    }
+
+    /**
+     * A gunship's soldier i's post (its hull's Character Markers, in its unit's crew order, block by block); null for any
+     * other ship's, and for those past the last post, who stay below decks.
+     */
+    @org.jetbrains.annotations.Nullable
+    private static rafasconquest.core.SeaLanes.Size.Post post(FieldBlock block, int i) {
+        if (block.ship() != FieldBlock.ShipKind.GUNSHIP) {
+            return null;
+        }
+        List<rafasconquest.core.SeaLanes.Size.Post> posts = block.hull().posts;
+        int n = block.berth() * BattlePlan.SOLDIERS_PER_FORMATION + i;
+        return n < posts.size() ? posts.get(n) : null;
+    }
+
+    /** The height soldier i is put aboard at: their post's, else just above the deck. */
+    private double deckY(FieldBlock block, int i) {
+        rafasconquest.core.SeaLanes.Size.Post post = post(block, i);
+        return level.getSeaLevel() + (post != null ? post.y() + 1 : deckDrop(block));
+    }
+
+    /**
+     * A gunner at a post beside a gun works it: the gun's engine (its Artillery Block's, {@link rafasconquest.content.ArtilleryMount})
+     * nearest them, not yet worked. Tried again while they keep the deck, as the ship's engines come a second after it.
+     */
+    private void manGun(AbstractRecruitEntity soldier, FieldBlock block, int i) {
+        rafasconquest.core.SeaLanes.Size.Post post = post(block, i);
+        rafasconquest.battle.Machine gun = post == null || post.gun().isEmpty() ? null : rafasconquest.battle.Machine.byId(post.gun());
+        if (gun == null || soldier.isPassenger()) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation type = net.minecraft.resources.ResourceLocation.tryParse(gun.entity());
+        Entity engine = level.getEntities((Entity) null, soldier.getBoundingBox().inflate(3), e -> e.getPassengers().isEmpty()
+                        && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).equals(type))
+                .stream().min(Comparator.comparingDouble(e -> e.distanceToSqr(soldier))).orElse(null);
+        if (engine != null) {
+            man(soldier, engine, gun);
+        }
     }
 
     /**
@@ -2540,6 +2567,10 @@ public final class RecruitsBattle {
             if (s == null || !s.isAlive() || commanded.contains(s.getId())) {
                 continue;
             }
+            if (s.isPassenger()) {
+                continue; // working a gun, which rides the ship
+            }
+            manGun(s, l.block, i);
             Point spot = deckSpot(l.block, i);
             if (!s.isInWater()) {
                 overboard.remove(s.getId());
@@ -2547,7 +2578,7 @@ public final class RecruitsBattle {
                 if (seenReal(s)) {
                     climbing.put(s.getId(), now); // swims to its ship's side and climbs it ({@link #climb})
                 } else {
-                    s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z()); // a sprite to everyone: no climb to see
+                    s.teleportTo(spot.x(), deckY(l.block, i), spot.z()); // a sprite to everyone: no climb to see
                     overboard.remove(s.getId());
                 }
             }
@@ -2591,7 +2622,7 @@ public final class RecruitsBattle {
             if (!s.isAlive() || ship == null || now - since > CLIMB_GIVE_UP) {
                 if (s.isAlive()) {
                     Point spot = deckSpot(l.block, i);
-                    s.teleportTo(spot.x(), level.getSeaLevel() + DECK_DROP, spot.z());
+                    s.teleportTo(spot.x(), deckY(l.block, i), spot.z());
                 }
                 climbing.remove(s.getId());
                 overboard.remove(s.getId());
@@ -3637,7 +3668,7 @@ public final class RecruitsBattle {
             }
         }
         if (RecruitEvents.recruitsGroupsManager != null) {
-            RecruitsGroup group = new RecruitsGroup(capitalised(u.block.arm().name().toLowerCase(Locale.ROOT).replace('_', ' ')) + " " + u.number, player, 0);
+            RecruitsGroup group = new RecruitsGroup(u.block.arm().title() + " " + u.number, player, 0);
             RecruitEvents.recruitsGroupsManager.addOrUpdateGroup(level, player, group);
             u.group = group.getUUID();
         }
@@ -6337,7 +6368,7 @@ public final class RecruitsBattle {
                 strike(strikers, foe, melee(l.block.arm()),
                         soldiers.size() * FieldRules.meleeFactor(sideOf(enemy, foe, centre), foe.block.arm()));
             // shortcut: musket hits are left out (no Striker for shot), so calibrate with armies of no musketeers until one is added.
-            } else if (l.block.arm() == Arm.ARCHERS && arrows(soldiers) > 0) {
+            } else if (l.block.arm().missile() == Arm.Missile.ARROWS && arrows(soldiers) > 0) {
                 Live shot = null;
                 double nearest = FieldRules.ARCHER_RANGE;
                 for (Live e : live.values()) {
@@ -6601,7 +6632,7 @@ public final class RecruitsBattle {
      */
     private int groundY(FieldBlock block, double x, double z) {
         if (block.afloat()) {
-            return level.getSeaLevel() + DECK_DROP; // onto its ship's deck, from just above it
+            return level.getSeaLevel() + deckDrop(block); // onto its ship's deck, from just above it
         }
         int bx = Mth.floor(x);
         int bz = Mth.floor(z);
@@ -6701,7 +6732,7 @@ public final class RecruitsBattle {
                     double fz = ship != null ? ship[3] : block.facingZ();
                     Point at = block == field.holder(block) ? centre : BattlePlan.place(centre, fx, fz, section.x(), section.z());
                     all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, shown, at.x(),
-                            level.getSeaLevel() + rafasconquest.style.ShipHulls.DECK, at.z(), fx, fz, // feet on the deck: keel a block under the sea, deck DECK + 1 over it
+                            level.getSeaLevel() + block.hull().deck, at.z(), fx, fz, // feet on the deck: keel a block under the sea, deck DECK + 1 over it
                             lone ? 0 : FieldBattle.DECK_FILES * FieldBattle.DECK_SPACING / 2, lone ? 0 : ranks * FieldBattle.DECK_SPACING / 2,
                             block.fighting(), block.captainAlive(), new int[0], -1, shipOf(block)));
                     continue;

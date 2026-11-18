@@ -26,15 +26,18 @@ final class CityPanel {
 
     private static final String[] TABS = {"City", "Army", "Intrigue"};
     private static final String[] BUTTONS = {"", "Muster", "Dismiss", "March"};
-    static final String[] NAMES = {"Levy", "Heavy infantry", "Skirmishers", "Zweihandlers", "Archers", "Cavalry", "Heavy cavalry",
-            "Musketeers", "Siege train", "Halberdiers", "Culverins", "Serpentines", "Mons Megs", "Hwachas", "Arcballistas",
-            "Onagers", "Trebuchets", "Tower crossbows"};
-    private static final Item[] ICONS = {Items.STONE_SWORD, Items.SHIELD, Items.IRON_SWORD, Items.NETHERITE_SWORD, Items.BOW,
-            Items.SADDLE, Items.IRON_HORSE_ARMOR, Items.CROSSBOW, Items.DISPENSER, Items.IRON_AXE, Items.FIRE_CHARGE,
-            Items.FIRE_CHARGE, Items.TNT, Items.FIREWORK_ROCKET, Items.ARROW, Items.COBBLESTONE, Items.STONE, Items.TIPPED_ARROW};
-    /** The arms the muster shop offers, by ordinal: the general roster (no siege train). */
-    private static final int[] SHOP = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster)
-            .mapToInt(Enum::ordinal).toArray();
+    /** The cards the muster shop offers, by ordinal: the general roster (no siege train), as the server numbers them. */
+    private static int[] shop() {
+        return java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster).mapToInt(BattlePlan.Arm::ordinal).toArray();
+    }
+
+    /** A card's icon, as its file names it (an item id); a sword if there is none. */
+    private static ItemStack icon(int arm) {
+        BattlePlan.Arm a = BattlePlan.Arm.get(arm);
+        net.minecraft.resources.ResourceLocation id = a == null ? null : net.minecraft.resources.ResourceLocation.tryParse(a.icon());
+        Item item = id == null ? null : net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+        return new ItemStack(item == null || item == Items.AIR ? Items.IRON_SWORD : item);
+    }
     private static final int BACK = 0xF0201D18;
     private static final int EDGE = 0xFF8C6A2F;
     private static final int GOLD = 0xFFE0C060;
@@ -148,7 +151,7 @@ final class CityPanel {
     }
 
     private static int count(int row, GrandStrategy.Army army) {
-        return row == 0 ? army.units().length : SHOP.length;
+        return row == 0 ? army.units().length : shop().length;
     }
 
     /** {@link #cardAt} for a row, only within the box's clip. */
@@ -259,16 +262,16 @@ final class CityPanel {
                 g.fill(left, shopTop, right, top - 2, BACK);
                 g.renderOutline(left, shopTop, right - left, SHOP_H, EDGE);
                 g.drawString(font, "Muster: click a card to raise " + Garrison.MEN + " soldiers", left + 6, shopTop + 4, GOLD, false);
-                int[] shop = rowXs(SHOP.length, 1);
+                int[] shop = rowXs(shop().length, 1);
                 int over = rowAt(shop, shopTop + 16, mouseX, mouseY);
                 g.enableScissor(left + 5, shopTop + 15, right - 5, shopTop + 17 + CARD_H);
-                for (int i = 0; i < SHOP.length; i++) {
-                    card(g, font, shop[i], shopTop + 16, SHOP[i], Garrison.MEN, i == over ? GOLD : 0xFFC8C8C8);
+                for (int i = 0; i < shop().length; i++) {
+                    card(g, font, shop[i], shopTop + 16, shop()[i], Garrison.MEN, i == over ? GOLD : 0xFFC8C8C8);
                 }
                 g.disableScissor();
-                scrollbar(g, 1, SHOP.length, mouseX, mouseY);
+                scrollbar(g, 1, shop().length, mouseX, mouseY);
                 if (over >= 0) {
-                    tip = tip(SHOP[over], Garrison.MEN, "Click: muster");
+                    tip = tip(shop()[over], Garrison.MEN, "Click: muster");
                 }
             } else if (mode == Mode.MARCH) {
                 String hint = "Click the map to march there; right-click to stop";
@@ -281,7 +284,8 @@ final class CityPanel {
     }
 
     static List<Component> tip(int arm, int soldiers, @Nullable String click) {
-        Component name = Component.literal(NAMES[arm]);
+        BattlePlan.Arm a = BattlePlan.Arm.get(arm);
+        Component name = Component.literal(a == null ? "?" : a.title());
         Component men = Component.literal(soldiers + (soldiers < Garrison.MEN ? " / " + Garrison.MEN : "") + " soldiers").withColor(0xA8A49C);
         return click == null ? List.of(name, men) : List.of(name, men, Component.literal(click).withColor(0xE0C060));
     }
@@ -290,7 +294,7 @@ final class CityPanel {
     static void card(GuiGraphics g, Font font, int x, int y, int arm, int soldiers, int edge) {
         g.fill(x - 1, y - 1, x + CARD_W + 1, y + CARD_H + 1, edge);
         g.fill(x, y, x + CARD_W, y + CARD_H, 0xFFFFF2B0);
-        g.renderItem(new ItemStack(ICONS[Math.floorMod(arm, ICONS.length)]), x + 3, y + 4);
+        g.renderItem(icon(arm), x + 3, y + 4);
         g.fill(x, y + CARD_H - 10, x + CARD_W, y + CARD_H - 9, 0xFFE0D090);
         String men = String.valueOf(soldiers);
         g.pose().pushPose();
@@ -335,9 +339,9 @@ final class CityPanel {
             }
         }
         if (mode == Mode.MUSTER) {
-            int shop = rowAt(rowXs(SHOP.length, 1), rowY(1), mx, my);
+            int shop = rowAt(rowXs(shop().length, 1), rowY(1), mx, my);
             if (shop >= 0) {
-                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, SHOP[shop], 0, 0);
+                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, shop()[shop], 0, 0);
             }
         } else if (mode == Mode.DISMISS) {
             int card = rowAt(rowXs(army.units().length, 0), top + TAB_H + 4, mx, my);

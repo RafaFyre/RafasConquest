@@ -1,0 +1,24 @@
+{
+  "name": "Levy",
+  "icon": "minecraft:stone_sword",
+  "kind": "foot",
+  "hits": 0.7,
+  "takes": 1.4,
+  "pace": 1,
+  "nerve": 0.7,
+  "traits": [
+    "expendable"
+  ],
+  "missile": "none",
+  "recruit": "recruits:recruit",
+  "kit": "levy",
+  "gear": {
+    "mainhand": "minecraft:stone_sword"
+  },
+  "figure": "levy",
+  "front": 3,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": ""
+}

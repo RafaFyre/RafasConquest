@@ -1,0 +1,20 @@
+{
+  "name": "Tower crossbows",
+  "icon": "minecraft:tipped_arrow",
+  "kind": "engine",
+  "hits": 1,
+  "takes": 1,
+  "pace": 0.8,
+  "nerve": 1,
+  "traits": [],
+  "missile": "none",
+  "recruit": "recruits:siege_engineer",
+  "kit": "archer",
+  "gear": {},
+  "figure": "engines",
+  "front": 0,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": "tower_crossbow"
+}

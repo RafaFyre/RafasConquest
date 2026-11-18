@@ -121,7 +121,13 @@ public final class Garrison {
 
     CompoundTag save() {
         CompoundTag t = new CompoundTag();
-        t.putIntArray("units", units.stream().mapToInt(Integer::intValue).toArray());
+        // Cards by id, so adding or removing card files never turns one card into another.
+        net.minecraft.nbt.ListTag ids = new net.minecraft.nbt.ListTag();
+        for (int u : units) {
+            BattlePlan.Arm a = BattlePlan.Arm.get(u);
+            ids.add(net.minecraft.nbt.StringTag.valueOf(a == null ? "" : a.id));
+        }
+        t.put("cards", ids);
         t.putIntArray("men", men.stream().mapToInt(Integer::intValue).toArray());
         t.putDouble("fromX", fromX);
         t.putDouble("fromZ", fromZ);
@@ -137,11 +143,24 @@ public final class Garrison {
 
     static Garrison load(CompoundTag t) {
         Garrison g = new Garrison();
-        int[] units = t.getIntArray("units");
         int[] men = t.getIntArray("men");
-        for (int i = 0; i < units.length; i++) {
-            g.units.add(units[i]);
-            g.men.add(men.length == units.length ? men[i] : MEN); // older saves: every card whole
+        if (t.contains("cards")) {
+            net.minecraft.nbt.ListTag ids = t.getList("cards", net.minecraft.nbt.Tag.TAG_STRING);
+            for (int i = 0; i < ids.size(); i++) {
+                BattlePlan.Arm a = BattlePlan.Arm.byId(ids.getString(i));
+                if (a == null) {
+                    rafasconquest.RafasConquest.LOGGER.warn("Grand strategy: a city army's card {} has no file any more; it is dropped", ids.getString(i));
+                    continue;
+                }
+                g.units.add(a.ordinal());
+                g.men.add(men.length == ids.size() ? men[i] : MEN);
+            }
+        } else { // older saves: the built-in cards by ordinal, which they keep
+            int[] units = t.getIntArray("units");
+            for (int i = 0; i < units.length; i++) {
+                g.units.add(units[i]);
+                g.men.add(men.length == units.length ? men[i] : MEN); // older saves still: every card whole
+            }
         }
         g.fromX = t.getDouble("fromX");
         g.fromZ = t.getDouble("fromZ");

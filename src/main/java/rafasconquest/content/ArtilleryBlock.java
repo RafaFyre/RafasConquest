@@ -31,12 +31,28 @@ import rafasconquest.battle.Machine;
  */
 public class ArtilleryBlock extends HorizontalDirectionalBlock implements EntityBlock {
     private static final MapCodec<ArtilleryBlock> CODEC = simpleCodec(ArtilleryBlock::new);
-    /** The engine it holds: any that shoots. */
-    public static final EnumProperty<Machine> WEAPON = EnumProperty.create("weapon", Machine.class, Machine::shoots);
+    /**
+     * The engines it can hold: the built-in ones that shoot, named as their {@link Machine}s, so a block state has a fixed set.
+     * shortcut: an engine added by a file can't stand on the block; upgrade to a block entity holding its id if one should.
+     */
+    public enum Weapon implements net.minecraft.util.StringRepresentable {
+        CULVERIN, SERPENTINE, MONS_MEG, HWACHA, ARCBALLISTA, ONAGER, TREBUCHET, TOWER_CROSSBOW;
+
+        public Machine machine() {
+            return Machine.byId(getSerializedName());
+        }
+
+        @Override
+        public String getSerializedName() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    public static final EnumProperty<Weapon> WEAPON = EnumProperty.create("weapon", Weapon.class);
 
     public ArtilleryBlock(Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(WEAPON, Machine.CULVERIN));
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(WEAPON, Weapon.CULVERIN));
     }
 
     @Override

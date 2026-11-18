@@ -1,0 +1,27 @@
+{
+  "name": "Cavalry",
+  "icon": "minecraft:saddle",
+  "kind": "mounted",
+  "hits": 1,
+  "takes": 1,
+  "pace": 1,
+  "nerve": 1,
+  "traits": [],
+  "missile": "none",
+  "recruit": "recruits:horseman",
+  "kit": "cavalry",
+  "gear": {
+    "head": "minecraft:iron_helmet",
+    "chest": "minecraft:iron_chestplate",
+    "legs": "minecraft:iron_leggings",
+    "feet": "minecraft:iron_boots",
+    "mainhand": "minecraft:iron_sword",
+    "offhand": "banner_shield"
+  },
+  "figure": "cavalry",
+  "front": 1,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": ""
+}

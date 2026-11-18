@@ -1,0 +1,24 @@
+{
+  "name": "Onager",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 6,
+  "age": "steel",
+  "homeland": null,
+  "field": true,
+  "attack": true,
+  "defence": false,
+  "reach": 90,
+  "reload": 13,
+  "damage": 63,
+  "batter": 0.5,
+  "ammo": {
+    "minecraft:stone": 64
+  },
+  "projectile": "rock",
+  "sound": "rafasconquest:battle.onager",
+  "body": "onager",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

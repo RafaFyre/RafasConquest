@@ -155,6 +155,11 @@ public final class SableLink {
         }
     }
 
+    /** Whether Sable ship {@code sub} (a ServerSubLevel, typed loosely so this class loads without Sable) is a battle's. */
+    public static boolean battleShip(Object sub) {
+        return enabled && BattleShips.battleShip((dev.ryanhcode.sable.sublevel.ServerSubLevel) sub);
+    }
+
     /** A spot on formation {@code id}'s deck in the world, {right, back} of its hull's middle: {x, y, z}; null with none sailing. */
     @org.jetbrains.annotations.Nullable
     public static double[] onDeck(int id, double right, double back) {

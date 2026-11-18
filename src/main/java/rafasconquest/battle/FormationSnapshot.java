@@ -33,8 +33,8 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         this(id, kind, rgb, mark, alive, x, y, z, facingX, facingZ, halfWidth, halfDepth, fighting, leader, soldierIds, leaderId, ship, null);
     }
 
-    /** {@link Engine#kind} of a ladder: after every {@link Machine}'s ordinal. */
-    public static final int LADDER = Machine.values().length;
+    /** {@link Engine#kind} of a ladder: past any {@link Machine}'s ordinal (sent as a byte, so at most 127 engines). */
+    public static final int LADDER = 127;
 
     /**
      * A formation's siege engine: a {@link Machine}'s ordinal or {@link #LADDER}. A tower, ram or ladder stands where it
@@ -77,9 +77,13 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         LEVY, HEAVY_INFANTRY, SKIRMISHERS, ZWEIHANDLERS, ARCHERS, CAVALRY, HEAVY_CAVALRY, MUSKETEERS, ENGINES, GENERAL, BEARER,
         HALBERDIERS;
 
-        /** The kind drawn for a block of {@code arm}: the same name; every engine's crews drawn as the siege train. */
+        /** The kind drawn for a block of {@code arm}: its card's {@code figure}; one not known drawn by its kind. */
         public static Kind of(BattlePlan.Arm arm) {
-            return arm.engine() ? ENGINES : valueOf(arm.name());
+            try {
+                return valueOf(arm.figure().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                return arm.engine() ? ENGINES : arm.mounted() ? CAVALRY : arm.shoots() ? ARCHERS : SKIRMISHERS;
+            }
         }
 
         public boolean mounted() {

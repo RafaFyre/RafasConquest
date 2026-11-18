@@ -1,0 +1,29 @@
+{
+  "name": "Halberdiers",
+  "icon": "minecraft:iron_axe",
+  "kind": "foot",
+  "hits": 1.2,
+  "takes": 0.9,
+  "pace": 0.9,
+  "nerve": 1.1,
+  "traits": [
+    "anti_horse"
+  ],
+  "missile": "none",
+  "recruit": "recruits:recruit",
+  "kit": "halberdier",
+  "gear": {
+    "head": "minecraft:iron_helmet",
+    "chest": "minecraft:iron_chestplate",
+    "legs": "minecraft:iron_leggings",
+    "feet": "minecraft:iron_boots",
+    "mainhand": "minecraft:iron_axe",
+    "offhand": "none"
+  },
+  "figure": "halberdiers",
+  "front": 2,
+  "requires": "magistuarmory",
+  "otherwise": "heavy_infantry",
+  "roster": true,
+  "engine": ""
+}

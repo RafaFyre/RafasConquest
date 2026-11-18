@@ -114,88 +114,226 @@ public final class BattlePlan {
     public static final int STALL_SECONDS = 30;
 
     /**
-     * A block's kind of soldier, with how it fights against the plain rates: how hard it {@code hits}, how much of the
-     * harm done it it {@code takes}, how fast it goes ({@code pace}), and how much loss it stands before it routs
-     * ({@code nerve}, times {@link FieldRules#ROUT_LOSS}).
+     * A unit card: a block's kind of soldier, read from its file in {@code mods/RafasConquest/units/arms} ({@link UnitCards}).
+     * How it fights against the plain rates: how hard it {@code hits}, how much of the harm done it it {@code takes}, how
+     * fast it goes ({@code pace}), and how much loss it stands before it routs ({@code nerve}, times
+     * {@link FieldRules#ROUT_LOSS}). Its {@link Kind} and traits say how the battle uses it, so a new card needs no code.
+     * <p>
+     * The built-in cards below always exist (their files only change their numbers); a file of a new id adds a card.
+     * {@link #ordinal} is its place in {@link #values}: the built-ins first, in the order city armies once saved them.
      */
-    public enum Arm {
-        /** Spearmen in leather or gambeson: many, cheap, soft, quick to break. */
-        LEVY(0.7, 1.4, 1, 0.7),
-        /** Chainmail, shields (and spears): the shield wall, bracing against horse and holding the line. */
-        HEAVY_INFANTRY(1.3, 0.7, 0.9, 1.3),
-        /** Chainmail and swords, no shields: quick, for the flanks. */
-        SKIRMISHERS(1.1, 1, 1.15, 1),
-        /** Knights with two-handed swords (Epic Knights only; else skirmishers, {@link #zweihandlers}). */
-        ZWEIHANDLERS(1.5, 0.85, 0.85, 1.2),
-        ARCHERS(1, 1, 1, 1),
-        CAVALRY(1, 1, 1, 1),
-        /** Diamond or frogmouth plate, lances: hits harder and takes less, a little slower. */
-        HEAVY_CAVALRY(1.3, 0.7, 0.9, 1.3),
-        /** Gambesons and bayonet muskets (Musket Mod, Gunpowder age): slow, hard volleys that shields don't stop; soft. */
-        MUSKETEERS(1.3, 1.2, 1, 0.9),
+    public static final class Arm {
+        /** Where a card stands and how it fights: in the infantry's files, among the shooters, with the horse, or working an engine. */
+        public enum Kind { FOOT, RANGED, MOUNTED, ENGINE }
+
+        /** What a ranged card looses: arrows, or shot that shields don't stop. */
+        public enum Missile { NONE, ARROWS, SHOT }
+
+        private static final List<Arm> ALL = new ArrayList<>();
+        private static Arm[] array = new Arm[0];
+
+        public static final Arm LEVY = builtIn("levy");
+        public static final Arm HEAVY_INFANTRY = builtIn("heavy_infantry");
+        public static final Arm SKIRMISHERS = builtIn("skirmishers");
+        public static final Arm ZWEIHANDLERS = builtIn("zweihandlers");
+        public static final Arm ARCHERS = builtIn("archers");
+        public static final Arm CAVALRY = builtIn("cavalry");
+        public static final Arm HEAVY_CAVALRY = builtIn("heavy_cavalry");
+        public static final Arm MUSKETEERS = builtIn("musketeers");
         /**
          * The siege train: crews working Siegeworks engines ({@link Machine}), each unit its own kind. Only the ram, tower
-         * and mantlet stay under it; a unit given a shooting engine becomes that engine's own arm ({@link #of}).
+         * and mantlet stay under it; a unit given a shooting engine becomes that engine's own card ({@link #of}).
          */
-        ENGINES(1, 1, 0.8, 1),
-        // New arms go last: city armies save their cards by ordinal.
-        /** Plate and halberds (Epic Knights only; else heavy infantry): the anti-horse line, hitting cavalry harder. */
-        HALBERDIERS(1.2, 0.9, 0.9, 1.1),
-        CULVERINS(Machine.CULVERIN),
-        SERPENTINES(Machine.SERPENTINE),
-        MONS_MEGS(Machine.MONS_MEG),
-        HWACHAS(Machine.HWACHA),
-        ARCBALLISTAS(Machine.ARCBALLISTA),
-        ONAGERS(Machine.ONAGER),
-        TREBUCHETS(Machine.TREBUCHET),
-        TOWER_CROSSBOWS(Machine.TOWER_CROSSBOW);
+        public static final Arm ENGINES = builtIn("engines");
+        public static final Arm HALBERDIERS = builtIn("halberdiers");
+        public static final Arm CULVERINS = builtIn("culverins");
+        public static final Arm SERPENTINES = builtIn("serpentines");
+        public static final Arm MONS_MEGS = builtIn("mons_megs");
+        public static final Arm HWACHAS = builtIn("hwachas");
+        public static final Arm ARCBALLISTAS = builtIn("arcballistas");
+        public static final Arm ONAGERS = builtIn("onagers");
+        public static final Arm TREBUCHETS = builtIn("trebuchets");
+        public static final Arm TOWER_CROSSBOWS = builtIn("tower_crossbows");
+        /** A gunship's crew: at sea they sail its ship card ({@link #ship}), on land they fight on foot. */
+        public static final Arm GUNSHIP = builtIn("gunship");
 
-        private final double hits;
-        private final double takes;
-        private final double pace;
-        private final double nerve;
-        private final Machine machine;
+        public final String id;
+        private int ordinal;
+        private boolean builtIn;
+        String name = "";
+        Kind kind = Kind.FOOT;
+        double hits = 1;
+        double takes = 1;
+        double pace = 1;
+        double nerve = 1;
+        java.util.Set<String> traits = java.util.Set.of();
+        Missile missile = Missile.NONE;
+        /** Its soldiers' entity (a Villager Recruits one). */
+        String recruit = "recruits:recruit";
+        /** Epic Knights' kit it wears where that is installed ({@code rafasconquest.gear.Armoury.Kit}, lower case). */
+        String kit = "archer";
+        /** Its vanilla gear: head, chest, legs, feet, main hand, off hand (item ids, "banner_shield", "musket"; "" none). */
+        String[] gear = new String[6];
+        /** How it is drawn far away ({@link FormationSnapshot.Kind}, lower case). */
+        String figure = "skirmishers";
+        /** The item its card shows (muster shop, army cards). */
+        String icon = "minecraft:iron_sword";
+        /** In its kind, the order cards take their places from the front: lowest first. */
+        int front;
+        /** A mod it needs, and the card that fights in its place without it ("" none). */
+        String requires = "";
+        String otherwise = "";
+        boolean roster = true;
+        String engine = "";
+        /** The ship card ({@link rafasconquest.core.SeaLanes.Size}) its unit sails at sea; "" the usual ones. */
+        String ship = "";
 
-        Arm(double hits, double takes, double pace, double nerve) {
-            this(hits, takes, pace, nerve, null);
+        Arm(String id) {
+            this.id = id;
         }
 
-        /** An engine's own arm: the siege train's rates, working only {@code machine}. */
-        Arm(Machine machine) {
-            this(1, 1, 0.8, 1, machine);
+        private static Arm builtIn(String id) {
+            Arm a = add(id);
+            a.builtIn = true;
+            UnitCards.readBuiltIn(a);
+            return a;
         }
 
-        Arm(double hits, double takes, double pace, double nerve, Machine machine) {
-            this.hits = hits;
-            this.takes = takes;
-            this.pace = pace;
-            this.nerve = nerve;
-            this.machine = machine;
+        /** The card {@code id}, made (with the plain rates, after every other) if there is none yet. */
+        static Arm add(String id) {
+            Arm a = byId(id);
+            if (a == null) {
+                a = new Arm(id);
+                a.ordinal = ALL.size();
+                ALL.add(a);
+                array = ALL.toArray(Arm[]::new);
+            }
+            return a;
         }
 
-        /** The engine this arm works, for an engine's own arm; null otherwise (the siege train's crews get theirs in battle). */
+        /** Drops every card but the built-in ones, before another's set is added in its order ({@link UnitCards#replace}). */
+        static void keepBuiltIns() {
+            ALL.removeIf(a -> !a.builtIn);
+            array = ALL.toArray(Arm[]::new);
+        }
+
+        /** Every card, by ordinal. A copy: don't hold it across a reload. */
+        public static Arm[] values() {
+            return array.clone();
+        }
+
+        /** The card at {@code ordinal}; null if there is none. */
+        @org.jetbrains.annotations.Nullable
+        public static Arm get(int ordinal) {
+            return ordinal >= 0 && ordinal < array.length ? array[ordinal] : null;
+        }
+
+        @org.jetbrains.annotations.Nullable
+        public static Arm byId(String id) {
+            for (Arm a : array) {
+                if (a.id.equals(id)) {
+                    return a;
+                }
+            }
+            return null;
+        }
+
+        public int ordinal() {
+            return ordinal;
+        }
+
+        public boolean builtIn() {
+            return builtIn;
+        }
+
+        /** Its id in upper case, as the enum it once was named it. */
+        public String name() {
+            return id.toUpperCase(java.util.Locale.ROOT);
+        }
+
+        /** Its name for people: its file's, else its id in words. */
+        public String title() {
+            return name.isEmpty() ? Character.toUpperCase(id.charAt(0)) + id.substring(1).replace('_', ' ') : name;
+        }
+
+        @Override
+        public String toString() {
+            return name();
+        }
+
+        public Kind kind() {
+            return kind;
+        }
+
+        public boolean has(String trait) {
+            return traits.contains(trait);
+        }
+
+        public Missile missile() {
+            return missile;
+        }
+
+        public String recruit() {
+            return recruit;
+        }
+
+        public String kit() {
+            return kit;
+        }
+
+        /** Its vanilla gear in slot {@code i}: head, chest, legs, feet, main hand, off hand; "" for none. */
+        public String gear(int i) {
+            return gear[i] == null ? "" : gear[i];
+        }
+
+        public String icon() {
+            return icon;
+        }
+
+        public String figure() {
+            return figure;
+        }
+
+        public int front() {
+            return front;
+        }
+
+        /** The card fighting in its place: its {@code otherwise} while the mod it {@code requires} isn't installed. */
+        public Arm fielded() {
+            Arm instead = requires.isEmpty() || installed(requires) ? null : byId(otherwise);
+            return instead == null || instead == this ? this : instead.fielded();
+        }
+
+        /** The engine this card works, for an engine's own card; null otherwise (the siege train's crews get theirs in battle). */
+        @org.jetbrains.annotations.Nullable
         public Machine machine() {
-            return machine;
+            return engine.isEmpty() ? null : Machine.byId(engine);
         }
 
-        /** Crews working an engine: the siege train, or an engine's own arm. */
+        /** The ship card its unit sails at sea; null for the usual ones (a unit's ship, the camp's). */
+        @org.jetbrains.annotations.Nullable
+        public rafasconquest.core.SeaLanes.Size ship() {
+            return ship.isEmpty() ? null : rafasconquest.core.SeaLanes.Size.byId(ship);
+        }
+
+        /** Crews working an engine: the siege train, or an engine's own card. */
         public boolean engine() {
-            return this == ENGINES || machine != null;
+            return kind == Kind.ENGINE;
         }
 
-        /** The arm of crews working {@code m}: its own arm, or the siege train for the ram, tower and mantlet. */
+        /** The card of crews working {@code m}: its own card, or the siege train for the ram, tower and mantlet. */
         public static Arm of(Machine m) {
-            for (Arm a : values()) {
-                if (a.machine == m) {
+            for (Arm a : array) {
+                if (m != null && a.machine() == m) {
                     return a;
                 }
             }
             return ENGINES;
         }
 
-        /** On the general roster (city army cards): every arm but the siege train. */
+        /** On the general roster (city army cards). */
         public boolean roster() {
-            return this != ENGINES;
+            return roster;
         }
 
         public double hits() {
@@ -216,27 +354,40 @@ public final class BattlePlan {
 
         /** Expendable, as in Total War: its rout frightens no one but other expendables. */
         public boolean expendable() {
-            return this == LEVY;
+            return has("expendable");
         }
 
         /** Foot that fights hand to hand, in files. */
         public boolean infantry() {
-            return this == LEVY || this == HEAVY_INFANTRY || this == SKIRMISHERS || this == ZWEIHANDLERS || this == HALBERDIERS;
+            return kind == Kind.FOOT;
         }
 
         public boolean mounted() {
-            return this == CAVALRY || this == HEAVY_CAVALRY;
+            return kind == Kind.MOUNTED;
         }
 
         /** Shoots from behind the front: archers, musketeers and the siege train. */
         public boolean shoots() {
-            return this == ARCHERS || this == MUSKETEERS || engine();
+            return kind == Kind.RANGED || kind == Kind.ENGINE;
         }
 
         /** Bears shields: takes less from the front ({@link FieldRules#SHIELD_MELEE}, {@link FieldRules#SHIELD_ARROWS}). */
         public boolean shielded() {
-            return this == HEAVY_INFANTRY;
+            return has("shielded");
         }
+    }
+
+    /** Mods by id that cards {@code require}, beyond the three below; set at startup (tests: all there). */
+    public static java.util.function.Predicate<String> mods = mod -> true;
+
+    /** Whether the mod {@code id} is installed, for cards that need one. */
+    public static boolean installed(String id) {
+        return switch (id) {
+            case "magistuarmory" -> zweihandlers;
+            case "musketmod" -> muskets;
+            case "siegeworks" -> siegeworks;
+            default -> mods.test(id);
+        };
     }
 
     /** Whether Epic Knights is there to arm zweihandlers; without it their share is skirmishers. Set at startup. */
@@ -508,30 +659,17 @@ public final class BattlePlan {
     public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles,
                                         @org.jetbrains.annotations.Nullable int[] mix) {
         if (mix != null) {
-            int engines = 0;
+            // Each card by its kind: foot in the files, shooters (then engines) behind them, horse at the back.
+            List<Arm> footTypes = new ArrayList<>();
+            List<Arm> shotTypes = new ArrayList<>();
+            List<Arm> horseTypes = new ArrayList<>();
             for (Arm a : Arm.values()) {
-                engines += a.engine() ? mix[a.ordinal()] : 0;
-            }
-            int[] foot = {mix[Arm.LEVY.ordinal()], mix[Arm.HEAVY_INFANTRY.ordinal()], mix[Arm.SKIRMISHERS.ordinal()],
-                    mix[Arm.ZWEIHANDLERS.ordinal()], mix[Arm.HALBERDIERS.ordinal()]};
-            int[] shot = {mix[Arm.ARCHERS.ordinal()], mix[Arm.MUSKETEERS.ordinal()], engines};
-            int[] horse = {mix[Arm.CAVALRY.ordinal()], mix[Arm.HEAVY_CAVALRY.ordinal()]};
-            List<Slot> slots = deployment(blocks, greatShield, wingShares, levyFront, maxFiles, foot, shot, horse);
-            // The train's slots take the army's own engines, each kind in turn.
-            List<Arm> train = new ArrayList<>();
-            for (Arm a : Arm.values()) {
-                for (int i = a.engine() ? mix[a.ordinal()] : 0; i > 0; i--) {
-                    train.add(a);
+                if (a.ordinal() < mix.length && mix[a.ordinal()] > 0) {
+                    (a.infantry() ? footTypes : a.mounted() ? horseTypes : shotTypes).add(a);
                 }
             }
-            int next = 0;
-            for (int i = 0; i < slots.size(); i++) {
-                Slot s = slots.get(i);
-                if (s.arm() == Arm.ENGINES && next < train.size()) {
-                    slots.set(i, new Slot(train.get(next++), s.right(), s.back(), s.line(), s.file(), s.files(), s.wing(), s.band()));
-                }
-            }
-            return slots;
+            return deployment(blocks, greatShield, wingShares, levyFront, maxFiles, footTypes, counts(footTypes, mix),
+                    shotTypes, counts(shotTypes, mix), horseTypes, counts(horseTypes, mix));
         }
         boolean musketeers = musketeers();
         int archers = Math.round(blocks * (float) (ARCHER_SHARE + (musketeers ? MUSKETEER_SHARE / 2 : 0))); // archers and musketeers
@@ -548,19 +686,25 @@ public final class BattlePlan {
         boolean engines = engines();
         archers += engines ? Math.round(blocks * (float) TRAIN_SHARE) : 0; // the siege train, on top, stands with them
         // Each kind shared out army-wide first, so the army holds its exact shares, then dealt out to the wings.
-        return deployment(blocks, greatShield, wingShares, levyFront, maxFiles, share(infantry, footShares(musketeers), 0),
-                share(archers, shotShares(musketeers, engines), 0), share(cavalry, HORSE_SHARES, 0));
+        return deployment(blocks, greatShield, wingShares, levyFront, maxFiles,
+                List.of(Arm.LEVY, Arm.HEAVY_INFANTRY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS, Arm.HALBERDIERS), share(infantry, footShares(musketeers), 0),
+                List.of(Arm.ARCHERS, Arm.MUSKETEERS, Arm.ENGINES), share(archers, shotShares(musketeers, engines), 0),
+                List.of(Arm.CAVALRY, Arm.HEAVY_CAVALRY), share(cavalry, HORSE_SHARES, 0));
+    }
+
+    private static int[] counts(List<Arm> types, int[] mix) {
+        return types.stream().mapToInt(a -> mix[a.ordinal()]).toArray();
     }
 
     /**
-     * Lays out an army of {@code foot} blocks of infantry (levy, heavy, skirmishers, zweihandlers, halberdiers),
-     * {@code shot} of shooters (archers, musketeers, siege train) and {@code horse} of cavalry (light, heavy).
+     * Lays out an army of {@code foot[k]} blocks of each of {@code footTypes} (infantry), {@code shot[k]} of each of
+     * {@code shotTypes} (shooters and engines) and {@code horse[k]} of each of {@code horseTypes} (cavalry).
      */
     private static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront, int maxFiles,
-                                         int[] foot, int[] shot, int[] horse) {
-        int infantry = foot[0] + foot[1] + foot[2] + foot[3] + foot[4];
-        int archers = shot[0] + shot[1] + shot[2];
-        int cavalry = horse[0] + horse[1];
+                                         List<Arm> footTypes, int[] foot, List<Arm> shotTypes, int[] shot, List<Arm> horseTypes, int[] horse) {
+        int infantry = java.util.Arrays.stream(foot).sum();
+        int archers = java.util.Arrays.stream(shot).sum();
+        int cavalry = java.util.Arrays.stream(horse).sum();
         int soldiers = blocks * SOLDIERS_PER_FORMATION;
         boolean winged = maxFiles == 0 && soldiers > WINGS_OVER && infantry >= 3;
         double[] shares = winged ? wingShares : new double[]{0, 1, 0};
@@ -584,8 +728,8 @@ public final class BattlePlan {
             List<Slot> slots = new ArrayList<>();
             if (wingInfantry[wing] + wingArchers[wing] + wingCavalry[wing] > 0) {
                 int cap = Math.max(1, (int) Math.round(frontCap * (winged ? shares[wing] : 1)));
-                widths[wing] = layoutWing(slots, wing, firstFile, foot(wingFoot[wing], levyFront), wingArchers[wing], wingShot[wing][1], wingShot[wing][2],
-                        wingCavalry[wing], wingHorse[wing][1], greatShield, stackFiles, depth, files, pitch, cap);
+                widths[wing] = layoutWing(slots, wing, firstFile, foot(footTypes, wingFoot[wing], levyFront), behind(shotTypes, wingShot[wing]),
+                        behind(horseTypes, wingHorse[wing]), greatShield, stackFiles, depth, files, pitch, cap);
                 firstFile += (int) slots.stream().filter(s -> s.line() == 0).count();
             }
             wings.add(slots);
@@ -614,9 +758,11 @@ public final class BattlePlan {
      * Lays out one wing (or a small army) around its own middle: front, archers, reserves, cavalry. Its front files
      * are numbered from {@code firstFile}. Returns how wide it stands.
      */
-    private static double layoutWing(List<Slot> slots, int wing, int firstFile, List<Arm> foot, int archers, int musketeers, int engines, int cavalry, int heavyCavalry,
+    private static double layoutWing(List<Slot> slots, int wing, int firstFile, List<Arm> foot, List<Arm> shot, List<Arm> horse,
                                      boolean greatShield, int stackFiles, int depth, int files, double pitch, int frontCap) {
         int infantry = foot.size();
+        int archers = shot.size();
+        int cavalry = horse.size();
         int next = 0; // the next of foot to take its place, front rank first
         int archersPerRow = Math.max(1, (archers + ARCHER_ROWS - 1) / ARCHER_ROWS);
         int cover = archers == 0 ? 1 : (int) Math.ceil(archersPerRow * BLOCK_PITCH / pitch);
@@ -659,7 +805,7 @@ public final class BattlePlan {
         for (int i = 0; i < archers; i++) {
             int row = i / archersPerRow;
             int inRow = Math.min(archersPerRow, archers - row * archersPerRow);
-            slots.add(new Slot(i < archers - musketeers - engines ? Arm.ARCHERS : i < archers - engines ? Arm.MUSKETEERS : Arm.ENGINES, across(i % archersPerRow, inRow, BLOCK_PITCH), archersBack + row * ARCHER_ROW, -1, i,
+            slots.add(new Slot(shot.get(i), across(i % archersPerRow, inRow, BLOCK_PITCH), archersBack + row * ARCHER_ROW, -1, i,
                     FILE_WIDTH, wing, BAND_ARCHERS));
         }
         widest = Math.max(widest, Math.min(archers, archersPerRow) * BLOCK_PITCH);
@@ -691,7 +837,7 @@ public final class BattlePlan {
         for (int i = 0; i < cavalry; i++) {
             int row = i / cavalryPerRow;
             int inRow = Math.min(cavalryPerRow, cavalry - row * cavalryPerRow);
-            slots.add(new Slot(i < cavalry - heavyCavalry ? Arm.CAVALRY : Arm.HEAVY_CAVALRY, across(i % cavalryPerRow, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i,
+            slots.add(new Slot(horse.get(i), across(i % cavalryPerRow, inRow, BLOCK_PITCH), cavalryBack + row * CAVALRY_ROW, -1, i,
                     FILE_WIDTH, wing, BAND_CAVALRY));
         }
         widest = Math.max(widest, Math.min(cavalry, cavalryPerRow) * BLOCK_PITCH);
@@ -759,26 +905,33 @@ public final class BattlePlan {
     }
 
     /**
-     * A wing's infantry, {@code n} blocks of each kind in {@link #footShares}' order, in the order they take their
-     * places from the front rank back: the levies first if they go up front, else the heavy infantry, the levies
-     * behind it, the halberdiers beside the heavy infantry; then the skirmishers and the zweihandlers. Without Epic
-     * Knights, zweihandlers fight as skirmishers and halberdiers as heavy infantry.
+     * A wing's infantry, {@code n[k]} blocks of each of {@code types}, in the order they take their places from the
+     * front rank back: by each card's {@link Arm#front} (the heavy infantry, the halberdiers beside it, the levies
+     * behind, then the skirmishers and the zweihandlers), the expendable first if they go up front. A card whose mod
+     * isn't installed fights as its stand-in ({@link Arm#fielded}): without Epic Knights, zweihandlers as skirmishers
+     * and halberdiers as heavy infantry.
      */
-    static List<Arm> foot(int[] n, boolean levyFront) {
-        int infantry = n[0] + n[1] + n[2] + n[3] + n[4];
-        Arm[] order = levyFront
-                ? new Arm[]{Arm.LEVY, Arm.HEAVY_INFANTRY, Arm.HALBERDIERS, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS}
-                : new Arm[]{Arm.HEAVY_INFANTRY, Arm.HALBERDIERS, Arm.LEVY, Arm.SKIRMISHERS, Arm.ZWEIHANDLERS};
-        int[] count = levyFront ? new int[]{n[0], n[1], n[4], n[2], n[3]} : new int[]{n[1], n[4], n[0], n[2], n[3]};
-        List<Arm> foot = new ArrayList<>(infantry);
-        for (int k = 0; k < order.length; k++) {
-            Arm arm = zweihandlers ? order[k] : order[k] == Arm.ZWEIHANDLERS ? Arm.SKIRMISHERS
-                    : order[k] == Arm.HALBERDIERS ? Arm.HEAVY_INFANTRY : order[k];
-            for (int i = 0; i < count[k]; i++) {
-                foot.add(arm);
+    static List<Arm> foot(List<Arm> types, int[] n, boolean levyFront) {
+        java.util.Comparator<Integer> order = java.util.Comparator.<Integer>comparingInt(k -> levyFront && types.get(k).expendable() ? 0 : 1)
+                .thenComparingInt(k -> types.get(k).front()).thenComparingInt(k -> types.get(k).ordinal());
+        return lineUp(types, n, order);
+    }
+
+    /** A wing's shooters (then engines) or horse, {@code n[k]} blocks of each of {@code types}, by {@link Arm#front}. */
+    static List<Arm> behind(List<Arm> types, int[] n) {
+        return lineUp(types, n, java.util.Comparator.<Integer>comparingInt(k -> types.get(k).engine() ? 1 : 0)
+                .thenComparingInt(k -> types.get(k).front()).thenComparingInt(k -> types.get(k).ordinal()));
+    }
+
+    private static List<Arm> lineUp(List<Arm> types, int[] n, java.util.Comparator<Integer> order) {
+        List<Arm> out = new ArrayList<>();
+        java.util.stream.IntStream.range(0, types.size()).boxed().sorted(order).forEach(k -> {
+            Arm arm = types.get(k).fielded();
+            for (int i = 0; i < n[k]; i++) {
+                out.add(arm);
             }
-        }
-        return foot;
+        });
+        return out;
     }
 
     /** The front file standing nearest a point {@code right} of the wing's middle. */

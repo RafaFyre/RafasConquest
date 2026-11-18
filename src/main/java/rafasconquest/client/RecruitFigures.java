@@ -338,11 +338,11 @@ final class RecruitFigures {
      * bridge down), until the next call; added unmoving ({@code amount} 0). False if it can't be drawn here.
      */
     static boolean engine(int kind, boolean up) {
-        if (!usable || !ready() || kind >= Machine.values().length || Minecraft.getInstance().level == null) {
+        if (!usable || !ready() || Machine.get(kind) == null || Minecraft.getInstance().level == null) {
             return false;
         }
-        Machine machine = Machine.values()[kind];
-        boolean bridge = up && machine == Machine.SIEGE_TOWER;
+        Machine machine = Machine.get(kind);
+        boolean bridge = up && machine.role() == Machine.Role.TOWER;
         Look look = ENGINES.computeIfAbsent(kind * 2 + (bridge ? 1 : 0), k -> engineLook(machine, bridge));
         if (look.layers.isEmpty()) {
             return false;
@@ -358,10 +358,10 @@ final class RecruitFigures {
         List<Layer> layers = new ArrayList<>();
         try {
             net.minecraft.world.entity.Entity e = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
-                    .getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, machine.id)).map(type -> type.create(mc.level)).orElse(null);
-            if (e != null && machine == Machine.SIEGE_TOWER) {
+                    .getOptional(ResourceLocation.parse(machine.entity())).map(type -> type.create(mc.level)).orElse(null);
+            if (e != null && machine.role() == Machine.Role.TOWER) {
                 layers.addAll(filmTower(mc, e, bridge));
-            } else if (e != null && machine == Machine.TREBUCHET) {
+            } else if (e != null && machine.throwing()) { // filmed through its throw, as Siegeworks animates a trebuchet
                 layers.addAll(filmTrebuchet(mc, e));
             } else if (e != null) {
                 for (Capture c : film(mc, e).values()) {

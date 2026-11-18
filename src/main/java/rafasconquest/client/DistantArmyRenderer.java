@@ -344,19 +344,21 @@ public final class DistantArmyRenderer {
                 ? null : SoldierFigure.Shape.engine(engine.kind(), engine.up());
         float size = SoldierFigure.engineSize(engine.kind());
         if (!engine.withCrew()) {
-            float[] motion = shape == null && engine.kind() == rafasconquest.battle.Machine.SIEGE_TOWER.ordinal()
+            float[] motion = shape == null && rafasconquest.battle.Machine.get(engine.kind()) != null
+                    && rafasconquest.battle.Machine.get(engine.kind()).role() == rafasconquest.battle.Machine.Role.TOWER
                     ? RecruitFigures.tower(formation.id(), engine.x(), engine.z(), engine.facingX(), engine.facingZ(), engine.up()) : STILL;
             engine(mc, shape, palette, engine.x(), engine.y(), engine.z(), engine.facingX(), engine.facingZ(), size, motion, eye, renderBlocks, lit, glow);
             return;
         }
-        int engines = engine.kind() == FormationSnapshot.LADDER ? 1 : rafasconquest.battle.Machine.values()[engine.kind()].inBlock(formation.id());
+        rafasconquest.battle.Machine machine = rafasconquest.battle.Machine.get(engine.kind());
+        int engines = machine == null ? 1 : machine.inBlock(formation.id());
         FormationSnapshot target = ArrowVolleys.aim(formation.id()); // shooting engines each turn to face what they shoot at
         for (int i = 0; i < placed.size(); i++) {
             if (!rafasconquest.battle.Machine.works(i, engines, placed.size())) {
                 continue;
             }
             FigureMotion.Placed p = placed.get(i);
-            boolean trebuchet = engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal();
+            boolean trebuchet = machine != null && machine.throwing();
             float phase = Math.floorMod(formation.id() * 31 + i * 17, 100) / 100F;
             float[] motion = shape == null && trebuchet ? RecruitFigures.trebuchet(formation.fighting(), phase) : STILL;
             // its shot heard where the far one is drawn; nearer, the real one is the game's
@@ -373,8 +375,7 @@ public final class DistantArmyRenderer {
                 fx = tx / t;
                 fz = tz / t;
             }
-            boolean heavy = engine.kind() == rafasconquest.battle.Machine.MONS_MEG.ordinal()
-                    || engine.kind() == rafasconquest.battle.Machine.TREBUCHET.ordinal();
+            boolean heavy = machine != null && machine.heavy();
             double angle = swing(((long) formation.id() << 16) | i, Math.atan2(fz, fx), heavy ? SWING_PER_SECOND / 2 : SWING_PER_SECOND);
             engine(mc, shape, palette, p.x(), p.y(), p.z(), Math.cos(angle), Math.sin(angle), size, motion, eye, renderBlocks, lit, glow);
         }

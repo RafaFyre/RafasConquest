@@ -1,0 +1,24 @@
+{
+  "name": "Trebuchet",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 6,
+  "age": "steel",
+  "homeland": null,
+  "field": false,
+  "attack": true,
+  "defence": false,
+  "reach": 150,
+  "reload": 24,
+  "damage": 84,
+  "batter": 1,
+  "ammo": {
+    "minecraft:stone": 64
+  },
+  "projectile": "big_rock",
+  "sound": "",
+  "body": "trebuchet",
+  "size": 1,
+  "heavy": true,
+  "throwing": true
+}

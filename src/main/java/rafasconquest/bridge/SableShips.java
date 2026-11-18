@@ -239,7 +239,7 @@ final class SableShips {
             double dx = at.x() - there.x();
             double dz = at.z() - there.z();
             double d = Math.hypot(dx, dz);
-            double room = reach + SeaLanes.Size.XLARGE.length / 2.0;
+            double room = reach + SeaLanes.Size.longestOnLanes() / 2.0;
             if (d > 1e-6 && d < room) {
                 away.add(dx / d * AVOID * (1 - d / room), 0, dz / d * AVOID * (1 - d / room));
             }

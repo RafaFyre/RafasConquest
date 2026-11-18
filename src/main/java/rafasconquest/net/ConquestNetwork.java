@@ -172,7 +172,7 @@ public final class ConquestNetwork {
                     b.writeBlockPos(m.pos());
                     b.writeEnum(m.weapon());
                 })
-                .decoder(b -> new ArtillerySet(b.readBlockPos(), b.readEnum(rafasconquest.battle.Machine.class)))
+                .decoder(b -> new ArtillerySet(b.readBlockPos(), b.readEnum(rafasconquest.content.ArtilleryBlock.Weapon.class)))
                 .consumerMainThread(ConquestNetwork::handleArtillerySet)
                 .add();
         CHANNEL.messageBuilder(GrandStrategyView.class, 25, NetworkDirection.PLAY_TO_CLIENT)
@@ -300,6 +300,25 @@ public final class ConquestNetwork {
                         i.readDouble(), i.readDouble(), false))))
                 .consumerMainThread((m, context) -> rafasconquest.client.ClientTownsfolk.set(m.walks()))
                 .add();
+        CHANNEL.messageBuilder(UnitCardFiles.class, 42, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.files().size());
+                    for (String[] f : m.files()) {
+                        b.writeUtf(f[0]);
+                        b.writeUtf(f[1]);
+                        b.writeUtf(f[2], UnitCardFiles.MAX);
+                    }
+                })
+                .decoder(b -> {
+                    int n = b.readVarInt();
+                    java.util.List<String[]> files = new java.util.ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        files.add(new String[]{b.readUtf(), b.readUtf(), b.readUtf(UnitCardFiles.MAX)});
+                    }
+                    return new UnitCardFiles(files);
+                })
+                .consumerMainThread((m, context) -> rafasconquest.client.ClientScreens.unitCards(m.files()))
+                .add();
         CHANNEL.messageBuilder(FarBanners.class, 41, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> {
                     b.writeVarInt(m.where().size());
@@ -378,6 +397,17 @@ public final class ConquestNetwork {
     }
 
     /** Server → client: whether the sea swells (the seaSwell game rule), for the water drawn. */
+    /** Server → client: its unit card and engine files ({@link rafasconquest.battle.UnitCards}), so the client numbers them alike. */
+    public record UnitCardFiles(java.util.List<String[]> files) {
+        /** A file's characters at most: a hull .nbt goes as base64. shortcut: all files go in one message; very many big hulls could pass the packet limit, then split it. */
+        static final int MAX = 262144;
+    }
+
+    public static void sendUnitCards(ServerPlayer player) {
+        CHANNEL.send(player, new UnitCardFiles(java.util.stream.Stream.concat(rafasconquest.battle.UnitCards.texts().stream(),
+                rafasconquest.style.ShipHulls.texts().stream()).toList()));
+    }
+
     public record SeaSwell(boolean on) {
     }
 
@@ -664,10 +694,10 @@ public final class ConquestNetwork {
     }
 
     /** Client → server: an Artillery Block's weapon, to keep (creative, within reach). */
-    public record ArtillerySet(net.minecraft.core.BlockPos pos, rafasconquest.battle.Machine weapon) {
+    public record ArtillerySet(net.minecraft.core.BlockPos pos, rafasconquest.content.ArtilleryBlock.Weapon weapon) {
     }
 
-    public static void setArtillery(net.minecraft.core.BlockPos pos, rafasconquest.battle.Machine weapon) {
+    public static void setArtillery(net.minecraft.core.BlockPos pos, rafasconquest.content.ArtilleryBlock.Weapon weapon) {
         CHANNEL.sendToServer(new ArtillerySet(pos, weapon));
     }
 
@@ -793,15 +823,18 @@ public final class ConquestNetwork {
     /** Server → client: the player's stats and settings ({@link rafasconquest.peerage.PlayerStats}). */
     public record StatsView(rafasconquest.peerage.PlayerStats.View view) {
         void write(FriendlyByteBuf buf) {
-            buf.writeCollection(view.rows(), (b, row) -> {
-                b.writeUtf(row[0]);
-                b.writeUtf(row[1]);
-            });
+            for (List<String[]> rows : List.of(view.rows(), view.attributes(), view.weapons())) {
+                buf.writeCollection(rows, (b, row) -> {
+                    b.writeUtf(row[0]);
+                    b.writeUtf(row[1]);
+                });
+            }
             buf.writeBoolean(view.teleportAtMuster());
         }
 
         static StatsView read(FriendlyByteBuf buf) {
             return new StatsView(new rafasconquest.peerage.PlayerStats.View(buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}),
+                    buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}), buf.readList(b -> new String[]{b.readUtf(), b.readUtf()}),
                     buf.readBoolean()));
         }
     }

@@ -49,6 +49,21 @@ final class DistantHorizonsQuality {
         }
     }
 
+    /**
+     * Distant Horizons' vanilla fade off, always: it fades Sable ships with the world's blocks, fogging their hulls and
+     * hiding them past the render distance, though they stay real out to {@link DistantShips#REAL_WITHIN}. Not in
+     * its API, so set on its own config entry, in memory only.
+     */
+    static void noVanillaFade() {
+        var fade = com.seibel.distanthorizons.core.config.Config.Client.Advanced.Graphics.Quality.vanillaFadeMode;
+        var none = com.seibel.distanthorizons.api.enums.config.EDhApiMcRenderingFadeMode.NONE;
+        if (fade.getAllowApiOverride()) {
+            fade.setApiValue(none, RafasConquest.MOD_ID);
+        } else {
+            fade.setWithoutSaving(none);
+        }
+    }
+
     /** Distant Horizons' LOD-only mode, set as an override while on and cleared back to the player's own setting after. */
     static void lodOnly(boolean on) {
         IDhApiConfig configs = DhApi.Delayed.configs;

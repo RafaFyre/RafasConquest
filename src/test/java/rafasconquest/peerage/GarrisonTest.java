@@ -27,4 +27,27 @@ class GarrisonTest {
         assertEquals(List.of(200, 70, 100), g.men);
         assertEquals(370, g.soldiers());
     }
+
+    @Test
+    void cardsAreSavedByIdSoAddedFilesDontRenumberThem() {
+        rafasconquest.battle.UnitCards.apply("arms", "pikemen", "{\"kind\": \"foot\"}");
+        try {
+            int pikes = rafasconquest.battle.BattlePlan.Arm.byId("pikemen").ordinal();
+            int archers = rafasconquest.battle.BattlePlan.Arm.ARCHERS.ordinal();
+            Garrison g = new Garrison();
+            g.add(pikes);
+            g.add(archers);
+            net.minecraft.nbt.CompoundTag saved = g.save();
+            assertEquals(List.of(pikes, archers), Garrison.load(saved).units);
+
+            rafasconquest.battle.UnitCards.replace(List.of()); // the pikemen's file gone: the card is dropped
+            assertEquals(List.of(archers), Garrison.load(saved).units);
+
+            net.minecraft.nbt.CompoundTag old = new net.minecraft.nbt.CompoundTag(); // a save from before card ids
+            old.putIntArray("units", new int[]{archers});
+            assertEquals(List.of(archers), Garrison.load(old).units);
+        } finally {
+            rafasconquest.battle.UnitCards.replace(List.of());
+        }
+    }
 }

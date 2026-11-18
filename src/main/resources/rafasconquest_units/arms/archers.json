@@ -1,0 +1,20 @@
+{
+  "name": "Archers",
+  "icon": "minecraft:bow",
+  "kind": "ranged",
+  "hits": 1,
+  "takes": 1,
+  "pace": 1,
+  "nerve": 1,
+  "traits": [],
+  "missile": "arrows",
+  "recruit": "recruits:bowman",
+  "kit": "archer",
+  "gear": {},
+  "figure": "archers",
+  "front": 1,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": ""
+}

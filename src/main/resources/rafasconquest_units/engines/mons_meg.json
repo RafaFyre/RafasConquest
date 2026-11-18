@@ -1,0 +1,26 @@
+{
+  "name": "Mons meg",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 2,
+  "age": "gunpowder",
+  "homeland": null,
+  "field": false,
+  "attack": true,
+  "defence": false,
+  "reach": 160,
+  "reload": 34,
+  "damage": 84,
+  "batter": 2,
+  "ammo": {
+    "black_powder": 64,
+    "giant_cannon_ball": 6,
+    "ramrod": 1
+  },
+  "projectile": "big_ball",
+  "sound": "rafasconquest:battle.mons_meg",
+  "body": "bombard",
+  "size": 1,
+  "heavy": true,
+  "throwing": false
+}

@@ -21,7 +21,9 @@ public final class FieldBlock {
         /** Fast, full of swordsmen: keeps clear, then rams an enemy already grappled at its bow, in the side. */
         SHOCK,
         /** The fleet's camp: food, gear and the cavalry's horses; keeps to the rear, nobody on deck. */
-        CAMP
+        CAMP,
+        /** A ship of the line ({@link rafasconquest.core.SeaLanes.Size#gunship}): lies off at gun range, side-on, and fires broadsides. */
+        GUNSHIP
     }
 
     /** What a block is doing in its army. */
@@ -243,7 +245,7 @@ public final class FieldBlock {
         this.facingZ = facingZ;
         this.duty = duty;
         this.homeDuty = duty;
-        this.arrows = arm == Arm.ARCHERS ? soldiers * FieldRules.ARROWS_EACH : arm == Arm.MUSKETEERS ? soldiers * FieldRules.CARTRIDGES_EACH : 0;
+        this.arrows = arm.missile() == Arm.Missile.ARROWS ? soldiers * FieldRules.ARROWS_EACH : arm.missile() == Arm.Missile.SHOT ? soldiers * FieldRules.CARTRIDGES_EACH : 0;
     }
 
     /** What a player's unit does in a battle ({@link FieldBattle#assign}). */

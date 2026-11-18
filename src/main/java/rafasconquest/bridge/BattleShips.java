@@ -52,6 +52,8 @@ final class BattleShips {
     private static final Map<Integer, Integer> sides = new HashMap<>();
     /** Each ship's deck height this tick (where its soldiers stand), by formation id. */
     private static final Map<Integer, Double> decks = new HashMap<>();
+    /** Each ship's deck height above its keel, its card's. */
+    private static final Map<Integer, Integer> deckHeights = new HashMap<>();
 
     private BattleShips() {
     }
@@ -99,11 +101,13 @@ final class BattleShips {
         Map<Integer, SableLink.Helm> sailing = new HashMap<>();
         hulls.clear();
         decks.clear();
+        deckHeights.clear();
         sides.clear();
         List<SableLink.Helm> unbuilt = new ArrayList<>();
         for (SableLink.Helm h : helms) {
             wanted.add(key(h));
             sides.put(h.id(), h.side());
+            deckHeights.put(h.id(), size(h).deck);
             ServerSubLevel sub = ships.get(key(h));
             if (sub == null) {
                 if (level.getGameTime() % 20 == h.id() % 20) { // a try a second each, spread over the ticks
@@ -111,7 +115,7 @@ final class BattleShips {
                 }
             } else {
                 hulls.put(h.id(), hull(sub, h)); // where it lies, steered or not, so none is built on it
-                decks.put(h.id(), middle(sub).y + ShipHulls.DECK + 1);
+                decks.put(h.id(), middle(sub).y + size(h).deck + 1);
                 RigidBodyHandle body = RigidBodyHandle.of(sub);
                 if (body != null && body.isValid()) {
                     sailing.put(h.id(), h);
@@ -173,8 +177,13 @@ final class BattleShips {
         BoundingBox3ic box = sub.getPlot().getBoundingBox();
         // Built bow to +z, so its right (seen facing the bow) is -x and astern is -z.
         Vector3d at = sub.logicalPose().transformPosition(new Vector3d((box.minX() + box.maxX() + 1) / 2.0 - right,
-                box.minY() + ShipHulls.DECK + 1, (box.minZ() + box.maxZ() + 1) / 2.0 - back));
+                box.minY() + deckHeights.getOrDefault(id, ShipHulls.DECK) + 1, (box.minZ() + box.maxZ() + 1) / 2.0 - back));
         return new double[]{at.x, at.y, at.z};
+    }
+
+    /** Whether {@code sub} is a battle's ship (its guns' crews are the battle's own soldiers, not engineers of their own). */
+    public static boolean battleShip(ServerSubLevel sub) {
+        return sub.getUserDataTag().contains(BATTLE);
     }
 
     private static String key(SableLink.Helm h) {

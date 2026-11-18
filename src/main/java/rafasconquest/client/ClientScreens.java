@@ -42,8 +42,16 @@ public final class ClientScreens {
         Minecraft.getInstance().setScreen(new GateScreen(pos, left, right));
     }
 
+    /** The server's unit cards; in single player its cards are already this game's own. */
+    public static void unitCards(java.util.List<String[]> files) {
+        if (!Minecraft.getInstance().hasSingleplayerServer()) {
+            rafasconquest.battle.UnitCards.replace(files.stream().filter(f -> !f[0].equals("hulls")).toList());
+            rafasconquest.style.ShipHulls.replace(files.stream().filter(f -> f[0].equals("hulls")).toList());
+        }
+    }
+
     /** An Artillery Block's weapon, to pick. */
-    public static void openArtillery(net.minecraft.core.BlockPos pos, rafasconquest.battle.Machine weapon) {
+    public static void openArtillery(net.minecraft.core.BlockPos pos, rafasconquest.content.ArtilleryBlock.Weapon weapon) {
         Minecraft.getInstance().setScreen(new ArtilleryScreen(pos, weapon));
     }
 

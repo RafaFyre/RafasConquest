@@ -78,13 +78,21 @@ public final class BattleSounds {
     /** The recorded shot of an engine of this arm; null if it has none. */
     @javax.annotation.Nullable
     static Shot shot(rafasconquest.battle.BattlePlan.Arm arm) {
-        return switch (arm) {
-            case ONAGERS -> ONAGER;
-            case CULVERINS -> CULVERIN;
-            case MONS_MEGS -> MONS_MEG;
-            default -> null;
-        };
+        rafasconquest.battle.Machine m = arm.machine();
+        if (m == null || m.sound().isEmpty()) {
+            return null;
+        }
+        // The recordings we tuned keep their release and loudness; any other sound plays at once, heard far.
+        for (Shot s : new Shot[]{ONAGER, CULVERIN, MONS_MEG}) {
+            if (s.sound().getLocation().toString().equals(m.sound())) {
+                return s;
+            }
+        }
+        ResourceLocation id = ResourceLocation.tryParse(m.sound());
+        return id == null ? null : OTHER_SHOTS.computeIfAbsent(id, k -> new Shot(SoundEvent.createVariableRangeEvent(k), 0, 16F));
     }
+
+    private static final java.util.Map<ResourceLocation, Shot> OTHER_SHOTS = new java.util.HashMap<>();
 
     /** A shot's sound waiting to start: where, and when ({@code Util.getMillis}). */
     private record Queued(Shot shot, Vec3 at, long when) {

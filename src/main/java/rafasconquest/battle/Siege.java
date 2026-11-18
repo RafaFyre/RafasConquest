@@ -736,11 +736,11 @@ public final class Siege {
             }
             if (b.arm.mounted()) {
                 cavalry.add(b);
-            } else if (b.machine == Machine.SIEGE_TOWER) {
+            } else if (b.machine != null && b.machine.role() == Machine.Role.TOWER) {
                 towers.add(b);
-            } else if (b.machine == Machine.BATTERING_RAM) {
+            } else if (b.machine != null && b.machine.role() == Machine.Role.RAM) {
                 rams.add(b);
-            } else if (b.machine == Machine.MANTLET) {
+            } else if (b.machine != null && b.machine.role() == Machine.Role.MANTLET) {
                 mantlets.add(b);
             } else if (b.arm.engine() && b.machine != null) {
                 artillery.add(b);

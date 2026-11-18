@@ -3,7 +3,7 @@ package rafasconquest.core;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -86,7 +86,7 @@ class SeaLanesTest {
 
     @Test
     void mediumShipsAreCommonestThenSmallLargeAndExtraLarge() {
-        Map<SeaLanes.Size, Integer> counts = new EnumMap<>(SeaLanes.Size.class);
+        Map<SeaLanes.Size, Integer> counts = new HashMap<>();
         for (int i = 0; i < 10_000; i++) {
             counts.merge(SeaLanes.Size.pick(("ship" + i).hashCode()), 1, Integer::sum);
         }

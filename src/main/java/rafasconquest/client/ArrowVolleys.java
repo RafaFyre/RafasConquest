@@ -109,18 +109,21 @@ public final class ArrowVolleys {
             this.flash = flash;
         }
 
+        /** What a card looses: its engine's projectile (by name), shot for a musket card, else arrows. */
         static Kind of(int arm) {
-            BattlePlan.Arm[] arms = BattlePlan.Arm.values();
-            return arm < 0 || arm >= arms.length ? ARROW : switch (arms[arm]) {
-                case MUSKETEERS -> SHOT;
-                case CULVERINS, SERPENTINES -> BALL;
-                case MONS_MEGS -> BIG_BALL;
-                case HWACHAS -> ROCKET;
-                case ARCBALLISTAS, TOWER_CROSSBOWS -> BOLT;
-                case ONAGERS -> ROCK;
-                case TREBUCHETS -> BIG_ROCK;
-                default -> ARROW;
-            };
+            BattlePlan.Arm a = BattlePlan.Arm.get(arm);
+            if (a == null) {
+                return ARROW;
+            }
+            rafasconquest.battle.Machine m = a.machine();
+            if (m != null) {
+                try {
+                    return valueOf(m.projectile().toUpperCase(java.util.Locale.ROOT));
+                } catch (IllegalArgumentException e) {
+                    return ARROW;
+                }
+            }
+            return a.missile() == BattlePlan.Arm.Missile.SHOT ? SHOT : ARROW;
         }
     }
 
@@ -154,7 +157,7 @@ public final class ArrowVolleys {
             AIMS.put(from[v], new long[]{to[v], now});
             int arm = v < arms.length ? arms[v] : -1;
             Kind kind = Kind.of(arm);
-            BattleSounds.Shot sound = arm < 0 || arm >= BattlePlan.Arm.values().length ? null : BattleSounds.shot(BattlePlan.Arm.values()[arm]);
+            BattleSounds.Shot sound = BattlePlan.Arm.get(arm) == null ? null : BattleSounds.shot(BattlePlan.Arm.get(arm));
             List<FormationSnapshot.Sprite> figures = archers.layout();
             int fired = Math.min(shots[v], MAX_PER_VOLLEY);
             for (int i = 0; i < fired; i++) {

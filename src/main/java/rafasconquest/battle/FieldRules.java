@@ -263,7 +263,12 @@ public final class FieldRules {
 
     /** How much a musket ball does, for whom it hits: no shield stops it. */
     public static double shotDamage(Arm defender) {
-        return SHOT_DAMAGE * Arm.MUSKETEERS.hits() * defender.takes();
+        return shotDamage(Arm.MUSKETEERS, defender);
+    }
+
+    /** The same, fired by {@code shooter}'s card. */
+    public static double shotDamage(Arm shooter, Arm defender) {
+        return SHOT_DAMAGE * shooter.hits() * defender.takes();
     }
 
     /**

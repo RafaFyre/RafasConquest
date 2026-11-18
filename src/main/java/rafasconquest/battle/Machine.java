@@ -8,90 +8,178 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Siegeworks' engines that armies bring in their siege train ({@link BattlePlan.Arm#ENGINES}): each its own unit, its
- * {@link BattlePlan#PLATOON_SOLDIERS} soldiers working {@code perUnit} engines, shared out over its blocks. An engine fights from {@code age} on, in
- * the battles it is {@code field}, siege {@code attack} or siege {@code defence} gear for, and, if it has a
- * {@code homeland}, for that land's nations only. In the numbers each engine shoots once every {@code reload} seconds
- * as far as {@code reach}, each shot (misses included) doing {@code damage} health; first-pass figures from Siegeworks'
- * own loading times and damage; in a siege an attacker's shot batters the wall for {@code batter} ({@link Siege#batter}).
- * Its crew carry {@code ammo}: item id and count, each a shot's worth or a tool kept. The battering ram, siege tower
- * and mantlet shoot nothing: their crews bring them to the gate, the wall, or before the shooters ({@link Siege}).
+ * An engine armies bring ({@link BattlePlan.Arm#ENGINES}), read from its file in {@code mods/RafasConquest/units/engines}
+ * ({@link UnitCards}): its {@code entity} (a Siegeworks one), each unit its {@link BattlePlan#PLATOON_SOLDIERS} soldiers
+ * working {@code perUnit} engines, shared out over its blocks. An engine fights from {@code age} on, in the battles it is
+ * {@code field}, siege {@code attack} or siege {@code defence} gear for, and, if it has a {@code homeland}, for that
+ * land's nations only. In the numbers each engine shoots once every {@code reload} seconds as far as {@code reach}, each
+ * shot (misses included) doing {@code damage} health; in a siege an attacker's shot batters the wall for {@code batter}
+ * ({@link Siege#batter}). Its crew carry {@code ammo}: item id and count. Its {@link Role} says what the battle does with
+ * it: shooters shoot; the battering ram, siege tower and mantlet shoot nothing, their crews bringing them to the gate,
+ * the wall, or before the shooters ({@link Siege}).
+ * <p>
+ * The built-in engines below always exist (their files only change their numbers); a file of a new id adds one.
  */
-public enum Machine implements net.minecraft.util.StringRepresentable {
-    CULVERIN("culverin", 15, Age.GUNPOWDER, null, true, false, true, 120, 15, 42, 0,
-            "black_powder", 64, "cannon_ball", 16, "ramrod", 1),
-    SERPENTINE("serpentine", 15, Age.GUNPOWDER, null, true, false, true, 140, 19, 63, 0,
-            "black_powder", 64, "cannon_ball", 16, "ramrod", 1),
-    MONS_MEG("mons_meg", 2, Age.GUNPOWDER, null, false, true, false, 160, 34, 84, 2,
-            "black_powder", 64, "giant_cannon_ball", 6, "ramrod", 1),
-    HWACHA("hwacha", 12, Age.GUNPOWDER, Homeland.JUNGLE, true, false, false, 90, 35, 84, 0,
-            "so_singijeon", 64),
-    ARCBALLISTA("arcballista", 15, Age.STEEL, null, true, false, false, 80, 7, 21, 0,
-            "arcballista_bolt", 32),
-    ONAGER("onager", 6, Age.STEEL, null, true, true, false, 90, 13, 63, 0.5,
-            "minecraft:stone", 64),
-    TREBUCHET("trebuchet", 6, Age.STEEL, null, false, true, false, 150, 24, 84, 1,
-            "minecraft:stone", 64),
-    TOWER_CROSSBOW("tower_crossbow", 15, Age.STEEL, null, false, false, true, 80, 11, 21, 0,
-            "tower_crossbow_bolt", 32),
-    BATTERING_RAM("battering_ram", 10, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
-    SIEGE_TOWER("siege_tower", 10, Age.STEEL, null, false, true, false, 0, 0, 0, 0),
-    MANTLET("mantlet", 40, Age.STEEL, null, false, true, false, 0, 0, 0, 0);
+public final class Machine {
+    public enum Role { SHOOTER, RAM, TOWER, MANTLET }
 
     /** Siegeworks' mod id; its items and engines are named under it unless an id says otherwise. */
     public static final String MOD = "siegeworks";
     /** Shots each engine carries into battle, in the numbers. */
     public static final int SHOTS_EACH = 40;
 
-    /** Its entity's id, under {@link #MOD}. */
-    public final String id;
-    /** Engines a full unit works, and so soldiers to an engine (a fraction: a Mons Meg's 100 span five blocks). */
-    public final int perUnit;
-    public final double crew;
-    public final Age age;
-    @Nullable
-    public final Homeland homeland;
-    public final boolean field;
-    public final boolean attack;
-    public final boolean defence;
-    public final double reach;
-    public final double reload;
-    public final double damage;
-    public final double batter;
-    /** Item ids (bare ones under {@link #MOD}) and counts, in pairs. */
-    private final Object[] ammo;
+    private static final List<Machine> ALL = new ArrayList<>();
+    private static Machine[] array = new Machine[0];
 
-    Machine(String id, int perUnit, Age age, @Nullable Homeland homeland, boolean field, boolean attack, boolean defence,
-           double reach, double reload, double damage, double batter, Object... ammo) {
+    public static final Machine CULVERIN = builtIn("culverin");
+    public static final Machine SERPENTINE = builtIn("serpentine");
+    public static final Machine MONS_MEG = builtIn("mons_meg");
+    public static final Machine HWACHA = builtIn("hwacha");
+    public static final Machine ARCBALLISTA = builtIn("arcballista");
+    public static final Machine ONAGER = builtIn("onager");
+    public static final Machine TREBUCHET = builtIn("trebuchet");
+    public static final Machine TOWER_CROSSBOW = builtIn("tower_crossbow");
+    public static final Machine BATTERING_RAM = builtIn("battering_ram");
+    public static final Machine SIEGE_TOWER = builtIn("siege_tower");
+    public static final Machine MANTLET = builtIn("mantlet");
+
+    /** Its file's name; its entity's path under {@link #MOD} unless {@link #entity} says otherwise. */
+    public final String id;
+    private int ordinal;
+    String entity = "";
+    String name = "";
+    Role role = Role.SHOOTER;
+    /** Engines a full unit works, and so soldiers to an engine (a fraction: a Mons Meg's 100 span five blocks). */
+    public int perUnit = 1;
+    public double crew = BattlePlan.PLATOON_SOLDIERS;
+    public Age age = Age.STEEL;
+    @Nullable
+    public Homeland homeland;
+    public boolean field;
+    public boolean attack;
+    public boolean defence;
+    public double reach;
+    public double reload;
+    public double damage;
+    public double batter;
+    /** What it looses, as the client draws it ({@code ArrowVolleys.Kind}, lower case), and the recording of its shot ("" none). */
+    String projectile = "arrow";
+    String sound = "";
+    /** Its box shape where its real model can't be drawn ({@code SoldierFigure.Body}, lower case), how much bigger it is drawn. */
+    String body = "cannon";
+    float size = 1;
+    /** Its shot shakes and flashes big (a Mons Meg's, a trebuchet's); it swings a throwing arm as a trebuchet does. */
+    boolean heavy;
+    boolean throwing;
+    /** Item ids (bare ones under {@link #MOD}) and counts. */
+    final List<java.util.Map.Entry<String, Integer>> ammo = new ArrayList<>();
+
+    private Machine(String id) {
         this.id = id;
-        this.perUnit = perUnit;
-        this.crew = BattlePlan.PLATOON_SOLDIERS / (double) perUnit;
-        this.age = age;
-        this.homeland = homeland;
-        this.field = field;
-        this.attack = attack;
-        this.defence = defence;
-        this.reach = reach;
-        this.reload = reload;
-        this.damage = damage;
-        this.batter = batter;
-        this.ammo = ammo;
     }
 
-    /** Its name in an Artillery Block's state: its entity id. */
+    private static Machine builtIn(String id) {
+        Machine m = add(id);
+        UnitCards.readBuiltIn(m);
+        return m;
+    }
+
+    /** The engine {@code id}, made (shooting nothing, after every other) if there is none yet. */
+    static Machine add(String id) {
+        Machine m = byId(id);
+        if (m == null) {
+            m = new Machine(id);
+            m.ordinal = ALL.size();
+            ALL.add(m);
+            array = ALL.toArray(Machine[]::new);
+        }
+        return m;
+    }
+
+    /** Drops every engine but the built-in ones, before another's set is added in its order ({@link UnitCards#replace}). */
+    static void keepBuiltIns() {
+        ALL.subList(MANTLET.ordinal + 1, ALL.size()).clear();
+        array = ALL.toArray(Machine[]::new);
+    }
+
+    public static Machine[] values() {
+        return array.clone();
+    }
+
+    public static int count() {
+        return array.length;
+    }
+
+    /** The engine at {@code ordinal}; null if there is none. */
+    @Nullable
+    public static Machine get(int ordinal) {
+        return ordinal >= 0 && ordinal < array.length ? array[ordinal] : null;
+    }
+
+    @Nullable
+    public static Machine byId(String id) {
+        for (Machine m : array) {
+            if (m.id.equals(id)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    public int ordinal() {
+        return ordinal;
+    }
+
+    public String name() {
+        return id.toUpperCase(java.util.Locale.ROOT);
+    }
+
     @Override
-    public String getSerializedName() {
-        return id;
+    public String toString() {
+        return name();
+    }
+
+    /** Its entity's full id. */
+    public String entity() {
+        return entity.isEmpty() ? MOD + ":" + id : entity.indexOf(':') >= 0 ? entity : MOD + ":" + entity;
+    }
+
+    public Role role() {
+        return role;
+    }
+
+    public String projectile() {
+        return projectile;
+    }
+
+    public String sound() {
+        return sound;
+    }
+
+    public String body() {
+        return body;
+    }
+
+    public float size() {
+        return size;
+    }
+
+    public boolean heavy() {
+        return heavy;
+    }
+
+    public boolean throwing() {
+        return throwing;
     }
 
     /** Whether it shoots: the ram, tower and mantlet don't. */
     public boolean shoots() {
-        return reach > 0;
+        return role == Role.SHOOTER && reach > 0;
     }
 
     /** Whether its operator rides it from where the crew stands; a ram or tower is brought up as a siege work instead. */
     public boolean ridden() {
-        return this != BATTERING_RAM && this != SIEGE_TOWER;
+        return role != Role.RAM && role != Role.TOWER;
     }
 
     /** How many of it a block of crew works, on average (a fraction for the heavy ones). */
@@ -115,9 +203,8 @@ public enum Machine implements net.minecraft.util.StringRepresentable {
     /** The ammunition its crew carry: full item id, count. */
     public List<java.util.Map.Entry<String, Integer>> ammo() {
         List<java.util.Map.Entry<String, Integer>> out = new ArrayList<>();
-        for (int i = 0; i < ammo.length; i += 2) {
-            String item = (String) ammo[i];
-            out.add(java.util.Map.entry(item.indexOf(':') >= 0 ? item : MOD + ":" + item, (Integer) ammo[i + 1]));
+        for (var e : ammo) {
+            out.add(java.util.Map.entry(e.getKey().indexOf(':') >= 0 ? e.getKey() : MOD + ":" + e.getKey(), e.getValue()));
         }
         return out;
     }
@@ -128,7 +215,7 @@ public enum Machine implements net.minecraft.util.StringRepresentable {
      */
     public static List<Machine> allowed(Age reached, @Nullable Homeland land, BattleType type, boolean defending) {
         List<Machine> out = new ArrayList<>();
-        for (Machine e : values()) {
+        for (Machine e : array) {
             boolean serves = switch (type) {
                 case LAND -> e.field;
                 case SIEGE -> defending ? e.defence : e.attack;

@@ -110,7 +110,7 @@ final class SiegeWorks {
     /** A Siegeworks tower's speed driven by its crew, blocks a second, from Siegeworks' config; 0 if unknown. */
     private static double towerSpeed() {
         try {
-            var type = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, "siege_tower")).orElse(null);
+            var type = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.parse(Machine.SIEGE_TOWER.entity())).orElse(null);
             if (type == null) {
                 return 0;
             }
@@ -251,7 +251,7 @@ final class SiegeWorks {
             return;
         }
         Vec3 centre = centre(carrying);
-        Entity e = engine(w, "siege_ladder");
+        Entity e = engine(w, Machine.MOD + ":siege_ladder");
         if (e != null) {
             e.teleportTo(centre.x, centre.y + 1.7, centre.z);
             e.setYRot(yaw(centre, w.foot()));
@@ -278,7 +278,7 @@ final class SiegeWorks {
         }
         BlockPos foot = cell.atY(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cell.getX(), cell.getZ()));
         ladders.put(w, foot);
-        Entity e = engine(w, "siege_ladder");
+        Entity e = engine(w, Machine.MOD + ":siege_ladder");
         if (e != null) {
             // Long enough for the wall: three blocks a section past the first.
             int sections = Math.max(0, Math.min(4, (int) Math.ceil((walkY - foot.getY() + 1) / 3.0) - 1));
@@ -303,7 +303,7 @@ final class SiegeWorks {
         int ox = ox(w);
         int oz = oz(w);
         boolean up = w.state() == Siege.State.UP;
-        Entity e = engine(w, "siege_tower");
+        Entity e = engine(w, Machine.SIEGE_TOWER.entity());
         Point[] last = rolling.get(w);
         if (e != null && last == null) {
             e.teleportTo(at.x(), ground, at.z()); // just made: on the ground where the numbers have it
@@ -432,7 +432,7 @@ final class SiegeWorks {
             return;
         }
         Vec3 centre = centre(carrying);
-        Entity e = engine(w, "battering_ram");
+        Entity e = engine(w, Machine.BATTERING_RAM.entity());
         if (e != null) {
             e.teleportTo(centre.x, centre.y, centre.z);
             e.setYRot(yaw(centre, w.foot()));
@@ -446,7 +446,7 @@ final class SiegeWorks {
         if (e != null && !e.isRemoved()) {
             return e;
         }
-        e = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.fromNamespaceAndPath(Machine.MOD, id))
+        e = BuiltInRegistries.ENTITY_TYPE.getOptional(ResourceLocation.parse(id))
                 .map(t -> t.create(level)).orElse(null);
         if (e == null) {
             engines.remove(w);

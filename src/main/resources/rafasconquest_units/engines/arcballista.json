@@ -1,0 +1,24 @@
+{
+  "name": "Arcballista",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 15,
+  "age": "steel",
+  "homeland": null,
+  "field": true,
+  "attack": false,
+  "defence": false,
+  "reach": 80,
+  "reload": 7,
+  "damage": 21,
+  "batter": 0,
+  "ammo": {
+    "arcballista_bolt": 32
+  },
+  "projectile": "bolt",
+  "sound": "",
+  "body": "ballista",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

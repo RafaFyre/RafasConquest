@@ -42,25 +42,26 @@ final class SoldierFigure {
 
         /** A siege engine's model ({@link FormationSnapshot.Engine#kind}), a tower's bridge or a ladder {@code up} or not; always 3D. */
         static Shape engine(int kind, boolean up) {
-            Body body = kind == FormationSnapshot.LADDER ? (up ? Body.LADDER_UP : Body.LADDER) : switch (Machine.values()[kind]) {
-                case CULVERIN, SERPENTINE -> Body.CANNON;
-                case MONS_MEG -> Body.BOMBARD;
-                case HWACHA -> Body.HWACHA;
-                case ARCBALLISTA -> Body.BALLISTA;
-                case ONAGER -> Body.ONAGER;
-                case TREBUCHET -> Body.TREBUCHET;
-                case TOWER_CROSSBOW -> Body.TOWER_CROSSBOW;
-                case BATTERING_RAM -> Body.RAM;
-                case SIEGE_TOWER -> up ? Body.TOWER_UP : Body.TOWER;
-                case MANTLET -> Body.MANTLET;
-            };
+            Machine m = Machine.get(kind);
+            Body body;
+            if (m == null) {
+                body = up ? Body.LADDER_UP : Body.LADDER;
+            } else {
+                try {
+                    body = Body.valueOf(m.body().toUpperCase(java.util.Locale.ROOT)); // as its file names it
+                } catch (IllegalArgumentException e) {
+                    body = Body.CANNON;
+                }
+                body = body == Body.TOWER && up ? Body.TOWER_UP : body;
+            }
             return new Shape(body, false, false, false, FigureGear.Weapon.NONE, false);
         }
     }
 
     /** How much bigger than its model an engine is drawn: the serpentine is a culverin's bigger sister. */
     static float engineSize(int kind) {
-        return kind != FormationSnapshot.LADDER && Machine.values()[kind] == Machine.SERPENTINE ? 1.3F : 1;
+        Machine m = Machine.get(kind);
+        return m == null ? 1 : m.size();
     }
 
     enum Body {

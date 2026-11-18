@@ -1,0 +1,30 @@
+{
+  "name": "Heavy cavalry",
+  "icon": "minecraft:iron_horse_armor",
+  "kind": "mounted",
+  "hits": 1.3,
+  "takes": 0.7,
+  "pace": 0.9,
+  "nerve": 1.3,
+  "traits": [
+    "barded",
+    "halberd_sometimes"
+  ],
+  "missile": "none",
+  "recruit": "recruits:horseman",
+  "kit": "heavy_cavalry",
+  "gear": {
+    "head": "minecraft:diamond_helmet",
+    "chest": "minecraft:diamond_chestplate",
+    "legs": "minecraft:diamond_leggings",
+    "feet": "minecraft:diamond_boots",
+    "mainhand": "minecraft:diamond_sword",
+    "offhand": "banner_shield"
+  },
+  "figure": "heavy_cavalry",
+  "front": 2,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": ""
+}

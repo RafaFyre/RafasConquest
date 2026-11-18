@@ -106,7 +106,7 @@ final class DistantShips {
         for (FormationSnapshot f : DistantArmies.now()) {
             if (f.ship() != null && f.ship().hull() >= 0) { // one hull to a ship, drawn by the block sailing it
                 wants.add(new Want(f.id(), f.x(), f.z(), Math.atan2(f.facingX(), f.facingZ()),
-                        SeaLanes.Size.values()[f.ship().hull()], null, f.ship()));
+                        SeaLanes.Size.get(f.ship().hull()), null, f.ship()));
             }
         }
         double[][] owns = match(wants, real);

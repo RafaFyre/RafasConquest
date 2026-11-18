@@ -26,6 +26,13 @@ public final class DistantHorizonsLink {
             RafasConquest.LOGGER.info("Distant Horizons found: battle figures take over where it fades the world");
         } catch (LinkageError | RuntimeException e) {
             RafasConquest.LOGGER.warn("Distant Horizons found, but its API doesn't match; distant battles are drawn without it", e);
+            return;
+        }
+        try {
+            DistantHorizonsQuality.noVanillaFade();
+            RafasConquest.LOGGER.info("Distant Horizons: vanilla fade off, so Sable ships aren't faded with the world");
+        } catch (LinkageError | RuntimeException e) { // its internal config, which a new version may move
+            RafasConquest.LOGGER.warn("Distant Horizons: couldn't turn its vanilla fade off; set Vanilla Fade Mode to None by hand", e);
         }
     }
 

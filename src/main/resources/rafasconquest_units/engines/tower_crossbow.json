@@ -1,0 +1,24 @@
+{
+  "name": "Tower crossbow",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 15,
+  "age": "steel",
+  "homeland": null,
+  "field": false,
+  "attack": false,
+  "defence": true,
+  "reach": 80,
+  "reload": 11,
+  "damage": 21,
+  "batter": 0,
+  "ammo": {
+    "tower_crossbow_bolt": 32
+  },
+  "projectile": "bolt",
+  "sound": "",
+  "body": "tower_crossbow",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

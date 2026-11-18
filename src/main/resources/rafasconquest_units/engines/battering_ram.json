@@ -1,0 +1,22 @@
+{
+  "name": "Battering ram",
+  "entity": "",
+  "role": "ram",
+  "per_unit": 10,
+  "age": "steel",
+  "homeland": null,
+  "field": false,
+  "attack": true,
+  "defence": false,
+  "reach": 0,
+  "reload": 0,
+  "damage": 0,
+  "batter": 0,
+  "ammo": {},
+  "projectile": "arrow",
+  "sound": "",
+  "body": "ram",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

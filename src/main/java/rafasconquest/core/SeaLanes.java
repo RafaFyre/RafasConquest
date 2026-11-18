@@ -40,28 +40,159 @@ public final class SeaLanes {
     /** Ships each port sends to sea per lane at launch. */
     static final int AT_SEA_PER_SIDE = 4;
 
-    public enum Size {
-        SMALL(11, 5), MEDIUM(17, 5), LARGE(23, 7), XLARGE(31, 9),
+    /**
+     * A ship card: a kind of ship, from its file in {@code mods/RafasConquest/units/ships} ({@link rafasconquest.battle.UnitCards}).
+     * Its hull is a structure {@code .nbt} beside it ({@link rafasconquest.style.ShipHulls}; {@code merchant} the lanes'
+     * unarmed one, blank: the same), with its length and beam, its deck's height above its keel, its pace in battle (times
+     * the usual), how often it sails the lanes (a weight; 0: never), and which battle ship it is ({@code battle}: "unit",
+     * "flagship", "cargo"; blank: none). The built-in five are constants; a file of a new id adds a card.
+     */
+    public static final class Size {
+        private static final List<Size> ALL = new ArrayList<>();
+        private static Size[] array = new Size[0];
+
+        public static final Size SMALL = builtIn("small");
+        public static final Size MEDIUM = builtIn("medium");
+        public static final Size LARGE = builtIn("large");
+        public static final Size XLARGE = builtIn("xlarge");
         /** A battle's unit ship, two hundred soldiers on deck; never on the lanes. */
-        XXLARGE(41, 13);
+        public static final Size XXLARGE = builtIn("xxlarge");
+        /** A ship of the line: its crew stand only at the Character Markers in its hull and work its guns; never on the lanes. */
+        public static final Size GUNSHIP = builtIn("gunship");
 
-        public final int length;
-        public final int width;
+        public final String id;
+        private int ordinal;
+        private boolean builtIn;
+        public String name;
+        public int length = 17;
+        public int width = 5;
+        public int deck = 4;
+        public double speed = 1;
+        public int lanes;
+        public String battle = "";
+        public String hull = "";
+        public String merchant = "";
+        /** "boarder": its unit stands on its deck and boards (the captains' AI); "gunship": it lies off and fires broadsides. */
+        public String type = "boarder";
+        /**
+         * Read from its hull ({@link rafasconquest.style.ShipHulls}): its guns (the engines on its Artillery Blocks, by id),
+         * those on its right side (-x) and its left (+x), a centreline gun on both; and where its crew stand, its Character
+         * Markers, one post a soldier.
+         */
+        public List<String> gunsRight = List.of();
+        public List<String> gunsLeft = List.of();
+        public List<Post> posts = List.of();
 
-        Size(int length, int width) {
-            this.length = length;
-            this.width = width;
+        /** A crewman's place in the hull's frame (x across, y up from the keel, z to the bow), and the gun beside it ("" none). */
+        public record Post(int x, int y, int z, String gun) {
+        }
+
+        private Size(String id) {
+            this.id = id;
+            this.name = id;
+        }
+
+        private static Size builtIn(String id) {
+            Size s = add(id);
+            s.builtIn = true;
+            rafasconquest.battle.UnitCards.readBuiltIn(s);
+            return s;
+        }
+
+        /** The card of {@code id}, made (after the others) if new. */
+        public static Size add(String id) {
+            Size s = byId(id);
+            if (s == null) {
+                s = new Size(id);
+                s.ordinal = ALL.size();
+                ALL.add(s);
+                array = ALL.toArray(Size[]::new);
+            }
+            return s;
+        }
+
+        public static void keepBuiltIns() {
+            ALL.removeIf(s -> !s.builtIn);
+            array = ALL.toArray(Size[]::new);
+        }
+
+        /** Every card, by ordinal. A copy: don't hold it across a reload. */
+        public static Size[] values() {
+            return array.clone();
+        }
+
+        /** The card at {@code ordinal}; a large ship if there is none (a server's card this client lacks). */
+        public static Size get(int ordinal) {
+            return ordinal >= 0 && ordinal < array.length ? array[ordinal] : LARGE;
+        }
+
+        @org.jetbrains.annotations.Nullable
+        public static Size byId(String id) {
+            for (Size s : array) {
+                if (s.id.equals(id)) {
+                    return s;
+                }
+            }
+            return null;
+        }
+
+        /** The first card that is battle ship {@code role}, else {@code otherwise}. */
+        public static Size battle(String role, Size otherwise) {
+            for (Size s : array) {
+                if (s.battle.equals(role)) {
+                    return s;
+                }
+            }
+            return otherwise;
+        }
+
+        public boolean gunship() {
+            return type.equals("gunship");
+        }
+
+        public static Size unitShip() {
+            return battle("unit", XXLARGE);
+        }
+
+        public int ordinal() {
+            return ordinal;
+        }
+
+        public boolean builtIn() {
+            return builtIn;
         }
 
         /** Its style slot folder name. */
         public String slot() {
-            return name().toLowerCase(java.util.Locale.ROOT);
+            return id;
         }
 
-        /** Medium most often, then small, large, and extra large least: 40, 30, 20, 10 in 100. */
+        @Override
+        public String toString() {
+            return id;
+        }
+
+        /** A card by its lane weight, the most common first, so the built-ins' 40, 30, 20, 10 in 100 fall as they always did. */
         static Size pick(long hash) {
-            int roll = (int) Math.floorMod(mix(hash) >>> 20, 100L);
-            return roll < 40 ? MEDIUM : roll < 70 ? SMALL : roll < 90 ? LARGE : XLARGE;
+            List<Size> sailing = ALL.stream().filter(s -> s.lanes > 0)
+                    .sorted(java.util.Comparator.comparingInt((Size s) -> -s.lanes)).toList();
+            int total = sailing.stream().mapToInt(s -> s.lanes).sum();
+            if (total == 0) {
+                return MEDIUM;
+            }
+            int roll = (int) Math.floorMod(mix(hash) >>> 20, (long) total);
+            for (Size s : sailing) {
+                roll -= s.lanes;
+                if (roll < 0) {
+                    return s;
+                }
+            }
+            return MEDIUM;
+        }
+
+        /** The longest ship on the lanes. */
+        public static int longestOnLanes() {
+            return ALL.stream().filter(s -> s.lanes > 0).mapToInt(s -> s.length).max().orElse(XLARGE.length);
         }
     }
 

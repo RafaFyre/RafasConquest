@@ -14,17 +14,17 @@ public class ArtilleryScreen extends Screen {
     private static final int W = 200;
 
     private final BlockPos pos;
-    private final Machine weapon;
+    private final ArtilleryBlock.Weapon weapon;
     private boolean open;
 
-    public ArtilleryScreen(BlockPos pos, Machine weapon) {
+    public ArtilleryScreen(BlockPos pos, ArtilleryBlock.Weapon weapon) {
         super(Component.literal("Artillery Block"));
         this.pos = pos;
         this.weapon = weapon;
     }
 
-    private static Component name(Machine m) {
-        return Component.translatable("entity." + Machine.MOD + "." + m.id);
+    private static Component name(ArtilleryBlock.Weapon m) {
+        return Component.translatable("entity." + Machine.MOD + "." + m.getSerializedName());
     }
 
     @Override
@@ -38,7 +38,7 @@ public class ArtilleryScreen extends Screen {
         if (!open) {
             return;
         }
-        for (Machine m : ArtilleryBlock.WEAPON.getPossibleValues()) {
+        for (ArtilleryBlock.Weapon m : ArtilleryBlock.WEAPON.getPossibleValues()) {
             y += 20;
             addRenderableWidget(Button.builder(name(m), b -> {
                 ConquestNetwork.setArtillery(pos, m);
