@@ -130,6 +130,10 @@ public final class FieldRules {
     public static final double LURE_REACH = 20;
     /** A pincer gives up after this long. */
     public static final int PINCER_SECONDS = 40;
+    /** Once its bait springs, a wing holds this long for the enemy to come on, then marches up again. */
+    public static final int BAIT_HOLD_SECONDS = 60;
+    /** A front block not yet fighting this far behind its wing's line is brought up to it. */
+    public static final double LINE_LAG = 4;
     /** The conveyor: a front block that has fought this long is rotated to the back of its file's stack. */
     public static final int ROTATE_SECONDS = 120;
     /**

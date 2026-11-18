@@ -1670,8 +1670,9 @@ public final class FieldBattle {
             bait(army, block, order);
             return;
         }
-        if (army.baitSprung[block.wing] && order == BattlePlan.Order.MARCH) {
-            order = BattlePlan.Order.HOLD; // the wing waits for its bait to draw the enemy in
+        if (army.baitSprung[block.wing] && order == BattlePlan.Order.MARCH
+                && seconds - army.baitSprungAt[block.wing] < FieldRules.BAIT_HOLD_SECONDS) {
+            order = BattlePlan.Order.HOLD; // the wing waits a while for its bait to draw the enemy in, then moves up
         }
         switch (order) {
             case MARCH -> {
@@ -1704,6 +1705,9 @@ public final class FieldBattle {
                     return;
                 }
                 double step = Math.min(BattlePlan.MARCH_STEP, nearest - BattlePlan.FRONT_CONTACT);
+                if (step <= 0 && foe == null && behindOthers(army, block.wing, block.line) > FieldRules.LINE_LAG) {
+                    step = BattlePlan.MARCH_STEP; // not yet fighting and behind its wing's line: the general brings it up
+                }
                 if (step > 0) {
                     block.line = block.line.plus(army.facingX * step, army.facingZ * step);
                 }
@@ -1724,6 +1728,7 @@ public final class FieldBattle {
             block.engaged = true;
             if (!army.baitSprung[block.wing]) {
                 army.baitSprung[block.wing] = true;
+                army.baitSprungAt[block.wing] = seconds;
                 calls.add(new Order(army.side, Call.BAIT));
                 events.add(new Event(army.side, rafasconquest.data.Dialogue.say("battle.events.bait_falls_back", "where", army.where(block.wing))));
             }
@@ -3382,8 +3387,8 @@ public final class FieldBattle {
 
     /**
      * Whom a block that breaks formation goes for, by its general's strategies: cavalry the enemy general
-     * (Decapitate), else the most soldiers near (Mass Casualties), else an exposed block (Precision Strikes); null for
-     * the nearest.
+     * (Decapitate), else the most soldiers near (Mass Casualties), else an exposed block (Precision Strikes), else the
+     * nearest; spread over that block's unit ({@link #spreadOver}). Null, no enemy left.
      */
     @Nullable
     private FieldBlock choosePrey(FieldArmy army, FieldArmy enemy, FieldBlock block) {
@@ -3391,19 +3396,35 @@ public final class FieldBattle {
                 && enemy.commander.pos.distanceTo(block.pos) <= 60) {
             return enemy.commander;
         }
-        if (army.plan.has(Strategy.MASS_CASUALTIES)) {
-            FieldBlock e = mostSoldiers(enemy, block.pos, 60);
-            if (e != null) {
-                return e;
-            }
+        FieldBlock e = army.plan.has(Strategy.MASS_CASUALTIES) ? mostSoldiers(enemy, block.pos, 60) : null;
+        if (e == null && army.plan.has(Strategy.PRECISION_STRIKES)) {
+            e = mostExposed(enemy, block.pos, 60);
+            e = e != null && e.pos.distanceTo(block.pos) <= 60 ? e : null;
         }
-        if (army.plan.has(Strategy.PRECISION_STRIKES)) {
-            FieldBlock e = mostExposed(enemy, block.pos, 60);
-            if (e != null && e.pos.distanceTo(block.pos) <= 60) {
-                return e;
-            }
+        if (e == null) {
+            e = nearestBlock(block, enemy, block.arm.mounted());
         }
-        return null;
+        return e == null ? null : spreadOver(block, e, Double.MAX_VALUE);
+    }
+
+    /**
+     * Which block of {@code foe}'s unit (within {@code reach} of {@code by}) {@code by} goes for: the blocks of its own
+     * unit spread evenly over the foe's, left to right as both stand, so a unit falls on a whole unit in a wave instead
+     * of every block turning on the one nearest.
+     */
+    private FieldBlock spreadOver(FieldBlock by, FieldBlock foe, double reach) {
+        List<FieldBlock> foes = unit(armies[foe.side], foe, foe.pos);
+        foes.removeIf(f -> f.duty == Duty.GENERAL || f.duty == Duty.BEARER || by.pos.distanceTo(f.pos) > reach);
+        if (foes.size() < 2) {
+            return foe;
+        }
+        FieldArmy army = armies[by.side];
+        Comparator<FieldBlock> leftToRight = Comparator.comparingDouble(b -> b.pos.x() * -army.facingZ + b.pos.z() * army.facingX);
+        List<FieldBlock> mine = unit(army, by, by.pos);
+        foes.sort(leftToRight);
+        mine.sort(leftToRight);
+        int i = Math.max(0, mine.indexOf(by));
+        return foes.get(i * foes.size() / Math.max(1, mine.size()));
     }
 
     /** How far behind its army's front line a point is (negative: ahead of it). */
@@ -3935,6 +3956,8 @@ public final class FieldBattle {
         }
         if (foe.afloat && archers.afloat) {
             foe = spread(archers, crew(foe)); // shooting at a ship: its unit's blocks take the arrows, the general last
+        } else if (foe != led) {
+            foe = spreadOver(archers, foe, reach); // a unit's shooters (Hwachas too) share out the enemy unit's blocks
         }
         int shots = (int) Math.min(archers.arrows, machine != null ? engineShots(archers)
                 : Math.ceil(archers.alive * (archers.arm.missile() == Arm.Missile.SHOT ? FieldRules.SHOTS_PER_SECOND : FieldRules.ARROWS_PER_SECOND)));

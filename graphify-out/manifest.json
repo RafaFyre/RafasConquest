@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestEvents.java": {
-    "mtime": 1794948094.5229077,
-    "seen": 1794953975.444448,
-    "ast_hash": "2ea0ccef6899733fca9a6fd1d66cbbe9",
+    "mtime": 1794973326.1295066,
+    "seen": 1794973370.9158587,
+    "ast_hash": "bef777a9570103ddc3c95ca4a7ec1a85",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/ConquestGameRules.java": {
@@ -78,15 +78,15 @@
     "semantic_hash": "0f38673dfc737e56b2e6675fb9f18960"
   },
   "src/main/java/rafasconquest/battle/FieldArmy.java": {
-    "mtime": 1794442464.488892,
-    "seen": 1794442756.6186016,
-    "ast_hash": "8cf84c99f8fc70c80d61caf442b81861",
+    "mtime": 1794973283.2076373,
+    "seen": 1794973370.9158862,
+    "ast_hash": "2a748653f2055ec4e276fdb96fffb745",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1794973024.204281,
-    "seen": 1794973168.857302,
-    "ast_hash": "aa0eb1b9c7074b0efa6f2c04ecaf9d0b",
+    "mtime": 1794973669.8581495,
+    "seen": 1794973718.003283,
+    "ast_hash": "7de213bde117d12529dd0ee662fdeb84",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
@@ -96,9 +96,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
-    "mtime": 1794948094.5282378,
-    "seen": 1794953975.444472,
-    "ast_hash": "9d993f19d4039e722b9b2f55f26ebb7b",
+    "mtime": 1794973532.2570956,
+    "seen": 1794973718.0032866,
+    "ast_hash": "a708755236f1ec78fb83f9d6037ca72f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FormationSnapshot.java": {
@@ -684,9 +684,9 @@
     "semantic_hash": "3d30902a7883bd168e6259ed3ecaa94e"
   },
   "src/main/java/rafasconquest/gear/Armoury.java": {
-    "mtime": 1794973074.6836114,
-    "seen": 1794973168.8575866,
-    "ast_hash": "51ee98a586933f20b81c6f42ccd83e27",
+    "mtime": 1794973300.344179,
+    "seen": 1794973370.9162679,
+    "ast_hash": "81e62166c128a09bb13fcc9d6b885e06",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/gear/RankKits.java": {
@@ -744,9 +744,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1794972696.018135,
-    "seen": 1794972758.510286,
-    "ast_hash": "6ab2d678e681d9a60b96977956bff5cb",
+    "mtime": 1794973326.0407968,
+    "seen": 1794973370.9163184,
+    "ast_hash": "1e228573b3cc3dc5d98a9260730efb5a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -822,9 +822,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/PlayerStats.java": {
-    "mtime": 1794972930.0298252,
-    "seen": 1794973023.9491823,
-    "ast_hash": "6d20627f6cadc359795c702fe6184d81",
+    "mtime": 1794973325.8298485,
+    "seen": 1794973370.916353,
+    "ast_hash": "b31a56a0ac93155a391db007f4bc4e3c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/Quest.java": {
@@ -1662,9 +1662,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1794973024.349401,
-    "seen": 1794973168.8580768,
-    "ast_hash": "4a808dcf50bc94079b857d67efe3de74",
+    "mtime": 1794973646.082058,
+    "seen": 1794973718.0040715,
+    "ast_hash": "f165f22f6c94e5e1ea8ff432e036bb10",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -2592,9 +2592,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest.mixins.json": {
-    "mtime": 1794623815.743719,
-    "seen": 1794623963.7176576,
-    "ast_hash": "2acd628f891350525e11834d10a81583",
+    "mtime": 1794973325.7375867,
+    "seen": 1794973370.916775,
+    "ast_hash": "fb636d3d62512957a68153118af90e81",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/RecruitsArrowCleanerMixin.java": {
@@ -4284,15 +4284,33 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/WeaponSkills.java": {
-    "mtime": 1794972953.9697504,
-    "seen": 1794973023.9491906,
-    "ast_hash": "04f1683ffa051ced808a402a473669ce",
+    "mtime": 1794973401.1785152,
+    "seen": 1794973443.5872934,
+    "ast_hash": "19ec34bf35a2fa5f4eae58dc9ca238f4",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/peerage/WeaponSkillsTest.java": {
     "mtime": 1794972969.3894632,
     "seen": 1794973023.9497073,
     "ast_hash": "9f2d7f0b34229b30b9aa027e532dc502",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/EpicKnightsJoustingMixin.java": {
+    "mtime": 1794973401.1171997,
+    "seen": 1794973443.587248,
+    "ast_hash": "afb3b8ddb7e7bacc19b0904f4ea3ccac",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/EpicKnightsSlownessMixin.java": {
+    "mtime": 1794973325.5490677,
+    "seen": 1794973370.9163065,
+    "ast_hash": "1ea2d8ae507780c16478f26ff1c02406",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/mixin/EpicKnightsTwoHandedMixin.java": {
+    "mtime": 1794973299.7831693,
+    "seen": 1794973370.916308,
+    "ast_hash": "649403a3bd8cee86fd0235c3d240af46",
     "semantic_hash": ""
   }
 }

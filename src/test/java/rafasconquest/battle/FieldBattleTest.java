@@ -496,6 +496,28 @@ class FieldBattleTest {
     }
 
     @Test
+    void aChargingFootUnitSpreadsOverItsPreysUnit() {
+        FieldBattle battle = battle(100, 100, 5);
+        for (int i = 0; i < BattlePlan.TIME_LIMIT_SECONDS && !battle.over(); i++) {
+            battle.second();
+            for (FieldBlock c : battle.army(0).blocks()) {
+                if (!c.arm().infantry() || c.platoon() < 0 || c.inWedge || !c.charged || c.prey() == null || c.prey().platoon() < 0) {
+                    continue;
+                }
+                FieldBlock prey = c.prey();
+                List<FieldBlock> mates = battle.army(0).platoon(c.platoon()).stream()
+                        .filter(m -> m.alive() > 0 && m.charged && m.prey() != null && m.prey().platoon() == prey.platoon() && m.prey().side == prey.side).toList();
+                long standing = battle.army(1).platoon(prey.platoon()).stream().filter(e -> e.alive() > 0 && e.duty() != Duty.FLEEING).count();
+                if (mates.size() >= 2 && standing >= 2) {
+                    assertTrue(mates.stream().map(FieldBlock::prey).distinct().count() > 1, "a whole unit fell on one block of its prey's unit");
+                    return;
+                }
+            }
+        }
+        throw new AssertionError("no unit charged a unit");
+    }
+
+    @Test
     void aFrontUnitCyclesOutWholeAndTheUnitBehindTakesItsFiles() {
         FieldBattle battle = battle(100, 100, 1);
         FieldArmy army = battle.army(0);

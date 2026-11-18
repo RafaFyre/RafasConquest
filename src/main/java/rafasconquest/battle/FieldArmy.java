@@ -72,6 +72,8 @@ public final class FieldArmy {
     final int[] baitUnit = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
     final Point[] baitLine = new Point[3];
     final boolean[] baitSprung = new boolean[3];
+    /** When each wing's bait sprang (battle seconds). */
+    final int[] baitSprungAt = new int[3];
     /** Pincer: the lured enemy block each wing is striking, and since when. */
     final FieldBlock[] pincerTarget = new FieldBlock[3];
     final int[] pincerSince = new int[3];
