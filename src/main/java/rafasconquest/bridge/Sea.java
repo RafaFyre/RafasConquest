@@ -5,6 +5,7 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.Level;
 import rafasconquest.core.SeaCalm;
 
+import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -22,7 +23,14 @@ public final class Sea {
 
     /** The level's sea calm, as of now. */
     public static SeaCalm calm(Level level) {
-        return calms.computeIfAbsent(level, l -> new SeaCalm((x, z) -> depth(l, x, z))).at(level.getGameTime());
+        return calms.computeIfAbsent(level, l -> {
+            // Weak: a value holding its own key keeps it in the WeakHashMap forever, and every world left with it.
+            WeakReference<Level> weak = new WeakReference<>(l);
+            return new SeaCalm((x, z) -> {
+                Level held = weak.get();
+                return held == null ? SeaCalm.UNKNOWN : depth(held, x, z);
+            });
+        }).at(level.getGameTime());
     }
 
     /** A sea calm of the level's own, not shared: for one other thread to work out on its own (it keeps no locks). */
