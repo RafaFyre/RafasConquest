@@ -26,6 +26,8 @@ import java.util.Map;
  */
 public final class Armoury {
     static final String MOD = "magistuarmory";
+    /** Epic Knights: Addon, optional on top: its looks join each land's, and characters' taste draws on all its pieces. */
+    static final String ADDON = "magistuarmoryaddon";
 
     /** Who a kit is for. */
     public enum Kit {
@@ -210,6 +212,133 @@ public final class Armoury {
                         "antiquelegacy:bronze_small_wings_decoration", "antiquelegacy:antique_cloak_decoration"));
     }
 
+    /** Looks built from Epic Knights: Addon's pieces, which join each land's own only when the addon is installed. */
+    private static final Map<Homeland, java.util.List<Style>> ADDON_STYLES = new EnumMap<>(Homeland.class);
+
+    /** An Epic Knights: Addon piece's name. */
+    private static String a(String name) {
+        return ADDON + ":" + name;
+    }
+
+    static {
+        ADDON_STYLES.put(Homeland.PLAINS, java.util.List.of(
+                // late harness: coats of plates, cuirassiers, Greenwich plate and a royal plume for the officers
+                new Style(a("sallet_without_visor"), body(a("coat_of_plates_chestplate"), "chainmail_leggings", a("coat_of_plates_boots")),
+                        a("steel_war_hammer"), "iron_heatershield",
+                        a("closed_burgonet"), body(a("heavy_cuirassier_chestplate"), "cuirassier_leggings", a("heavy_cuirassier_boots")), a("steel_lance"),
+                        a("greenwich_armet"), body(a("greenwich_chestplate"), "gothic_leggings", a("greenwich_boots")), a("steel_longsword"),
+                        a("royal_plume_decoration"), a("landsknecht_feathers_decoration"), "rondel_decoration",
+                        "antiquelegacy:triple_feather_decoration", "antiquelegacy:antique_cloak_decoration"),
+                // English: chapels and chained gambesons, English knights, avant harness under British armets
+                new Style(a("chapel"), body(a("chained_gambeson"), "chainmail_leggings", a("chained_gambeson_boots")),
+                        a("steel_round_mace"), "iron_heatershield",
+                        a("late_bascinet"), body(a("english_knight_chestplate"), "knight_leggings", a("english_knight_boots")), a("steel_lance"),
+                        a("british_armet"), body(a("avant_chestplate"), a("avant_leggings"), a("avant_boots")), a("steel_arming_sword_type_xv"),
+                        a("frontal_feather_decoration"), a("horse_tail_decoration"), "ecranche_decoration",
+                        "antiquelegacy:roman_two_feathers_decoration", "antiquelegacy:antique_cloak_decoration")));
+        ADDON_STYLES.put(Homeland.TAIGA, java.util.List.of(
+                // gallowglass axemen, splinted riders, lion-helmed officers
+                new Style(a("cervelliere"), body(a("gallowglass_chestplate"), a("gallowglass_leggings"), a("gallowglass_boots")),
+                        a("steel_broadaxe"), "iron_roundshield",
+                        a("scale_helmet"), body(a("splint_chestplate"), a("splint_leggings"), a("splint_boots")), a("steel_lance"),
+                        a("lion_helmet"), body(a("xiii_century_knight_chestplate"), a("xiii_century_knight_leggings"), a("xiii_century_knight_boots")),
+                        a("steel_gallowglass_axe"),
+                        a("ram_horns_decoration"), a("horse_tail_decoration"), "hood_decoration",
+                        "antiquelegacy:bronze_horns_decoration", "antiquelegacy:fur_cloak_decoration"),
+                // the steppe: Cuman helmets and lamellar, heavy brigandine for the captains
+                new Style(a("cuman_helmet"), body("lamellar_chestplate", "chainmail_leggings", "lamellar_boots"),
+                        a("steel_francisca_axe"), "iron_roundshield",
+                        a("light_cuman_helmet"), body(a("splint_chestplate"), a("splint_leggings"), a("splint_boots")), a("steel_lance"),
+                        a("cuman_captain_helmet"), body(a("heavy_brigandine_chestplate"), a("heavy_brigandine_leggings"), a("heavy_brigandine_boots")),
+                        a("steel_long_seax"),
+                        a("horse_tail_decoration"), a("goose_decoration"), "rondel_decoration",
+                        "antiquelegacy:bronze_small_wings_decoration", "antiquelegacy:fur_cloak_decoration")));
+        ADDON_STYLES.put(Homeland.SNOW, java.util.List.of(
+                // a military order: early great helms, white helms on horse, dark crusaders
+                new Style(a("early_greathelm"), body(a("xiii_century_knight_chestplate"), a("xiii_century_knight_leggings"), a("xiii_century_knight_boots")),
+                        a("steel_war_axe"), "iron_kiteshield",
+                        a("white_greathelm"), body("knight_chestplate", "knight_leggings", "knight_boots"), a("steel_lance"),
+                        a("late_greathelm"), body(a("dark_crusader_chestplate"), a("dark_crusader_leggings"), a("dark_crusader_boots")),
+                        a("steel_german_greatsword"),
+                        a("royal_plume_decoration"), a("frontal_feather_decoration"), "hood_decoration",
+                        "antiquelegacy:hair_plume_decoration", "antiquelegacy:fur_cloak_decoration"),
+                // black harness: German bascinets, dark cuirassiers, dark Maximilian plate
+                new Style(a("german_bascinet"), body(a("coat_of_plates_chestplate"), "chainmail_leggings", a("coat_of_plates_boots")),
+                        a("steel_round_mace"), "iron_heatershield",
+                        a("dark_late_sallet"), body(a("dark_heavy_cuirassier_chestplate"), "cuirassier_leggings", a("dark_heavy_cuirassier_boots")),
+                        a("steel_lance"),
+                        a("dark_maximilian_helmet"), body(a("dark_maximilian_chestplate"), a("dark_maximilian_leggings"), a("dark_maximilian_boots")),
+                        a("steel_executioners_sword"),
+                        a("ram_horns_decoration"), a("horse_tail_decoration"), "rondel_decoration",
+                        "antiquelegacy:triple_feather_decoration", "antiquelegacy:subarmalis_decoration")));
+        ADDON_STYLES.put(Homeland.DESERT, java.util.List.of(
+                // Saracens and Mamluks: mirror armour and scimitars
+                new Style(a("saracen_helmet"), body(a("saracen_chestplate"), "chainmail_leggings", a("saracen_boots")),
+                        a("steel_scimitar"), "iron_rondache",
+                        a("kulah_khud"), body(a("mirror_chestplate"), "chainmail_leggings", a("mirror_boots")), a("steel_lance"),
+                        a("mamluk_helmet"), body(a("mirror_chestplate"), "chainmail_leggings", a("mirror_boots")), a("steel_grand_falchion"),
+                        a("horse_tail_decoration"), a("frontal_feather_decoration"), "ecranche_decoration",
+                        "antiquelegacy:roman_crest_decoration", "antiquelegacy:chiton_decoration"),
+                // the far south-west: cabassets and morions, falchions and rapiers
+                new Style(a("cabasset"), body(a("chained_gambeson"), "chainmail_leggings", a("chained_gambeson_boots")),
+                        a("steel_falchion"), "iron_target",
+                        a("early_cabasset"), body(a("splint_chestplate"), a("splint_leggings"), a("splint_boots")), a("steel_lance"),
+                        a("morion"), body(a("alla_tedesca_chestplate"), "chainmail_leggings", a("alla_tedesca_boots")), a("steel_rapier"),
+                        a("frontal_feather_decoration"), a("horse_tail_decoration"), "hood_decoration",
+                        "antiquelegacy:greek_crest_decoration", "antiquelegacy:chiton_decoration")));
+        ADDON_STYLES.put(Homeland.SAVANNA, java.util.List.of(
+                // condottieri: visored kettle hats, Milanese armets, closed barbutes
+                new Style(a("visored_kettlehat"), body(a("pikeman_chestplate"), "chainmail_leggings", a("pikeman_boots")),
+                        a("steel_sidesword"), "iron_target",
+                        a("milanese_armet"), body(a("avant_chestplate"), a("avant_leggings"), a("avant_boots")), a("steel_lance"),
+                        a("closed_barbute"), body(a("articulated_chestplate"), "gothic_leggings", "platemail_boots"), a("steel_arming_sword_type_xiv"),
+                        a("royal_plume_decoration"), a("landsknecht_feathers_decoration"), "rondel_decoration",
+                        "antiquelegacy:greek_high_crest_decoration", "antiquelegacy:fabric_right_hand_manika_decoration"),
+                // landsknechts: puff and slash, two-handed messers, sabres for the captains
+                new Style(a("late_kettlehat"), body(a("steel_puff_and_slash_chestplate"), "chainmail_leggings", a("steel_puff_and_slash_boots")),
+                        a("steel_messer_sword"), "iron_buckler",
+                        a("light_burgonet"), body(a("heavy_cuirassier_chestplate"), "cuirassier_leggings", a("heavy_cuirassier_boots")), a("steel_lance"),
+                        a("sturmhaube"), body(a("gilded_steel_puff_and_slash_chestplate"), "chainmail_leggings", a("gilded_steel_puff_and_slash_boots")),
+                        a("steel_cavalry_sabre"),
+                        a("landsknecht_feathers_decoration"), a("frontal_feather_decoration"), "ecranche_decoration",
+                        "antiquelegacy:roman_feathers_decoration", "antiquelegacy:chiton_decoration")));
+        ADDON_STYLES.put(Homeland.JUNGLE, java.util.List.of(
+                // open sallets and chained gambesons, heavy brigandine riders, proto-Maximilian officers
+                new Style(a("sallet_without_neck_protection"), body(a("chained_gambeson"), "chainmail_leggings", a("chained_gambeson_boots")),
+                        a("steel_bar_mace"), "iron_ellipticalshield",
+                        a("opened_sallet"), body(a("heavy_brigandine_chestplate"), a("heavy_brigandine_leggings"), a("heavy_brigandine_boots")),
+                        a("steel_lance"),
+                        a("two_eye_slits_sallet"), body(a("proto_maximilian_chestplate"), "gothic_leggings", a("proto_maximilian_boots")),
+                        a("steel_feder"),
+                        a("goose_decoration"), a("horse_tail_decoration"), "hood_decoration",
+                        "antiquelegacy:two_hair_plumes_decoration", "antiquelegacy:celtic_tunic_underarmor_decoration"),
+                // tunics and bicoques, grilled helms, lobster-tailed officers in engraved plate
+                new Style(a("bicoque"), body(a("tunic"), "chainmail_leggings", a("tunic_boots")),
+                        a("steel_crow_beak"), "iron_target",
+                        a("grilled_helmet"), body(a("coat_of_plates_chestplate"), "chainmail_leggings", a("coat_of_plates_boots")), a("steel_lance"),
+                        a("lobster_tailed_helmet"), body(a("engraved_chestplate"), "cuirassier_leggings", "cuirassier_boots"), a("steel_saxon_sword"),
+                        a("ram_horns_decoration"), a("frontal_feather_decoration"), "rondel_decoration",
+                        "antiquelegacy:greek_high_crest_decoration", "antiquelegacy:subarmalis_decoration")));
+        ADDON_STYLES.put(Homeland.SWAMP, java.util.List.of(
+                // linen coifs and hammer spears, klappvisor knights, gilded kastenbrust for the officers
+                new Style(a("linen_coif"), body(a("chained_gambeson"), "chainmail_leggings", a("chained_gambeson_boots")),
+                        a("steel_short_spear"), "iron_buckler",
+                        a("klappvisor_bascinet"), body(a("xiii_century_knight_chestplate"), a("xiii_century_knight_leggings"), a("xiii_century_knight_boots")),
+                        a("steel_lance"),
+                        a("gilded_grand_bascinet"), body(a("ceremonial_kastenbrust_chestplate"), "kastenbrust_leggings", a("ceremonial_kastenbrust_boots")),
+                        a("steel_arming_sword_type_xiii"),
+                        a("royal_plume_decoration"), a("goose_decoration"), "ecranche_decoration",
+                        "antiquelegacy:roman_two_feathers_decoration", "antiquelegacy:celtic_tunic_underarmor_decoration"),
+                // tablet helms behind pavises, late sallets, blued gothic plate under close helmets
+                new Style(a("tablet_helmet"), body(a("pikeman_chestplate"), "chainmail_leggings", a("pikeman_boots")),
+                        a("steel_sabre"), "iron_pavese",
+                        a("late_sallet"), body(a("splint_chestplate"), a("splint_leggings"), a("splint_boots")), a("steel_lance"),
+                        a("close_helmet"), body(a("darkblued_gothic_chestplate"), a("darkblued_gothic_leggings"), a("darkblued_gothic_boots")),
+                        a("steel_italian_poleaxe"),
+                        a("horse_tail_decoration"), a("ram_horns_decoration"), "hood_decoration",
+                        "antiquelegacy:roman_crest_alt_decoration", "antiquelegacy:iron_right_hand_manika_decoration")));
+    }
+
     /** A worn outfit: the stack for each slot it fills (the others are left as they are). */
     public record Outfit(Map<EquipmentSlot, ItemStack> slots) {
         public static final Outfit NONE = new Outfit(Map.of());
@@ -257,10 +386,80 @@ public final class Armoury {
         return style(land, turn);
     }
 
-    /** A land's {@code turn}th look, wrapping round. */
+    /** A land's {@code turn}th look, wrapping round; Epic Knights: Addon's looks follow the land's own when it is installed. */
     public static Style style(Homeland land, int turn) {
         java.util.List<Style> looks = STYLES.getOrDefault(land, STYLES.get(Homeland.PLAINS));
+        if (addonAvailable()) {
+            looks = java.util.stream.Stream.concat(looks.stream(), ADDON_STYLES.getOrDefault(land, java.util.List.of()).stream()).toList();
+        }
         return looks.get(Math.floorMod(turn, looks.size()));
+    }
+
+    /** Whether Epic Knights: Addon is installed. */
+    public static boolean addonAvailable() {
+        return ModList.get() != null && ModList.get().isLoaded(ADDON);
+    }
+
+    /** Every piece Epic Knights: Addon registers, by kind, read from the game: helmets, chestplates, clothes (light chests), weapons, decorations by slot. */
+    record AddonPieces(java.util.List<String> helmets, java.util.List<String> chests, java.util.List<String> clothes,
+                       java.util.List<String> weapons, java.util.List<String> headTrims, java.util.List<String> bodyTrims) {
+        static final AddonPieces NONE = new AddonPieces(java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of());
+    }
+
+    @Nullable
+    private static AddonPieces addonPieces;
+
+    /** The addon's pieces, gathered once; none without it. */
+    static AddonPieces addonPieces() {
+        if (!addonAvailable()) {
+            return AddonPieces.NONE;
+        }
+        if (addonPieces == null) {
+            AddonPieces p = new AddonPieces(new java.util.ArrayList<>(), new java.util.ArrayList<>(), new java.util.ArrayList<>(),
+                    new java.util.ArrayList<>(), new java.util.ArrayList<>(), new java.util.ArrayList<>());
+            try {
+                Class<?> decoration = Class.forName("com.magistuarmory.item.ArmorDecoration");
+                java.lang.reflect.Method type = decoration.getMethod("getType");
+                for (Item item : BuiltInRegistries.ITEM) {
+                    ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+                    if (!ADDON.equals(id.getNamespace())) {
+                        continue;
+                    }
+                    String name = id.toString();
+                    if (decoration.isInstance(item)) {
+                        (type.invoke(item) == net.minecraft.world.item.ArmorItem.Type.HELMET ? p.headTrims() : p.bodyTrims()).add(name);
+                    } else if (item instanceof net.minecraft.world.item.ArmorItem armour) {
+                        if (armour.getType() == net.minecraft.world.item.ArmorItem.Type.HELMET) {
+                            p.helmets().add(name);
+                        } else if (armour.getType() == net.minecraft.world.item.ArmorItem.Type.CHESTPLATE) {
+                            // shortcut: defence 3 or less counts as clothing (tunic, doublet, puff and slash); name them if some plate slips in
+                            (armour.getDefense() <= 3 ? p.clothes() : p.chests()).add(name);
+                        }
+                    } else if (item instanceof net.minecraft.world.item.SwordItem && !name.contains("training")) {
+                        p.weapons().add(name);
+                    }
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                RafasConquest.LOGGER.warn("Could not read Epic Knights: Addon's pieces: {}", e.toString());
+            }
+            addonPieces = p;
+        }
+        return addonPieces;
+    }
+
+    /** One of {@code base} or {@code more}, all equally likely. */
+    static String pick(java.util.Random r, String[] base, java.util.List<String> more) {
+        int n = r.nextInt(base.length + more.size());
+        return n < base.length ? base[n] : more.get(n - base.length);
+    }
+
+    /** Swaps the body for a chest piece and its matching legs and feet, where it has them (the others are kept). */
+    private static void dressBody(Map<EquipmentSlot, ItemStack> slots, String chest, int colour) {
+        String set = chest.endsWith("_chestplate") ? chest.substring(0, chest.length() - "_chestplate".length()) : chest;
+        put(slots, EquipmentSlot.CHEST, stack(chest, colour));
+        put(slots, EquipmentSlot.LEGS, stack(set + "_leggings", colour));
+        put(slots, EquipmentSlot.FEET, stack(set + "_boots", colour));
     }
 
     /** A nation's colour (its banner's ground), as RGB. */
@@ -387,21 +586,32 @@ public final class Armoury {
     /**
      * A character's own taste on top of their kit, the same each time for the same person: some swap the helmet or the
      * weapon for one they prefer, some nobles carry a sword, and each wears none to three accessories in a colour of their own.
+     * With Epic Knights: Addon every one of its helmets, harnesses, clothes, weapons and decorations is among the choices.
      */
     static void personalise(Map<EquipmentSlot, ItemStack> slots, Kit kit, int colour, java.util.Random r) {
         boolean armoured = kit == Kit.SWORD_SAINT || kit == Kit.SWORD_KING || kit == Kit.SWORD_GOD;
+        AddonPieces addon = addonPieces();
         if (armoured && r.nextInt(5) < 2) {
-            put(slots, EquipmentSlot.HEAD, stack(TASTE_HELMETS[r.nextInt(TASTE_HELMETS.length)], colour));
+            put(slots, EquipmentSlot.HEAD, stack(pick(r, TASTE_HELMETS, addon.helmets()), colour));
+        }
+        // the addon's harness for the armoured, its doublets and puff-and-slash for the rest (no draw without it, so looks stay put)
+        java.util.List<String> bodies = armoured ? addon.chests() : addon.clothes();
+        if (!bodies.isEmpty() && r.nextInt(5) < 2) {
+            dressBody(slots, bodies.get(r.nextInt(bodies.size())), colour);
         }
         if (r.nextInt(5) < 2) { // a preferred blade, or a sword for an unarmed noble
-            put(slots, EquipmentSlot.MAINHAND, stack(TASTE_WEAPONS[r.nextInt(TASTE_WEAPONS.length)], -1));
+            put(slots, EquipmentSlot.MAINHAND, stack(pick(r, TASTE_WEAPONS, addon.weapons()), -1));
         }
         int trim = r.nextBoolean() ? colour : TRIM_COLOURS[r.nextInt(TRIM_COLOURS.length)];
         for (int n = r.nextInt(4); n > 0; n--) {
             if (armoured && r.nextBoolean()) {
-                decorate(slots, EquipmentSlot.HEAD, HEAD_TRIMS[r.nextInt(HEAD_TRIMS.length)], trim);
+                decorate(slots, EquipmentSlot.HEAD, pick(r, HEAD_TRIMS, addon.headTrims()), trim);
             } else {
-                decorate(slots, EquipmentSlot.CHEST, CHEST_TRIMS[r.nextInt(CHEST_TRIMS.length)], trim);
+                String piece = pick(r, CHEST_TRIMS, addon.bodyTrims());
+                // the addon's body decorations sit on the chest, legs (skirts, codpieces) or feet; each takes only its own
+                for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+                    decorate(slots, slot, piece, trim);
+                }
             }
         }
     }

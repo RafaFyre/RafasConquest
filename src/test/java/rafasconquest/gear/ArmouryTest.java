@@ -38,9 +38,14 @@ class ArmouryTest {
                 "iron_left_hand_manika", "bronze_left_hand_manika", "fabric_left_hand_manika",
                 "iron_right_hand_manika", "bronze_right_hand_manika", "fabric_right_hand_manika")
                 .map(d -> "antiquelegacy:" + d + "_decoration").collect(java.util.stream.Collectors.toSet());
-        Field f = Armoury.class.getDeclaredField("STYLES");
-        f.setAccessible(true);
-        for (Object looks : ((Map<?, ?>) f.get(null)).values()) {
+        java.util.List<Object> all = new java.util.ArrayList<>();
+        for (String field : new String[]{"STYLES", "ADDON_STYLES"}) {
+            Field f = Armoury.class.getDeclaredField(field);
+            f.setAccessible(true);
+            all.addAll(((Map<?, ?>) f.get(null)).values());
+        }
+        assertEquals(Homeland.values().length * 2, all.size(), "every land has its own and the addon's looks");
+        for (Object looks : all) {
             for (Object o : (java.util.List<?>) looks) {
                 Armoury.Style s = (Armoury.Style) o;
                 org.junit.jupiter.api.Assertions.assertTrue(chest.contains(s.officerChest()), s.officerChest());
