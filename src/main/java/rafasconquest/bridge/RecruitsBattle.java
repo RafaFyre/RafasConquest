@@ -1768,6 +1768,10 @@ public final class RecruitsBattle {
             List<AbstractRecruitEntity> marked = shooting ? preyOf(block, List.of()) : List.of();
             List<AbstractRecruitEntity> anyone = shooting ? enemiesOf(block.side(), false) : List.of();
             for (AbstractRecruitEntity s : living) {
+                if (boarders.isEmpty() && s.getVehicle() != null && block.ship() == FieldBlock.ShipKind.GUNSHIP && mayFight(block.side())) {
+                    aimGun(s, block);
+                    continue;
+                }
                 // Off its deck spot an archer holds its fire: with a target, Recruits' bow goal stops its walk back
                 // every tick, so it stood while its ship sailed and turned away. Pinned again ({@link #pin}), it looses.
                 if (shooting && pinned.containsKey(s.getId())) {
@@ -2068,6 +2072,43 @@ public final class RecruitsBattle {
         Live prey = block.prey() == null ? null : live.get(block.prey());
         List<AbstractRecruitEntity> soldiers = prey == null ? List.of() : prey.living();
         return soldiers.isEmpty() ? otherwise : soldiers;
+    }
+
+    /**
+     * A gunship's gunner aims as its broadside does ({@link FieldBattle#broadside}): a gun on the side its ship's mark
+     * lies on (the ship a player sent it at, else its captain's) aims only at that ship's soldiers; one on the other side
+     * fires at will, at the nearest enemy off that side. Within its gun's reach; its target kept while it still may.
+     * Siegeworks' crew AI then lays, loads and fires the gun at it.
+     * shortcut: a mark with nobody real aboard (none on deck, or only numbers) is held fire at; upgrade to aiming at its hull if that shows.
+     */
+    private void aimGun(AbstractRecruitEntity s, FieldBlock block) {
+        if (s.getState() != 0) {
+            s.setAggroState(0);
+        }
+        String type = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(s.getVehicle().getType()));
+        rafasconquest.battle.Machine gun = null;
+        for (int m = 0; m < rafasconquest.battle.Machine.count(); m++) {
+            if (rafasconquest.battle.Machine.get(m).entity().equals(type)) {
+                gun = rafasconquest.battle.Machine.get(m);
+            }
+        }
+        double reach = gun == null ? FieldRules.ARCHER_RANGE : gun.reach;
+        FieldBlock holder = field.holder(block);
+        double[] ship = SableLink.shipAt(block.shipId());
+        Point centre = ship == null ? holder.pos() : new Point(ship[0], ship[1]);
+        double fx = ship == null ? holder.facingX() : ship[2];
+        double fz = ship == null ? holder.facingZ() : ship[3];
+        java.util.function.ToIntFunction<Point> sideOf = p -> (p.x() - centre.x()) * -fz + (p.z() - centre.z()) * fx >= 0 ? 1 : -1;
+        int side = sideOf.applyAsInt(new Point(s.getX(), s.getZ()));
+        FieldBlock mark = block.prey();
+        boolean marked = mark != null && mark.side() != block.side() && mark.alive() > 0 && mark.afloat()
+                && sideOf.applyAsInt(mark.pos()) == side;
+        List<AbstractRecruitEntity> may = marked ? preyOf(block, List.of())
+                : enemiesOf(block.side(), false).stream().filter(e -> sideOf.applyAsInt(new Point(e.getX(), e.getZ())) == side).toList();
+        LivingEntity target = s.getTarget();
+        if (!(target != null && target.isAlive() && target.distanceTo(s) <= reach && may.contains(target))) {
+            s.setTarget(nearestTo(s, may).filter(f -> f.distanceTo(s) <= reach).orElse(null));
+        }
     }
 
     /** The real soldiers fighting against {@code side}, its archers only if {@code archersFirst} and any are real. */

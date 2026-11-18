@@ -459,36 +459,62 @@ public final class FieldBattle {
     }
 
     /**
-     * A gunship that is only numbers fires the guns on the side its mark lies (its mark within 45 degrees of its beam),
-     * each in reach once a reload, at random; its shot falls on the mark's unit as arrows do. A real one's guns are
-     * Siegeworks engines its gunners work themselves.
+     * A gunship that is only numbers fires a broadside from each side: the side its mark (the ship a player sent it at,
+     * else its captain's) lies on fires only at that ship, once it is abeam (within 45 degrees of the beam); the other
+     * side fires at will, at the nearest enemy ship abeam of it. Each gun in reach fires once a reload, at random; its
+     * shot falls on the struck ship's unit as arrows do. A real gunship's gunners aim the same way (RecruitsBattle).
      * shortcut: guns fire while any of the unit lives, whoever stands at them; scale by gunners left if that matters.
      */
-    private void broadside(FieldBlock b, List<FieldBlock> targets, List<Double> damages) {
-        FieldBlock foe = b.prey;
-        if (foe == null || foe.alive == 0 || !foe.afloat || foe.side == b.side) {
-            return;
-        }
-        double dx = foe.pos.x() - b.pos.x();
-        double dz = foe.pos.z() - b.pos.z();
-        double along = dx * b.facingX + dz * b.facingZ;
-        double right = dx * -b.facingZ + dz * b.facingX;
-        if (Math.abs(along) > Math.abs(right)) {
-            return; // ahead or astern: no gun bears
-        }
-        double d = Math.hypot(dx, dz);
-        double damage = 0;
-        for (String id : right >= 0 ? b.hull.gunsRight : b.hull.gunsLeft) {
-            Machine m = Machine.byId(id);
-            if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
-                damage += m.damage;
+    void broadside(FieldBlock b, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
+        FieldBlock mark = b.prey != null && b.prey.alive > 0 && b.prey.afloat && b.prey.side != b.side ? b.prey : null;
+        int markSide = mark == null ? 0 : gunSide(b, mark.pos);
+        for (int side : new int[]{1, -1}) {
+            List<String> guns = side > 0 ? b.hull.gunsRight : b.hull.gunsLeft;
+            if (guns.isEmpty()) {
+                continue;
+            }
+            FieldBlock foe = null;
+            if (side == markSide) {
+                foe = abeam(b, mark.pos, side) ? mark : null;
+            } else {
+                double best = Double.MAX_VALUE;
+                for (FieldBlock e : enemy.blocks) {
+                    if (e.alive > 0 && e.afloat && e == holder(e) && abeam(b, e.pos, side) && b.pos.distanceTo(e.pos) < best) {
+                        best = b.pos.distanceTo(e.pos);
+                        foe = e;
+                    }
+                }
+            }
+            if (foe == null) {
+                continue;
+            }
+            double d = b.pos.distanceTo(foe.pos);
+            double damage = 0;
+            for (String id : guns) {
+                Machine m = Machine.byId(id);
+                if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
+                    damage += m.damage;
+                }
+            }
+            if (damage > 0) {
+                FieldBlock hit = spread(b, crew(foe));
+                targets.add(hit);
+                damages.add(damage * hit.arm.takes());
             }
         }
-        if (damage > 0) {
-            FieldBlock hit = spread(b, crew(foe));
-            targets.add(hit);
-            damages.add(damage * hit.arm.takes());
-        }
+    }
+
+    /** Which of ship {@code b}'s sides a place lies on: 1 its right (seen from astern), -1 its left. */
+    public static int gunSide(FieldBlock b, Point at) {
+        return (at.x() - b.pos.x()) * -b.facingZ + (at.z() - b.pos.z()) * b.facingX >= 0 ? 1 : -1;
+    }
+
+    /** Whether {@code at} lies off ship {@code b}'s {@code side}, within 45 degrees of its beam: where that side's guns bear. */
+    static boolean abeam(FieldBlock b, Point at, int side) {
+        double dx = at.x() - b.pos.x();
+        double dz = at.z() - b.pos.z();
+        double right = dx * -b.facingZ + dz * b.facingX;
+        return right * side > 0 && Math.abs(dx * b.facingX + dz * b.facingZ) <= Math.abs(right);
     }
 
     /** How many blocks a second a formation's ship sails. */
@@ -3657,7 +3683,7 @@ public final class FieldBattle {
                     shoot(army, block, enemy, targets, damages);
                 }
                 if (block.ship == FieldBlock.ShipKind.GUNSHIP && block.afloat && block == holder(block) && !block.live) {
-                    broadside(block, targets, damages);
+                    broadside(block, enemy, targets, damages);
                 }
             }
         }

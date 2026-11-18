@@ -831,6 +831,56 @@ class FieldBattleTest {
     }
 
     @Test
+    void aGunshipsMarkedSideFiresOnlyAtItsMarkAndTheOtherAtWill() {
+        rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        List<String> right = gunship.gunsRight;
+        List<String> left = gunship.gunsLeft;
+        gunship.gunsRight = List.of("culverin", "culverin", "culverin", "culverin", "culverin");
+        gunship.gunsLeft = gunship.gunsRight;
+        try {
+            int[] mine = new int[BattlePlan.Arm.values().length];
+            mine[BattlePlan.Arm.GUNSHIP.ordinal()] = 10;
+            int[] theirs = new int[BattlePlan.Arm.values().length];
+            theirs[BattlePlan.Arm.HEAVY_INFANTRY.ordinal()] = 40;
+            FieldBattle battle = new FieldBattle(0, 0, new Point(0, 0), 1, 0, 3, FieldRules.RATES, WarPlan.NONE, WarPlan.NONE, mine, theirs);
+            battle.setType(BattleType.OCEAN);
+            FieldBlock g = battle.army(0).blocks().stream().filter(b -> b.arm() == BattlePlan.Arm.GUNSHIP && battle.holder(b) == b).findFirst().orElseThrow();
+            List<FieldBlock> foes = battle.army(1).blocks().stream().filter(b -> b.afloat() && battle.holder(b) == b).toList();
+            FieldBlock mark = foes.get(0);
+            FieldBlock other = foes.get(1);
+            g.pos = new Point(0, 0);
+            g.facingX = 1; // bow to +x: its right (seen from astern) is +z
+            g.facingZ = 0;
+            mark.pos = new Point(0, 40);
+            other.pos = new Point(0, -40);
+            for (FieldBlock f : foes.subList(2, foes.size())) {
+                f.pos = new Point(5000, 5000); // out of reach
+            }
+            g.prey = mark;
+            assertEquals(1, FieldBattle.gunSide(g, mark.pos));
+            java.util.Set<FieldBlock> hit = new java.util.HashSet<>();
+            for (int i = 0; i < 200; i++) {
+                List<FieldBlock> targets = new java.util.ArrayList<>();
+                battle.broadside(g, battle.army(1), targets, new java.util.ArrayList<>());
+                targets.forEach(t -> hit.add(battle.holder(t)));
+            }
+            assertEquals(java.util.Set.of(mark, other), hit, "the marked side at its mark, the other side at will");
+
+            other.pos = new Point(-10, 35); // nearer, but on the marked side: that side holds for its mark
+            hit.clear();
+            for (int i = 0; i < 200; i++) {
+                List<FieldBlock> targets = new java.util.ArrayList<>();
+                battle.broadside(g, battle.army(1), targets, new java.util.ArrayList<>());
+                targets.forEach(t -> hit.add(battle.holder(t)));
+            }
+            assertEquals(java.util.Set.of(mark), hit);
+        } finally {
+            gunship.gunsRight = right;
+            gunship.gunsLeft = left;
+        }
+    }
+
+    @Test
     void anOfficersShipSailsWhereTheySendItAndHoldsThere() {
         FieldBattle battle = battle(60, 60, 3);
         battle.setType(BattleType.OCEAN);
