@@ -16,6 +16,7 @@
   ],
   "client": [
     "ClientChunkWindowMixin",
+    "EpicKnightsCloakMixin",
     "DhShaderLoaderMixin",
     "DhTerrainShaderMixin",
     "SodiumShaderInterfaceMixin",

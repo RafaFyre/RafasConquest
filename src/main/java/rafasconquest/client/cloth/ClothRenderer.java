@@ -40,9 +40,18 @@ public final class ClothRenderer {
      * One textured pass over the cloth: the cloth itself (solid), then each dye layer on top. The cloth spans the
      * texture's pixels {@code u0}–{@code u1}, {@code v0}–{@code v1} (of 64), the banner's flag unless said.
      */
-    public record Layer(Material material, int argb, boolean solid, float u0, float v0, float u1, float v1) {
+    public record Layer(Material material, int argb, boolean solid, float u0, float v0, float u1, float v1, @Nullable float[] us) {
         public Layer(Material material, int argb, boolean solid) {
             this(material, argb, solid, 1, 1, 21, 41);
+        }
+
+        public Layer(Material material, int argb, boolean solid, float u0, float v0, float u1, float v1) {
+            this(material, argb, solid, u0, v0, u1, v1, null);
+        }
+
+        /** Each column's own texture u, for cloth that wraps round faces laid out apart on its texture. */
+        public Layer(Material material, int argb, boolean solid, float[] us, float v0, float v1) {
+            this(material, argb, solid, us[0], v0, us[us.length - 1], v1, us);
         }
     }
 
@@ -64,9 +73,21 @@ public final class ClothRenderer {
      * on a back (local +z behind, −x the wearer's right), where wind must not press it into the wearer.
      */
     public record Kind(int w, int h, double sx, double sy, double depth, Fabric fabric, boolean blocks, boolean onBack,
-                       double[]... boxes) {
+                       @Nullable double[][] around, double[]... boxes) {
+        public Kind(int w, int h, double sx, double sy, double depth, Fabric fabric, boolean blocks, boolean onBack,
+                    double[]... boxes) {
+            this(w, h, sx, sy, depth, fabric, blocks, onBack, null, boxes);
+        }
+
+        /** Cloth whose pinned row runs round {@code xs}, {@code zs} (one point a column) rather than straight across. */
+        public static Kind around(int h, double[] xs, double[] zs, double sy, Fabric fabric, boolean onBack, double[]... boxes) {
+            return new Kind(xs.length, h, 0, sy, 0, fabric, false, onBack, new double[][]{xs, zs}, boxes);
+        }
+
         Cloth make() {
-            return new Cloth(w, h, sx, sy, depth, fabric.bend()).keepOut(boxes);
+            Cloth cloth = around == null ? new Cloth(w, h, sx, sy, depth, fabric.bend())
+                    : new Cloth(h, around[0], around[1], sy, fabric.bend());
+            return cloth.keepOut(boxes);
         }
     }
 
@@ -103,6 +124,14 @@ public final class ClothRenderer {
     }
 
     private static final Map<Integer, Far> FAR = new HashMap<>();
+
+    /** Moves the limb boxes of the moving cloth under {@code key} (see {@link Cloth#limbs}), if it moves. */
+    public static void limbs(Object key, double[][] boxes, Matrix4d[] toLimb) {
+        Live live = LIVE.get(key);
+        if (live != null) {
+            live.cloth.limbs(boxes, toLimb);
+        }
+    }
 
     /** Marks an entity as carried far (null: no longer). */
     public static void far(int entity, @Nullable Far far) {
@@ -379,9 +408,13 @@ public final class ClothRenderer {
         }
         for (int l = 0; l < layers.size(); l++) {
             Layer layer = layers.get(l);
-            VertexConsumer vc = layer.solid()
-                    ? layer.material().buffer(buffers, RenderType::entityCutoutNoCull)
-                    : layer.material().buffer(buffers, RenderType::entityNoOutline);
+            Material m = layer.material();
+            // A material whose atlas is its own texture is a plain 64 × 64 texture (an armour's), drawn without an atlas.
+            VertexConsumer vc = m.atlasLocation().equals(m.texture())
+                    ? buffers.getBuffer(layer.solid() ? RenderType.entityCutoutNoCull(m.texture()) : RenderType.entityNoOutline(m.texture()))
+                    : layer.solid()
+                    ? m.buffer(buffers, RenderType::entityCutoutNoCull)
+                    : m.buffer(buffers, RenderType::entityNoOutline);
             for (int j = 0; j < h - 1; j++) {
                 for (int i = 0; i < w - 1; i++) {
                     int p = j * w + i;
@@ -421,7 +454,10 @@ public final class ClothRenderer {
      */
     private static void vertex(VertexConsumer vc, PoseStack.Pose pose, float[][] at, float[] nx, float[] ny, float[] nz,
                                int side, int p, int w, int h, Layer layer, int light, int overlay, float inset) {
-        float u = Mth.clamp(layer.u0() + (layer.u1() - layer.u0()) * (p % w) / (w - 1), layer.u0() + inset, layer.u1() - inset) / 64F;
+        int i = p % w;
+        float u = layer.us() == null
+                ? Mth.clamp(layer.u0() + (layer.u1() - layer.u0()) * i / (w - 1), layer.u0() + inset, layer.u1() - inset) / 64F
+                : (layer.us()[i] + (i == 0 ? inset : i == w - 1 ? -inset : 0)) / 64F;
         float v = Mth.clamp(layer.v0() + (layer.v1() - layer.v0()) * (p / w) / (h - 1), layer.v0() + inset, layer.v1() - inset) / 64F;
         vc.addVertex(pose, at[0][p], at[1][p], at[2][p]).setColor(layer.argb()).setUv(u, v).setOverlay(overlay).setLight(light)
                 .setNormal(pose, nx[p] * side, ny[p] * side, nz[p] * side);

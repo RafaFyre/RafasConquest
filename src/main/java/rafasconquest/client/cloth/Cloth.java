@@ -56,6 +56,30 @@ public final class Cloth {
      * two down: they let the sheet curve but not crease, so it falls in a few wide folds, as thick cloth does.
      */
     public Cloth(int w, int h, double sx, double sy, double depth, double bend) {
+        this(h, across(w, sx), depthOf(w, depth), sy, bend);
+    }
+
+    private static double[] across(int w, double sx) {
+        double[] xs = new double[w];
+        for (int i = 0; i < w; i++) {
+            xs[i] = (i - (w - 1) * 0.5) * sx;
+        }
+        return xs;
+    }
+
+    private static double[] depthOf(int w, double depth) {
+        double[] zs = new double[w];
+        java.util.Arrays.fill(zs, depth);
+        return zs;
+    }
+
+    /**
+     * A sheet whose pinned row runs through the points ({@code xs[i]}, 0, {@code zs[i]}), one per column, and whose
+     * columns hang {@code sy} apart from there: a flat sheet, or one bent round a body (a cloak). Columns may share a
+     * point, to seam it.
+     */
+    public Cloth(int h, double[] xs, double[] zs, double sy, double bend) {
+        int w = xs.length;
         this.w = w;
         this.h = h;
         int n = w * h;
@@ -74,9 +98,9 @@ public final class Cloth {
         for (int j = 0; j < h; j++) {
             for (int i = 0; i < w; i++) {
                 int p = j * w + i;
-                lx[p] = (i - (w - 1) * 0.5) * sx;
+                lx[p] = xs[i];
                 ly[p] = j * sy;
-                lz[p] = depth;
+                lz[p] = zs[i];
             }
         }
         int bends = bend > 0 ? Math.max(0, w - 2) * h + w * Math.max(0, h - 2) : 0;
@@ -131,6 +155,21 @@ public final class Cloth {
     public Cloth keepOut(double[]... boxes) {
         this.boxes = boxes;
         return this;
+    }
+
+    /** Boxes that move with a limb (an arm): each in the limb's own units, with the matrices from local units to it and back. */
+    private double[][] limbBoxes = new double[0][];
+    private Matrix4d[] toLimb = new Matrix4d[0];
+    private Matrix4d[] fromLimb = new Matrix4d[0];
+
+    /** Where the limbs' boxes are now: {@code toLimb[k]} takes local units to limb {@code k}'s, where its box is. */
+    public void limbs(double[][] boxes, Matrix4d[] toLimb) {
+        this.limbBoxes = boxes;
+        this.toLimb = toLimb;
+        this.fromLimb = new Matrix4d[toLimb.length];
+        for (int k = 0; k < toLimb.length; k++) {
+            fromLimb[k] = toLimb[k].invert(new Matrix4d());
+        }
     }
 
     public boolean pinned(int p) {
@@ -205,7 +244,7 @@ public final class Cloth {
             oy[p] = y[p];
             oz[p] = z[p];
         }
-        Matrix4d inverse = boxes.length == 0 ? null : frame.invert(new Matrix4d());
+        Matrix4d inverse = boxes.length == 0 && limbBoxes.length == 0 ? null : frame.invert(new Matrix4d());
         for (int it = 0; it < iterations; it++) {
             for (int p = w; p < n; p++) {
                 x[p] += fx[p];
@@ -313,6 +352,12 @@ public final class Cloth {
             for (double[] b : boxes) {
                 moved |= outOfBox(v, b[0], b[1], b[2], b[3], b[4], b[5]);
             }
+            for (int k = 0; k < limbBoxes.length; k++) {
+                double[] b = limbBoxes[k];
+                toLimb[k].transformPosition(v);
+                moved |= outOfBox(v, b[0], b[1], b[2], b[3], b[4], b[5]);
+                fromLimb[k].transformPosition(v);
+            }
             if (moved) {
                 frame.transformPosition(v);
                 x[p] = v.x;
@@ -369,6 +414,9 @@ public final class Cloth {
         for (int s = 0; s < stickA.length; s++) {
             int a = stickA[s];
             int b = stickB[s];
+            if (stickHalf[s] == 0) { // a seam: no length to stretch
+                continue;
+            }
             double len = Math.sqrt(sq(x[a] - x[b]) + sq(y[a] - y[b]) + sq(z[a] - z[b]));
             worst = Math.max(worst, Math.abs(len / (stickHalf[s] * 2) - 1));
         }

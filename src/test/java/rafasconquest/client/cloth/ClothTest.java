@@ -32,6 +32,40 @@ class ClothTest {
     }
 
     @Test
+    void aSheetWrappedRoundABodyHangsUnderItsRowAndKeepsItsSeam() {
+        // A U round a body (front flap, side, back, other side, other flap), its two middle columns one seamed point.
+        double[] xs = {0.4, 0.5, 0.5, 0.2, -0.2, -0.5, -0.5, -0.5, -0.4};
+        double[] zs = {-0.2, -0.2, 0.2, 0.2, 0.2, 0.2, 0.2, -0.2, -0.2};
+        Cloth c = settle(new Cloth(9, xs, zs, 0.1, 0.8), 0, 200);
+        for (int i = 0; i < xs.length; i++) {
+            int bottom = 8 * xs.length + i;
+            assertEquals(xs[i], c.x[bottom], 0.05, "column " + i + " x");
+            assertEquals(zs[i], c.z[bottom], 0.05, "column " + i + " z");
+        }
+        int seamA = 8 * xs.length + 5;
+        assertEquals(0, Math.hypot(c.x[seamA] - c.x[seamA + 1], c.z[seamA] - c.z[seamA + 1]), 0.01);
+        assertTrue(c.worstStretch() < 0.3, "stretch " + c.worstStretch());
+    }
+
+    @Test
+    void aTurnedLimbBoxPushesItOut() {
+        // An arm swung 40° forward through the sheet's plane: no point may stay inside it, in the arm's own units.
+        Cloth c = new Cloth(9, 17, 0.1, 0.1, 0);
+        Matrix4d toArm = new Matrix4d().rotateX(Math.toRadians(-40)).translate(0, -0.3, 0); // local → arm
+        double[] arm = {-0.15, 0, -0.1, 0.15, 0.8, 0.1};
+        c.limbs(new double[][]{arm}, new Matrix4d[]{toArm});
+        settle(c, 0, 200);
+        Matrix4d toLocal = bar().invert();
+        org.joml.Vector3d v = new org.joml.Vector3d();
+        for (int p = c.w; p < c.x.length; p++) {
+            toArm.transformPosition(toLocal.transformPosition(v.set(c.x[p], c.y[p], c.z[p])));
+            boolean inside = v.x > arm[0] + 1e-6 && v.x < arm[3] - 1e-6 && v.y > arm[1] + 1e-6 && v.y < arm[4] - 1e-6
+                    && v.z > arm[2] + 1e-6 && v.z < arm[5] - 1e-6;
+            assertTrue(!inside, "point " + p + " inside the arm at " + v);
+        }
+    }
+
+    @Test
     void windBlowsItSideways() {
         Cloth c = settle(new Cloth(9, 17, 0.1, 0.1, 0), 9.81, 300);
         int bottom = 16 * 9 + 4;
