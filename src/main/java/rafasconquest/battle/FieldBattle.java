@@ -264,6 +264,13 @@ public final class FieldBattle {
     /** A block's ranks in its deck section. */
     private static final int DECK_RANKS = (BattlePlan.SOLDIERS_PER_FORMATION + DECK_FILES - 1) / DECK_FILES;
 
+    /** The most soldiers {@code hull}'s deck holds in whole block sections, laid out as {@link #deckSection} lays them. */
+    public static int deckCrew(rafasconquest.core.SeaLanes.Size hull) {
+        int abreast = hull.width >= rafasconquest.core.SeaLanes.Size.unitShip().width ? 2 : 1;
+        int rows = Math.max(1, (int) (hull.length / (DECK_RANKS * DECK_SPACING)));
+        return abreast * rows * BattlePlan.SOLDIERS_PER_FORMATION;
+    }
+
     /** The middle of block {@code b}'s section of its ship's deck, {right, back} of the ship's middle. */
     public Point deckSection(FieldBlock b) {
         int crew = crew(b).size();

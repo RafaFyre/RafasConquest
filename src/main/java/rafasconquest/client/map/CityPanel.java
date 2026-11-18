@@ -261,17 +261,17 @@ final class CityPanel {
                 int shopTop = top - SHOP_H - 2;
                 g.fill(left, shopTop, right, top - 2, BACK);
                 g.renderOutline(left, shopTop, right - left, SHOP_H, EDGE);
-                g.drawString(font, "Muster: click a card to raise " + Garrison.MEN + " soldiers", left + 6, shopTop + 4, GOLD, false);
+                g.drawString(font, "Muster: click a card to raise its soldiers", left + 6, shopTop + 4, GOLD, false);
                 int[] shop = rowXs(shop().length, 1);
                 int over = rowAt(shop, shopTop + 16, mouseX, mouseY);
                 g.enableScissor(left + 5, shopTop + 15, right - 5, shopTop + 17 + CARD_H);
                 for (int i = 0; i < shop().length; i++) {
-                    card(g, font, shop[i], shopTop + 16, shop()[i], Garrison.MEN, i == over ? GOLD : 0xFFC8C8C8);
+                    card(g, font, shop[i], shopTop + 16, shop()[i], Garrison.full(shop()[i]), i == over ? GOLD : 0xFFC8C8C8);
                 }
                 g.disableScissor();
                 scrollbar(g, 1, shop().length, mouseX, mouseY);
                 if (over >= 0) {
-                    tip = tip(shop()[over], Garrison.MEN, "Click: muster");
+                    tip = tip(shop()[over], Garrison.full(shop()[over]), "Click: muster");
                 }
             } else if (mode == Mode.MARCH) {
                 String hint = "Click the map to march there; right-click to stop";
@@ -286,7 +286,8 @@ final class CityPanel {
     static List<Component> tip(int arm, int soldiers, @Nullable String click) {
         BattlePlan.Arm a = BattlePlan.Arm.get(arm);
         Component name = Component.literal(a == null ? "?" : a.title());
-        Component men = Component.literal(soldiers + (soldiers < Garrison.MEN ? " / " + Garrison.MEN : "") + " soldiers").withColor(0xA8A49C);
+        int full = Garrison.full(arm);
+        Component men = Component.literal(soldiers + (soldiers < full ? " / " + full : "") + " soldiers").withColor(0xA8A49C);
         return click == null ? List.of(name, men) : List.of(name, men, Component.literal(click).withColor(0xE0C060));
     }
 

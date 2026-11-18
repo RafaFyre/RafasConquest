@@ -156,6 +156,12 @@ public final class BattlePlan {
         public static final Arm TOWER_CROSSBOWS = builtIn("tower_crossbows");
         /** A gunship's crew: at sea they sail its ship card ({@link #ship}), on land they fight on foot. */
         public static final Arm GUNSHIP = builtIn("gunship");
+        /** A crew sailing each of the other ship cards: boarders at sea, foot on land. */
+        public static final Arm SMALL_SHIP = builtIn("small_ship");
+        public static final Arm MEDIUM_SHIP = builtIn("medium_ship");
+        public static final Arm LARGE_SHIP = builtIn("large_ship");
+        public static final Arm FLAGSHIP = builtIn("flagship");
+        public static final Arm UNIT_SHIP = builtIn("unit_ship");
 
         public final String id;
         private int ordinal;
@@ -485,14 +491,20 @@ public final class BattlePlan {
     public static final int BAND_RESERVES = 2;
     public static final int BAND_CAVALRY = 3;
 
+    /** Most blocks in a platoon of {@code arm}: a boarding ship card's platoon sails one ship, so no more than its deck holds. */
+    static int platoonBlocks(Arm arm) {
+        int most = Math.min(PLATOON_BLOCKS, PLATOON_SOLDIERS / SOLDIERS_PER_FORMATION);
+        rafasconquest.core.SeaLanes.Size ship = arm.ship();
+        return ship == null || ship.gunship() ? most : Math.max(1, Math.min(most, FieldBattle.deckCrew(ship) / SOLDIERS_PER_FORMATION));
+    }
+
     /**
      * Gathers an army's blocks into platoons, each of one arm only: in each wing, its front, archers, reserves and
      * cavalry apart, and within those each arm apart, whole files
-     * (blocks of the arm standing one behind another) side by side from its left, each platoon at most {@link #PLATOON_BLOCKS}
-     * blocks and {@link #PLATOON_SOLDIERS} soldiers. Returns each slot's platoon, numbered from 0.
+     * (blocks of the arm standing one behind another) side by side from its left, each platoon at most
+     * {@link #platoonBlocks} blocks. Returns each slot's platoon, numbered from 0.
      */
     public static int[] platoons(List<Slot> slots) {
-        int most = Math.min(PLATOON_BLOCKS, PLATOON_SOLDIERS / SOLDIERS_PER_FORMATION);
         List<Integer> order = new ArrayList<>();
         for (int i = 0; i < slots.size(); i++) {
             order.add(i);
@@ -506,6 +518,7 @@ public final class BattlePlan {
         Slot last = null;
         for (int k = 0; k < order.size(); ) {
             Slot s = slots.get(order.get(k));
+            int most = platoonBlocks(s.arm());
             int end = k + 1; // the file starting here
             while (end < order.size() && sameFile(s, slots.get(order.get(end)))) {
                 end++;

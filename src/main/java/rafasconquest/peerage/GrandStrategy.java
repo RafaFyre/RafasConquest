@@ -8,6 +8,9 @@ import org.jetbrains.annotations.Nullable;
 import rafasconquest.battle.BattlePlan;
 import rafasconquest.battle.BattleType;
 import rafasconquest.bridge.RecruitsBattle;
+import rafasconquest.bridge.SiegeSurvey;
+import rafasconquest.politics.Lands;
+import rafasconquest.politics.MapLands;
 import rafasconquest.core.SeatCities;
 import rafasconquest.faction.Faction;
 import rafasconquest.map.BaseMap;
@@ -210,34 +213,123 @@ public final class GrandStrategy {
             player.sendSystemMessage(Component.literal("Both armies need soldiers to fight").withStyle(ChatFormatting.RED));
             return;
         }
+        // Both at sea: a sea battle. The defender within a castle's or city's walls: a siege. Otherwise: a land battle.
+        MapLands lands = MapLands.of(map);
+        boolean sea = lands.wet(at[0], at[1]);
+        if (sea != lands.wet(from[0], from[1])) {
+            player.sendSystemMessage(Component.literal("One army is at sea and the other on land").withStyle(ChatFormatting.RED));
+            return;
+        }
+        Lands.Fort fort = sea ? null : fortAt(map, lands, at);
+        BattleType type = sea ? BattleType.OCEAN : fort != null ? BattleType.SIEGE : BattleType.LAND;
+        int menA = sea ? shipMen(attacker) : attacker.soldiers();
+        int menD = sea ? shipMen(defender) : defender.soldiers();
+        int[] mixA = sea ? shipMix(attacker) : attacker.mix();
+        int[] mixD = sea ? shipMix(defender) : defender.mix();
+        if (sea && !rafasconquest.bridge.SableLink.available()) {
+            player.sendSystemMessage(Component.literal("A sea battle needs Sable for its ships").withStyle(ChatFormatting.RED));
+            return;
+        }
+        if (sea && (mixA == null || mixD == null)) {
+            player.sendSystemMessage(Component.literal("At sea only ship cards fight: both armies need some").withStyle(ChatFormatting.RED));
+            return;
+        }
         double dx = at[0] - from[0];
         double dz = at[1] - from[1];
         double len = Math.hypot(dx, dz);
         double ux = len < 1 ? 1 : dx / len;
         double uz = len < 1 ? 0 : dz / len;
-        try {
-            // The line of battle runs across the attacker's march, as /pve battle lays it across the caller's look.
-            RecruitsBattle.start(player.server.overworld(), a, attacker.soldiers(), d,
-                    defender.soldiers(), new BattlePlan.Point(at[0], at[1]), -uz, ux,
-                    attacker.general.isEmpty() ? null : attacker.general, defender.general.isEmpty() ? null : defender.general,
-                    BattleType.LAND, 0, null, null, attacker.mix(), defender.mix(), line -> {
-                        RecruitsBattle fought = RecruitsBattle.current();
-                        if (fought != null) {
-                            Garrison[] armies = {attacker, defender};
-                            int[][] started = {perArm(fought.field().army(0), false), perArm(fought.field().army(1), false)};
-                            fought.whenOver(outcome -> aftermath(player.server, fought, armies, started, outcome.winner(), at, ux, uz));
-                        }
-                        toBattle(player);
-                        String url = rafasconquest.dev.BattleMap.open(player.server);
-                        player.sendSystemMessage(Component.literal(line + ". The armies are deploying: ")
-                                .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA)
-                                        .withUnderlined(true).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
-                                .append(Component.literal(" or /pve debug battle start")));
-                    }, why -> player.sendSystemMessage(Component.literal(why).withStyle(ChatFormatting.RED)));
-            player.sendSystemMessage(Component.literal("The armies are surveying the ground..."));
-        } catch (IllegalStateException e) {
-            player.sendSystemMessage(Component.literal(e.getMessage()).withStyle(ChatFormatting.RED));
+        java.util.function.Consumer<SiegeSurvey.Result> fight = survey -> {
+            try {
+                // The line of battle runs across the attacker's march, as /pve battle lays it across the caller's look.
+                RecruitsBattle.start(player.server.overworld(), a, menA, d, menD, new BattlePlan.Point(at[0], at[1]), -uz, ux,
+                        attacker.general.isEmpty() ? null : attacker.general, defender.general.isEmpty() ? null : defender.general,
+                        type, 0, null, survey, mixA, mixD, line -> {
+                            RecruitsBattle fought = RecruitsBattle.current();
+                            if (fought != null) {
+                                Garrison[] armies = {attacker, defender};
+                                int[][] started = {perArm(fought.field().army(0), false), perArm(fought.field().army(1), false)};
+                                fought.whenOver(outcome -> aftermath(player.server, fought, armies, started, outcome.winner(), at, ux, uz, sea));
+                            }
+                            toBattle(player);
+                            String url = rafasconquest.dev.BattleMap.open(player.server);
+                            player.sendSystemMessage(Component.literal(line + ". The armies are deploying: ")
+                                    .append(Component.literal("[Open the battle map]").withStyle(style -> style.withColor(ChatFormatting.AQUA)
+                                            .withUnderlined(true).withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url))))
+                                    .append(Component.literal(" or /pve debug battle start")));
+                        }, why -> player.sendSystemMessage(Component.literal(why).withStyle(ChatFormatting.RED)));
+            } catch (IllegalStateException e) {
+                player.sendSystemMessage(Component.literal(e.getMessage()).withStyle(ChatFormatting.RED));
+            }
+        };
+        if (fort == null) {
+            fight.accept(null);
+            player.sendSystemMessage(Component.literal(sea ? "The fleets are closing..." : "The armies are surveying the ground..."));
+            return;
         }
+        // As /pve siege: a city's gates fitted, its defenders' council at its barracks, its harbour side never attacked.
+        net.minecraft.server.level.ServerLevel level = player.server.overworld();
+        boolean city = fort.half() > rafasconquest.worldgen.CountryPiece.CASTLE_WALL;
+        if (city) {
+            for (SeatCities.City c : ConquestRuntime.cities().inBox(fort.x(), fort.z(), fort.x(), fort.z())) {
+                if (c.x() == fort.x() && c.z() == fort.z()) {
+                    rafasconquest.worldgen.CityGates.fitAll(level, c);
+                }
+            }
+        }
+        player.sendSystemMessage(Component.literal("Surveying the walls of " + fort.name() + "..."));
+        SiegeSurvey.surveyAsync(level, fort.x(), fort.z(), fort.half(), city ? SiegeSurvey.cityHall(level, fort.x(), fort.z()) : null,
+                fort.port() ? net.minecraft.core.Direction.fromDelta(fort.outX(), 0, fort.outZ()) : null,
+                java.util.EnumSet.allOf(rafasconquest.battle.Siege.Engine.class)).whenComplete((survey, error) -> {
+            if (error != null) {
+                player.sendSystemMessage(Component.literal("Couldn't survey the walls: " + error.getMessage()).withStyle(ChatFormatting.RED));
+            } else {
+                fight.accept(survey);
+            }
+        });
+    }
+
+    /** The castle or seat city whose walls stand about (x, z); null if none. */
+    @Nullable
+    private static Lands.Fort fortAt(BaseMap map, MapLands lands, double[] at) {
+        List<Lands.Fort> forts = new ArrayList<>();
+        for (SeatCities.City c : map.cities()) {
+            forts.add(lands.fort(c));
+        }
+        for (rafasconquest.core.Countryside.Settlement s : map.settlements()) {
+            if (s.kind() == rafasconquest.core.Countryside.Kind.CASTLE) {
+                forts.add(new Lands.Fort("the castle of " + map.names().get(s.province()), s.x(), s.z(), 20, false, 0, 0)); // as MapLands.fort
+            }
+        }
+        for (Lands.Fort f : forts) {
+            if (f != null && Math.max(Math.abs(at[0] - f.x()), Math.abs(at[1] - f.z())) <= f.half()) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** At sea only the cards sailing ships fight: their soldiers. */
+    private static int shipMen(Garrison g) {
+        int men = 0;
+        for (int i = 0; i < g.units.size(); i++) {
+            BattlePlan.Arm a = BattlePlan.Arm.get(g.units.get(i));
+            men += a != null && a.ship() != null ? g.men.get(i) : 0;
+        }
+        return men;
+    }
+
+    /** At sea only the cards sailing ships fight: their blocks per arm; null if there are none. */
+    @Nullable
+    private static int[] shipMix(Garrison g) {
+        int[] mix = g.mix();
+        if (mix == null) {
+            return null;
+        }
+        for (int a = 0; a < mix.length; a++) {
+            mix[a] = BattlePlan.Arm.get(a).ship() != null ? mix[a] : 0;
+        }
+        return java.util.Arrays.stream(mix).sum() > 0 ? mix : null;
     }
 
     /** How far a beaten army falls back from the field, in blocks. */
@@ -257,7 +349,7 @@ public final class GrandStrategy {
      * the beaten one falls back from the field, away from the victor (the attacker the way it came).
      */
     private static void aftermath(net.minecraft.server.MinecraftServer server, RecruitsBattle fought, Garrison[] armies,
-                                  int[][] started, int winner, double[] at, double ux, double uz) {
+                                  int[][] started, int winner, double[] at, double ux, double uz, boolean sea) {
         Peerage peerage = Peerage.get(server);
         long now = server.overworld().getGameTime();
         for (int side = 0; side < 2; side++) {
@@ -271,7 +363,7 @@ public final class GrandStrategy {
                 left += alive[a];
             }
             Garrison g = armies[side];
-            g.survive(kept, left / (double) Math.max(1, all));
+            g.survive(kept, sea ? 1 : left / (double) Math.max(1, all)); // at sea the cards left ashore fought no one
             double away = side == 0 ? -1 : 1; // the attacker came along +u
             boolean beaten = winner == 1 - side;
             g.fromX = at[0];

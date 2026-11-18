@@ -53,7 +53,14 @@ public final class Garrison {
     /** Musters a full card of {@code arm}. */
     void add(int arm) {
         units.add(arm);
-        men.add(MEN);
+        men.add(full(arm));
+    }
+
+    /** A whole card's soldiers: {@link #MEN}, or for a boarding ship's card only what its deck holds (a gunship keeps the rest below). */
+    public static int full(int arm) {
+        BattlePlan.Arm a = BattlePlan.Arm.get(arm);
+        rafasconquest.core.SeaLanes.Size ship = a == null ? null : a.ship();
+        return ship == null || ship.gunship() ? MEN : Math.min(MEN, rafasconquest.battle.FieldBattle.deckCrew(ship));
     }
 
     void remove(int card) {

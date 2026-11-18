@@ -19,7 +19,7 @@ class UnitCardsTest {
 
     @Test
     void theBuiltInCardsComeFromTheirFilesInTheJar() {
-        assertEquals(19, Arm.values().length);
+        assertEquals(24, Arm.values().length);
         assertEquals(11, Machine.count());
         assertTrue(Arm.HEAVY_INFANTRY.shielded());
         assertTrue(Arm.LEVY.expendable());
@@ -43,7 +43,7 @@ class UnitCardsTest {
         Arm pikemen = Arm.byId("pikemen");
         Arm bombards = Arm.byId("bombards");
         assertNotNull(pikemen);
-        assertEquals(19, pikemen.ordinal(), "after the built-ins");
+        assertEquals(24, pikemen.ordinal(), "after the built-ins");
         assertTrue(pikemen.infantry() && pikemen.has("anti_horse"));
         assertEquals(1, pikemen.pace(), 1e-9, "a field left out keeps the plain rate");
         assertSame(bombards, Arm.of(Machine.byId("bombard")));
