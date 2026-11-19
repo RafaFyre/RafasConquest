@@ -96,6 +96,18 @@ public class MediumCannonEntity extends BlockEntity {
         ORDERS.put(crew, new Order(at, way, shot, tick));
     }
 
+    /** Whether the cannon {@code crew} works can be laid on {@code at}, within its arc; true while it works none yet. */
+    public static boolean bears(ServerLevel level, UUID crew, Vec3 at) {
+        BlockPos pos = CREWS.get(crew);
+        BlockState state = pos == null ? null : level.getBlockState(pos);
+        if (state == null || !state.hasProperty(MediumCannonBlock.FACING)) {
+            return true;
+        }
+        Vec3 base = SableLink.outOfPlot(level, Vec3.atBottomCenterOf(pos)).add(0, 1, 0);
+        return CannonAim.bears(CannonAim.layFor(CannonAim.ballistic(new Vector3d(base.x, base.y, base.z), new Vector3d(at.x, at.y, at.z)),
+                SableLink.turnAt(level, pos), CannonAim.facing(state.getValue(MediumCannonBlock.FACING))));
+    }
+
     /** Whether {@code soldier} works a Medium Cannon now. */
     public static boolean crewing(UUID soldier) {
         return CREWS.containsKey(soldier);

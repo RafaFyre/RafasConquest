@@ -2161,8 +2161,12 @@ public final class RecruitsBattle {
         FieldBlock mark = block.prey();
         boolean marked = mark != null && mark.side() != block.side() && mark.alive() > 0 && mark.afloat()
                 && sideOf.applyAsInt(mark.pos()) == side;
-        List<AbstractRecruitEntity> may = marked ? preyOf(block, List.of())
-                : enemiesOf(block.side(), false).stream().filter(e -> sideOf.applyAsInt(new Point(e.getX(), e.getZ())) == side).toList();
+        // Only those its own cannon can swing onto: a side holds 180 degrees, a gun's arc far less, and one laid at its
+        // arc's edge on a foe off the bow never fires.
+        List<AbstractRecruitEntity> may = (marked ? preyOf(block, List.of())
+                : enemiesOf(block.side(), false).stream().filter(e -> sideOf.applyAsInt(new Point(e.getX(), e.getZ())) == side).toList())
+                .stream().filter(e -> rafasconquest.content.MediumCannonEntity.bears(level, s.getUUID(),
+                        e.position().add(0, e.getBbHeight() * 0.5, 0))).toList();
         LivingEntity target = kept;
         if (!(target != null && target.isAlive() && target.distanceTo(s) <= reach && may.contains(target))) {
             target = nearestTo(s, may).filter(f -> f.distanceTo(s) <= reach).orElse(null);
