@@ -161,6 +161,12 @@ public final class RecruitsBattle {
     public static final double SHIPS_WITHIN = NUMBERS_BEYOND + BLOCK_REACH;
     /** A battle ship already sailing is taken away only this much further out than {@link #SHIPS_WITHIN}. */
     private static final double SHIPS_KEPT_PAST = 32;
+    /** At most this many real (Sable) ships besides those with real soldiers aboard: each costs Sable about 0.8 ms a tick. */
+    private static final int MOST_SHIPS = 12;
+
+    /** A ship that may be real: its helm, its distance from the nearest player (less any head start), and whether it must be. */
+    private record Afloat(SableLink.Helm helm, double near, boolean boarded) {
+    }
     /**
      * Battles up to this many blocks (both sides) are also fought through as numbers at the start, for comparing; a
      * bigger one would hold the server up for seconds.
@@ -2319,7 +2325,7 @@ public final class RecruitsBattle {
         for (ServerPlayer player : level.players()) {
             watchers.add(new Point(player.getX(), player.getZ()));
         }
-        List<SableLink.Helm> helms = new ArrayList<>();
+        List<Afloat> afloat = new ArrayList<>();
         for (int side = 0; side < 2; side++) {
             for (FieldBlock block : field.army(side).blocks()) {
                 if (block.alive() == 0 || block != field.holder(block)) {
@@ -2341,10 +2347,14 @@ public final class RecruitsBattle {
                 }
                 // A ship sailing is kept a little further out than one is built, else a formation on the line has its ship
                 // taken away and built again over and over: ships blinking near the player.
-                if (near > SHIPS_WITHIN + (SableLink.shipAt(block.shipId()) != null ? SHIPS_KEPT_PAST : 0)) {
+                double keep = SableLink.shipAt(block.shipId()) != null ? SHIPS_KEPT_PAST : 0;
+                if (near > SHIPS_WITHIN + keep) {
                     continue;
                 }
                 boolean real = field.crew(block).stream().anyMatch(live::containsKey);
+                // real soldiers stand on it, or step across onto it: it must be there
+                boolean boarded = real || block.lashed().stream().anyMatch(o -> field.crew(o).stream().anyMatch(live::containsKey))
+                        || block.hookedTo() != null && field.crew(block.hookedTo()).stream().anyMatch(live::containsKey);
                 Point at = moored ? landed.at() : block.pos();
                 Point to = moored ? landed.at() : real ? field.makingFor(block) : block.pos();
                 Set<Integer> lashed = new HashSet<>();
@@ -2355,10 +2365,19 @@ public final class RecruitsBattle {
                 // There, it lies as its captain wants (a real formation's), or as its numbers do (one still only numbers).
                 double faceX = real ? block.settleX() : block.facingX();
                 double faceZ = real ? block.settleZ() : block.facingZ();
-                helms.add(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
+                afloat.add(new Afloat(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(),
                         block.ship() == FieldBlock.ShipKind.CAMP, lashed, hooked, flag.base(),
-                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()));
+                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()), near - keep, boarded));
+            }
+        }
+        // Sable floats every real ship block by block (about 0.8 ms a tick each): only the nearest few are real, the rest
+        // drawn by the clients in their place (DistantShips). Boarded ones always, then the nearest, a sailing one first.
+        afloat.sort(Comparator.comparing((Afloat a) -> !a.boarded()).thenComparingDouble(Afloat::near));
+        List<SableLink.Helm> helms = new ArrayList<>();
+        for (Afloat a : afloat) {
+            if (a.boarded() || helms.size() < MOST_SHIPS) {
+                helms.add(a.helm());
             }
         }
         for (SableLink.Ram ram : SableLink.sailBattle(level, shipRun, helms)) {
@@ -5075,6 +5094,10 @@ public final class RecruitsBattle {
                 field.seconds(), sides[0].faction.name(), field.army(0).alive(), field.army(0).reliefs(), sides[1].faction.name(),
                 field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), frontRows, window.describe(),
                 perTick(ownNanos), perTick(fieldNanos), perTick(switchNanos), perTick(snapshotNanos)));
+        String sable = SablePhysics.report(level, window.count);
+        if (!sable.isEmpty()) {
+            broadcast("[battle sable] " + sable);
+        }
         window.clear();
         ownNanos = 0;
         fieldNanos = 0;
@@ -6130,7 +6153,8 @@ public final class RecruitsBattle {
         }
         updateEnlisted();
         switchLive();
-        if (phase == Phase.PULLBACK && (field.arrived() || nightfall())) {
+        // Morning already (a bed skipped the night): the pullback ends now, or the battle waits a whole day for nightfall.
+        if (phase == Phase.PULLBACK && (field.arrived() || nightfall() || morning())) {
             setPhase(Phase.NIGHT);
             for (Enlisted e : enlisted.values()) {
                 title(e, say("orders.night"));

@@ -267,6 +267,17 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(Deflect.class, 44, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                })
+                .decoder(b -> new Deflect())
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.peerage.Deflects.start(player);
+                    }
+                })
+                .add();
         CHANNEL.messageBuilder(GarrisonOrder.class, 39, NetworkDirection.PLAY_TO_SERVER)
                 .encoder((m, b) -> {
                     b.writeVarInt(m.army());
@@ -380,6 +391,14 @@ public final class ConquestNetwork {
 
     public static void cycleSwing() {
         CHANNEL.sendToServer(new CycleSwing());
+    }
+
+    /** Client → server: a quick click in combat mode, a deflect ({@link rafasconquest.peerage.Deflects}). */
+    public record Deflect() {
+    }
+
+    public static void deflect() {
+        CHANNEL.sendToServer(new Deflect());
     }
 
     /** Server → client: cavalry formation {@code cavalry[i]} tore into formation {@code struck[i]} this second. */

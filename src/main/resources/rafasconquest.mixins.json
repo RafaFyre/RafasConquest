@@ -12,7 +12,9 @@
     "RecruitsArrowCleanerMixin",
     "EpicKnightsTwoHandedMixin",
     "EpicKnightsSlownessMixin",
-    "EpicKnightsJoustingMixin"
+    "EpicKnightsJoustingMixin",
+    "BetterCombatOneHandMixin",
+    "SablePhysicsTimingMixin"
   ],
   "client": [
     "ClientChunkWindowMixin",

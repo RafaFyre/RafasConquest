@@ -95,9 +95,35 @@ public final class WeaponSkills {
         return caliber == null ? 0 : PlayerStats.score(player, caliber);
     }
 
-    /** The swing's Haste follows the weapon in hand. */
+    /** Main-hand weapons of unhindered players, each with its holder (weakly, so neither is kept alive by this). */
+    private static final java.util.Map<ItemStack, java.lang.ref.WeakReference<net.minecraft.world.entity.player.Player>> WIELDED =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static ItemStack sword;
+
+    /**
+     * Better Combat's moveset for a stack ({@code attributes}, its WeaponAttributes): a two-handed weapon in the main
+     * hand of a player strong enough ({@link #ONE_HAND_HEAVY}) swings as a one-handed sword, so the off hand stays free.
+     * Asked by Better Combat on both sides; the same stack object is what the holder has in hand (ItemStack has no equals).
+     */
+    public static ItemStack movesetOf(ItemStack stack) {
+        var holder = WIELDED.get(stack);
+        net.minecraft.world.entity.player.Player player = holder == null ? null : holder.get();
+        // inventory, not getMainHandItem: Better Combat hooks getItemBySlot to ask getAttributes, which asks us again (stack overflow)
+        if (player == null || player.getInventory().getSelected() != stack || !unhindered(player)) {
+            return stack;
+        }
+        if (sword == null) {
+            sword = new ItemStack(net.minecraft.world.item.Items.IRON_SWORD);
+        }
+        return sword;
+    }
+
+    /** The swing's Haste follows the weapon in hand; a strong player's weapon is noted for {@link #movesetOf}. */
     @SubscribeEvent
     public static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (unhindered(event.getEntity()) && !event.getEntity().getMainHandItem().isEmpty()) {
+            WIELDED.put(event.getEntity().getMainHandItem(), new java.lang.ref.WeakReference<>(event.getEntity()));
+        }
         if (!(event.getEntity() instanceof ServerPlayer player) || player.tickCount % 5 != 0) {
             return;
         }
