@@ -1,1 +1,1 @@
-{"name": "Small ship", "length": 11, "width": 5, "deck": 4, "speed": 1, "lanes": 30, "battle": "", "hull": "small.nbt", "merchant": "small_merchant.nbt", "type": "boarder"}
+{"name": "Small Boarder", "length": 11, "width": 5, "deck": 4, "speed": 1, "lanes": 30, "battle": "", "hull": "small.nbt", "merchant": "small_merchant.nbt", "type": "boarder"}

@@ -1,1 +1,1 @@
-{"name": "Large ship", "length": 23, "width": 7, "deck": 4, "speed": 1, "lanes": 20, "battle": "", "hull": "large.nbt", "merchant": "large_merchant.nbt", "type": "boarder"}
+{"name": "Large Boarder", "length": 23, "width": 7, "deck": 4, "speed": 1, "lanes": 20, "battle": "", "hull": "large.nbt", "merchant": "large_merchant.nbt", "type": "boarder"}

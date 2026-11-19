@@ -1,1 +1,1 @@
-{"name": "Medium ship", "length": 17, "width": 5, "deck": 4, "speed": 1, "lanes": 40, "battle": "", "hull": "medium.nbt", "merchant": "medium_merchant.nbt", "type": "boarder"}
+{"name": "Medium Boarder", "length": 17, "width": 5, "deck": 4, "speed": 1, "lanes": 40, "battle": "", "hull": "medium.nbt", "merchant": "medium_merchant.nbt", "type": "boarder"}
