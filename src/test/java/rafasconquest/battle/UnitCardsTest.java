@@ -76,7 +76,7 @@ class UnitCardsTest {
                 {"name": "Carrack", "length": 51, "width": 15, "deck": 6, "speed": 0.8, "battle": "unit", "hull": "carrack.nbt"}""");
         rafasconquest.core.SeaLanes.Size carrack = rafasconquest.core.SeaLanes.Size.byId("carrack");
         assertSame(xxl, rafasconquest.core.SeaLanes.Size.battle("unit", null), "the first card of a role is the built-in");
-        assertEquals(7, carrack.ordinal());
+        assertEquals(6, carrack.ordinal(), "after the six built-ins");
         assertEquals(0, carrack.lanes, "a card left off the lanes by default");
         UnitCards.apply(UnitCards.SHIPS, "xxlarge", """
                 {"battle": ""}""");

@@ -42,9 +42,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattlePlan.java": {
-    "mtime": 1795116226.6882281,
-    "seen": 1795116475.9466026,
-    "ast_hash": "c59a251e9430f37c00c0d5fde6d0429d",
+    "mtime": 1795119337.8647568,
+    "seen": 1795119530.5925386,
+    "ast_hash": "d7d239858e99c2971d0dba42f1b41fce",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattleSite.java": {
@@ -1662,9 +1662,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1795113263.5957797,
-    "seen": 1795113447.360968,
-    "ast_hash": "e608d285e4db17c4730a033a140c1765",
+    "mtime": 1795119156.7922487,
+    "seen": 1795119530.5933647,
+    "ast_hash": "ee4a0978dd51c2c5267f6c6dac4a15dd",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -4224,9 +4224,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/UnitCardsTest.java": {
-    "mtime": 1795116434.0355446,
-    "seen": 1795116475.9474373,
-    "ast_hash": "bdb4733d066e2552b5f13b6a72c23f03",
+    "mtime": 1795119377.9531229,
+    "seen": 1795119530.5933735,
+    "ast_hash": "ab3a9be8ff6fc1d65037ef5e23c87d22",
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest_units/arms/gunship.json": {

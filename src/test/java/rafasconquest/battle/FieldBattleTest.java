@@ -820,6 +820,19 @@ class FieldBattleTest {
     }
 
     @Test
+    void aGreatShieldFleetStillSailsItsGunships() {
+        // A Great Shield made its whole front heavy infantry: at sea that took every Gunship card's ship from it.
+        int[] mix = BattlePlan.navalMix(51);
+        WarPlan shield = WarPlan.of(List.of(Doctrine.SPEAR_AND_SHIELD));
+        FieldBattle battle = new FieldBattle(0, 0, new Point(0, 0), 1, 0, 3, FieldRules.RATES, shield, shield, mix, mix.clone());
+        battle.setType(BattleType.OCEAN);
+        for (int side = 0; side < 2; side++) {
+            assertTrue(battle.army(side).blocks().stream().anyMatch(b -> b.ship() == FieldBlock.ShipKind.GUNSHIP
+                    && b.hull() == rafasconquest.core.SeaLanes.Size.GUNSHIP), "side " + side + " lost its gunships");
+        }
+    }
+
+    @Test
     void aGunshipLiesOffSideOnAndFiresBroadsides() {
         rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
         List<String> right = gunship.gunsRight;

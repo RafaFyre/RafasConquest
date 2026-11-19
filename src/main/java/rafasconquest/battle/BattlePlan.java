@@ -678,7 +678,7 @@ public final class BattlePlan {
 
     /**
      * The same, the levies up front ({@code levyFront}: the general wants the front to fail, crushing them and drawing the
-     * enemy on) or behind the heavy infantry, supporting it. A Great Shield's front is all heavy infantry.
+     * enemy on) or behind the heavy infantry, supporting it. A Great Shield's front is all heavy infantry (ship cards keep theirs).
      */
     public static List<Slot> deployment(int blocks, boolean greatShield, double[] wingShares, boolean levyFront) {
         return deployment(blocks, greatShield, wingShares, levyFront, 0);
@@ -828,7 +828,8 @@ public final class BattlePlan {
         for (int row = 0; row < frontRows; row++) {
             for (int file = 0; file < width; file++) {
                 Arm arm = foot.get(next++);
-                slots.add(new Slot(greatShield ? Arm.HEAVY_INFANTRY : arm, fileRight[file], fileBack(row, stackFiles), row,
+                // A ship card keeps its card: it is the ship it sails (a Gunship's guns), not a shield wall's infantry.
+                slots.add(new Slot(greatShield && !arm.naval() ? Arm.HEAVY_INFANTRY : arm, fileRight[file], fileBack(row, stackFiles), row,
                         firstFile + file, files, wing, BAND_FRONT));
             }
         }
