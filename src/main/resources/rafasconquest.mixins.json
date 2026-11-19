@@ -23,7 +23,8 @@
     "DhShaderLoaderMixin",
     "DhTerrainShaderMixin",
     "SodiumShaderInterfaceMixin",
-    "SodiumShaderLoaderMixin"
+    "SodiumShaderLoaderMixin",
+    "ShoulderSurfingPickMixin"
   ],
   "injectors": {
     "defaultRequire": 0
