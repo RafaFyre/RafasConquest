@@ -322,6 +322,11 @@ public final class BattlePlan {
             return ship.isEmpty() ? null : rafasconquest.core.SeaLanes.Size.byId(ship);
         }
 
+        /** A ship's card: it serves in a fleet, never in a land army. */
+        public boolean naval() {
+            return ship() != null;
+        }
+
         /** Crews working an engine: the siege train, or an engine's own card. */
         public boolean engine() {
             return kind == Kind.ENGINE;
@@ -495,7 +500,10 @@ public final class BattlePlan {
     static int platoonBlocks(Arm arm) {
         int most = Math.min(PLATOON_BLOCKS, PLATOON_SOLDIERS / SOLDIERS_PER_FORMATION);
         rafasconquest.core.SeaLanes.Size ship = arm.ship();
-        return ship == null || ship.gunship() ? most : Math.max(1, Math.min(most, FieldBattle.deckCrew(ship) / SOLDIERS_PER_FORMATION));
+        if (ship != null && ship.gunship()) {
+            return Math.max(1, (ship.crewCap(most * SOLDIERS_PER_FORMATION) + SOLDIERS_PER_FORMATION - 1) / SOLDIERS_PER_FORMATION); // one a post
+        }
+        return ship == null ? most : Math.max(1, Math.min(most, FieldBattle.deckCrew(ship) / SOLDIERS_PER_FORMATION));
     }
 
     /**
@@ -553,6 +561,23 @@ public final class BattlePlan {
     public static int blocks(int soldiers) {
         int clamped = Math.max(MIN_SOLDIERS, Math.min(MAX_SOLDIERS, soldiers));
         return Math.max(1, Math.round(clamped / (float) SOLDIERS_PER_FORMATION));
+    }
+
+    /**
+     * A fleet's mix when no cards are given (a war's fleet, a command's sea battle): {@code blocks} blocks dealt in turn
+     * over the roster's ship cards, so it sails only ships, never land units; null if there are no ship cards.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static int[] navalMix(int blocks) {
+        Arm[] ships = java.util.Arrays.stream(Arm.values()).filter(a -> a.roster() && a.naval()).toArray(Arm[]::new);
+        if (ships.length == 0) {
+            return null;
+        }
+        int[] mix = new int[Arm.values().length];
+        for (int i = 0; i < Math.max(1, blocks); i++) {
+            mix[ships[i % ships.length].ordinal()]++;
+        }
+        return mix;
     }
 
     /** How an army of {@code blocks} blocks deploys in plain lines ({@link #deployment(int, boolean)}). */

@@ -47,12 +47,18 @@ public final class PoliticsSync {
             int counties = map == null ? 1 : w.goal().counties(MapLands.of(map)).size();
             wars.add(new int[]{w.attacker(), w.defender(), w.goal().duchy() ? 1 : 0, w.goal().index(), w.target(), w.taken().size(), counties,
                     (int) w.siteX(), (int) w.siteZ()});
+            // Each side's army and fleet: [nation, soldiers, x, z, state (0 marching, 1 mustering, 2 waiting while the
+            // other force fights), war, toX, toZ, fleet (1) or army (0), ships (a fleet's; 0 for an army)].
             for (boolean attacking : new boolean[]{true, false}) {
-                Army army = w.army(attacking);
-                if (army != null) {
-                    double[] to = army.heading(w);
+                for (Army army : new Army[]{w.land(attacking), w.fleet(attacking)}) {
+                    if (army == null) {
+                        continue;
+                    }
+                    boolean active = army == w.army(attacking);
+                    double[] to = active ? army.heading(w) : new double[]{army.x(), army.z()};
                     armies.add(new int[]{attacking ? w.attacker() : w.defender(), army.soldiers(), (int) army.x(), (int) army.z(),
-                            army.mustering(now) ? 1 : 0, i, (int) to[0], (int) to[1]});
+                            !active ? 2 : army.mustering(now) ? 1 : 0, i, (int) to[0], (int) to[1], army == w.fleet(attacking) ? 1 : 0,
+                            army == w.fleet(attacking) ? army.ships() : 0});
                 }
             }
         }

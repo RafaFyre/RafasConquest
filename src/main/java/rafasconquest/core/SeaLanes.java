@@ -45,7 +45,7 @@ public final class SeaLanes {
      * Its hull is a structure {@code .nbt} beside it ({@link rafasconquest.style.ShipHulls}; {@code merchant} the lanes'
      * unarmed one, blank: the same), with its length and beam, its deck's height above its keel, its pace in battle (times
      * the usual), how often it sails the lanes (a weight; 0: never), and which battle ship it is ({@code battle}: "unit",
-     * "flagship", "cargo"; blank: none). The built-in five are constants; a file of a new id adds a card.
+     * "flagship"; blank: none). The built-in five are constants; a file of a new id adds a card.
      */
     public static final class Size {
         private static final List<Size> ALL = new ArrayList<>();
@@ -148,6 +148,11 @@ public final class SeaLanes {
 
         public boolean gunship() {
             return type.equals("gunship");
+        }
+
+        /** Most soldiers this card's crew may be, up to {@code most}: a gunship's one a post (its gunners), once its hull is read. */
+        public int crewCap(int most) {
+            return gunship() && !posts.isEmpty() ? Math.min(most, posts.size()) : most;
         }
 
         public static Size unitShip() {

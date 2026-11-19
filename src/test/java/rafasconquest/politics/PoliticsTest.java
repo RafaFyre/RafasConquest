@@ -12,7 +12,10 @@ import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PoliticsTest {
@@ -184,6 +187,14 @@ class PoliticsTest {
         public boolean hasPort(int nation) {
             return ports[nation];
         }
+
+        /** A nation with a port has one at its capital, of one district (two ships). */
+        @Override
+        public List<Fort> ports(int nation) {
+            int[] c = capital(nation);
+            return ports[nation] ? List.of(new Fort("port " + nation, c[0], c[1], rafasconquest.core.SeatCities.DISTRICT / 2 + 4, true, 0, 1))
+                    : List.of();
+        }
     }
 
     @Test
@@ -191,19 +202,50 @@ class PoliticsTest {
         Row lands = row();
         lands.forts[2] = new Lands.Fort("Haven", 4500, 0, 60, true, 0, 1);
         lands.ports[0] = true;
+        lands.ports[1] = true;
         Politics p = new Politics();
         War w = p.declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
         assertNotNull(w);
         assertEquals(rafasconquest.battle.BattleType.OCEAN, w.type());
         assertEquals(4500, w.siteX(), 1e-9);
         assertEquals(60 + Lands.Fort.OFFSHORE, w.siteZ(), 1e-9, "out at sea off its harbour");
+        // The fleets are forces of their own, crewed from the ports, apart from the armies.
+        assertNotNull(w.fleet(true));
+        assertNotNull(w.fleet(false));
+        assertEquals(2 * Lands.Fort.FLEET_CREW, w.fleet(true).soldiers(), "the port's two ships, crewed");
+        assertSame(w.fleet(true), w.army(true), "at sea the fleet fights");
+        int armyBefore = w.land(true).soldiers();
         p.after(w, true, 0.9, 0.6, 3, lands, new Random(5), FAR);
+        assertEquals(armyBefore, w.land(true).soldiers(), "the sea battle cost the army no one");
+        assertNull(w.fleet(true));
+        assertNull(w.fleet(false));
         assertEquals(rafasconquest.battle.BattleType.AMPHIBIOUS, w.type(), "the sea won, they land");
         assertEquals(1, lands.owner(4), "the sea battle took no land");
         assertEquals(4500, w.siteX(), 1e-9);
         assertEquals(0, w.siteZ(), 1e-9, "at its walls");
         p.after(w, true, 0.8, 0.3, 4, lands, new Random(5), FAR);
         assertEquals(0, lands.owner(4), "the port stormed and taken");
+    }
+
+    @Test
+    void aDefenderWithNoFleetCantHoldTheSeaAndAnAttackerWithNoneGoesByLand() {
+        Row lands = row();
+        lands.forts[2] = new Lands.Fort("Haven", 4500, 0, 60, true, 0, 1);
+        lands.ports[0] = true;
+        War w = new Politics().declare(0, 1, new Goal(false, 2), 1, lands, new Random(1), FAR);
+        assertNotNull(w);
+        assertEquals(rafasconquest.battle.BattleType.AMPHIBIOUS, w.type(), "no fleet to meet it: straight to the walls");
+        assertNull(w.fleet(true));
+
+        Row dry = row();
+        dry.forts[2] = new Lands.Fort("Haven", 4500, 0, 60, true, 0, 1);
+        dry.ports[0] = true;
+        Politics p = new Politics();
+        p.drowned.put(0, 2 * Lands.Fort.FLEET_CREW); // its sailors all lost
+        War v = p.declare(0, 1, new Goal(false, 2), 1, dry, new Random(1), FAR);
+        assertNotNull(v);
+        assertNotEquals(rafasconquest.battle.BattleType.OCEAN, v.type(), "no fleet: by land");
+        assertNull(v.fleet(true));
     }
 
     @Test

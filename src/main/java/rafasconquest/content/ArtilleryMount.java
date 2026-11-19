@@ -25,17 +25,25 @@ import java.util.UUID;
 /**
  * An {@link ArtilleryBlock}'s anchor. Once the block is on a Sable ship it puts its engine on top, facing the block's way
  * turned with the ship, with a siege engineer riding it; then, once a second, pulls the engine back if it has left its
- * block. Sable itself carries a living entity (Siegeworks engines are) standing on a moving ship; the pull catches what
- * that misses: a ship unloaded and loaded again, a hard swing.
+ * block. Sable carries the engine standing on its deck (see SiegeworksShipCollisionMixin); the pull catches what that
+ * misses: a ship unloaded and loaded again, a hard swing.
  */
 public class ArtilleryMount extends BlockEntity {
     /** How far (squared, blocks) the engine may stray from its block before it is pulled back. */
     private static final double STRAY = 2 * 2;
+    /**
+     * The tag on an engine an Artillery Block made: it belongs to its block, not to whoever works it, so it stays when
+     * they go (Recruits takes any vehicle for a soldier's mount).
+     */
+    public static final String SHIP_GUN = "rafasconquest_ship_gun";
 
     @Nullable
     private UUID engine;
     /** Whether its engine was ever made: a destroyed engine is not made again. */
     private boolean made;
+    /** Whether its engine's going was logged (once). */
+    private boolean toldGone;
+    private boolean toldNoShip;
 
     public ArtilleryMount(BlockPos pos, BlockState state) {
         super(ConquestContent.ARTILLERY_ENTITY.get(), pos, state);
@@ -47,6 +55,10 @@ public class ArtilleryMount extends BlockEntity {
         }
         ServerSubLevel ship = ship(level, worldPosition);
         if (ship == null) {
+            if (!toldNoShip) {
+                toldNoShip = true;
+                rafasconquest.RafasConquest.LOGGER.info("[guns] {} ticks but is on no ship", worldPosition);
+            }
             return; // not on a ship: a hull being built, or a ship file being made
         }
         Vec3 top = ship.logicalPose().transformPosition(Vec3.atBottomCenterOf(worldPosition.above()));
@@ -56,6 +68,9 @@ public class ArtilleryMount extends BlockEntity {
             // keep a "last seen" tick if ships lose their guns after a long unload.
             if (!made) {
                 make(level, state, ship, top);
+            } else if (!toldGone) {
+                toldGone = true;
+                rafasconquest.RafasConquest.LOGGER.info("[guns] {} on ship {}: its engine {} is gone", worldPosition, ship.getName(), engine);
             }
             return;
         }
@@ -71,13 +86,17 @@ public class ArtilleryMount extends BlockEntity {
         made = true;
         setChanged();
         if (e == null) {
+            rafasconquest.RafasConquest.LOGGER.warn("[guns] {} on ship {}: no entity {} to make", worldPosition, ship.getName(), weapon.entity());
             return; // Siegeworks is not installed, or renamed it
         }
         Direction facing = state.getValue(ArtilleryBlock.FACING);
         Vector3d d = ship.logicalPose().orientation().transform(new Vector3d(facing.getStepX(), 0, facing.getStepZ()));
         float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
         e.moveTo(top.x, top.y, top.z, yaw, 0);
-        level.addFreshEntity(e);
+        e.addTag(SHIP_GUN);
+        boolean added = level.addFreshEntity(e);
+        rafasconquest.RafasConquest.LOGGER.info("[guns] {} on ship {}: made {} at {} (added {}, chunk loaded {})", worldPosition, ship.getName(),
+                weapon.entity(), top, added, level.hasChunkAt(BlockPos.containing(top)));
         engine = e.getUUID();
         if (rafasconquest.bridge.SableLink.battleShip(ship)) {
             return; // a battle gunship: its gunners are the battle's soldiers at its Character Markers (RecruitsBattle.manGun)

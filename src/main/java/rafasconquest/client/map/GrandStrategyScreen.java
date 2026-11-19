@@ -242,8 +242,9 @@ public class GrandStrategyScreen extends FactionMapScreen {
             return null;
         }
         double block = Math.abs(east[0] - feet[0]) / 100; // GUI pixels a block there
-        double half = Math.max(5, MARCHER_HEIGHT * 0.3 * block);
-        double tall = Math.max(12, MARCHER_HEIGHT * 1.3 * block); // with the banner over his head
+        // A fleet's ship lies about as long as it is tall with its masts; a marcher is narrow, his banner over his head.
+        double half = Math.max(5, (a.fleet() ? FleetFigure.LENGTH * 0.5 : MARCHER_HEIGHT * 0.3) * block);
+        double tall = Math.max(12, (a.fleet() ? FleetFigure.LENGTH * 0.8 : MARCHER_HEIGHT * 1.3) * block);
         return new double[]{feet[0] - half, feet[1] - tall, feet[0] + half, feet[1] + 2};
     }
 
@@ -272,6 +273,12 @@ public class GrandStrategyScreen extends FactionMapScreen {
     /** On the flat map, an army's marcher drawn as a figure over it (the 3D map has him in the world: {@link #renderMarcher}). */
     private void renderArmy(GuiGraphics g, GrandStrategy.Army a) {
         double[] at = camera == null ? pos(a) : null;
+        if (a.fleet()) {
+            if (at != null) {
+                renderFleet(g, a, at);
+            }
+            return;
+        }
         var e = at == null ? null : marcher(a);
         if (e == null) {
             return;
@@ -282,6 +289,26 @@ public class GrandStrategyScreen extends FactionMapScreen {
         float feet = (float) view.screenY(at[1]);
         InventoryScreen.renderEntityInInventory(g, (float) view.screenX(at[0]), feet - e.getBbHeight() * scale / 2, scale / e.getScale(),
                 new Vector3f(0, e.getBbHeight() / 2, 0), new Quaternionf().rotateZ((float) Math.PI), null, e);
+    }
+
+    /** How far the flat map's fleets are tipped from straight down, so their sails show (degrees). */
+    private static final float FLEET_TILT = 55;
+
+    /** On the flat map, a fleet's ship ({@link FleetFigure}) over where it is, bow along its course, looked down on. */
+    private void renderFleet(GuiGraphics g, GrandStrategy.Army a, double[] at) {
+        PoseStack pose = g.pose();
+        float s = (float) view.scale;
+        pose.pushPose();
+        pose.translate(view.screenX(at[0]), view.screenY(at[1]), 150);
+        // As the inventory draws an entity: z flipped and turned upright about z, which mirrors x (hence -dx below).
+        pose.scale(s, s, -s);
+        pose.mulPose(com.mojang.math.Axis.ZP.rotation((float) Math.PI));
+        pose.mulPose(com.mojang.math.Axis.XP.rotationDegrees(FLEET_TILT));
+        com.mojang.blaze3d.platform.Lighting.setupFor3DItems();
+        FleetFigure.draw(pose, g.bufferSource(), a, ClientMapCache.map(), nationOf(a), -(a.toX() - a.fromX()), a.toZ() - a.fromZ());
+        g.flush();
+        com.mojang.blaze3d.platform.Lighting.setupFor3DItems();
+        pose.popPose();
     }
 
     /**
@@ -300,6 +327,16 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     private static void renderMarcher(GrandStrategyScreen s, GrandStrategy.Army a, PoseStack pose, Vec3 cam, MultiBufferSource buffers) {
         double[] at = s.pos(a);
+        if (a.fleet()) { // a fleet is its ship, afloat on the sea where it is
+            BaseMap base = ClientMapCache.map();
+            if (at != null && base != null) {
+                pose.pushPose();
+                pose.translate(at[0] - cam.x, StrategyRelief.groundAt(base, at[0], at[1]) - cam.y, at[1] - cam.z);
+                FleetFigure.draw(pose, buffers, a, base, s.nationOf(a), a.toX() - a.fromX(), a.toZ() - a.fromZ());
+                pose.popPose();
+            }
+            return;
+        }
         var e = at == null ? null : s.marcher(a);
         BaseMap base = ClientMapCache.map();
         if (e == null || base == null) {
@@ -716,8 +753,11 @@ public class GrandStrategyScreen extends FactionMapScreen {
 
     private List<Component> armyTip(GrandStrategy.Army a) {
         List<Component> lines = new ArrayList<>(tip(FaceOffScreen.nation(a), FaceOffScreen.general(a)));
-        lines.add(Component.literal(a.units().length + " units, " + String.format("%,d", a.soldiers()) + " soldiers").withColor(0xA8A49C));
-        lines.add(Component.literal(picked == GrandStrategy.NO_TARGET || a.id() == picked ? "Click: select" : "Click: attack it").withColor(0xE0C060));
+        lines.add(Component.literal((a.fleet() ? "Fleet: " : "Army: ") + a.strength()).withColor(0xA8A49C));
+        GrandStrategy.Army mine = fief.army(picked);
+        boolean select = picked == GrandStrategy.NO_TARGET || a.id() == picked;
+        lines.add(Component.literal(select ? "Click: select" : mine != null && mine.fleet() != a.fleet()
+                ? (mine.fleet() ? "A fleet fights only fleets" : "An army fights only armies") : "Click: attack it").withColor(0xE0C060));
         return lines;
     }
 

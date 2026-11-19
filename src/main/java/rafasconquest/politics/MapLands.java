@@ -274,6 +274,17 @@ public final class MapLands implements Lands {
     }
 
     @Override
+    public List<Fort> ports(int nation) {
+        List<Fort> ports = new ArrayList<>();
+        for (rafasconquest.core.SeatCities.City c : map.cities()) {
+            if (c.port() && owner(c.province()) == nation) {
+                ports.add(fort(c));
+            }
+        }
+        return ports;
+    }
+
+    @Override
     public rafasconquest.people.Realm realm() {
         return map.realm();
     }

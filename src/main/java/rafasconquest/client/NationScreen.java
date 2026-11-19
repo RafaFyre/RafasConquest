@@ -195,12 +195,15 @@ public class NationScreen extends Screen {
                 continue;
             }
             String title = ClientPolitics.titleName(base, w[2] == 1, w[3]);
-            String army = "no army in the field";
+            List<String> forces = new ArrayList<>();
             for (int[] a : ClientPolitics.armies()) {
                 if (a[5] == i && a[0] == nation) {
-                    army = String.format("%,d", a[1]) + " soldiers " + (a[4] == 1 ? "mustering" : "on the march");
+                    boolean fleet = a.length > 8 && a[8] == 1;
+                    forces.add((fleet ? a[9] + " ships (" + String.format("%,d", a[1]) + " crew) " : String.format("%,d", a[1]) + " soldiers ")
+                            + (a[4] == 1 ? "mustering" : a[4] == 2 ? "waiting" : fleet ? "at sea" : "on the march"));
                 }
             }
+            String army = forces.isEmpty() ? "no army in the field" : String.join("; ", forces);
             lines.add(new String[]{"At war with " + base.nations().get(attacking ? w[1] : w[0]).name(),
                     (attacking ? "For the " : "Defending the ") + title + ": " + w[5] + " of " + w[6] + " counties taken; " + army});
         }

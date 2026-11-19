@@ -20,8 +20,6 @@ public final class FieldBlock {
         SWORDSMEN,
         /** Fast, full of swordsmen: keeps clear, then rams an enemy already grappled at its bow, in the side. */
         SHOCK,
-        /** The fleet's camp: food, gear and the cavalry's horses; keeps to the rear, nobody on deck. */
-        CAMP,
         /** A ship of the line ({@link rafasconquest.core.SeaLanes.Size#gunship}): lies off at gun range, side-on, and fires broadsides. */
         GUNSHIP
     }

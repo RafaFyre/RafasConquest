@@ -26,9 +26,13 @@ final class CityPanel {
 
     private static final String[] TABS = {"City", "Army", "Intrigue"};
     private static final String[] BUTTONS = {"", "Muster", "Dismiss", "March"};
-    /** The cards the muster shop offers, by ordinal: the general roster (no siege train), as the server numbers them. */
-    private static int[] shop() {
-        return java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster).mapToInt(BattlePlan.Arm::ordinal).toArray();
+    /**
+     * The cards the muster shop offers, by ordinal: the general roster (no siege train) of the force's kind, ships to a
+     * fleet and the rest to an army, as the server numbers them.
+     */
+    private static int[] shop(GrandStrategy.Army army) {
+        return java.util.Arrays.stream(BattlePlan.Arm.values()).filter(a -> a.roster() && a.naval() == army.fleet())
+                .mapToInt(BattlePlan.Arm::ordinal).toArray();
     }
 
     /** A card's icon, as its file names it (an item id); a sword if there is none. */
@@ -151,7 +155,7 @@ final class CityPanel {
     }
 
     private static int count(int row, GrandStrategy.Army army) {
-        return row == 0 ? army.units().length : shop().length;
+        return row == 0 ? army.units().length : shop(army).length;
     }
 
     /** {@link #cardAt} for a row, only within the box's clip. */
@@ -245,7 +249,7 @@ final class CityPanel {
             if (hovered >= 0) {
                 tip = tip(units[hovered], army.men()[hovered], mode == Mode.DISMISS ? "Click: dismiss" : null);
             }
-            String count = units.length + " units, " + String.format("%,d", army.soldiers()) + " soldiers";
+            String count = army.strength();
             g.drawString(font, count, right - 6 - font.width(count), top + 5, 0xFFA8A49C, false);
             int by = height - TAB_H - 4;
             Mode[] buttons = buttons(army);
@@ -261,17 +265,18 @@ final class CityPanel {
                 int shopTop = top - SHOP_H - 2;
                 g.fill(left, shopTop, right, top - 2, BACK);
                 g.renderOutline(left, shopTop, right - left, SHOP_H, EDGE);
-                g.drawString(font, "Muster: click a card to raise its soldiers", left + 6, shopTop + 4, GOLD, false);
-                int[] shop = rowXs(shop().length, 1);
+                g.drawString(font, army.fleet() ? "Muster: click a card to build that ship" : "Muster: click a card to raise its soldiers",
+                        left + 6, shopTop + 4, GOLD, false);
+                int[] shop = rowXs(shop(army).length, 1);
                 int over = rowAt(shop, shopTop + 16, mouseX, mouseY);
                 g.enableScissor(left + 5, shopTop + 15, right - 5, shopTop + 17 + CARD_H);
-                for (int i = 0; i < shop().length; i++) {
-                    card(g, font, shop[i], shopTop + 16, shop()[i], Garrison.full(shop()[i]), i == over ? GOLD : 0xFFC8C8C8);
+                for (int i = 0; i < shop(army).length; i++) {
+                    card(g, font, shop[i], shopTop + 16, shop(army)[i], Garrison.full(shop(army)[i]), i == over ? GOLD : 0xFFC8C8C8);
                 }
                 g.disableScissor();
-                scrollbar(g, 1, shop().length, mouseX, mouseY);
+                scrollbar(g, 1, shop(army).length, mouseX, mouseY);
                 if (over >= 0) {
-                    tip = tip(shop()[over], Garrison.full(shop()[over]), "Click: muster");
+                    tip = tip(shop(army)[over], Garrison.full(shop(army)[over]), "Click: muster");
                 }
             } else if (mode == Mode.MARCH) {
                 String hint = "Click the map to march there; right-click to stop";
@@ -287,7 +292,9 @@ final class CityPanel {
         BattlePlan.Arm a = BattlePlan.Arm.get(arm);
         Component name = Component.literal(a == null ? "?" : a.title());
         int full = Garrison.full(arm);
-        Component men = Component.literal(soldiers + (soldiers < full ? " / " + full : "") + " soldiers").withColor(0xA8A49C);
+        boolean ship = a != null && a.naval();
+        Component men = Component.literal((ship ? "1 ship, " : "") + soldiers + (soldiers < full ? " / " + full : "") + (ship ? " crew" : " soldiers"))
+                .withColor(0xA8A49C);
         return click == null ? List.of(name, men) : List.of(name, men, Component.literal(click).withColor(0xE0C060));
     }
 
@@ -340,9 +347,9 @@ final class CityPanel {
             }
         }
         if (mode == Mode.MUSTER) {
-            int shop = rowAt(rowXs(shop().length, 1), rowY(1), mx, my);
+            int shop = rowAt(rowXs(shop(army).length, 1), rowY(1), mx, my);
             if (shop >= 0) {
-                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, shop()[shop], 0, 0);
+                ConquestNetwork.orderGarrison(army.id(), GrandStrategy.MUSTER, shop(army)[shop], 0, 0);
             }
         } else if (mode == Mode.DISMISS) {
             int card = rowAt(rowXs(army.units().length, 0), top + TAB_H + 4, mx, my);

@@ -16,13 +16,13 @@ public final class SableLink {
     /**
      * A battle ship's orders this tick: formation {@code id}'s ship (of {@code side}) sails for (toX, toZ) at up to
      * {@code speed} blocks a second, bow along its course (or along (faceX, faceZ) once there). {@code hull}: its size (the
-     * general's a size up, a unit's the biggest); {@code cargo}: one of the fleet's camp, stores on deck; {@code lashed}: the formations whose
+     * general's a size up, a unit's the biggest); {@code lashed}: the formations whose
      * ships it is grappled to, which it keeps alongside; {@code hooked}: those its grapple lines are in, which haul it
      * toward its place alongside them; {@code sail}, {@code stripe}: its side's banner dyes (base, first
      * mark), which its sail is woven in.
      */
     public record Helm(int id, int side, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed,
-                       rafasconquest.core.SeaLanes.Size hull, boolean cargo, java.util.Set<Integer> lashed, java.util.Set<Integer> hooked,
+                       rafasconquest.core.SeaLanes.Size hull, java.util.Set<Integer> lashed, java.util.Set<Integer> hooked,
                        int sail, int stripe) {
     }
 
@@ -158,6 +158,23 @@ public final class SableLink {
     /** Whether Sable ship {@code sub} (a ServerSubLevel, typed loosely so this class loads without Sable) is a battle's. */
     public static boolean battleShip(Object sub) {
         return enabled && BattleShips.battleShip((dev.ryanhcode.sable.sublevel.ServerSubLevel) sub);
+    }
+
+    /**
+     * Whether {@code e} stands on (or last stood on) a Sable ship.
+     * shortcut: an engine that once rode a ship counts as on one after, so ashore it collides as plain Minecraft does;
+     * check distance to that ship if engines landed off ships should get Siegeworks' terrain collision back.
+     */
+    public static boolean onShip(net.minecraft.world.entity.Entity e) {
+        if (!enabled) {
+            return false;
+        }
+        try {
+            return dev.ryanhcode.sable.Sable.HELPER.getTrackingSubLevel(e) != null
+                    || dev.ryanhcode.sable.Sable.HELPER.getLastTrackingSubLevel(e) != null;
+        } catch (LinkageError err) {
+            return false;
+        }
     }
 
     /** A spot on formation {@code id}'s deck in the world, {right, back} of its hull's middle: {x, y, z}; null with none sailing. */

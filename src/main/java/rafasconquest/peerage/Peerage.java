@@ -85,6 +85,8 @@ public final class Peerage extends SavedData {
     private final Map<Integer, String> fates = new HashMap<>();
     /** Each city's army, by its seat province: raised (at random) the first time it is asked for. */
     final Map<Integer, Garrison> garrisons = new HashMap<>();
+    /** Each port city's fleet, by its seat province, a force apart from its army: raised the first time it is asked for. */
+    final Map<Integer, Garrison> fleets = new HashMap<>();
     /** Armies spawned on the grand strategy map in creative; an army's id is its index here. */
     final List<Garrison> spawned = new java.util.ArrayList<>();
 
@@ -122,6 +124,27 @@ public final class Peerage extends SavedData {
         Garrison g = garrisons.get(province);
         if (g == null) {
             garrisons.put(province, g = Garrison.raise(random));
+            setDirty();
+        }
+        return g;
+    }
+
+    /**
+     * A port city's fleet, in its harbour off the port at {@code harbour} (x, z) while it has not put to sea (or came
+     * back beaten); null for a city with no port ({@code harbour} null).
+     */
+    @org.jetbrains.annotations.Nullable
+    public Garrison fleet(int province, net.minecraft.util.RandomSource random, @org.jetbrains.annotations.Nullable double[] harbour) {
+        if (harbour == null) {
+            return null;
+        }
+        Garrison g = fleets.get(province);
+        if (g == null) {
+            fleets.put(province, g = Garrison.raiseFleet(random, harbour[0], harbour[1]));
+            setDirty();
+        } else if (g.home()) {
+            g.fromX = g.toX = harbour[0]; // a fleet is never home in its city: it lies in harbour
+            g.fromZ = g.toZ = harbour[1];
             setDirty();
         }
         return g;
@@ -241,6 +264,9 @@ public final class Peerage extends SavedData {
         CompoundTag armies = new CompoundTag();
         garrisons.forEach((province, g) -> armies.put(Integer.toString(province), g.save()));
         tag.put("garrisons", armies);
+        CompoundTag fleetsTag = new CompoundTag();
+        fleets.forEach((province, g) -> fleetsTag.put(Integer.toString(province), g.save()));
+        tag.put("fleets", fleetsTag);
         ListTag spawnedTag = new ListTag();
         spawned.forEach(g -> spawnedTag.add(g.save()));
         tag.put("spawned", spawnedTag);
@@ -304,8 +330,34 @@ public final class Peerage extends SavedData {
         for (String key : armies.getAllKeys()) {
             data.garrisons.put(Integer.parseInt(key), Garrison.load(armies.getCompound(key)));
         }
+        CompoundTag fleetsTag = tag.getCompound("fleets");
+        for (String key : fleetsTag.getAllKeys()) {
+            data.fleets.put(Integer.parseInt(key), Garrison.load(fleetsTag.getCompound(key)));
+        }
+        // Older saves mixed ships into a city's army: they go to its fleet, which puts to sea from its harbour once asked for.
+        data.garrisons.forEach((province, g) -> {
+            g.fleet = false;
+            List<int[]> ships = g.strip();
+            if (!ships.isEmpty()) {
+                Garrison f = data.fleets.computeIfAbsent(province, p -> {
+                    Garrison n = new Garrison();
+                    n.fleet = true;
+                    return n;
+                });
+                ships.forEach(s -> {
+                    f.units.add(s[0]);
+                    f.men.add(s[1]);
+                });
+            }
+        });
         for (Tag st : tag.getList("spawned", Tag.TAG_COMPOUND)) {
-            data.spawned.add(Garrison.load((CompoundTag) st));
+            Garrison g = Garrison.load((CompoundTag) st);
+            int dropped = g.strip().size();
+            if (dropped > 0) {
+                rafasconquest.RafasConquest.LOGGER.warn("Grand strategy: a spawned {} held {} card(s) of the other kind; they are dropped",
+                        g.fleet ? "fleet" : "army", dropped);
+            }
+            data.spawned.add(g);
         }
         return data;
     }

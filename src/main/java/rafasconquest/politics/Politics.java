@@ -229,18 +229,38 @@ public final class Politics {
         return wars.stream().anyMatch(w -> w.involves(nation));
     }
 
-    /** The soldiers a nation could raise now: its levy, less its dead not yet made good, less its armies in the field. */
+    /** The soldiers a nation could raise now: its levy, less its dead not yet made good, less its armies and fleets in the field. */
     public int manpower(int nation, Lands lands) {
         int field = 0;
         for (War w : wars) {
-            if (w.attacker == nation && w.attackerArmy != null) {
-                field += w.attackerArmy.soldiers;
-            }
-            if (w.defender == nation && w.defenderArmy != null) {
-                field += w.defenderArmy.soldiers;
+            for (boolean attacking : new boolean[]{true, false}) {
+                if ((attacking ? w.attacker : w.defender) == nation && w.land(attacking) != null) {
+                    field += w.land(attacking).soldiers;
+                }
             }
         }
         return Math.max(0, lands.levy(nation) - dead.getOrDefault(nation, 0) - field);
+    }
+
+    /** Each nation's sailors lost at sea not yet made good: its fleet strength is its ports' crews, less these, less its fleets at sea. */
+    final Map<Integer, Integer> drowned = new HashMap<>();
+
+    /** The most a nation's ports can crew: each of their ships a {@link Lands.Fort#FLEET_CREW}. */
+    static int seaLevy(int nation, Lands lands) {
+        return lands.ports(nation).stream().mapToInt(p -> p.harbourShips() * Lands.Fort.FLEET_CREW).sum();
+    }
+
+    /** The sailors a nation could put to sea now: a fleet is a force of its own, apart from its armies' manpower. */
+    public int fleetStrength(int nation, Lands lands) {
+        int field = 0;
+        for (War w : wars) {
+            for (boolean attacking : new boolean[]{true, false}) {
+                if ((attacking ? w.attacker : w.defender) == nation && w.fleet(attacking) != null) {
+                    field += w.fleet(attacking).soldiers;
+                }
+            }
+        }
+        return Math.max(0, seaLevy(nation, lands) - drowned.getOrDefault(nation, 0) - field);
     }
 
     // ---- each day ----
@@ -253,6 +273,14 @@ public final class Politics {
                 dead.put(n, left);
             } else {
                 dead.remove(n);
+            }
+        }
+        for (int n : new ArrayList<>(drowned.keySet())) {
+            int left = drowned.get(n) - (int) Math.ceil(seaLevy(n, lands) * RECOVERY);
+            if (left > 0) {
+                drowned.put(n, left);
+            } else {
+                drowned.remove(n);
             }
         }
         truces.values().removeIf(until -> until <= day);
@@ -548,11 +576,75 @@ public final class Politics {
             return w;
         }
         front.raised(w, false);
+        putToSea(w, now, lands);
         return w;
+    }
+
+    /**
+     * A battle at sea next: each side's fleet put to sea, if it has none there. An attacker with no fleet to send can't
+     * contest the sea and marches on the county by land instead; a defender with none can't stop it, and its army lands.
+     */
+    void putToSea(War w, double now, Lands lands) {
+        if (w.type != BattleType.OCEAN) {
+            return;
+        }
+        if (w.attackerFleet == null) {
+            w.attackerFleet = raiseFleet(w, true, now, lands);
+        }
+        if (w.attackerFleet == null) {
+            w.defenderFleet = null;
+            aim(w, lands, false);
+            return;
+        }
+        if (w.defenderFleet == null) {
+            w.defenderFleet = raiseFleet(w, false, now, lands);
+        }
+        if (w.defenderFleet == null) {
+            seaWon(w, lands.fort(w.target), now);
+        }
+    }
+
+    /** The attacker holds the sea off the target's port: its fleet goes home, its army lands under the walls next. */
+    private static void seaWon(War w, Lands.Fort fort, double now) {
+        w.attackerFleet = null;
+        w.defenderFleet = null;
+        w.seaWon = w.target;
+        w.type = BattleType.AMPHIBIOUS;
+        w.siteX = fort.x();
+        w.siteZ = fort.z();
+        if (w.attackerArmy != null) {
+            w.attackerArmy.readyAt = Math.max(w.attackerArmy.readyAt, now + REST);
+        }
+    }
+
+    /**
+     * Raises a side's fleet from its ports' ships, all its leader's and half its allies'; null if too few. It puts to sea
+     * from the leader's port nearest the battle, off its harbour.
+     */
+    @Nullable
+    Army raiseFleet(War w, boolean attacking, double now, Lands lands) {
+        List<Integer> side = w.side(attacking);
+        int sailors = 0;
+        for (int i = 0; i < side.size(); i++) {
+            int available = fleetStrength(side.get(i), lands);
+            sailors += i == 0 ? available : available / 2;
+        }
+        List<Lands.Fort> ports = lands.ports(side.get(0));
+        if (sailors < MIN_ARMY || ports.isEmpty()) {
+            return null;
+        }
+        Lands.Fort port = ports.stream().min(java.util.Comparator.comparingDouble(p -> Math.hypot(p.sea()[0] - w.siteX, p.sea()[1] - w.siteZ)))
+                .orElseThrow();
+        return new Army(sailors, port.sea()[0], port.sea()[1], now + MUSTER, port.name());
     }
 
     /** Sets the next county to fight for (the defender's in the title nearest our land) and the battle site on its border. */
     static boolean aim(War w, Lands lands) {
+        return aim(w, lands, true);
+    }
+
+    /** As above; {@code bySea}: a port may be fought for at sea first, else always by land. */
+    static boolean aim(War w, Lands lands, boolean bySea) {
         int best = -1;
         double bestDistance = Double.MAX_VALUE;
         double[] bestSite = null;
@@ -593,7 +685,7 @@ public final class Politics {
         w.target = best;
         w.seaWon = -1;
         Lands.Fort fort = lands.fort(best);
-        if (fort != null && fort.port() && lands.hasPort(w.attacker)) {
+        if (bySea && fort != null && fort.port() && lands.hasPort(w.attacker)) {
             // Port against port: the fleets meet at sea first, off its harbour.
             w.type = BattleType.OCEAN;
             w.siteX = fort.sea()[0];
@@ -718,10 +810,11 @@ public final class Politics {
         double dt = moved < 0 ? 0 : Math.max(0, Math.min(1, now - moved));
         moved = now;
         for (War w : new ArrayList<>(wars)) {
-            if (awaiting.contains(w.id) || w.attackerArmy == null || w.defenderArmy == null) {
+            // At sea only the fleets move: the armies wait where they mustered for the sea to be won.
+            if (awaiting.contains(w.id) || w.army(true) == null || w.army(false) == null) {
                 continue;
             }
-            boolean here = march(w.attackerArmy, w, now, dt) & march(w.defenderArmy, w, now, dt);
+            boolean here = march(w.army(true), w, now, dt) & march(w.army(false), w, now, dt);
             if (here) {
                 fight(w, now, lands, random, front);
             }
@@ -759,8 +852,8 @@ public final class Politics {
 
     /** Both armies are at the site: they fight, for real if someone is near, else by strength. */
     void fight(War w, double now, Lands lands, Random random, Front front) {
-        int attackers = w.attackerArmy.soldiers;
-        int defenders = w.defenderArmy.soldiers;
+        int attackers = w.army(true).soldiers;
+        int defenders = w.army(false).soldiers;
         if ((w.type == BattleType.LAND || w.type == BattleType.SIEGE) && lands.fort(w.target) != null) {
             w.type = holdsOut(defenders, attackers, lands.person(lands.ruler(w.defender))) ? BattleType.SIEGE : BattleType.LAND;
         }
@@ -802,8 +895,9 @@ public final class Politics {
     void after(War w, boolean attackerWon, double attackersLeft, double defendersLeft, double now, Lands lands, Random random, Front front) {
         long day = (long) Math.floor(now);
         w.battles++;
-        bury(w.attacker, w.attackerArmy, attackersLeft);
-        bury(w.defender, w.defenderArmy, defendersLeft);
+        boolean atSea = w.type == BattleType.OCEAN;
+        bury(w.attacker, w.army(true), attackersLeft, atSea);
+        bury(w.defender, w.army(false), defendersLeft, atSea);
         String county = lands.titleName(new Goal(false, w.target));
         Lands.Fort fort = lands.fort(w.target);
         String where = fort == null ? say("battles.where.field")
@@ -811,11 +905,7 @@ public final class Politics {
         if (attackerWon && w.type == BattleType.OCEAN && fort != null) {
             // The sea is theirs: the attacker's army lands under the port's walls next.
             log(day, say("battles.fleet_beaten", "a", lands.nationName(w.attacker), "d", lands.nationName(w.defender), "where", where));
-            w.seaWon = w.target;
-            w.type = BattleType.AMPHIBIOUS;
-            w.siteX = fort.x();
-            w.siteZ = fort.z();
-            w.attackerArmy.readyAt = now + REST;
+            seaWon(w, fort, now);
             return;
         }
         if (attackerWon) {
@@ -842,10 +932,17 @@ public final class Politics {
             }
             front.raised(w, false);
             w.attackerArmy.readyAt = now + REST;
+            putToSea(w, now, lands);
         } else {
             log(day, say("battles.defender_won", "d", lands.nationName(w.defender), "a", lands.nationName(w.attacker), "where", where, "county", county));
             if (sues(w, true, lands, random)) {
                 peace(w, day, lands, say(w.taken.isEmpty() ? "battles.sued_nothing" : "battles.sued_keeping", "a", lands.nationName(w.attacker)));
+                return;
+            }
+            if (w.type == BattleType.OCEAN) {
+                // The fleet beaten goes home; another puts to sea, if the ports can crew one, else the army goes by land.
+                w.attackerFleet = null;
+                putToSea(w, now, lands);
                 return;
             }
             w.attackerArmy = null;
@@ -858,11 +955,11 @@ public final class Politics {
         }
     }
 
-    /** An army's dead go on its nation's count. */
-    private void bury(int nation, Army army, double left) {
+    /** A force's dead go on its nation's count: an army's on its people's, a fleet's on its ports'. */
+    private void bury(int nation, Army army, double left, boolean fleet) {
         int fell = (int) Math.round(army.soldiers * (1 - Math.max(0, Math.min(1, left))));
         army.soldiers -= fell;
-        dead.merge(nation, fell, Integer::sum);
+        (fleet ? drowned : dead).merge(nation, fell, Integer::sum);
     }
 
     /**
@@ -1046,6 +1143,9 @@ public final class Politics {
         CompoundTag d = new CompoundTag();
         dead.forEach((n, count) -> d.putInt(Integer.toString(n), count));
         tag.put("dead", d);
+        CompoundTag sea = new CompoundTag();
+        drowned.forEach((n, count) -> sea.putInt(Integer.toString(n), count));
+        tag.put("drowned", sea);
         ListTag events = new ListTag();
         for (Event e : chronicle) {
             CompoundTag et = new CompoundTag();
@@ -1080,6 +1180,10 @@ public final class Politics {
         CompoundTag d = tag.getCompound("dead");
         for (String k : d.getAllKeys()) {
             p.dead.put(Integer.parseInt(k), d.getInt(k));
+        }
+        CompoundTag sea = tag.getCompound("drowned");
+        for (String k : sea.getAllKeys()) {
+            p.drowned.put(Integer.parseInt(k), sea.getInt(k));
         }
         for (Tag e : tag.getList("chronicle", Tag.TAG_COMPOUND)) {
             CompoundTag et = (CompoundTag) e;

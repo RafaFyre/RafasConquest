@@ -771,13 +771,14 @@ public final class ConquestNetwork {
                 b.writeDouble(a.toZ());
                 b.writeLong(a.start());
                 b.writeInt(a.target());
+                b.writeBoolean(a.fleet());
             });
         }
 
         static GrandStrategyView read(FriendlyByteBuf buf) {
             return new GrandStrategyView(new rafasconquest.peerage.GrandStrategy.View(buf.readInt(), buf.readInt(), buf.readLong(),
                     buf.readList(b -> new rafasconquest.peerage.GrandStrategy.Army(b.readInt(), b.readInt(), b.readUtf(), b.readVarInt(),
-                            b.readVarIntArray(), b.readVarIntArray(), b.readDouble(), b.readDouble(), b.readDouble(), b.readDouble(), b.readLong(), b.readInt()))));
+                            b.readVarIntArray(), b.readVarIntArray(), b.readDouble(), b.readDouble(), b.readDouble(), b.readDouble(), b.readLong(), b.readInt(), b.readBoolean()))));
         }
     }
 
@@ -1278,8 +1279,7 @@ public final class ConquestNetwork {
                 buf.writeFloat((float) f.halfDepth());
                 FormationSnapshot.Ship ship = f.ship();
                 FormationSnapshot.Engine engine = f.engine();
-                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0) | (ship != null && ship.cargo() ? 8 : 0)
-                        | (engine != null ? 16 : 0) | (engine != null && engine.up() ? 32 : 0));
+                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0)                        | (engine != null ? 16 : 0) | (engine != null && engine.up() ? 32 : 0));
                 buf.writeVarIntArray(f.soldierIds());
                 buf.writeVarInt(f.leaderId() + 1);
                 if (ship != null) {
@@ -1301,7 +1301,7 @@ public final class ConquestNetwork {
         /** A formation's ship, after the rest of it; null if its flags say it is ashore. */
         @org.jetbrains.annotations.Nullable
         private static FormationSnapshot.Ship readShip(FriendlyByteBuf buf, int flags) {
-            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), (flags & 8) != 0, buf.readByte());
+            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), buf.readByte());
         }
 
         static BattleSnapshot read(FriendlyByteBuf buf) {

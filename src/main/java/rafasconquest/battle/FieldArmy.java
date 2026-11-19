@@ -194,6 +194,11 @@ public final class FieldArmy {
         return !any && infantryEngaged();
     }
 
+    /** Files the platoons afresh when next asked: blocks were taken out. */
+    void forgetPlatoons() {
+        platoons = null;
+    }
+
     /** The blocks of platoon {@code n}, standing or not; none for a number no block has. */
     List<FieldBlock> platoon(int n) {
         if (platoons == null) {

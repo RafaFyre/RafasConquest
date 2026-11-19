@@ -138,14 +138,16 @@ public class TitleLayer implements MapLayer {
                 continue;
             }
             int colour = 0xFF000000 | map.color(map.base.nations().get(army[0]).id());
-            if (army[4] == 1) {
+            boolean fleet = army.length > 8 && army[8] == 1;
+            if (army[4] != 0) {
                 armyTent(g, x, y, colour);
             } else {
                 armyOnTheMarch(g, x, y, (int) view.screenX(army[6]), (int) view.screenY(army[7]), colour);
             }
             if (Math.abs(mouseX - x - 3) <= 6 && Math.abs(mouseY - y + 3) <= 7) {
-                hovered = "Army of " + map.base.nations().get(army[0]).name() + ": " + String.format("%,d", army[1]) + " soldiers, "
-                        + (army[4] == 1 ? "mustering" : "on the march");
+                hovered = (fleet ? "Fleet of " : "Army of ") + map.base.nations().get(army[0]).name() + ": "
+                        + (fleet ? army[9] + " ships (" + String.format("%,d", army[1]) + " crew), " : String.format("%,d", army[1]) + " soldiers, ")
+                        + (army[4] == 1 ? "mustering" : army[4] == 2 ? "waiting" : fleet ? "at sea" : "on the march");
                 hoveredProvince = -1;
             }
         }

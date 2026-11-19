@@ -56,7 +56,7 @@ final class DistantShips {
         /** Its hull's blocks, in its own frame, as the real one is built. */
         List<ShipHulls.Part> parts() {
             return lane != null ? laneHull(lane)
-                    : ShipHulls.battle(size, battle.cargo(), DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
+                    : ShipHulls.battle(size,DyeColor.byId(battle.sail()), DyeColor.byId(battle.stripe()));
         }
 
         /** Whether Sable's real ship shows for itself, {@code flat} blocks from the camera: the client has it, within {@link #REAL_WITHIN}. */

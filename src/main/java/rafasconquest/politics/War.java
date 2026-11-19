@@ -31,6 +31,11 @@ public final class War {
     Army attackerArmy;
     @Nullable
     Army defenderArmy;
+    /** Each side's fleet, a force of its own, raised from its ports' ships for a battle at sea; null when none is at sea. */
+    @Nullable
+    Army attackerFleet;
+    @Nullable
+    Army defenderFleet;
     int battles;
     /** Each side's general, chosen (a person's index), or -1: the best at war, by Martial, as each battle finds them. */
     int attackerGeneral = -1;
@@ -86,9 +91,36 @@ public final class War {
         return type;
     }
 
+    /** A side's force for the next battle: its fleet for a battle at sea, else its army. */
     @Nullable
     public Army army(boolean attacking) {
+        return type == BattleType.OCEAN ? fleet(attacking) : land(attacking);
+    }
+
+    /** A side's land army, whatever the next battle is. */
+    @Nullable
+    public Army land(boolean attacking) {
         return attacking ? attackerArmy : defenderArmy;
+    }
+
+    @Nullable
+    public Army fleet(boolean attacking) {
+        return attacking ? attackerFleet : defenderFleet;
+    }
+
+    /** Sets a side's force for the next battle (its fleet at sea, else its army). */
+    void setArmy(boolean attacking, @Nullable Army army) {
+        if (type == BattleType.OCEAN) {
+            if (attacking) {
+                attackerFleet = army;
+            } else {
+                defenderFleet = army;
+            }
+        } else if (attacking) {
+            attackerArmy = army;
+        } else {
+            defenderArmy = army;
+        }
     }
 
     /** A side's chosen general (a person's index), or -1. */
@@ -141,6 +173,12 @@ public final class War {
         if (defenderArmy != null) {
             tag.put("defenderArmy", defenderArmy.save());
         }
+        if (attackerFleet != null) {
+            tag.put("attackerFleet", attackerFleet.save());
+        }
+        if (defenderFleet != null) {
+            tag.put("defenderFleet", defenderFleet.save());
+        }
         tag.putInt("battles", battles);
         tag.putInt("attackerGeneral", attackerGeneral);
         tag.putInt("defenderGeneral", defenderGeneral);
@@ -162,6 +200,8 @@ public final class War {
         w.seaWon = tag.contains("seaWon") ? tag.getInt("seaWon") : -1;
         w.attackerArmy = tag.contains("attackerArmy") ? Army.load(tag.getCompound("attackerArmy")) : null;
         w.defenderArmy = tag.contains("defenderArmy") ? Army.load(tag.getCompound("defenderArmy")) : null;
+        w.attackerFleet = tag.contains("attackerFleet") ? Army.load(tag.getCompound("attackerFleet")) : null;
+        w.defenderFleet = tag.contains("defenderFleet") ? Army.load(tag.getCompound("defenderFleet")) : null;
         w.battles = tag.getInt("battles");
         w.attackerGeneral = tag.contains("attackerGeneral") ? tag.getInt("attackerGeneral") : -1;
         w.defenderGeneral = tag.contains("defenderGeneral") ? tag.getInt("defenderGeneral") : -1;

@@ -283,21 +283,19 @@ public final class ShipHulls {
     }
 
     /**
-     * A battle ship's hull: its card's hull, with hay, barrels and chests on deck if it is a {@code cargo} ship (the
-     * fleet's camp), and its sails in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s across their
-     * middle row. Each kind is built once and the same list handed out after, so the client can keep its shape by the list.
+     * A battle ship's hull: its card's hull, its sails in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s
+     * across their middle row. Each kind is built once and the same list handed out after, so the client can keep its shape by the list.
      */
-    public static List<Part> battle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
-        return BATTLE.computeIfAbsent(new BattleKind(size, cargo, sail, stripe),
-                k -> buildBattle(k.size(), k.cargo(), k.sail(), k.stripe()));
+    public static List<Part> battle(SeaLanes.Size size, DyeColor sail, DyeColor stripe) {
+        return BATTLE.computeIfAbsent(new BattleKind(size, sail, stripe), k -> buildBattle(k.size(), k.sail(), k.stripe()));
     }
 
-    private record BattleKind(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
+    private record BattleKind(SeaLanes.Size size, DyeColor sail, DyeColor stripe) {
     }
 
     private static final Map<BattleKind, List<Part>> BATTLE = new ConcurrentHashMap<>();
 
-    private static List<Part> buildBattle(SeaLanes.Size size, boolean cargo, DyeColor sail, DyeColor stripe) {
+    private static List<Part> buildBattle(SeaLanes.Size size, DyeColor sail, DyeColor stripe) {
         List<Part> hull = hull(size, false);
         int low = Integer.MAX_VALUE;
         int high = Integer.MIN_VALUE;
@@ -309,41 +307,45 @@ public final class ShipHulls {
         }
         int middle = (low + high) / 2;
         List<Part> parts = new ArrayList<>();
-        Set<Long> taken = new HashSet<>();
         for (Part p : hull) {
             parts.add(p.state().getBlock() instanceof SailBlock && p.state().hasProperty(SailBlock.COLOR)
                     ? new Part(p.x(), p.y(), p.z(), p.state().setValue(SailBlock.COLOR, p.y() == middle ? stripe : sail)) : p);
-            taken.add(net.minecraft.core.BlockPos.asLong(p.x(), p.y(), p.z()));
-        }
-        if (!cargo) {
-            return List.copyOf(parts);
-        }
-        BlockState[] goods = {Blocks.HAY_BLOCK.defaultBlockState(), Blocks.BARREL.defaultBlockState(), Blocks.CHEST.defaultBlockState()};
-        int half = size.length / 2;
-        for (int z = -half / 2; z <= half / 2; z += 2) {
-            for (int x = -1; x <= 1; x += 2) {
-                if (!taken.contains(net.minecraft.core.BlockPos.asLong(x, size.deck + 1, z))) {
-                    parts.add(new Part(x, size.deck + 1, z, goods[Math.floorMod(x + z, goods.length)]));
-                }
-            }
         }
         return List.copyOf(parts);
     }
 
     /**
-     * A warship made a gunship: Artillery Blocks (culverins) in from the rails down both sides of its deck, facing out, a
-     * gun every five blocks over its middle half, and a Character Marker inboard of each for its gunner.
+     * A warship made a gunship: over its full-beam middle, every other plank of the deck rail down both sides an Artillery
+     * Block (culverin) facing out, and a Character Marker inboard of each for its gunner.
      */
     private static List<Part> gunned(List<Part> rowed, int length, int width) {
-        List<Part> parts = new ArrayList<>(rowed);
         int beam = width / 2;
         int half = length / 2;
-        for (int z = -half / 2; z <= half / 2; z += 5) {
-            for (int s : new int[]{-1, 1}) {
-                parts.add(new Part(s * (beam - 1), DECK + 1, z, ConquestContent.ARTILLERY.get().defaultBlockState()
-                        .setValue(rafasconquest.content.ArtilleryBlock.FACING, s < 0 ? Direction.WEST : Direction.EAST)));
-                parts.add(new Part(s * (beam - 2), DECK + 1, z, ConquestContent.MARKER.get().defaultBlockState()));
+        Set<Long> guns = new java.util.LinkedHashSet<>(); // in order, so the file and its posts come out the same each time
+        Integer first = null;
+        for (int z = -half; z <= half; z++) {
+            // plain()'s beam at z: full only over the middle.
+            if (Math.min(beam, (half - Math.abs(z)) * 2 * beam / Math.max(1, half / 2)) < beam) {
+                continue;
             }
+            first = first == null ? z : first;
+            if ((z - first) % 2 == 0) {
+                guns.add(net.minecraft.core.BlockPos.asLong(-beam, DECK + 1, z));
+                guns.add(net.minecraft.core.BlockPos.asLong(beam, DECK + 1, z));
+            }
+        }
+        List<Part> parts = new ArrayList<>();
+        for (Part p : rowed) {
+            if (!guns.contains(net.minecraft.core.BlockPos.asLong(p.x(), p.y(), p.z()))) {
+                parts.add(p);
+            }
+        }
+        for (long g : guns) {
+            int x = net.minecraft.core.BlockPos.getX(g);
+            int z = net.minecraft.core.BlockPos.getZ(g);
+            parts.add(new Part(x, DECK + 1, z, ConquestContent.ARTILLERY.get().defaultBlockState()
+                    .setValue(rafasconquest.content.ArtilleryBlock.FACING, x < 0 ? Direction.WEST : Direction.EAST)));
+            parts.add(new Part(x - Integer.signum(x), DECK + 1, z, ConquestContent.MARKER.get().defaultBlockState()));
         }
         return List.copyOf(parts);
     }

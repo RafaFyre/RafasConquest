@@ -746,22 +746,34 @@ class FieldBattleTest {
     void aFleetDeploysInOneLineAbreast() {
         FieldBattle battle = battle(20, 20, 3);
         battle.setType(BattleType.OCEAN);
-        boolean camps = false;
         for (int side = 0; side < 2; side++) {
             // The battle's axis is x: a line abreast stands at one x, its ships along z.
-            java.util.List<Point> ships = battle.army(side).blocks().stream().filter(b -> b.ship() != FieldBlock.ShipKind.CAMP && battle.holder(b) == b)
+            java.util.List<Point> ships = battle.army(side).blocks().stream().filter(b -> battle.holder(b) == b)
                     .map(FieldBlock::pos).sorted(java.util.Comparator.comparingDouble(Point::z)).toList();
             for (int i = 1; i < ships.size(); i++) {
                 assertEquals(ships.get(0).x(), ships.get(i).x(), 1e-6, "not in one line abreast");
                 assertEquals(FieldBattle.fleetSpacing(), ships.get(i).z() - ships.get(i - 1).z(), 1e-6, "not FLEET_SPACING apart");
             }
-            double facing = battle.army(side).facingX();
-            for (FieldBlock camp : battle.army(side).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.CAMP).toList()) {
-                camps = true;
-                assertEquals(-FieldBattle.CAMP_ASTERN, (camp.pos().x() - ships.get(0).x()) * facing, 1e-6, "a supply ship not well astern");
-            }
         }
-        assertTrue(camps, "no supply ships to check");
+    }
+
+    @Test
+    void cavalryAndEnginesStayOutOfABattleAtSea() {
+        FieldBattle battle = battle(40, 40, 3);
+        java.util.function.Predicate<FieldBlock> ashore = b -> (b.arm().mounted() || b.arm().engine())
+                && b.duty() != FieldBlock.Duty.GENERAL && b.duty() != FieldBlock.Duty.GUARD && b.duty() != FieldBlock.Duty.BEARER;
+        int[] before = {battle.army(0).started(), battle.army(1).started()};
+        int[] left = new int[2];
+        for (int side = 0; side < 2; side++) {
+            left[side] = battle.army(side).blocks().stream().filter(ashore).mapToInt(FieldBlock::started).sum();
+        }
+        assertTrue(left[0] > 0, "no cavalry or engines to leave out");
+        battle.setType(BattleType.OCEAN);
+        for (int side = 0; side < 2; side++) {
+            assertTrue(battle.army(side).blocks().stream().noneMatch(ashore), "cavalry or engines sailed");
+            assertEquals(before[side] - left[side], battle.army(side).started(), "started not down by those left out");
+            assertTrue(battle.army(side).blocks().stream().allMatch(FieldBlock::afloat), "someone left ashore at sea");
+        }
     }
 
     @Test
@@ -932,7 +944,7 @@ class FieldBattleTest {
             // An archer ship: left to its captain it would stand off and shoot; the player's order comes first.
             FieldBlock ship = battle.army(0).blocks().stream().filter(b -> b.ship() == FieldBlock.ShipKind.ARCHERS && battle.holder(b) == b)
                     .findFirst().orElseThrow();
-            FieldBlock target = battle.army(1).blocks().stream().filter(b -> b.afloat() && b.ship() != FieldBlock.ShipKind.CAMP && battle.holder(b) == b)
+            FieldBlock target = battle.army(1).blocks().stream().filter(b -> b.afloat() && battle.holder(b) == b)
                     .findFirst().orElseThrow();
             battle.crew(ship).forEach(battle::lead);
             battle.steer(ship, ship.pos(), ship.facingX, ship.facingZ, true, target, ram);

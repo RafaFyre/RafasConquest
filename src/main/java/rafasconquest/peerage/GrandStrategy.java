@@ -35,18 +35,27 @@ public final class GrandStrategy {
     /** The hold's own army's id; spawned armies are 0 and up. */
     public static final int HOLD = -1;
     public static final int NO_TARGET = -2;
+    /** The hold's own fleet's id, if its city is a port. */
+    public static final int HOLD_FLEET = -3;
     /** Most soldiers a spawned army may be made with. */
     public static final int MAX_SOLDIERS = 40000;
 
     /**
      * An army on the map: its id ({@link #HOLD}, or a spawned army's), nation (index, -1: none), general ("": the best at
      * war), card cap (0: none), cards ({@link BattlePlan.Arm} ordinals) and each card's soldiers, march, and the army it
-     * marches to attack.
+     * marches to attack, and whether it is a fleet (ship cards, on water) or an army (land cards, on land).
      */
     public record Army(int id, int nation, String general, int cap, int[] units, int[] men, double fromX, double fromZ, double toX, double toZ,
-                       long start, int target) {
+                       long start, int target, boolean fleet) {
         public int soldiers() {
             return java.util.Arrays.stream(men).sum();
+        }
+
+        /** Its strength as shown: a fleet's ships (each card one), then their crews; an army's units, then its soldiers. */
+        public String strength() {
+            String men = String.format("%,d", soldiers());
+            return fleet ? units.length + (units.length == 1 ? " ship (" : " ships (") + men + " crew)"
+                    : units.length + " units, " + men + " soldiers";
         }
     }
 
@@ -74,6 +83,10 @@ public final class GrandStrategy {
         List<Army> armies = new ArrayList<>();
         if (peer.hold >= 0) {
             armies.add(army(HOLD, peerage.garrison(peer.hold, player.getRandom()), peer.hold));
+            Garrison fleet = peerage.fleet(peer.hold, player.getRandom(), harbour(peer.hold));
+            if (fleet != null) {
+                armies.add(army(HOLD_FLEET, fleet, peer.hold));
+            }
         }
         for (int i = 0; i < peerage.spawned.size(); i++) {
             armies.add(army(i, peerage.spawned.get(i), -1));
@@ -83,7 +96,27 @@ public final class GrandStrategy {
 
     private static Army army(int id, Garrison g, int hold) {
         return new Army(id, nationOf(g, hold), g.general, g.cap, g.units.stream().mapToInt(Integer::intValue).toArray(),
-                g.men.stream().mapToInt(Integer::intValue).toArray(), g.fromX, g.fromZ, g.toX, g.toZ, g.start, g.target);
+                g.men.stream().mapToInt(Integer::intValue).toArray(), g.fromX, g.fromZ, g.toX, g.toZ, g.start, g.target, g.fleet);
+    }
+
+    /** Where a hold's fleet lies in harbour (x, z): off its city's port; null for a city with no port. */
+    @Nullable
+    private static double[] harbour(int province) {
+        BaseMap map = ConquestRuntime.map();
+        if (map == null) {
+            return null;
+        }
+        for (SeatCities.City c : map.cities()) {
+            if (c.province() == province && c.port()) {
+                return MapLands.of(map).fort(c).sea();
+            }
+        }
+        return null;
+    }
+
+    /** The hold whose army or fleet {@code id} is ({@link #HOLD}, {@link #HOLD_FLEET}), else -1 (a spawned one). */
+    private static int holdOf(int id, int hold) {
+        return id == HOLD || id == HOLD_FLEET ? hold : -1;
     }
 
     /** An army's nation: a spawned army's own, the hold's army's its holder's. */
@@ -103,6 +136,9 @@ public final class GrandStrategy {
         if (id == HOLD) {
             return hold < 0 ? null : peerage.garrison(hold, player.getRandom());
         }
+        if (id == HOLD_FLEET) {
+            return hold < 0 ? null : peerage.fleet(hold, player.getRandom(), harbour(hold));
+        }
         return player.isCreative() && id >= 0 && id < peerage.spawned.size() ? peerage.spawned.get(id) : null;
     }
 
@@ -113,13 +149,17 @@ public final class GrandStrategy {
         return at != null ? at : city(hold);
     }
 
-    /** In creative: a new army of {@code nation} led by {@code general}, made for {@code soldiers}, at (x, z); filled at random if asked. */
+    /**
+     * In creative: a new force of {@code nation} led by {@code general}, made for {@code soldiers}, at (x, z): a fleet on
+     * water, an army on land; filled at random if asked.
+     */
     public static void spawn(ServerPlayer player, int nation, String general, int soldiers, boolean autofill, double x, double z) {
         BaseMap map = ConquestRuntime.map();
         if (!player.isCreative() || map == null || nation < 0 || nation >= map.nations().size() || !Double.isFinite(x) || !Double.isFinite(z)) {
             return;
         }
         Garrison g = new Garrison();
+        g.fleet = MapLands.of(map).wet(x, z);
         g.nation = nation;
         g.general = general.length() > 64 ? general.substring(0, 64) : general;
         g.cap = Math.max(1, Math.min(MAX_SOLDIERS, soldiers) / Garrison.MEN);
@@ -143,11 +183,11 @@ public final class GrandStrategy {
         if (g == null) {
             return;
         }
-        int home = army == HOLD ? hold : -1;
+        int home = holdOf(army, hold);
         long now = player.server.overworld().getGameTime();
         switch (op) {
             case MUSTER -> {
-                if (arg >= 0 && arg < BattlePlan.Arm.values().length && BattlePlan.Arm.values()[arg].roster()) {
+                if (arg >= 0 && arg < BattlePlan.Arm.values().length && g.takes(BattlePlan.Arm.values()[arg])) {
                     g.add(arg);
                 }
             }
@@ -158,9 +198,20 @@ public final class GrandStrategy {
             }
             case MARCH, ATTACK -> {
                 Garrison foe = op == ATTACK && arg != army ? find(player, arg) : null;
-                double[] goal = foe == null ? new double[]{x, z} : where(foe, arg == HOLD ? hold : -1, now);
+                if (foe != null && foe.fleet != g.fleet) {
+                    player.sendSystemMessage(Component.literal(g.fleet ? "A fleet fights only fleets" : "An army fights only armies")
+                            .withStyle(ChatFormatting.RED));
+                    return;
+                }
+                double[] goal = foe == null ? new double[]{x, z} : where(foe, holdOf(arg, hold), now);
                 double[] at = where(g, home, now);
                 if ((op == ATTACK && foe == null) || at == null || goal == null || !Double.isFinite(goal[0]) || !Double.isFinite(goal[1])) {
+                    return;
+                }
+                BaseMap map = ConquestRuntime.map();
+                if (map != null && MapLands.of(map).wet(goal[0], goal[1]) != g.fleet) {
+                    player.sendSystemMessage(Component.literal(g.fleet ? "A fleet sails only on water" : "An army marches only on land")
+                            .withStyle(ChatFormatting.RED));
                     return;
                 }
                 g.fromX = at[0];
@@ -173,7 +224,7 @@ public final class GrandStrategy {
             case BATTLE -> {
                 Garrison foe = arg != army ? find(player, arg) : null;
                 if (foe != null) {
-                    battle(player, g, home, foe, arg == HOLD ? hold : -1, now);
+                    battle(player, g, home, foe, holdOf(arg, hold), now);
                     g.target = NO_TARGET;
                     peerage.setDirty();
                 }
@@ -213,25 +264,21 @@ public final class GrandStrategy {
             player.sendSystemMessage(Component.literal("Both armies need soldiers to fight").withStyle(ChatFormatting.RED));
             return;
         }
-        // Both at sea: a sea battle. The defender within a castle's or city's walls: a siege. Otherwise: a land battle.
-        MapLands lands = MapLands.of(map);
-        boolean sea = lands.wet(at[0], at[1]);
-        if (sea != lands.wet(from[0], from[1])) {
-            player.sendSystemMessage(Component.literal("One army is at sea and the other on land").withStyle(ChatFormatting.RED));
+        // Two fleets: a sea battle. Two armies, the defender within a castle's or city's walls: a siege; otherwise a land battle.
+        if (attacker.fleet != defender.fleet) {
+            player.sendSystemMessage(Component.literal("A fleet fights only fleets, an army only armies").withStyle(ChatFormatting.RED));
             return;
         }
+        MapLands lands = MapLands.of(map);
+        boolean sea = attacker.fleet;
         Lands.Fort fort = sea ? null : fortAt(map, lands, at);
         BattleType type = sea ? BattleType.OCEAN : fort != null ? BattleType.SIEGE : BattleType.LAND;
-        int menA = sea ? shipMen(attacker) : attacker.soldiers();
-        int menD = sea ? shipMen(defender) : defender.soldiers();
-        int[] mixA = sea ? shipMix(attacker) : attacker.mix();
-        int[] mixD = sea ? shipMix(defender) : defender.mix();
+        int menA = attacker.soldiers();
+        int menD = defender.soldiers();
+        int[] mixA = attacker.mix();
+        int[] mixD = defender.mix();
         if (sea && !rafasconquest.bridge.SableLink.available()) {
             player.sendSystemMessage(Component.literal("A sea battle needs Sable for its ships").withStyle(ChatFormatting.RED));
-            return;
-        }
-        if (sea && (mixA == null || mixD == null)) {
-            player.sendSystemMessage(Component.literal("At sea only ship cards fight: both armies need some").withStyle(ChatFormatting.RED));
             return;
         }
         double dx = at[0] - from[0];
@@ -249,7 +296,7 @@ public final class GrandStrategy {
                             if (fought != null) {
                                 Garrison[] armies = {attacker, defender};
                                 int[][] started = {perArm(fought.field().army(0), false), perArm(fought.field().army(1), false)};
-                                fought.whenOver(outcome -> aftermath(player.server, fought, armies, started, outcome.winner(), at, ux, uz, sea));
+                                fought.whenOver(outcome -> aftermath(player.server, fought, armies, started, outcome.winner(), at, ux, uz));
                             }
                             toBattle(player);
                             String url = rafasconquest.dev.BattleMap.open(player.server);
@@ -309,29 +356,6 @@ public final class GrandStrategy {
         return null;
     }
 
-    /** At sea only the cards sailing ships fight: their soldiers. */
-    private static int shipMen(Garrison g) {
-        int men = 0;
-        for (int i = 0; i < g.units.size(); i++) {
-            BattlePlan.Arm a = BattlePlan.Arm.get(g.units.get(i));
-            men += a != null && a.ship() != null ? g.men.get(i) : 0;
-        }
-        return men;
-    }
-
-    /** At sea only the cards sailing ships fight: their blocks per arm; null if there are none. */
-    @Nullable
-    private static int[] shipMix(Garrison g) {
-        int[] mix = g.mix();
-        if (mix == null) {
-            return null;
-        }
-        for (int a = 0; a < mix.length; a++) {
-            mix[a] = BattlePlan.Arm.get(a).ship() != null ? mix[a] : 0;
-        }
-        return java.util.Arrays.stream(mix).sum() > 0 ? mix : null;
-    }
-
     /** How far a beaten army falls back from the field, in blocks. */
     private static final double RETREAT = 1500;
 
@@ -349,8 +373,9 @@ public final class GrandStrategy {
      * the beaten one falls back from the field, away from the victor (the attacker the way it came).
      */
     private static void aftermath(net.minecraft.server.MinecraftServer server, RecruitsBattle fought, Garrison[] armies,
-                                  int[][] started, int winner, double[] at, double ux, double uz, boolean sea) {
+                                  int[][] started, int winner, double[] at, double ux, double uz) {
         Peerage peerage = Peerage.get(server);
+        BaseMap map = ConquestRuntime.map();
         long now = server.overworld().getGameTime();
         for (int side = 0; side < 2; side++) {
             int[] alive = perArm(fought.field().army(side), true);
@@ -363,13 +388,15 @@ public final class GrandStrategy {
                 left += alive[a];
             }
             Garrison g = armies[side];
-            g.survive(kept, sea ? 1 : left / (double) Math.max(1, all)); // at sea the cards left ashore fought no one
+            g.survive(kept, left / (double) Math.max(1, all));
             double away = side == 0 ? -1 : 1; // the attacker came along +u
-            boolean beaten = winner == 1 - side;
+            double[] back = {at[0] + ux * away * RETREAT, at[1] + uz * away * RETREAT};
+            // A beaten force falls back, but never off its own kind of ground: a fleet stays on the water, an army ashore.
+            boolean beaten = winner == 1 - side && (map == null || MapLands.of(map).wet(back[0], back[1]) == g.fleet);
             g.fromX = at[0];
             g.fromZ = at[1];
-            g.toX = beaten ? at[0] + ux * away * RETREAT : at[0];
-            g.toZ = beaten ? at[1] + uz * away * RETREAT : at[1];
+            g.toX = beaten ? back[0] : at[0];
+            g.toZ = beaten ? back[1] : at[1];
             g.start = now;
             g.target = NO_TARGET;
         }
@@ -385,12 +412,14 @@ public final class GrandStrategy {
     private static void disband(Peerage peerage, Garrison gone) {
         int id = peerage.spawned.indexOf(gone);
         if (id < 0) {
-            gone.fromX = gone.fromZ = gone.toX = gone.toZ = Double.NaN; // a hold's army stays, empty, home in its city to muster anew
+            // A hold's army stays, empty, home in its city to muster anew; its fleet goes back to harbour (Peerage.fleet).
+            gone.fromX = gone.fromZ = gone.toX = gone.toZ = Double.NaN;
             return;
         }
         peerage.spawned.remove(id);
         List<Garrison> all = new ArrayList<>(peerage.spawned);
         all.addAll(peerage.garrisons.values());
+        all.addAll(peerage.fleets.values());
         for (Garrison g : all) {
             g.target = g.target == id ? NO_TARGET : g.target > id ? g.target - 1 : g.target;
         }

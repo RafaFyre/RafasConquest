@@ -35,6 +35,11 @@ public final class Army {
         return soldiers;
     }
 
+    /** As a fleet: its ships still afloat, each crewed by {@link Lands.Fort#FLEET_CREW} (one still sails with any crew left). */
+    public int ships() {
+        return (soldiers + Lands.Fort.FLEET_CREW - 1) / Lands.Fort.FLEET_CREW;
+    }
+
     public double x() {
         return x;
     }

@@ -206,10 +206,15 @@ final class BattleShips {
         double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
         SeaLanes.Ship hull = new SeaLanes.Ship(key(h), h.x(), h.z(), h.faceX() / length, h.faceZ() / length, 0, 0, true,
                 size(h), "", "");
-        ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h), h.cargo(),
+        ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h),
                 net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe())));
         if (sub == null) {
             return false;
+        }
+        long guns = ShipHulls.battle(size(h), net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe()))
+                .stream().filter(p -> p.state().getBlock() instanceof rafasconquest.content.ArtilleryBlock).count();
+        if (guns > 0) {
+            RafasConquest.LOGGER.info("[guns] built {} ({}) with {} Artillery Blocks", sub.getName(), size(h).id, guns);
         }
         CompoundTag tag = sub.getUserDataTag().copy();
         tag.putString(BATTLE, battle);

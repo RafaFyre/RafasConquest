@@ -80,6 +80,8 @@ public interface Lands {
         public static final int HARBOUR_SHIPS_PER_DISTRICT = 2;
         /** Soldiers aboard each. */
         public static final int HARBOUR_CREW = 20;
+        /** Soldiers aboard each of a port's ships when it puts to sea as a war fleet: a card's worth. */
+        public static final int FLEET_CREW = 200;
 
         /** How many ships of its own a port has, by its size; none for a castle or a city that is no port. */
         public int harbourShips() {
@@ -100,6 +102,11 @@ public interface Lands {
     /** Whether a nation holds a port, to send a fleet from. */
     default boolean hasPort(int nation) {
         return false;
+    }
+
+    /** The ports a nation holds, its fleet's ships and where they put to sea from. */
+    default java.util.List<Fort> ports(int nation) {
+        return java.util.List.of();
     }
 
     // ---- lords, for feuds ----

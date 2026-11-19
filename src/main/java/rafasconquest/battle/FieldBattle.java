@@ -125,6 +125,15 @@ public final class FieldBattle {
         this.type = type;
         crews.clear();
         for (FieldArmy army : armies) {
+            if (type == BattleType.OCEAN || type == BattleType.AMPHIBIOUS && army.side == 0) {
+                // No horses or engines on a fighting deck, and no supply ships to carry them: they stay out of the battle.
+                List<FieldBlock> ashore = army.blocks.stream().filter(b -> (b.arm.engine() || b.arm.mounted())
+                        && b.duty != Duty.GENERAL && b.duty != Duty.GUARD && b.duty != Duty.BEARER).toList();
+                army.blocks.removeAll(ashore);
+                army.wedge.removeAll(ashore);
+                army.started -= ashore.stream().mapToInt(FieldBlock::started).sum();
+                army.forgetPlatoons();
+            }
             int[] swordsmen = {0};
             // Each unit (platoon) is one ship, all its blocks aboard; the general, guard and standard share the flagship.
             java.util.Map<Integer, List<FieldBlock>> byShip = new java.util.LinkedHashMap<>();
@@ -141,7 +150,6 @@ public final class FieldBattle {
                 boolean command = b.duty == Duty.GENERAL || b.duty == Duty.GUARD || b.duty == Duty.BEARER;
                 if (!command) {
                     b.ship = kinds.computeIfAbsent(b.platoon, p -> b.arm.ship() != null && b.arm.ship().gunship() ? FieldBlock.ShipKind.GUNSHIP
-                            : b.arm.engine() || b.arm.mounted() ? FieldBlock.ShipKind.CAMP // no horses or engines on a fighting deck: they sail with the stores
                             : b.arm.shoots() ? FieldBlock.ShipKind.ARCHERS
                             : b.arm.shielded() ? FieldBlock.ShipKind.SWORDSMEN
                             : swordsmen[0]++ % 3 == 2 ? FieldBlock.ShipKind.SHOCK : FieldBlock.ShipKind.SWORDSMEN);
@@ -157,8 +165,7 @@ public final class FieldBattle {
                     b.shipId = crew.get(0).id;
                     b.berth = i;
                     b.hull = flagship ? rafasconquest.core.SeaLanes.Size.battle("flagship", rafasconquest.core.SeaLanes.Size.XLARGE)
-                            : named != null ? named
-                            : crew.get(0).ship == FieldBlock.ShipKind.CAMP ? rafasconquest.core.SeaLanes.Size.battle("cargo", rafasconquest.core.SeaLanes.Size.unitShip()) : rafasconquest.core.SeaLanes.Size.unitShip();
+                            : named != null ? named : rafasconquest.core.SeaLanes.Size.unitShip();
                 }
                 crews.put(crew.get(0).id, crew);
             }
@@ -307,9 +314,6 @@ public final class FieldBattle {
         return 2.0 * rafasconquest.core.SeaLanes.Size.unitShip().width;
     }
 
-    /** The camp's supply ships deploy this far astern of the fleet's line. */
-    public static final double CAMP_ASTERN = 80;
-
     /**
      * A fleet's line stands this far behind its army's front, half a unit's ship, so the two fleets' bows start as far apart as
      * the armies' fronts would (well out of grapple-hook reach).
@@ -323,15 +327,13 @@ public final class FieldBattle {
 
     /**
      * A fleet deploys in one line abreast across its army's front, {@link #fleetSpacing} apart, its ships in the order
-     * they stood from left to right, {@code extra} further back than {@link #fleetBack}; the camp's supply ships keep
-     * well back, in a line of their own {@link #CAMP_ASTERN} behind it.
+     * they stood from left to right, {@code extra} further back than {@link #fleetBack}.
      */
     private static void spreadShips(FieldArmy army, double extra) {
         List<FieldBlock> fleet = army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
                 .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
                 .toList();
-        lineAbreast(army, fleet.stream().filter(b -> b.ship != FieldBlock.ShipKind.CAMP).toList(), fleetBack() + extra);
-        lineAbreast(army, fleet.stream().filter(b -> b.ship == FieldBlock.ShipKind.CAMP).toList(), fleetBack() + extra + CAMP_ASTERN);
+        lineAbreast(army, fleet, fleetBack() + extra);
     }
 
     /** Ships in one line abreast, centred on the army's front, {@code back} behind it. */
@@ -548,8 +550,8 @@ public final class FieldBattle {
      * At sea, each ship's captain decides where it sails, by what it is for: a grappled ship holds fast while its
      * soldiers board; a swordsman ship lays itself alongside an enemy ship, side to side, and grapples; an archer ship
      * keeps at bow range behind its allies; a shock ship holds back a while, and until an enemy is grappled with one of
-     * its own, then comes round off that enemy's open side and rams it there, like cavalry into a flank; the camp's
-     * ships keep where they deployed. Shock ships that are only numbers grapple when they meet; real ones grapple when
+     * its own, then comes round off that enemy's open side and rams it there, like cavalry into a flank; the general's
+     * ship keeps where it deployed. Shock ships that are only numbers grapple when they meet; real ones grapple when
      * they really ram ({@link #lash}).
      * <p>
      * An enemy ship has two sides to come alongside or ram, and each takes one ship of ours, so ours never make for the
@@ -566,10 +568,7 @@ public final class FieldBattle {
                 }
             }
             // Ships, each by the block sailing it.
-            List<FieldBlock> boardable = enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && e.ship != FieldBlock.ShipKind.CAMP && e == holder(e)).toList();
-            if (boardable.isEmpty()) {
-                boardable = enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && e == holder(e)).toList(); // only the camp's left
-            }
+            List<FieldBlock> boardable = enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && e == holder(e)).toList();
             List<FieldBlock> engaged = seconds < SHOCK_WAIT ? List.of()
                     : enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && !e.lashed.isEmpty() && e == holder(e)).toList();
             // Ours the enemy's grapple hooks are in: the lines hold them while they haul.
@@ -611,7 +610,7 @@ public final class FieldBattle {
                     }
                     if (b.ledTarget != null && b.ledTarget.alive > 0) {
                         previous = holder(b.ledTarget); // sent at a ship: its captain goes for that one first
-                        if (b.ledTarget.afloat && b.ship != null && b.ship != FieldBlock.ShipKind.CAMP) {
+                        if (b.ledTarget.afloat && b.ship != null) {
                             // The player's order, whatever the ship is for: board it abreast, or ram it if told to.
                             ordered = previous;
                             kind = b.ship == FieldBlock.ShipKind.GUNSHIP ? FieldBlock.ShipKind.GUNSHIP // sent at a ship: it engages it with its guns
@@ -629,8 +628,8 @@ public final class FieldBattle {
                     continue;
                 }
                 b.prey = null;
-                if (b.ship == null || b.ship == FieldBlock.ShipKind.CAMP) {
-                    b.line = b.deployed != null ? b.deployed : b.pos; // the general's ships and the camp's keep their places
+                if (b.ship == null) {
+                    b.line = b.deployed != null ? b.deployed : b.pos; // the general's ship keeps its place
                     continue;
                 }
                 FieldBlock foe = nearestShip(b, enemy);
@@ -639,8 +638,6 @@ public final class FieldBattle {
                     continue;
                 }
                 switch (kind) {
-                    case CAMP -> {
-                    }
                     case ARCHERS -> {
                         b.line = standOff(b, foe, ARCHER_STANDOFF);
                         b.prey = mark(b, enemy, previous);
@@ -834,19 +831,13 @@ public final class FieldBattle {
         return foe.pos.plus((b.pos.x() - foe.pos.x()) / d * keep, (b.pos.z() - foe.pos.z()) / d * keep);
     }
 
-    /** The nearest enemy ship afloat: a fighting ship if any, else one of the camp's. */
+    /** The nearest enemy ship afloat. */
     @Nullable
     private static FieldBlock nearestShip(FieldBlock b, FieldArmy enemy) {
         FieldBlock best = null;
-        boolean bestCamp = false;
         for (FieldBlock e : enemy.blocks) {
-            if (e.alive == 0 || !e.afloat) {
-                continue;
-            }
-            boolean camp = e.ship == FieldBlock.ShipKind.CAMP;
-            if (best == null || bestCamp && !camp || bestCamp == camp && b.pos.distanceTo(e.pos) < b.pos.distanceTo(best.pos)) {
+            if (e.alive > 0 && e.afloat && (best == null || b.pos.distanceTo(e.pos) < b.pos.distanceTo(best.pos))) {
                 best = e;
-                bestCamp = camp;
             }
         }
         return best;

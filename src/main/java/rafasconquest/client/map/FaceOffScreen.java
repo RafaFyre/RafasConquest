@@ -114,7 +114,7 @@ final class FaceOffScreen extends Screen implements GrandStrategyScreen.OverMap 
                 tip = CityPanel.tip(a.units()[i], a.men()[i], null);
             }
         }
-        String men = a.units().length + " units, " + String.format("%,d", a.soldiers()) + " soldiers";
+        String men = a.strength();
         g.drawCenteredString(font, men, x + w / 2, bottom - 12, GREY);
         return tip;
     }

@@ -666,6 +666,10 @@ public final class RecruitsBattle {
         if (preparing) {
             throw new IllegalStateException("A battle is already being set up");
         }
+        if (type == BattleType.OCEAN) { // fleets sail ship cards only: no land units at sea
+            firstMix = firstMix != null ? firstMix : BattlePlan.navalMix(BattlePlan.blocks(firstSoldiers));
+            secondMix = secondMix != null ? secondMix : BattlePlan.navalMix(BattlePlan.blocks(secondSoldiers));
+        }
         stop();
         RecruitsFactions factions = new RecruitsFactions(level);
         PlayerTeam teamA = factions.team(first);
@@ -1106,6 +1110,9 @@ public final class RecruitsBattle {
     /** Soldier i of a block becomes real, at {@code p}, with the health they have left. */
     private void makeReal(Live l, int i, Point p, float health) {
         FieldBlock block = l.block;
+        if (block.afloat() && block.ship() == FieldBlock.ShipKind.GUNSHIP && !block.hull().posts.isEmpty() && post(block, i) == null) {
+            return; // a gunship's crew is its gunners: one for each post, the rest stay below decks as numbers
+        }
         Side side = sides[block.side()];
         float yaw = yawOf(field.enemyDirection(block));
         EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get()
@@ -1202,7 +1209,7 @@ public final class RecruitsBattle {
         // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
         UUID mountId = e.getMountUUID();
         Entity mount = mountId == null ? null : level.getEntity(mountId);
-        if (mount != null) {
+        if (mount != null && !mount.getTags().contains(rafasconquest.content.ArtilleryMount.SHIP_GUN)) {
             mount.discard();
         }
         backBanners.remove(e.getId());
@@ -1258,8 +1265,8 @@ public final class RecruitsBattle {
                 continue;
             }
             for (FieldBlock block : field.army(side).blocks()) {
-                if (block.alive() == 0 || block.afloat() && block.ship() == FieldBlock.ShipKind.CAMP) {
-                    continue; // a camp ship's riders are below with the horses and stores: nobody on deck
+                if (block.alive() == 0) {
+                    continue;
                 }
                 if (block.afloat() && SableLink.available() && SableLink.shipAt(block.shipId()) == null) {
                     continue; // no deck under them yet (or any more): numbers until their ship sails, not drowned on the sea floor
@@ -2366,8 +2373,7 @@ public final class RecruitsBattle {
                 double faceX = real ? block.settleX() : block.facingX();
                 double faceZ = real ? block.settleZ() : block.facingZ();
                 afloat.add(new Afloat(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
-                        real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(),
-                        block.ship() == FieldBlock.ShipKind.CAMP, lashed, hooked, flag.base(),
+                        real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(), lashed, hooked, flag.base(),
                         flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()), near - keep, boarded));
             }
         }
@@ -2574,7 +2580,7 @@ public final class RecruitsBattle {
 
     /**
      * A gunship's soldier i's post (its hull's Character Markers, in its unit's crew order, block by block); null for any
-     * other ship's, and for those past the last post, who stay below decks.
+     * other ship's, and for those past the last post, who stay below decks ({@link #makeReal} doesn't spawn them).
      */
     @org.jetbrains.annotations.Nullable
     private static rafasconquest.core.SeaLanes.Size.Post post(FieldBlock block, int i) {
@@ -2988,12 +2994,12 @@ public final class RecruitsBattle {
                 List<FieldBlock> blocks = new ArrayList<>(List.of(home));
                 boolean afloat = home.afloat();
                 if (afloat && rank.officer()) {
-                    // At sea an officer commands whole ships, one to each unit: as many as their rank leads hundreds of two.
+                    // At sea an officer commands whole ships, nearest first, by rank: Major 1, Colonel 3, Marshal 9, Grand Marshal 27.
                     blocks = new ArrayList<>(field.crew(home));
                     List<FieldBlock> others = allArms(army, taken, home).stream()
                             .filter(b -> b.shipId() != home.shipId() && b == field.holder(b)).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
                     others.sort(Comparator.comparingDouble(b -> b.pos().distanceTo(home.pos())));
-                    int ships = Math.max(1, leads / BattlePlan.PLATOON_SOLDIERS);
+                    int ships = (int) Math.pow(3, rank.number() - 5);
                     for (int i = 0; i < others.size() && i + 1 < ships; i++) {
                         blocks.addAll(field.crew(others.get(i)));
                     }
@@ -6368,7 +6374,7 @@ public final class RecruitsBattle {
             }
             Entity horse = e.getVehicle();
             level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF, e.getX(), e.getY() + 1, e.getZ(), 6, 0.3, 0.5, 0.3, 0.02);
-            if (horse != null) {
+            if (horse != null && !horse.getTags().contains(rafasconquest.content.ArtilleryMount.SHIP_GUN)) {
                 horse.discard();
             }
             e.discard();
@@ -6785,9 +6791,8 @@ public final class RecruitsBattle {
                 boolean lone = block.started() == 1;
                 if (block.afloat()) {
                     // Aboard: in its section of its ship's deck, DECK_FILES abreast. The block sailing the ship stands
-                    // where the ship is, so its hull is drawn there. A supply ship's riders are below with the horses and
-                    // stores: nobody shows on deck.
-                    int shown = block.ship() == FieldBlock.ShipKind.CAMP ? 0 : block.alive();
+                    // where the ship is, so its hull is drawn there.
+                    int shown = block.alive();
                     int ranks = (Math.max(1, shown) + FieldBattle.DECK_FILES - 1) / FieldBattle.DECK_FILES;
                     Point section = field.deckSection(block);
                     // With a real ship, where it really lies and heads: the field's own numbers only catch up each second.
@@ -6883,7 +6888,7 @@ public final class RecruitsBattle {
         }
         FactionBanner flag = FactionBanner.of(sides[block.side()].faction.id());
         return new FormationSnapshot.Ship(flag.base(), flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(),
-                block.ship() == FieldBlock.ShipKind.CAMP, block == field.holder(block) ? block.hull().ordinal() : -1);
+                block == field.holder(block) ? block.hull().ordinal() : -1);
     }
 
     /**

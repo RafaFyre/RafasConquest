@@ -35,6 +35,8 @@ public final class Garrison {
     public String general = "";
     public int cap;
     public int target = GrandStrategy.NO_TARGET;
+    /** A fleet (ship cards only, on water) rather than an army (land cards only, on land): two kinds of force that never mix. */
+    public boolean fleet;
 
     static Garrison raise(RandomSource random) {
         Garrison g = new Garrison();
@@ -42,10 +44,28 @@ public final class Garrison {
         return g;
     }
 
-    /** Adds random cards of the general roster until it holds {@code cards}. */
+    /** A hold's fleet, raised at random the first time it is asked for, in harbour off its port at (x, z). */
+    static Garrison raiseFleet(RandomSource random, double x, double z) {
+        Garrison g = new Garrison();
+        g.fleet = true;
+        g.fill(FLEET_START, random);
+        g.fromX = g.toX = x;
+        g.fromZ = g.toZ = z;
+        return g;
+    }
+
+    /** Every port's fleet starts with this many ship cards. */
+    public static final int FLEET_START = 3;
+
+    /** Whether a card may serve in this force: ship cards in a fleet, the rest in an army. */
+    public boolean takes(BattlePlan.Arm arm) {
+        return arm.roster() && arm.naval() == fleet;
+    }
+
+    /** Adds random cards of its kind's roster until it holds {@code cards}. */
     void fill(int cards, RandomSource random) {
-        BattlePlan.Arm[] roster = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::roster).toArray(BattlePlan.Arm[]::new);
-        while (units.size() < cards) {
+        BattlePlan.Arm[] roster = java.util.Arrays.stream(BattlePlan.Arm.values()).filter(this::takes).toArray(BattlePlan.Arm[]::new);
+        while (roster.length > 0 && units.size() < cards) {
             add(roster[random.nextInt(roster.length)].ordinal());
         }
     }
@@ -56,11 +76,11 @@ public final class Garrison {
         men.add(full(arm));
     }
 
-    /** A whole card's soldiers: {@link #MEN}, or for a boarding ship's card only what its deck holds (a gunship keeps the rest below). */
+    /** A whole card's soldiers: {@link #MEN}, or for a ship's card only what it holds: a boarder's deck, a gunship's gun posts. */
     public static int full(int arm) {
         BattlePlan.Arm a = BattlePlan.Arm.get(arm);
         rafasconquest.core.SeaLanes.Size ship = a == null ? null : a.ship();
-        return ship == null || ship.gunship() ? MEN : Math.min(MEN, rafasconquest.battle.FieldBattle.deckCrew(ship));
+        return ship == null ? MEN : ship.gunship() ? ship.crewCap(MEN) : Math.min(MEN, rafasconquest.battle.FieldBattle.deckCrew(ship));
     }
 
     void remove(int card) {
@@ -145,7 +165,21 @@ public final class Garrison {
         t.putString("general", general);
         t.putInt("cap", cap);
         t.putInt("target", target);
+        t.putBoolean("fleet", fleet);
         return t;
+    }
+
+    /** Takes out the cards not of its kind (older saves mixed ships and land units): each [card, soldiers]. */
+    List<int[]> strip() {
+        List<int[]> out = new ArrayList<>();
+        for (int i = units.size() - 1; i >= 0; i--) {
+            BattlePlan.Arm a = BattlePlan.Arm.get(units.get(i));
+            if (a != null && a.naval() != fleet) {
+                out.add(0, new int[]{units.get(i), men.get(i)});
+                remove(i);
+            }
+        }
+        return out;
     }
 
     static Garrison load(CompoundTag t) {
@@ -178,6 +212,9 @@ public final class Garrison {
         g.general = t.getString("general");
         g.cap = t.getInt("cap");
         g.target = t.contains("target") ? t.getInt("target") : GrandStrategy.NO_TARGET;
+        // Older saves: a force of ship cards alone was a fleet in all but name.
+        g.fleet = t.contains("fleet") ? t.getBoolean("fleet")
+                : !g.units.isEmpty() && g.units.stream().allMatch(u -> BattlePlan.Arm.get(u) != null && BattlePlan.Arm.get(u).naval());
         return g;
     }
 }
