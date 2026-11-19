@@ -130,7 +130,12 @@ class BattlePlanTest {
         assertTrue(Machine.allowed(gunpowder, rafasconquest.people.Homeland.JUNGLE, BattleType.LAND, false).contains(Machine.HWACHA), "the hwacha is the Jungle's");
         assertEquals(List.of(Machine.ONAGER, Machine.TREBUCHET, Machine.BATTERING_RAM, Machine.SIEGE_TOWER, Machine.MANTLET),
                 Machine.allowed(steel, plains, BattleType.SIEGE, false));
+        assertFalse(Arm.of(Machine.MEDIUM_CANNON).roster(), "the Medium Cannon is a ship's, never an army's");
+        assertTrue(Machine.allowed(gunpowder, plains, BattleType.SIEGE, true).stream().noneMatch(m -> m == Machine.MEDIUM_CANNON));
         for (Machine m : Machine.values()) {
+            if (m == Machine.MEDIUM_CANNON) {
+                continue;
+            }
             boolean train = m == Machine.BATTERING_RAM || m == Machine.SIEGE_TOWER || m == Machine.MANTLET;
             assertEquals(train, Arm.of(m) == Arm.ENGINES, m + ": only the ram, tower and mantlet stay in the siege train");
             assertEquals(!train, Arm.of(m).roster(), m + " on the general roster");

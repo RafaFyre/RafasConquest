@@ -158,7 +158,7 @@ public final class ArrowVolleys {
             int arm = v < arms.length ? arms[v] : -1;
             Kind kind = Kind.of(arm);
             BattleSounds.Shot sound = BattlePlan.Arm.get(arm) == null ? null : BattleSounds.shot(BattlePlan.Arm.get(arm));
-            List<FormationSnapshot.Sprite> figures = archers.layout();
+            List<FormationSnapshot.Sprite> figures = archers.afloat() ? rail(archers, target) : archers.layout();
             int fired = Math.min(shots[v], MAX_PER_VOLLEY);
             for (int i = 0; i < fired; i++) {
                 FormationSnapshot.Sprite s = figures.get(RANDOM.nextInt(figures.size()));
@@ -184,6 +184,55 @@ public final class ArrowVolleys {
                 }
             }
         }
+    }
+
+    /**
+     * A real Medium Cannon's ball (CannonShots), fired from (x, y, z) at (vx, vy, vz) blocks a tick: its flight is
+     * followed here, through this client's own blocks and ships, to where it first strikes, and drawn as a parabola
+     * (it flies one: no drag), with the gun's flash, smoke and report.
+     */
+    public static void cannonShot(double x, double y, double z, double vx, double vy, double vz) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || ARROWS.size() >= MAX_IN_FLIGHT) {
+            return;
+        }
+        Vec3 start = new Vec3(x, y, z);
+        Vec3 at = start;
+        int ticks = 0;
+        while (ticks < 200) {
+            Vec3 next = at.add(vx, vy - rafasconquest.content.CannonAim.GRAVITY * ticks, vz);
+            ticks++;
+            if (!mc.level.isLoaded(BlockPos.containing(next))) {
+                break;
+            }
+            if (ticks > 1 && mc.level.clip(new net.minecraft.world.level.ClipContext(at, next, net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                    net.minecraft.world.level.ClipContext.Fluid.ANY, net.minecraft.world.phys.shapes.CollisionContext.empty())).getType()
+                    != net.minecraft.world.phys.HitResult.Type.MISS) {
+                break;
+            }
+            at = next;
+        }
+        Vec3 end = new Vec3(x + vx * ticks, y + vy * ticks - rafasconquest.content.CannonAim.GRAVITY * ticks * (ticks - 1) / 2.0, z + vz * ticks);
+        long now = Util.getMillis();
+        double g = rafasconquest.content.CannonAim.GRAVITY;
+        ARROWS.add(new Arrow(Kind.BALL, start, end, g * ticks * ticks / 8, now, ticks / 20.0));
+        smoke(Kind.BALL, start, start.add(vx, 0, vz), now);
+        BattleSounds.Shot sound = BattleSounds.shot(BattlePlan.Arm.of(rafasconquest.battle.Machine.MEDIUM_CANNON));
+        if (sound != null) {
+            BattleSounds.queue(sound, start, now - sound.releaseMillis());
+        }
+    }
+
+    /**
+     * A ship's figures on its side facing {@code target}, who shoot over that rail (a gunship's broadside leaves from the
+     * guns on that side); all of them if none stand there.
+     */
+    private static List<FormationSnapshot.Sprite> rail(FormationSnapshot ship, FormationSnapshot target) {
+        List<FormationSnapshot.Sprite> figures = ship.layout();
+        double toward = (target.x() - ship.x()) * -ship.facingZ() + (target.z() - ship.z()) * ship.facingX();
+        List<FormationSnapshot.Sprite> rail = figures.stream()
+                .filter(s -> ((s.x() - ship.x()) * -ship.facingZ() + (s.z() - ship.z()) * ship.facingX()) * toward > 0).toList();
+        return rail.isEmpty() ? figures : rail;
     }
 
     /** The flash and smoke of one shot: a flash at the muzzle, then puffs from it a little way toward the target. */

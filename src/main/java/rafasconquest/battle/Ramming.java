@@ -35,6 +35,78 @@ public final class Ramming {
         return speed >= MIN_CLOSING ? speed : 0;
     }
 
+    /** Room a ship keeps from another it turns near or sails round, in blocks. */
+    public static final double CLEAR = 3;
+    /** A turn smaller than this needs no room checked (radians): a ship under way swings little. */
+    static final double REAL_TURN = Math.toRadians(20);
+
+    /** {@code h} turned about its middle by {@code angle} radians (toward +z from +x). */
+    static Hull turned(Hull h, double angle) {
+        double c = Math.cos(angle);
+        double s = Math.sin(angle);
+        return new Hull(h.x(), h.z(), h.dirX() * c - h.dirZ() * s, h.dirX() * s + h.dirZ() * c, h.halfLength(), h.halfBeam(), 0, 0);
+    }
+
+    /**
+     * Whether coming round by {@code off} radians where it lies, {@code me} would strike one of {@code others} it is
+     * clear of now: its hull checked halfway round and all the way (up to a quarter turn, past which a hull sweeps no
+     * more). Such a ship backs astern first, to where it has room to turn.
+     */
+    public static boolean turnFouls(Hull me, double off, Iterable<Hull> others) {
+        if (Math.abs(off) < REAL_TURN) {
+            return false;
+        }
+        double full = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, off));
+        Hull half = turned(me, full / 2);
+        Hull round = turned(me, full);
+        for (Hull o : others) {
+            if (!overlap(me, o, CLEAR) && (overlap(half, o, CLEAR) || overlap(round, o, CLEAR))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Where {@code me}, going for (tx, tz), should make for instead to pass round the nearest of {@code others} lying across
+     * its way: a point off that ship's nearer side, wide enough for its own beam; null if its way is clear.
+     */
+    @org.jetbrains.annotations.Nullable
+    public static double[] detour(Hull me, double tx, double tz, Iterable<Hull> others) {
+        double d = Math.hypot(tx - me.x(), tz - me.z());
+        if (d < 1e-6) {
+            return null;
+        }
+        double ux = (tx - me.x()) / d;
+        double uz = (tz - me.z()) / d;
+        double nx = -uz; // across its way
+        double nz = ux;
+        Hull block = null;
+        double blockAlong = Double.MAX_VALUE;
+        double blockAcross = 0;
+        double blockWide = 0;
+        for (Hull o : others) {
+            double ox = o.x() - me.x();
+            double oz = o.z() - me.z();
+            double along = ox * ux + oz * uz;
+            double across = ox * nx + oz * nz;
+            // How far the other's hull reaches across the way, and how near it may lie before it is in it.
+            double wide = Math.abs(o.dirX() * nx + o.dirZ() * nz) * o.halfLength() + Math.abs(-o.dirZ() * nx + o.dirX() * nz) * o.halfBeam()
+                    + me.halfBeam() + CLEAR;
+            if (along > 0 && along < d && Math.abs(across) < wide && along < blockAlong) {
+                block = o;
+                blockAlong = along;
+                blockAcross = across;
+                blockWide = wide;
+            }
+        }
+        if (block == null) {
+            return null;
+        }
+        double way = blockAcross > 0 ? -1 : 1; // round the side it lies off the way less
+        return new double[]{block.x() + nx * way * blockWide, block.z() + nz * way * blockWide};
+    }
+
     /** Whether two ships' footprints, each grown by {@code room} all round, overlap (separating axes of two rectangles). */
     public static boolean overlap(Hull a, Hull b, double room) {
         double dx = b.x() - a.x();

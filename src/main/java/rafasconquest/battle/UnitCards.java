@@ -228,6 +228,7 @@ public final class UnitCards {
         s.hull = str(o, "hull", s.hull);
         s.merchant = str(o, "merchant", s.merchant);
         s.type = str(o, "type", s.type).toLowerCase(Locale.ROOT);
+        s.gunBlock = str(o, "gun_block", s.gunBlock);
     }
 
     private static String str(JsonObject o, String key, String otherwise) {

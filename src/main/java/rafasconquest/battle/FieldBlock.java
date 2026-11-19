@@ -129,6 +129,8 @@ public final class FieldBlock {
      */
     double settleX;
     double settleZ;
+    /** A gunship's firing side (1 or -1, see FieldBattle's captains), kept once chosen; 0 before it first engages. */
+    int gunSide;
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;

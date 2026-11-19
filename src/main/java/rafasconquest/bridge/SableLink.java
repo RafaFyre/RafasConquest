@@ -177,6 +177,63 @@ public final class SableLink {
         }
     }
 
+    /**
+     * Whether {@code e} stands within a ship's world box. Unlike {@link #onShip} it holds on a client from an entity's
+     * first tick: Sable tracks an entity as aboard only once it has stood there, and an entity's tags aren't sent.
+     */
+    public static boolean overShip(net.minecraft.world.entity.Entity e) {
+        if (!enabled) {
+            return false;
+        }
+        try {
+            dev.ryanhcode.sable.api.sublevel.SubLevelContainer container =
+                    dev.ryanhcode.sable.api.sublevel.SubLevelContainer.getContainer(e.level());
+            if (container == null) {
+                return false;
+            }
+            for (dev.ryanhcode.sable.sublevel.SubLevel sub : container.getAllSubLevels()) {
+                var box = sub.boundingBox();
+                if (!sub.isRemoved() && e.getX() >= box.minX() && e.getX() <= box.maxX() && e.getZ() >= box.minZ() && e.getZ() <= box.maxZ()
+                        && e.getY() >= box.minY() - 2 && e.getY() <= box.maxY() + 2) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (LinkageError err) {
+            return false;
+        }
+    }
+
+    /**
+     * Where {@code at} lies in the world: a point in a ship's plot (Sable's far-off home for a ship's blocks) as that ship
+     * lies now; any other point is {@code at} itself, the same object.
+     */
+    public static net.minecraft.world.phys.Vec3 outOfPlot(net.minecraft.world.level.Level level, net.minecraft.world.phys.Vec3 at) {
+        if (!enabled) {
+            return at;
+        }
+        try {
+            dev.ryanhcode.sable.sublevel.SubLevel sub = dev.ryanhcode.sable.Sable.HELPER.getContaining(level, at);
+            return sub == null ? at : sub.logicalPose().transformPosition(at);
+        } catch (LinkageError err) {
+            return at;
+        }
+    }
+
+    /** How the ship whose plot holds {@code pos} is turned now (its logical pose); null on land. */
+    @org.jetbrains.annotations.Nullable
+    public static org.joml.Quaterniond turnAt(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+        if (!enabled) {
+            return null;
+        }
+        try {
+            dev.ryanhcode.sable.sublevel.SubLevel sub = dev.ryanhcode.sable.Sable.HELPER.getContaining(level, pos);
+            return sub == null || sub.isRemoved() ? null : new org.joml.Quaterniond(sub.logicalPose().orientation());
+        } catch (LinkageError err) {
+            return null;
+        }
+    }
+
     /** A spot on formation {@code id}'s deck in the world, {right, back} of its hull's middle: {x, y, z}; null with none sailing. */
     @org.jetbrains.annotations.Nullable
     public static double[] onDeck(int id, double right, double back) {

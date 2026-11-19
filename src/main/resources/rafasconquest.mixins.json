@@ -18,6 +18,7 @@
     "SiegeworksShipCollisionMixin"
   ],
   "client": [
+    "FieldGunMountedMixin",
     "ClientChunkWindowMixin",
     "EpicKnightsCloakMixin",
     "ArmorLegsMixin",

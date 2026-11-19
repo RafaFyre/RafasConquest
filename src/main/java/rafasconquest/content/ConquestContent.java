@@ -93,9 +93,22 @@ public final class ConquestContent {
             () -> new ArtilleryBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS)));
     public static final DeferredHolder<Item, Item> ARTILLERY_ITEM = ITEMS.register("artillery",
             () -> new BlockItem(ARTILLERY.get(), new Item.Properties()));
+    /** The Mounted Light Cannon: a culverin's barrel on a block of planks, 30 degrees either way ({@link MountedCannonBlock}). */
+    public static final DeferredHolder<Block, Block> MOUNTED_CANNON = BLOCKS.register("mounted_light_cannon",
+            () -> new MountedCannonBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)));
+    public static final DeferredHolder<Item, Item> MOUNTED_CANNON_ITEM = ITEMS.register("mounted_light_cannon",
+            () -> new BlockItem(MOUNTED_CANNON.get(), new Item.Properties()));
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<ArtilleryMount>> ARTILLERY_ENTITY =
             BLOCK_ENTITIES.register("artillery", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
-                    .of(ArtilleryMount::new, ARTILLERY.get()).build(null));
+                    .of(ArtilleryMount::new, ARTILLERY.get(), MOUNTED_CANNON.get()).build(null));
+    /** The Medium Cannon: our own gun on a carriage, not a Siegeworks one ({@link MediumCannonBlock}). */
+    public static final DeferredHolder<Block, Block> MEDIUM_CANNON = BLOCKS.register("medium_cannon",
+            () -> new MediumCannonBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS).noOcclusion()));
+    public static final DeferredHolder<Item, Item> MEDIUM_CANNON_ITEM = ITEMS.register("medium_cannon",
+            () -> new BlockItem(MEDIUM_CANNON.get(), new Item.Properties()));
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<MediumCannonEntity>> MEDIUM_CANNON_ENTITY =
+            BLOCK_ENTITIES.register("medium_cannon", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
+                    .of(MediumCannonEntity::new, MEDIUM_CANNON.get()).build(null));
     /** The sail stitcher: an iron stick (does nothing yet). */
     public static final DeferredHolder<Item, Item> SAIL_STITCHER = ITEMS.register("sail_stitcher",
             () -> new Item(new Item.Properties().stacksTo(1)));
@@ -205,6 +218,9 @@ public final class ConquestContent {
                 output.accept(OAR_RIGHT_ITEM.get());
                 output.accept(HELM_ITEM.get());
                 output.accept(ARTILLERY_ITEM.get());
+                output.accept(MOUNTED_CANNON_ITEM.get());
+                output.accept(MEDIUM_CANNON_ITEM.get());
+                output.accept(MEDIUM_CANNON_ITEM.get());
                 output.accept(SAIL_STITCHER.get());
                 output.accept(SAIL_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());

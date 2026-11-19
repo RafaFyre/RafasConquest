@@ -51,6 +51,13 @@ public final class ClientModEvents {
         DistantOcclusion.registerShaders(event);
     }
 
+    /** The Medium Cannon's carriage and barrel, drawn apart (OarFigures). */
+    @SubscribeEvent
+    public static void onRegisterModels(net.neoforged.neoforge.client.event.ModelEvent.RegisterAdditional event) {
+        event.register(OarFigures.CARRIAGE);
+        event.register(OarFigures.BARREL);
+    }
+
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(rafasconquest.npc.ConquestEntities.RECRUITER.get(), RecruiterRenderer::new);

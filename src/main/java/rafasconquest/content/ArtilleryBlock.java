@@ -49,10 +49,31 @@ public class ArtilleryBlock extends HorizontalDirectionalBlock implements Entity
     }
 
     public static final EnumProperty<Weapon> WEAPON = EnumProperty.create("weapon", Weapon.class);
+    /** Its engine stands in its place: the block is then gone to the eye and the hand, the engine where it was. */
+    public static final net.minecraft.world.level.block.state.properties.BooleanProperty ARMED =
+            net.minecraft.world.level.block.state.properties.BooleanProperty.create("armed");
 
     public ArtilleryBlock(Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(WEAPON, Weapon.CULVERIN));
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(WEAPON, Weapon.CULVERIN).setValue(ARMED, false));
+    }
+
+    @Override
+    protected net.minecraft.world.level.block.RenderShape getRenderShape(BlockState state) {
+        return state.getValue(ARMED) ? net.minecraft.world.level.block.RenderShape.INVISIBLE : net.minecraft.world.level.block.RenderShape.MODEL;
+    }
+
+    @Override
+    protected net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, net.minecraft.world.level.BlockGetter level, BlockPos pos,
+                                                                 net.minecraft.world.phys.shapes.CollisionContext context) {
+        // Armed, clicks and the gun's own footing go to the engine standing in its place.
+        return state.getValue(ARMED) ? net.minecraft.world.phys.shapes.Shapes.empty() : super.getShape(state, level, pos, context);
+    }
+
+    @Override
+    protected net.minecraft.world.phys.shapes.VoxelShape getCollisionShape(BlockState state, net.minecraft.world.level.BlockGetter level, BlockPos pos,
+                                                                          net.minecraft.world.phys.shapes.CollisionContext context) {
+        return state.getValue(ARMED) ? net.minecraft.world.phys.shapes.Shapes.empty() : super.getCollisionShape(state, level, pos, context);
     }
 
     @Override
@@ -62,7 +83,7 @@ public class ArtilleryBlock extends HorizontalDirectionalBlock implements Entity
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, WEAPON);
+        builder.add(FACING, WEAPON, ARMED);
     }
 
     @Override

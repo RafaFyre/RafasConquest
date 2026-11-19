@@ -42,6 +42,8 @@ public final class Machine {
     public static final Machine BATTERING_RAM = builtIn("battering_ram");
     public static final Machine SIEGE_TOWER = builtIn("siege_tower");
     public static final Machine MANTLET = builtIn("mantlet");
+    /** The Medium Cannon: a ship's gun on its own block (MediumCannonBlock), not a Siegeworks engine; never an army's. */
+    public static final Machine MEDIUM_CANNON = builtIn("medium_cannon");
 
     /** Its file's name; its entity's path under {@link #MOD} unless {@link #entity} says otherwise. */
     public final String id;
@@ -98,7 +100,7 @@ public final class Machine {
 
     /** Drops every engine but the built-in ones, before another's set is added in its order ({@link UnitCards#replace}). */
     static void keepBuiltIns() {
-        ALL.subList(MANTLET.ordinal + 1, ALL.size()).clear();
+        ALL.subList(MEDIUM_CANNON.ordinal + 1, ALL.size()).clear();
         array = ALL.toArray(Machine[]::new);
     }
 

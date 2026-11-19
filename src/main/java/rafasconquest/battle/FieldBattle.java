@@ -41,7 +41,8 @@ public final class FieldBattle {
     }
 
     /** Arrows loosed in the last second by an archer block, at a block: drawn by clients as arrows in flight. */
-    public record Volley(FieldBlock archers, FieldBlock target, int shots) {
+    /** Shots fired as numbers this second, for clients to draw; {@code gun}: the engine that fired them, null for arrows and shot. */
+    public record Volley(FieldBlock archers, FieldBlock target, int shots, @org.jetbrains.annotations.Nullable Machine gun) {
     }
 
     private final FieldArmy[] armies;
@@ -471,46 +472,57 @@ public final class FieldBattle {
      * A gunship that is only numbers fires a broadside from each side: the side its mark (the ship a player sent it at,
      * else its captain's) lies on fires only at that ship, once it is abeam (within 45 degrees of the beam); the other
      * side fires at will, at the nearest enemy ship abeam of it. Each gun in reach fires once a reload, at random; its
-     * shot falls on the struck ship's unit as arrows do. A real gunship's gunners aim the same way (RecruitsBattle).
+     * shot falls on the struck ship's unit as arrows do. A real gunship's gunners aim the same way (RecruitsBattle), and
+     * shoot real crews themselves: its numbers fire only at a ship with nobody real aboard, as its gunners fire at its hull.
      * shortcut: guns fire while any of the unit lives, whoever stands at them; scale by gunners left if that matters.
      */
     void broadside(FieldBlock b, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
-        FieldBlock mark = b.prey != null && b.prey.alive > 0 && b.prey.afloat && b.prey.side != b.side ? b.prey : null;
-        int markSide = mark == null ? 0 : gunSide(b, mark.pos);
+        boolean real = crew(b).stream().anyMatch(c -> c.live);
         for (int side : new int[]{1, -1}) {
             List<String> guns = side > 0 ? b.hull.gunsRight : b.hull.gunsLeft;
-            if (guns.isEmpty()) {
-                continue;
-            }
-            FieldBlock foe = null;
-            if (side == markSide) {
-                foe = abeam(b, mark.pos, side) ? mark : null;
-            } else {
-                double best = Double.MAX_VALUE;
-                for (FieldBlock e : enemy.blocks) {
-                    if (e.alive > 0 && e.afloat && e == holder(e) && abeam(b, e.pos, side) && b.pos.distanceTo(e.pos) < best) {
-                        best = b.pos.distanceTo(e.pos);
-                        foe = e;
-                    }
-                }
-            }
-            if (foe == null) {
+            FieldBlock foe = guns.isEmpty() ? null : broadsideFoe(b, enemy, side);
+            if (foe == null || real && crew(foe).stream().anyMatch(c -> c.live)) {
                 continue;
             }
             double d = b.pos.distanceTo(foe.pos);
             double damage = 0;
+            List<Machine> fired = new ArrayList<>();
             for (String id : guns) {
                 Machine m = Machine.byId(id);
                 if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
                     damage += m.damage;
+                    fired.add(m);
                 }
             }
             if (damage > 0) {
                 FieldBlock hit = spread(b, crew(foe));
                 targets.add(hit);
                 damages.add(damage * hit.arm.takes());
+                if (!real) { // drawn by clients, ball, smoke and flash; a real gunship's gunners fire real guns
+                    fired.forEach(m -> volleys.add(new Volley(b, hit, 1, m)));
+                }
             }
         }
+    }
+
+    /**
+     * The enemy ship gunship {@code b}'s {@code side} guns bear on: on the side its mark lies (the ship a player sent it
+     * at, else its captain's), that ship once abeam; on the other, the nearest enemy ship abeam; null for none.
+     */
+    public FieldBlock broadsideFoe(FieldBlock b, FieldArmy enemy, int side) {
+        FieldBlock mark = b.prey != null && b.prey.alive > 0 && b.prey.afloat && b.prey.side != b.side ? b.prey : null;
+        if (mark != null && gunSide(b, mark.pos) == side) {
+            return abeam(b, mark.pos, side) ? mark : null;
+        }
+        FieldBlock foe = null;
+        double best = Double.MAX_VALUE;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.afloat && e == holder(e) && abeam(b, e.pos, side) && b.pos.distanceTo(e.pos) < best) {
+                best = b.pos.distanceTo(e.pos);
+                foe = e;
+            }
+        }
+        return foe;
     }
 
     /** Which of ship {@code b}'s sides a place lies on: 1 its right (seen from astern), -1 its left. */
@@ -643,17 +655,20 @@ public final class FieldBattle {
                         b.prey = mark(b, enemy, previous);
                     }
                     case GUNSHIP -> {
-                        // Lies off its mark at gun range and turns its side to it, the nearer way round.
+                        // Lies off its mark at gun range with one side to it: the side that faced it when it first
+                        // engaged, kept, so it bombards with that side and never comes about to show the other.
                         FieldBlock e = ordered != null ? ordered
                                 : previous != null && previous.side != b.side && previous.alive > 0 && previous.afloat ? previous : foe;
                         b.prey = e;
                         b.line = standOff(b, e, gunRange(b));
                         double d = Math.max(1e-6, b.pos.distanceTo(e.pos));
-                        double px = -(e.pos.z() - b.pos.z()) / d;
-                        double pz = (e.pos.x() - b.pos.x()) / d;
-                        double turn = px * b.facingX + pz * b.facingZ < 0 ? -1 : 1;
-                        b.settleX = turn * px;
-                        b.settleZ = turn * pz;
+                        double ux = (e.pos.x() - b.pos.x()) / d;
+                        double uz = (e.pos.z() - b.pos.z()) / d;
+                        if (b.gunSide == 0) {
+                            b.gunSide = ux * -b.facingZ + uz * b.facingX >= 0 ? 1 : -1; // its mark off its (-z, x) side (1) or the other
+                        }
+                        b.settleX = b.gunSide * uz; // the heading whose (-z, x) side, times gunSide, points at the mark
+                        b.settleZ = -b.gunSide * ux;
                     }
                     case SWORDSMEN -> {
                         Target t = claim(b, ordered != null ? List.of(ordered) : boardable, previous, taken);
@@ -3531,13 +3546,32 @@ public final class FieldBattle {
      * One second of a ship that is only numbers sailing for {@code target}. A ship can't move sideways: it turns, at
      * most {@link #TURN_RATE} a second, and goes ahead along its heading, or astern at half speed. It comes round toward
      * its target as it goes, slower the further it has to turn, so it sails in an arc; a target close astern it backs to,
-     * its stern toward it. There, it stops and comes round to the heading its captain wants.
+     * its stern toward it. There, it stops and comes round to the heading its captain wants. It sails round a ship of its
+     * own side lying across its way ({@link Ramming#detour}), and where coming round would strike any of {@code ships}
+     * (but those it is grappled to, hooking or going for) it backs astern instead, to where it has room to turn.
      */
-    static void sail(FieldBlock b, Point target) {
+    static void sail(FieldBlock b, Point target, List<FieldBlock> ships) {
+        List<Ramming.Hull> others = new ArrayList<>();
+        List<Ramming.Hull> allies = new ArrayList<>();
+        for (FieldBlock o : ships) {
+            if (o != b && !b.lashed.contains(o) && o != b.hookedTo && o != b.prey) {
+                others.add(footprint(o));
+                if (o.side == b.side) {
+                    allies.add(footprint(o));
+                }
+            }
+        }
+        Ramming.Hull me = footprint(b);
         double dx = target.x() - b.pos.x();
         double dz = target.z() - b.pos.z();
         double d = Math.hypot(dx, dz);
         boolean there = d <= AT_PLACE;
+        double[] round = there ? null : Ramming.detour(me, target.x(), target.z(), allies);
+        if (round != null) {
+            dx = round[0] - b.pos.x();
+            dz = round[1] - b.pos.z();
+            d = Math.max(1e-6, Math.hypot(dx, dz));
+        }
         double wantX = there ? b.settleX() : dx / d;
         double wantZ = there ? b.settleZ() : dz / d;
         boolean astern = !there && wantX * b.facingX + wantZ * b.facingZ < 0 && d <= ASTERN_WITHIN;
@@ -3546,6 +3580,11 @@ public final class FieldBattle {
             wantZ = -wantZ;
         }
         double off = Math.atan2(b.facingX * wantZ - b.facingZ * wantX, b.facingX * wantX + b.facingZ * wantZ);
+        if (Ramming.turnFouls(me, off, others)) {
+            double back = shipSpeed(b) / 2; // no room to come round: astern, straight, until there is
+            b.pos = b.pos.plus(-b.facingX * back, -b.facingZ * back);
+            return;
+        }
         double turn = Math.max(-TURN_RATE, Math.min(TURN_RATE, off));
         if (!there) {
             // Along its heading halfway through the turn: an arc.
@@ -3571,6 +3610,7 @@ public final class FieldBattle {
     /** Every block walks toward its line at its pace; one that has broken formation goes for its prey. */
     private void move(FieldArmy army) {
         FieldArmy enemy = armies[1 - army.side];
+        List<FieldBlock> afloat = null;
         for (FieldBlock block : army.blocks) {
             if (block.alive == 0 || block.afloat && block != holder(block)) {
                 continue; // aboard another's ship, it goes where the ship does (syncCrews)
@@ -3601,7 +3641,17 @@ public final class FieldBattle {
                 target = prey.pos;
             }
             if (block.afloat) {
-                sail(block, target);
+                if (afloat == null) {
+                    afloat = new ArrayList<>(); // every ship on the water, by the block sailing it, for room to turn and pass
+                    for (FieldArmy a : armies) {
+                        for (FieldBlock o : a.blocks) {
+                            if (o.afloat && o.alive > 0 && o == holder(o)) {
+                                afloat.add(o);
+                            }
+                        }
+                    }
+                }
+                sail(block, target, afloat);
                 continue;
             }
             double dx = target.x() - block.pos.x();
@@ -3701,7 +3751,7 @@ public final class FieldBattle {
                 if (block.arm.shoots() && block.arrows > 0) {
                     shoot(army, block, enemy, targets, damages);
                 }
-                if (block.ship == FieldBlock.ShipKind.GUNSHIP && block.afloat && block == holder(block) && !block.live) {
+                if (block.ship == FieldBlock.ShipKind.GUNSHIP && block.afloat && block == holder(block)) {
                     broadside(block, enemy, targets, damages);
                 }
             }
@@ -3961,7 +4011,7 @@ public final class FieldBattle {
                 : Math.ceil(archers.alive * (archers.arm.missile() == Arm.Missile.SHOT ? FieldRules.SHOTS_PER_SECOND : FieldRules.ARROWS_PER_SECOND)));
         archers.arrows -= shots;
         if (shots > 0) {
-            volleys.add(new Volley(archers, foe, shots));
+            volleys.add(new Volley(archers, foe, shots, machine));
         }
         targets.add(foe);
         damages.add((machine != null ? shots * machine.damage * foe.arm.takes() // no shield stops shot or stone

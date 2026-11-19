@@ -84,7 +84,7 @@ public final class ShipHulls {
 
     private static List<Part> made(SeaLanes.Size size, boolean merchant) {
         List<Part> plain = plain(size.length, size.width);
-        return merchant ? plain : size.gunship() ? gunned(rowed(plain, size.length, size.width), size.length, size.width)
+        return merchant ? plain : size.gunship() ? gunned(rowed(plain, size.length, size.width), size)
                 : rowed(plain, size.length, size.width);
     }
 
@@ -98,8 +98,8 @@ public final class ShipHulls {
         List<String> right = new ArrayList<>();
         List<String> left = new ArrayList<>();
         for (Part p : parts) {
-            if (p.state().getBlock() instanceof rafasconquest.content.ArtilleryBlock) {
-                String gun = p.state().getValue(rafasconquest.content.ArtilleryBlock.WEAPON).getSerializedName();
+            String gun = gunOf(p.state());
+            if (gun != null) {
                 if (p.x() <= 0) {
                     right.add(gun);
                 }
@@ -115,9 +115,9 @@ public final class ShipHulls {
         for (SeaLanes.Size.Post post : POSTS.getOrDefault(size.hull, List.of())) {
             String gun = "";
             for (Part p : parts) {
-                if (p.state().getBlock() instanceof rafasconquest.content.ArtilleryBlock && !manned.contains(p)
+                if (gunOf(p.state()) != null && !manned.contains(p)
                         && Math.abs(p.x() - post.x()) <= 1 && Math.abs(p.z() - post.z()) <= 1 && Math.abs(p.y() - post.y()) <= 1) {
-                    gun = p.state().getValue(rafasconquest.content.ArtilleryBlock.WEAPON).getSerializedName();
+                    gun = gunOf(p.state());
                     manned.add(p);
                     break;
                 }
@@ -125,6 +125,15 @@ public final class ShipHulls {
             posts.add(new SeaLanes.Size.Post(post.x(), post.y(), post.z(), gun));
         }
         size.posts = List.copyOf(posts);
+    }
+
+    /** The engine a gun block holds, by id (an Artillery Block's weapon, or the Medium Cannon); null for any other block. */
+    @org.jetbrains.annotations.Nullable
+    public static String gunOf(BlockState state) {
+        if (state.getBlock() instanceof rafasconquest.content.ArtilleryBlock) {
+            return state.getValue(rafasconquest.content.ArtilleryBlock.WEAPON).getSerializedName();
+        }
+        return state.getBlock() instanceof rafasconquest.content.MediumCannonBlock ? rafasconquest.battle.Machine.MEDIUM_CANNON.id : null;
     }
 
     private static void fitAll() {
@@ -315,12 +324,16 @@ public final class ShipHulls {
     }
 
     /**
-     * A warship made a gunship: over its full-beam middle, every other plank of the deck rail down both sides an Artillery
-     * Block (culverin) facing out, and a Character Marker inboard of each for its gunner.
+     * A warship made a gunship: over its full-beam middle, every third plank of the deck rail down both sides an Artillery
+     * Block (culverin) facing out, its gun standing on the deck in that gap (ArtilleryBlock.ARMED), and a Character Marker
+     * inboard of each for its gunner. The card's {@code gun_block} takes the Artillery Block's place (a Mounted Light Cannon's).
      */
-    private static List<Part> gunned(List<Part> rowed, int length, int width) {
-        int beam = width / 2;
-        int half = length / 2;
+    private static List<Part> gunned(List<Part> rowed, SeaLanes.Size size) {
+        int beam = size.width / 2;
+        int half = size.length / 2;
+        net.minecraft.world.level.block.Block named = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .get(net.minecraft.resources.ResourceLocation.tryParse(size.gunBlock));
+        BlockState gun = (gunOf(named.defaultBlockState()) != null ? named : ConquestContent.ARTILLERY.get()).defaultBlockState();
         Set<Long> guns = new java.util.LinkedHashSet<>(); // in order, so the file and its posts come out the same each time
         Integer first = null;
         for (int z = -half; z <= half; z++) {
@@ -329,7 +342,7 @@ public final class ShipHulls {
                 continue;
             }
             first = first == null ? z : first;
-            if ((z - first) % 2 == 0) {
+            if ((z - first) % 3 == 0) { // two rail planks between guns: cover for their gunners
                 guns.add(net.minecraft.core.BlockPos.asLong(-beam, DECK + 1, z));
                 guns.add(net.minecraft.core.BlockPos.asLong(beam, DECK + 1, z));
             }
@@ -343,8 +356,8 @@ public final class ShipHulls {
         for (long g : guns) {
             int x = net.minecraft.core.BlockPos.getX(g);
             int z = net.minecraft.core.BlockPos.getZ(g);
-            parts.add(new Part(x, DECK + 1, z, ConquestContent.ARTILLERY.get().defaultBlockState()
-                    .setValue(rafasconquest.content.ArtilleryBlock.FACING, x < 0 ? Direction.WEST : Direction.EAST)));
+            parts.add(new Part(x, DECK + 1, z, gun
+                    .setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, x < 0 ? Direction.WEST : Direction.EAST)));
             parts.add(new Part(x - Integer.signum(x), DECK + 1, z, ConquestContent.MARKER.get().defaultBlockState()));
         }
         return List.copyOf(parts);

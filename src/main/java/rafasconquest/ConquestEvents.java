@@ -119,6 +119,9 @@ public final class ConquestEvents {
 
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel shooting) {
+            rafasconquest.content.CannonShots.tick(shooting);
+        }
         if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) {
             ConquestServer server = ConquestServer.get();
             if (server != null) {

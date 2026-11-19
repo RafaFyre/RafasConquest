@@ -19,8 +19,8 @@ class UnitCardsTest {
 
     @Test
     void theBuiltInCardsComeFromTheirFilesInTheJar() {
-        assertEquals(24, Arm.values().length);
-        assertEquals(11, Machine.count());
+        assertEquals(26, Arm.values().length);
+        assertEquals(12, Machine.count());
         assertTrue(Arm.HEAVY_INFANTRY.shielded());
         assertTrue(Arm.LEVY.expendable());
         assertEquals(Arm.Missile.SHOT, Arm.MUSKETEERS.missile());
@@ -43,7 +43,7 @@ class UnitCardsTest {
         Arm pikemen = Arm.byId("pikemen");
         Arm bombards = Arm.byId("bombards");
         assertNotNull(pikemen);
-        assertEquals(24, pikemen.ordinal(), "after the built-ins");
+        assertEquals(26, pikemen.ordinal(), "after the built-ins");
         assertTrue(pikemen.infantry() && pikemen.has("anti_horse"));
         assertEquals(1, pikemen.pace(), 1e-9, "a field left out keeps the plain rate");
         assertSame(bombards, Arm.of(Machine.byId("bombard")));
@@ -76,7 +76,7 @@ class UnitCardsTest {
                 {"name": "Carrack", "length": 51, "width": 15, "deck": 6, "speed": 0.8, "battle": "unit", "hull": "carrack.nbt"}""");
         rafasconquest.core.SeaLanes.Size carrack = rafasconquest.core.SeaLanes.Size.byId("carrack");
         assertSame(xxl, rafasconquest.core.SeaLanes.Size.battle("unit", null), "the first card of a role is the built-in");
-        assertEquals(6, carrack.ordinal());
+        assertEquals(7, carrack.ordinal());
         assertEquals(0, carrack.lanes, "a card left off the lanes by default");
         UnitCards.apply(UnitCards.SHIPS, "xxlarge", """
                 {"battle": ""}""");

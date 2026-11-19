@@ -1,0 +1,22 @@
+{
+  "name": "Medium Cannon",
+  "entity": "",
+  "role": "shooter",
+  "per_unit": 1,
+  "age": "gunpowder",
+  "homeland": null,
+  "field": false,
+  "attack": false,
+  "defence": false,
+  "reach": 160,
+  "reload": 20,
+  "damage": 60,
+  "batter": 0,
+  "ammo": {},
+  "projectile": "ball",
+  "sound": "rafasconquest:battle.culverin",
+  "body": "cannon",
+  "size": 1,
+  "heavy": false,
+  "throwing": false
+}

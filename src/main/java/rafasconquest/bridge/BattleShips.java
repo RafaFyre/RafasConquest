@@ -201,6 +201,9 @@ final class BattleShips {
         return new Ramming.Hull(x, z, h.faceX() / length, h.faceZ() / length, size.length / 2.0, size.width / 2.0, 0, 0);
     }
 
+    /** The ship kinds whose gun count was logged already. */
+    private static final java.util.Set<String> TOLD_SIZES = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
     /** Builds formation {@code h}'s ship where its formation is; false if it couldn't be built there yet. */
     private static boolean build(ServerLevel level, String battle, SableLink.Helm h) {
         double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
@@ -212,9 +215,10 @@ final class BattleShips {
             return false;
         }
         long guns = ShipHulls.battle(size(h), net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe()))
-                .stream().filter(p -> p.state().getBlock() instanceof rafasconquest.content.ArtilleryBlock).count();
-        if (guns > 0) {
-            RafasConquest.LOGGER.info("[guns] built {} ({}) with {} Artillery Blocks", sub.getName(), size(h).id, guns);
+                .stream().filter(p -> ShipHulls.gunOf(p.state()) != null).count();
+        if (guns > 0 || TOLD_SIZES.add(size(h).id)) { // diagnostic: a gunless kind is told once, so a hull missing its guns shows
+            RafasConquest.LOGGER.info("[guns] built {} ({}, {}, hull '{}') with {} Artillery Blocks", sub.getName(), size(h).id, size(h).type,
+                    size(h).hull, guns);
         }
         CompoundTag tag = sub.getUserDataTag().copy();
         tag.putString(BATTLE, battle);
@@ -311,10 +315,28 @@ final class BattleShips {
             body.addLinearAndAngularVelocity(velocity.negate(), spin.negate());
             return;
         }
+        // Every other real ship but those it is grappled to or hooking: room to turn; those of its own side: to sail round.
+        List<Ramming.Hull> others = new ArrayList<>();
+        List<Ramming.Hull> allies = new ArrayList<>();
+        for (SableLink.Helm o : sailing.values()) {
+            Ramming.Hull hull = hulls.get(o.id());
+            if (o.id() != h.id() && hull != null && !h.lashed().contains(o.id()) && !h.hooked().contains(o.id())) {
+                others.add(hull);
+                if (o.side() == h.side()) {
+                    allies.add(hull);
+                }
+            }
+        }
         double dx = h.toX() - me.x();
         double dz = h.toZ() - me.z();
         double d = Math.hypot(dx, dz);
         boolean there = d <= FieldBattle.AT_PLACE;
+        double[] round = there ? null : Ramming.detour(me, h.toX(), h.toZ(), allies);
+        if (round != null) { // one of its own side across its way: it makes for a point off that ship's side
+            dx = round[0] - me.x();
+            dz = round[1] - me.z();
+            d = Math.max(1e-6, Math.hypot(dx, dz));
+        }
         double wantX = there ? h.faceX() : dx / d;
         double wantZ = there ? h.faceZ() : dz / d;
         boolean astern = !there && wantX * me.dirX() + wantZ * me.dirZ() < 0 && d <= FieldBattle.ASTERN_WITHIN;
@@ -330,6 +352,10 @@ final class BattleShips {
         double off = wrap(Math.atan2(wantX, wantZ) - heading);
         double pace = there ? 0 : Math.min(astern ? h.speed() / 2 : h.speed(), d * PULL) * Math.max(FieldBattle.MIN_WAY, Math.cos(off));
         pace = astern ? -pace : pace;
+        if (Ramming.turnFouls(me, off, others)) {
+            pace = -h.speed() / 2; // no room to come round: astern, straight, until there is
+            off = 0;
+        }
         // Drops back from one of its own side ahead of it, goes on from one astern: along its heading, never sideways.
         pace += (away.x * me.dirX() + away.z * me.dirZ()) * SPREAD;
         pace = Math.max(-h.speed() / 2, Math.min(h.speed(), pace));

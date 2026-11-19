@@ -899,6 +899,8 @@ class FieldBattleTest {
                 targets.forEach(t -> hit.add(battle.holder(t)));
             }
             assertEquals(java.util.Set.of(mark, other), hit, "the marked side at its mark, the other side at will");
+            assertTrue(battle.volleys().stream().anyMatch(v -> v.archers() == g && v.gun() == Machine.byId("culverin")),
+                    "a sprite gunship's broadside is drawn, each shot its gun's");
 
             other.pos = new Point(-10, 35); // nearer, but on the marked side: that side holds for its mark
             hit.clear();
@@ -908,6 +910,20 @@ class FieldBattleTest {
                 targets.forEach(t -> hit.add(battle.holder(t)));
             }
             assertEquals(java.util.Set.of(mark), hit);
+
+            // Real, its gunners shoot a real crew themselves: its numbers fire only at a ship with nobody real aboard.
+            other.pos = new Point(0, -40);
+            g.setLive(true);
+            battle.crew(mark).forEach(c -> c.setLive(true));
+            hit.clear();
+            int drawn = battle.volleys().size();
+            for (int i = 0; i < 200; i++) {
+                List<FieldBlock> targets = new java.util.ArrayList<>();
+                battle.broadside(g, battle.army(1), targets, new java.util.ArrayList<>());
+                targets.forEach(t -> hit.add(battle.holder(t)));
+            }
+            assertEquals(java.util.Set.of(other), hit, "a real gunship's numbers fire only at a ship with nobody real aboard");
+            assertEquals(drawn, battle.volleys().size(), "a real gunship's gunners fire real guns: nothing drawn");
         } finally {
             gunship.gunsRight = right;
             gunship.gunsLeft = left;
@@ -1062,7 +1078,7 @@ class FieldBattleTest {
             Point before = ship.pos();
             double hx = ship.facingX();
             double hz = ship.facingZ();
-            FieldBattle.sail(ship, target);
+            FieldBattle.sail(ship, target, List.of());
             double dx = ship.pos().x() - before.x();
             double dz = ship.pos().z() - before.z();
             double moved = Math.hypot(dx, dz);
@@ -1078,12 +1094,30 @@ class FieldBattleTest {
     }
 
     @Test
+    void aShipWithNoRoomToComeRoundBacksAsternUntilItHasRoom() {
+        FieldBlock ship = loneShip();
+        rafasconquest.core.SeaLanes.Size hull = ship.hull();
+        // An ally lying alongside, clear of it, but in the way of its bow coming round toward +z.
+        Ramming.Hull ally = new Ramming.Hull(0, hull.width + Ramming.CLEAR * 2 + 2, 1, 0, hull.length / 2.0, hull.width / 2.0, 0, 0);
+        assertTrue(Ramming.turnFouls(new Ramming.Hull(0, 0, 1, 0, hull.length / 2.0, hull.width / 2.0, 0, 0), Math.PI / 2, List.of(ally)),
+                "coming round a quarter turn would strike it");
+        assertFalse(Ramming.turnFouls(new Ramming.Hull(0, 0, 1, 0, hull.length / 2.0, hull.width / 2.0, 0, 0), Math.toRadians(5), List.of(ally)),
+                "a small turn needs no room");
+        double[] round = Ramming.detour(new Ramming.Hull(0, 0, 1, 0, hull.length / 2.0, hull.width / 2.0, 0, 0), 300, 0,
+                List.of(new Ramming.Hull(100, 2, 0, 1, hull.length / 2.0, hull.width / 2.0, 0, 0)));
+        assertNotNull(round, "an ally lying across its way");
+        assertTrue(round[1] < -hull.length / 2.0, "passes round the nearer end of it: " + round[1]);
+        assertNull(Ramming.detour(new Ramming.Hull(0, 0, 1, 0, hull.length / 2.0, hull.width / 2.0, 0, 0), 300, 0,
+                List.of(new Ramming.Hull(100, 200, 0, 1, hull.length / 2.0, hull.width / 2.0, 0, 0))), "one well off its way");
+    }
+
+    @Test
     void aShipBacksAtHalfSpeedToAPlaceCloseAstern() {
         FieldBlock ship = loneShip();
         Point target = new Point(-10, 0); // close astern
         for (int s = 0; s < 30 && ship.pos().distanceTo(target) > FieldBattle.AT_PLACE; s++) {
             Point before = ship.pos();
-            FieldBattle.sail(ship, target);
+            FieldBattle.sail(ship, target, List.of());
             assertTrue(ship.pos().distanceTo(before) <= FieldBattle.shipSpeed(ship) / 2 + 1e-9, "astern faster than half speed");
             assertTrue(ship.pos().x() < before.x() + 1e-9, "didn't back toward it");
             assertEquals(1, ship.facingX(), 1e-9, "turned round instead of backing");

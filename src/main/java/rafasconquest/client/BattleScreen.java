@@ -51,8 +51,12 @@ public final class BattleScreen extends Screen {
         InventoryScreen.renderEntityInInventoryFollowsMouse(g, x - scale, feet - 2 * scale, x + scale, feet, scale, 0.0625F, mouseX, mouseY, entity);
     }
 
-    private static final String[] ARMS = {"LEVY", "HVY INF", "SKIRMISH", "ZWEIHAND", "ARCHERS", "CAVALRY", "HVY CAV", "MUSKETS", "ENGINES", "HALBERDS",
-            "CULVERIN", "SERPENT", "MONS MEG", "HWACHA", "BALLISTA", "ONAGER", "TREBUCHT", "T. XBOW"};
+    /** A card's name on its card, as its file names it (ship cards and cards added by files too), cut to fit. */
+    private static String armName(int arm) {
+        rafasconquest.battle.BattlePlan.Arm a = rafasconquest.battle.BattlePlan.Arm.get(arm);
+        String name = a == null ? "?" : a.title().toUpperCase(java.util.Locale.ROOT);
+        return name.length() > 14 ? name.substring(0, 13) + "." : name;
+    }
     private static final String[] MODES = {"FOLLOWING", "HOLDING", "MOVING", "CHARGING", "YOUR ORDERS"};
     private static final String[] WINGS = {"L", "C", "R"};
     private static final String[] WING_NAMES = {"Left wing", "Centre", "Right wing"};
@@ -600,13 +604,13 @@ public final class BattleScreen extends Screen {
         g.fill(x - 1, y - 1, x + w + 1, y + h + 1, all ? GOLD : some ? 0xFFFFE080 : 0xFFC8C8C8);
         g.fill(x, y, x + w, y + h, 0xFFFFF2B0);
         UnitInfo first = card.get(0);
-        int[] arms = new int[ARMS.length];
+        int[] arms = new int[Math.max(1, rafasconquest.battle.BattlePlan.Arm.values().length)];
         int alive = 0;
         int started = 0;
         boolean fighting = false;
         boolean tired = false;
         for (UnitInfo u : card) {
-            arms[Mth.clamp(u.arm(), 0, ARMS.length - 1)] += u.soldiers();
+            arms[Mth.clamp(u.arm(), 0, arms.length - 1)] += u.soldiers();
             alive += u.soldiers();
             started += u.started();
             fighting |= u.fighting();
@@ -618,7 +622,7 @@ public final class BattleScreen extends Screen {
         }
         String status = (fighting ? "FIGHTING" : MODES[Mth.clamp(first.mode(), 0, MODES.length - 1)]) + (tired ? ", TIRED" : "");
         g.fill(x, y + 9, x + w, y + 10, 0xFFE0D090);
-        small(g, ARMS[arm] + (first.split() ? "*" : ""), x + w / 2, y + 3, 0.6F);
+        small(g, armName(arm) + (first.split() ? "*" : ""), x + w / 2, y + 3, 0.6F);
         Integer group = groups.get(first.number());
         if (group != null) {
             small(g, "GROUP " + group, x + w / 2, y + h / 2 - 3, 0.5F);

@@ -76,6 +76,14 @@ final class OarFigures {
     }
 
     private static Model oarModel;
+    /** The Medium Cannon's two parts: its carriage about the block's bottom middle, its barrel about its trunnions. */
+    private static Model cannonCarriage, cannonBarrel;
+    public static final net.minecraft.client.resources.model.ModelResourceLocation CARRIAGE = net.minecraft.client.resources.model.ModelResourceLocation
+            .standalone(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "block/medium_cannon_carriage"));
+    public static final net.minecraft.client.resources.model.ModelResourceLocation BARREL = net.minecraft.client.resources.model.ModelResourceLocation
+            .standalone(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(RafasConquest.MOD_ID, "block/medium_cannon_barrel"));
+    /** How much of the way to its lay a drawn cannon goes each frame: the server's lay comes a few ticks apart. */
+    private static final float CANNON_EASE = 0.3F;
     /** Far ships' hulls, by {@link DistantShips#hullKey}. shortcut: never freed, as FigureBatches' models; free unseen ones if the card's memory shows. */
     private static final java.util.Map<Object, Model> HULLS = new java.util.HashMap<>();
     private static int program = -1, instanceBuffer, mvp, modulator, atlas;
@@ -122,7 +130,56 @@ final class OarFigures {
             int light = FigureBatches.lightColour(LevelRenderer.getLightColor(oar.getLevel(), pos.relative(side)));
             put(oarModel, (float) dx, (float) dy, (float) dz, turn, light);
         }
+        cannons(mc, eye, partialTick);
         draw(pose.last().pose());
+    }
+
+    /** Each loaded Medium Cannon, its carriage turned to its yaw and its barrel tipped to its pitch, on its ship as it lies. */
+    private static void cannons(Minecraft mc, Vec3 eye, float partialTick) {
+        Matrix3f turn = new Matrix3f();
+        Vector3d pivot = new Vector3d();
+        for (rafasconquest.content.MediumCannonEntity gun : rafasconquest.content.MediumCannonEntity.CLIENT_LOADED) {
+            BlockState state = gun.getBlockState();
+            if (gun.isRemoved() || !(state.getBlock() instanceof rafasconquest.content.MediumCannonBlock)) {
+                continue;
+            }
+            BlockPos pos = gun.getBlockPos();
+            Vector3d at = new Vector3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+            Quaterniond ship = shipTurn(mc, pos, partialTick, at);
+            double dx = at.x - eye.x;
+            double dy = at.y - eye.y;
+            double dz = at.z - eye.z;
+            if (dx * dx + dz * dz > DistantShips.REAL_WITHIN * DistantShips.REAL_WITHIN) {
+                continue; // as the oars: past here the far ship's copy has it
+            }
+            gun.shownYaw += (gun.yaw - gun.shownYaw) * CANNON_EASE;
+            gun.shownPitch += (gun.pitch - gun.shownPitch) * CANNON_EASE;
+            Quaterniond carriage = rafasconquest.content.CannonAim.carriage(ship,
+                    rafasconquest.content.CannonAim.facing(state.getValue(rafasconquest.content.MediumCannonBlock.FACING)), gun.shownYaw);
+            int light = FigureBatches.lightColour(LevelRenderer.getLightColor(gun.getLevel(), pos.above()));
+            put(cannonCarriage, (float) dx, (float) dy, (float) dz, turn.set(new Quaternionf(carriage)), light);
+            carriage.transform(pivot.set(rafasconquest.content.CannonAim.PIVOT));
+            Quaterniond barrel = rafasconquest.content.CannonAim.barrel(carriage, gun.shownPitch);
+            put(cannonBarrel, (float) (dx + pivot.x), (float) (dy + pivot.y), (float) (dz + pivot.z), turn.set(new Quaternionf(barrel)), light);
+        }
+    }
+
+    /** A standalone block model's quads, moved by {@code -origin} (block units), as a model for the graphics card. */
+    private static float[] partModel(net.minecraft.client.resources.model.ModelResourceLocation where, double ox, double oy, double oz) {
+        RecruitFigures.Capture c = new RecruitFigures.Capture();
+        PoseStack pose = new PoseStack();
+        pose.translate(-ox, -oy, -oz);
+        var model = Minecraft.getInstance().getModelManager().getModel(where);
+        net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(42);
+        for (Direction d : Direction.values()) {
+            for (var quad : model.getQuads(null, d, random)) {
+                c.putBulkData(pose.last(), quad, 1, 1, 1, 1, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+            }
+        }
+        for (var quad : model.getQuads(null, null, random)) {
+            c.putBulkData(pose.last(), quad, 1, 1, 1, 1, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+        }
+        return c.triangles();
     }
 
     /**
@@ -189,7 +246,9 @@ final class OarFigures {
             return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.withDefaultNamespace(
                     state.getValue(rafasconquest.content.SailBlock.COLOR).getName() + "_wool")).defaultBlockState();
         }
-        return state.getRenderShape() == net.minecraft.world.level.block.RenderShape.MODEL ? state : null;
+        // A Medium Cannon is drawn instanced near, its whole model at rest far off.
+        return state.getRenderShape() == net.minecraft.world.level.block.RenderShape.MODEL
+                || state.getBlock() instanceof rafasconquest.content.MediumCannonBlock ? state : null;
     }
 
     private static long cell(int x, int y, int z) {
@@ -348,7 +407,7 @@ final class OarFigures {
     }
 
     private static void draw(Matrix4f pose) {
-        if (program < 0 || oarModel.count == 0 && HULLS.values().stream().allMatch(h -> h.count == 0)) {
+        if (program < 0 || oarModel.count == 0 && cannonCarriage.count == 0 && HULLS.values().stream().allMatch(h -> h.count == 0)) {
             return;
         }
         int oldProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
@@ -373,6 +432,8 @@ final class OarFigures {
         GL20.glUniform4f(modulator, colour[0], colour[1], colour[2], colour[3]);
         GL20.glUniform1i(atlas, 0);
         drawEach(oarModel);
+        drawEach(cannonCarriage);
+        drawEach(cannonBarrel);
         HULLS.values().forEach(OarFigures::drawEach);
         GlStateManager._glUseProgram(oldProgram);
         GlStateManager._glBindVertexArray(oldVao);
@@ -460,6 +521,9 @@ final class OarFigures {
         atlas = GL20.glGetUniformLocation(p, "Atlas");
         instanceBuffer = GlStateManager._glGenBuffers();
         oarModel = upload(model());
+        cannonCarriage = upload(partModel(CARRIAGE, 0.5, 0, 0.5));
+        var pivot = rafasconquest.content.CannonAim.PIVOT;
+        cannonBarrel = upload(partModel(BARREL, 0.5 + pivot.x, pivot.y, 0.5 + pivot.z));
         program = p;
         RafasConquest.LOGGER.info("[oars] drawing oars instanced ({} corners)", oarModel.vertices);
         return true;

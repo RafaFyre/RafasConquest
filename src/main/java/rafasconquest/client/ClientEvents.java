@@ -150,6 +150,7 @@ public final class ClientEvents {
     public static void onClientTick(ClientTickEvent.Post event) {
         BattleSounds.tick();
         rafasconquest.client.cloth.ClothRenderer.tick();
+        CannonControl.tick();
     }
 
     /** A battle soldier (or its horse) past the handover is hidden; its figure stands in for it. */
@@ -194,6 +195,11 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onAttack(net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {
         Minecraft mc = Minecraft.getInstance();
+        if (event.isAttack() && CannonControl.attack()) {
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            return;
+        }
         if (!event.isAttack() || mc.player == null || mc.hitResult != null && mc.hitResult.getType() == net.minecraft.world.phys.HitResult.Type.ENTITY) {
             return;
         }

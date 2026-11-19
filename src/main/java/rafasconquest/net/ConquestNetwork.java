@@ -367,6 +367,91 @@ public final class ConquestNetwork {
                 })
                 .consumerMainThread((m, context) -> rafasconquest.client.FarFlags.banners(m.where(), m.what()))
                 .add();
+        CHANNEL.messageBuilder(CannonShot.class, 45, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> {
+                    b.writeDouble(m.x()).writeDouble(m.y()).writeDouble(m.z());
+                    b.writeFloat((float) m.vx()).writeFloat((float) m.vy()).writeFloat((float) m.vz());
+                    b.writeByte(m.shot());
+                })
+                .decoder(b -> new CannonShot(b.readDouble(), b.readDouble(), b.readDouble(), b.readFloat(), b.readFloat(), b.readFloat(), b.readByte()))
+                .consumerMainThread((m, context) -> rafasconquest.client.ArrowVolleys.cannonShot(m.x(), m.y(), m.z(), m.vx(), m.vy(), m.vz()))
+                .add();
+        CHANNEL.messageBuilder(CannonTaken.class, 46, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> b.writeBlockPos(m.pos()))
+                .decoder(b -> new CannonTaken(b.readBlockPos()))
+                .consumerMainThread((m, context) -> rafasconquest.client.CannonControl.take(m.pos()))
+                .add();
+        CHANNEL.messageBuilder(CannonLay.class, 47, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> b.writeBlockPos(m.pos()).writeFloat(m.yaw()).writeFloat(m.pitch()))
+                .decoder(b -> new CannonLay(b.readBlockPos(), b.readFloat(), b.readFloat()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.content.MediumCannonEntity.layBy(player, m.pos(), m.yaw(), m.pitch());
+                    }
+                })
+                .add();
+        CHANNEL.messageBuilder(CannonFire.class, 48, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> b.writeBlockPos(m.pos()))
+                .decoder(b -> new CannonFire(b.readBlockPos()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.content.MediumCannonEntity.fireBy(player, m.pos());
+                    }
+                })
+                .add();
+        CHANNEL.messageBuilder(CannonLeave.class, 49, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> b.writeBlockPos(m.pos()))
+                .decoder(b -> new CannonLeave(b.readBlockPos()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.content.MediumCannonEntity.leaveBy(player, m.pos());
+                    }
+                })
+                .add();
+    }
+
+    /** Server → client: a Medium Cannon fired a ball from (x, y, z) at (vx, vy, vz) blocks a tick, of {@code shot} (its ordinal). */
+    public record CannonShot(double x, double y, double z, double vx, double vy, double vz, int shot) {
+    }
+
+    /** Server → client: the player now works the Medium Cannon at {@code pos}. */
+    public record CannonTaken(net.minecraft.core.BlockPos pos) {
+    }
+
+    /** Client → server: the player lays the cannon they work; fires it; lets it go. */
+    public record CannonLay(net.minecraft.core.BlockPos pos, float yaw, float pitch) {
+    }
+
+    public record CannonFire(net.minecraft.core.BlockPos pos) {
+    }
+
+    public record CannonLeave(net.minecraft.core.BlockPos pos) {
+    }
+
+    public static void sendCannonShot(List<ServerPlayer> players, net.minecraft.world.phys.Vec3 at, double vx, double vy, double vz, int shot) {
+        CannonShot msg = new CannonShot(at.x, at.y, at.z, vx, vy, vz, shot);
+        for (ServerPlayer p : players) {
+            CHANNEL.send(p, msg);
+        }
+    }
+
+    public static void sendCannonTaken(ServerPlayer player, net.minecraft.core.BlockPos pos) {
+        CHANNEL.send(player, new CannonTaken(pos));
+    }
+
+    public static void sendCannonLay(net.minecraft.core.BlockPos pos, float yaw, float pitch) {
+        CHANNEL.sendToServer(new CannonLay(pos, yaw, pitch));
+    }
+
+    public static void sendCannonFire(net.minecraft.core.BlockPos pos) {
+        CHANNEL.sendToServer(new CannonFire(pos));
+    }
+
+    public static void sendCannonLeave(net.minecraft.core.BlockPos pos) {
+        CHANNEL.sendToServer(new CannonLeave(pos));
     }
 
     /** Server → client: the battle banners and flags about the player's camera, out past its own chunks ({@link rafasconquest.content.PlacedBanners}). */
