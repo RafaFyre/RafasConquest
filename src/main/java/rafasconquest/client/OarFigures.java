@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import dev.ryanhcode.sable.Sable;
+import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.client.Camera;
@@ -134,10 +135,20 @@ final class OarFigures {
         draw(pose.last().pose());
     }
 
+    /** A gun past the handover: its ship (null ashore) and light, looked up again every {@link #FAR_GUN_REFRESH_TICKS}, not every frame. */
+    private record FarGun(@org.jetbrains.annotations.Nullable ClientSubLevel ship, int light, long until) {
+    }
+
+    private static final java.util.Map<rafasconquest.content.MediumCannonEntity, FarGun> FAR_GUNS = new java.util.WeakHashMap<>();
+    private static final long FAR_GUN_REFRESH_TICKS = 20;
+
     /** Each loaded Medium Cannon, its carriage turned to its yaw and its barrel tipped to its pitch, on its ship as it lies. */
     private static void cannons(Minecraft mc, Vec3 eye, float partialTick) {
         Matrix3f turn = new Matrix3f();
         Vector3d pivot = new Vector3d();
+        long now = mc.level.getGameTime();
+        // Each ship's pose once a frame, shared by all its far guns.
+        java.util.Map<ClientSubLevel, Pose3dc> poses = new java.util.IdentityHashMap<>();
         for (rafasconquest.content.MediumCannonEntity gun : rafasconquest.content.MediumCannonEntity.CLIENT_LOADED) {
             BlockState state = gun.getBlockState();
             if (gun.isRemoved() || !(state.getBlock() instanceof rafasconquest.content.MediumCannonBlock)) {
@@ -145,18 +156,42 @@ final class OarFigures {
             }
             BlockPos pos = gun.getBlockPos();
             Vector3d at = new Vector3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
-            Quaterniond ship = shipTurn(mc, pos, partialTick, at);
+            FarGun cached = FAR_GUNS.get(gun);
+            if (cached != null && (now >= cached.until || cached.ship != null && cached.ship.isRemoved())) {
+                FAR_GUNS.remove(gun);
+                cached = null;
+            }
+            Quaterniond ship;
+            if (cached == null) {
+                ship = shipTurn(mc, pos, partialTick, at);
+            } else if (cached.ship == null) {
+                ship = null; // not aboard a ship: drawn where its block is
+            } else {
+                Pose3dc pose = poses.computeIfAbsent(cached.ship, s -> s.renderPose(partialTick));
+                pose.transformPosition(at);
+                ship = new Quaterniond(pose.orientation());
+            }
             double dx = at.x - eye.x;
             double dy = at.y - eye.y;
             double dz = at.z - eye.z;
             if (dx * dx + dz * dz > DistantShips.REAL_WITHIN * DistantShips.REAL_WITHIN) {
+                FAR_GUNS.remove(gun);
                 continue; // as the oars: past here the far ship's copy has it
             }
-            gun.shownYaw += (gun.yaw - gun.shownYaw) * CANNON_EASE;
-            gun.shownPitch += (gun.pitch - gun.shownPitch) * CANNON_EASE;
+            // Past the gunners' handover each gun settles at rest, as the far ship's copy draws it, so it turns figure with its gunner.
+            boolean far = dx * dx + dy * dy + dz * dz > DistantArmyRenderer.handover() * DistantArmyRenderer.handover();
+            if (!far && cached != null) {
+                FAR_GUNS.remove(gun);
+                cached = null;
+            }
+            gun.shownYaw += ((far ? 0 : gun.yaw) - gun.shownYaw) * CANNON_EASE;
+            gun.shownPitch += ((far ? 0 : gun.pitch) - gun.shownPitch) * CANNON_EASE;
             Quaterniond carriage = rafasconquest.content.CannonAim.carriage(ship,
                     rafasconquest.content.CannonAim.facing(state.getValue(rafasconquest.content.MediumCannonBlock.FACING)), gun.shownYaw);
-            int light = FigureBatches.lightColour(LevelRenderer.getLightColor(gun.getLevel(), pos.above()));
+            int light = cached != null ? cached.light : FigureBatches.lightColour(LevelRenderer.getLightColor(gun.getLevel(), pos.above()));
+            if (far && cached == null) {
+                FAR_GUNS.put(gun, new FarGun(shipOf(mc, pos), light, now + FAR_GUN_REFRESH_TICKS));
+            }
             put(cannonCarriage, (float) dx, (float) dy, (float) dz, turn.set(new Quaternionf(carriage)), light);
             carriage.transform(pivot.set(rafasconquest.content.CannonAim.PIVOT));
             Quaterniond barrel = rafasconquest.content.CannonAim.barrel(carriage, gun.shownPitch);
@@ -371,13 +406,29 @@ final class OarFigures {
     }
 
     /** The ship's render turn for an oar at {@code pos} on one (moving {@code at} from its plot into the world), or null. */
-    static Quaterniond shipTurn(Minecraft mc, BlockPos pos, float partialTick, Vector3d at) {
+    /** The Sable ship a block is aboard, or null (none, or Sable missing or broken). */
+    @org.jetbrains.annotations.Nullable
+    private static ClientSubLevel shipOf(Minecraft mc, BlockPos pos) {
         if (sableBroken || !SableLink.available()) {
             return null;
         }
         try {
             SubLevel sub = Sable.HELPER.getContaining(mc.level, pos);
-            if (!(sub instanceof ClientSubLevel ship) || ship.isRemoved()) {
+            return sub instanceof ClientSubLevel ship && !ship.isRemoved() ? ship : null;
+        } catch (LinkageError e) {
+            sableBroken = true;
+            RafasConquest.LOGGER.warn("Sable's client API doesn't match; oars on ships are drawn where their blocks are", e);
+            return null;
+        }
+    }
+
+    static Quaterniond shipTurn(Minecraft mc, BlockPos pos, float partialTick, Vector3d at) {
+        if (sableBroken || !SableLink.available()) {
+            return null;
+        }
+        try {
+            ClientSubLevel ship = shipOf(mc, pos);
+            if (ship == null) {
                 return null;
             }
             var pose = ship.renderPose(partialTick);

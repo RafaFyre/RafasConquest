@@ -74,6 +74,11 @@ public final class DistantArmyRenderer {
         handover = fade > 0 ? Math.min(drawn, fade) : drawn;
     }
 
+    /** This frame's handover distance (see {@link #prepare}). */
+    static double handover() {
+        return handover;
+    }
+
     /** Whether to hide this real soldier (or its horse) because a figure stands in for it. */
     public static boolean hides(Entity entity, Vec3 eye, float partialTick) {
         if (!DistantArmies.isOurs(entity)) {
