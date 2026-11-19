@@ -1,8 +1,0 @@
-{
-  "variants": {
-    "facing=north": { "model": "rafasconquest:block/artillery" },
-    "facing=east": { "model": "rafasconquest:block/artillery", "y": 90 },
-    "facing=south": { "model": "rafasconquest:block/artillery", "y": 180 },
-    "facing=west": { "model": "rafasconquest:block/artillery", "y": 270 }
-  }
-}

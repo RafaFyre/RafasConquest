@@ -217,7 +217,7 @@ final class BattleShips {
         long guns = ShipHulls.battle(size(h), net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe()))
                 .stream().filter(p -> ShipHulls.gunOf(p.state()) != null).count();
         if (guns > 0 || TOLD_SIZES.add(size(h).id)) { // diagnostic: a gunless kind is told once, so a hull missing its guns shows
-            RafasConquest.LOGGER.info("[guns] built {} ({}, {}, hull '{}') with {} Artillery Blocks", sub.getName(), size(h).id, size(h).type,
+            RafasConquest.LOGGER.info("[guns] built {} ({}, {}, hull '{}') with {} guns", sub.getName(), size(h).id, size(h).type,
                     size(h).hull, guns);
         }
         CompoundTag tag = sub.getUserDataTag().copy();

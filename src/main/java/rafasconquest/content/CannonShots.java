@@ -69,11 +69,20 @@ public final class CannonShots {
 
     private static final java.util.Map<ServerLevel, List<Ball>> FLYING = new java.util.WeakHashMap<>();
 
+    /** Diagnostic: how the shots of the last {@link #TALLY_TICKS} ended, and what they did on the way. Server thread only. */
+    private static final java.util.Map<String, Integer> TALLY = new java.util.TreeMap<>();
+    private static final int TALLY_TICKS = 200;
+
+    public static void note(String what) {
+        TALLY.merge(what, 1, Integer::sum);
+    }
+
     private CannonShots() {
     }
 
     static void fire(ServerLevel level, Vec3 muzzle, Vector3d v, MediumCannonEntity.Shot shot, @Nullable Entity by, double damage) {
         FLYING.computeIfAbsent(level, k -> new ArrayList<>()).add(new Ball(muzzle, v, shot, by, (float) damage));
+        note("fired");
         List<ServerPlayer> near = new ArrayList<>();
         for (ServerPlayer p : level.players()) {
             if (p.distanceToSqr(muzzle) <= TOLD_WITHIN * TOLD_WITHIN) {
@@ -89,16 +98,22 @@ public final class CannonShots {
         if (balls != null && !balls.isEmpty()) {
             balls.removeIf(b -> !fly(level, b));
         }
+        if (level.getGameTime() % TALLY_TICKS == 0 && !TALLY.isEmpty()) {
+            rafasconquest.RafasConquest.LOGGER.info("[shots] last {} s: {}", TALLY_TICKS / 20, TALLY);
+            TALLY.clear();
+        }
     }
 
     /** One tick of a ball's flight; false once it is done. */
     private static boolean fly(ServerLevel level, Ball b) {
         if (++b.age > LIFE) {
+            note("ended: still flying after 10 s");
             return false;
         }
         Vec3 next = b.at.add(b.v.x, b.v.y, b.v.z);
         b.v.y -= CannonAim.GRAVITY;
         if (!level.isLoaded(BlockPos.containing(next))) {
+            note("ended: flew out of loaded chunks");
             return false; // never loads ground for a shot
         }
         if (b.age <= CLEAR) {
@@ -111,26 +126,35 @@ public final class CannonShots {
         Vec3 end = hit.getType() == HitResult.Type.MISS ? next : rafasconquest.bridge.SableLink.outOfPlot(level, hit.getLocation());
         strike(level, b, b.at, end);
         if (b.v.lengthSquared() < SPENT * SPENT) {
+            note("ended: spent in bodies");
             return false;
         }
         if (hit.getType() == HitResult.Type.MISS) {
             b.at = next;
             return true;
         }
+        String where = end != hit.getLocation() ? "ship" : "land"; // outOfPlot moved it: the hit was in a ship's plot
         BlockPos pos = hit.getBlockPos();
         BlockState state = level.getBlockState(pos);
         if (state.getFluidState().is(FluidTags.WATER)) {
+            note(where.equals("ship") ? "ended: in water in a ship" : "ended: in the sea");
             return false; // shortcut: no splash yet; the client's ball just ends there
         }
         float hardness = state.getDestroySpeed(level, pos);
         if (hardness < 0 || hardness > HARDEST || b.smashed >= SMASH) {
+            note(b.smashed >= SMASH ? "ended: broke its " + SMASH + " blocks (" + where + ")" : "ended: on a hard block (" + where + ")");
             return false;
         }
         level.destroyBlock(pos, false, b.by);
+        note("blocks broken (" + where + ")");
         b.smashed++;
         b.v.mul(THROUGH_BLOCK);
         b.at = end;
-        return b.v.lengthSquared() >= SPENT * SPENT;
+        if (b.v.lengthSquared() < SPENT * SPENT) {
+            note("ended: spent breaking blocks (" + where + ")");
+            return false;
+        }
+        return true;
     }
 
     /** Everyone the ball passes through between {@code from} and {@code to} is struck, once each. */
@@ -140,6 +164,7 @@ public final class CannonShots {
                 continue;
             }
             b.struck.add(e.getId());
+            note("soldiers struck");
             double speed = b.v.length() / CannonAim.SPEED;
             e.hurt(level.damageSources().explosion(null, b.by), (float) (b.damage * Math.min(1, speed)));
             b.v.mul(THROUGH_BODY);

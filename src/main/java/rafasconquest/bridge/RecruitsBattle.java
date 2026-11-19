@@ -1132,8 +1132,8 @@ public final class RecruitsBattle {
                 && rafasconquest.battle.Machine.works(i, block.machine().inBlock(block.id()), BattlePlan.SOLDIERS_PER_FORMATION);
         rafasconquest.core.SeaLanes.Size.Post post = block.afloat() ? post(block, i) : null;
         boolean gunner = works || post != null && !post.gun().isEmpty();
-        // Every gunner is a siege engineer, whatever their card: only engineers are worked by Siegeworks' Recruits
-        // controller, which lays, loads and fires the gun at their target.
+        // Every gunner is a siege engineer, whatever their card: on land only engineers are worked by Siegeworks' Recruits
+        // controller; at sea, a ship's gun crews are engineers too.
         EntityType<? extends AbstractRecruitEntity> type = block.duty() == Duty.BEARER ? ModEntityTypes.RECRUIT.get()
                 : gunner ? ModEntityTypes.SIEGE_ENGINEER.get()
                 : block.afloat() && block.arm().mounted() ? type(Arm.SKIRMISHERS) // no horses on deck: the guard sails on foot
@@ -1154,7 +1154,6 @@ public final class RecruitsBattle {
         if (block.afloat()) {
             Point spot = deckSpot(block, i);
             soldier.teleportTo(spot.x(), deckY(block, i), spot.z()); // onto its ship's deck, not the sea floor
-            manGun(soldier, block, i);
         }
         if (block.champion()) {
             makeChampion(soldier);
@@ -1235,7 +1234,7 @@ public final class RecruitsBattle {
         // Cavalry get their horse from Recruits on their first tick; it outlives a rider who falls or dismounts.
         UUID mountId = e.getMountUUID();
         Entity mount = mountId == null ? null : level.getEntity(mountId);
-        if (mount != null && !mount.getTags().contains(rafasconquest.content.ArtilleryMount.SHIP_GUN)) {
+        if (mount != null) {
             mount.discard();
         }
         backBanners.remove(e.getId());
@@ -1808,16 +1807,9 @@ public final class RecruitsBattle {
             List<AbstractRecruitEntity> marked = shooting ? preyOf(block, List.of()) : List.of();
             List<AbstractRecruitEntity> anyone = shooting ? enemiesOf(block.side(), false) : List.of();
             for (AbstractRecruitEntity s : living) {
-                if (boarders.isEmpty() && s.getVehicle() != null && block.ship() == FieldBlock.ShipKind.GUNSHIP && mayFight(block.side())) {
-                    aimGun(s, block);
-                    continue;
-                }
                 if (boarders.isEmpty() && rafasconquest.content.MediumCannonEntity.crewing(s.getUUID()) && mayFight(block.side())) {
                     aimCannon(s, block); // stands at its gun, its target the cannon's, not its own
                     continue;
-                }
-                if (s instanceof com.talhanation.recruits.entities.SiegeEngineerEntity gunner && gunner.getShouldStrategicFire()) {
-                    gunner.setShouldStrategicFire(false); // only aimGun lays a gun on a hull
                 }
                 // Off its deck spot an archer holds its fire: with a target, Recruits' bow goal stops its walk back
                 // every tick, so it stood while its ship sailed and turned away. Pinned again ({@link #pin}), it looses.
@@ -2121,50 +2113,16 @@ public final class RecruitsBattle {
         return soldiers.isEmpty() ? otherwise : soldiers;
     }
 
-    /**
-     * A gunship's gunner aims as its broadside does ({@link FieldBattle#broadside}): a gun on the side its ship's mark
-     * lies on (the ship a player sent it at, else its captain's) aims only at that ship's soldiers; one on the other side
-     * fires at will, at the nearest enemy off that side. Within its gun's reach; its target kept while it still may.
-     * With nobody real to shoot at there (a gunship lies off at most of its reach, past where soldiers turn real), it
-     * fires at the hull of the ship its side's guns bear on ({@link FieldBattle#broadsideFoe}): Recruits' strategic fire,
-     * which Siegeworks aims at before any target; the numbers take that ship's losses ({@link FieldBattle#broadside}).
-     * Siegeworks' crew AI then lays, loads and fires the gun.
-     */
-    private void aimGun(AbstractRecruitEntity s, FieldBlock block) {
-        if (s.getState() != 0) {
-            s.setAggroState(0);
-        }
-        String type = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(s.getVehicle().getType()));
-        rafasconquest.battle.Machine gun = null;
-        for (int m = 0; m < rafasconquest.battle.Machine.count(); m++) {
-            if (rafasconquest.battle.Machine.get(m).entity().equals(type)) {
-                gun = rafasconquest.battle.Machine.get(m);
-            }
-        }
-        double reach = gun == null ? FieldRules.ARCHER_RANGE : gun.reach;
-        GunMark m = gunMark(s, block, reach, s.getTarget());
-        if (m.target() != s.getTarget()) {
-            s.setTarget(m.target());
-        }
-        if (!(s instanceof com.talhanation.recruits.entities.SiegeEngineerEntity gunner)) {
-            return; // never fires anyway (man() warns)
-        }
-        gunner.setShouldStrategicFire(m.hull() != null);
-        if (m.hull() != null) {
-            gunner.setStrategicFirePos(m.hull());
-        }
-    }
-
     /** What a gunner fires at: a soldier, else (null target) the hull of the ship its side's guns bear on; neither, nothing. */
-    private record GunMark(@Nullable LivingEntity target, @Nullable BlockPos hull) {
+    private record GunMark(@Nullable LivingEntity target, @Nullable BlockPos hull, boolean drawn) {
     }
 
     /** The cannons' crews' last marks, by soldier entity id, kept while they still may be fired at ({@link #gunMark}). */
     private final Map<Integer, LivingEntity> cannonMarks = new HashMap<>();
 
     /**
-     * A Medium Cannon's crew is given its mark as a Siegeworks gunner is ({@link #aimGun}), each battle second (passOnOrders);
-     * the cannon itself lays and fires ({@link rafasconquest.content.MediumCannonEntity}). Its shot is roundshot until
+     * A Medium Cannon's crew is given its mark ({@link #gunMark}) each battle second (passOnOrders); the cannon itself
+     * lays and fires ({@link rafasconquest.content.MediumCannonEntity}). Its shot is roundshot until
      * captains choose. (A gate on the soldier's id here, every tenth tick, met the once-a-second orders for only one
      * gunner in ten: the rest never had a mark.)
      */
@@ -2181,11 +2139,16 @@ public final class RecruitsBattle {
         if (at != null) {
             rafasconquest.content.MediumCannonEntity.order(s.getUUID(), at, rafasconquest.content.MediumCannonEntity.Shot.ROUNDSHOT, now);
         }
+        // Diagnostic, each gunner each second: what it is laid on. A distant ship is drawn only, so it has no hull to strike.
+        rafasconquest.content.CannonShots.note(m.target() != null ? "aimed at: a soldier" : m.hull() == null ? "aimed at: nothing in reach"
+                : m.drawn() ? "aimed at: a distant (drawn) ship" : "aimed at: a real ship's hull");
     }
 
     /**
-     * A gunship gunner's mark, as its broadside aims ({@link FieldBattle#broadside}): see {@link #aimGun}. {@code kept}:
-     * its last target, kept while it still may be.
+     * A gunship gunner's mark, as its broadside aims ({@link FieldBattle#broadside}): a gun on the side its ship's mark
+     * lies on (the ship a player sent it at, else its captain's) aims only at that ship's soldiers; one on the other side
+     * fires at will, at the nearest enemy off that side, within reach. With nobody real to shoot at there, the hull of the
+     * ship its side's guns bear on ({@link FieldBattle#broadsideFoe}). {@code kept}: its last target, kept while it still may be.
      */
     private GunMark gunMark(AbstractRecruitEntity s, FieldBlock block, double reach, @Nullable LivingEntity kept) {
         FieldBlock holder = field.holder(block);
@@ -2205,16 +2168,16 @@ public final class RecruitsBattle {
             target = nearestTo(s, may).filter(f -> f.distanceTo(s) <= reach).orElse(null);
         }
         if (target != null) {
-            return new GunMark(target, null);
+            return new GunMark(target, null, false);
         }
         FieldBlock foe = field.broadsideFoe(holder, field.army(1 - block.side()), side);
         double[] afloat = foe == null ? null : SableLink.shipAt(foe.shipId());
         Point hull = foe == null ? null : afloat != null ? new Point(afloat[0], afloat[1]) : foe.pos(); // a far ship: where its sprite sails
         if (hull == null || hull.distanceTo(new Point(s.getX(), s.getZ())) > reach) {
-            return new GunMark(null, null);
+            return new GunMark(null, null, false);
         }
         double y = afloat != null && !Double.isNaN(afloat[4]) ? afloat[4] : level.getSeaLevel() + 1;
-        return new GunMark(null, BlockPos.containing(hull.x(), y, hull.z()));
+        return new GunMark(null, BlockPos.containing(hull.x(), y, hull.z()), afloat == null);
     }
 
     /** The real soldiers fighting against {@code side}, its archers only if {@code archersFirst} and any are real. */
@@ -2549,9 +2512,8 @@ public final class RecruitsBattle {
         }
         for (int i = 0; i < l.soldiers.length; i++) {
             AbstractRecruitEntity s = l.soldiers[i];
-            if (s == null || !s.isAlive() || commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || s.isInWater()
-                    || s.isPassenger()) {
-                continue; // a passenger works a gun, which rides the ship
+            if (s == null || !s.isAlive() || commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || s.isInWater()) {
+                continue;
             }
             // The spot keepDeck sends them to: a gunship gunner's is their post, which may stand above or below the deck.
             Point spot = shipSpot(l.block, i);
@@ -2703,28 +2665,6 @@ public final class RecruitsBattle {
     }
 
     /**
-     * A gunner at a post beside a gun works it: the gun's engine (its Artillery Block's, {@link rafasconquest.content.ArtilleryMount})
-     * nearest them, not yet worked. Tried again while they keep the deck, as the ship's engines come a second after it.
-     */
-    private void manGun(AbstractRecruitEntity soldier, FieldBlock block, int i) {
-        rafasconquest.core.SeaLanes.Size.Post post = post(block, i);
-        rafasconquest.battle.Machine gun = post == null || post.gun().isEmpty() ? null : rafasconquest.battle.Machine.byId(post.gun());
-        if (gun == null || gun == rafasconquest.battle.Machine.MEDIUM_CANNON || soldier.isPassenger()) {
-            return; // a Medium Cannon takes the soldier at its post itself
-        }
-        net.minecraft.resources.ResourceLocation type = net.minecraft.resources.ResourceLocation.tryParse(gun.entity());
-        // The gun beside the soldier's own post (its marker stands a block inboard of it), wherever the soldier now is.
-        Point at = deckSpot(block, i);
-        Vec3 postAt = new Vec3(at.x(), soldier.getY(), at.z());
-        Entity engine = level.getEntities((Entity) null, new net.minecraft.world.phys.AABB(postAt, postAt).inflate(2.5, 3, 2.5),
-                        e -> e.getPassengers().isEmpty() && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).equals(type))
-                .stream().min(Comparator.comparingDouble(e -> e.distanceToSqr(postAt))).orElse(null);
-        if (engine != null) {
-            man(soldier, engine, gun);
-        }
-    }
-
-    /**
      * Keeps a formation aboard its ship: not boarding, they stand in their section of the deck ({@link #deckSpot}), set
      * again as the ship moves; anyone who has been in the water a while climbs back aboard.
      */
@@ -2740,10 +2680,6 @@ public final class RecruitsBattle {
             if (s == null || !s.isAlive() || commanded.contains(s.getId())) {
                 continue;
             }
-            if (s.isPassenger()) {
-                continue; // working a gun, which rides the ship
-            }
-            manGun(s, l.block, i);
             Point spot = deckSpot(l.block, i);
             if (!s.isInWater()) {
                 overboard.remove(s.getId());
@@ -6488,7 +6424,7 @@ public final class RecruitsBattle {
             }
             Entity horse = e.getVehicle();
             level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF, e.getX(), e.getY() + 1, e.getZ(), 6, 0.3, 0.5, 0.3, 0.02);
-            if (horse != null && !horse.getTags().contains(rafasconquest.content.ArtilleryMount.SHIP_GUN)) {
+            if (horse != null) {
                 horse.discard();
             }
             e.discard();

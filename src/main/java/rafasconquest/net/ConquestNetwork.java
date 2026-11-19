@@ -167,14 +167,6 @@ public final class ConquestNetwork {
                 .decoder(b -> { MarkerView v = MarkerView.read(b); return new MarkerSet(v.pos(), v.spec()); })
                 .consumerMainThread(ConquestNetwork::handleMarkerSet)
                 .add();
-        CHANNEL.messageBuilder(ArtillerySet.class, 36, NetworkDirection.PLAY_TO_SERVER)
-                .encoder((m, b) -> {
-                    b.writeBlockPos(m.pos());
-                    b.writeEnum(m.weapon());
-                })
-                .decoder(b -> new ArtillerySet(b.readBlockPos(), b.readEnum(rafasconquest.content.ArtilleryBlock.Weapon.class)))
-                .consumerMainThread(ConquestNetwork::handleArtillerySet)
-                .add();
         CHANNEL.messageBuilder(GrandStrategyView.class, 25, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(GrandStrategyView::write)
                 .decoder(GrandStrategyView::read)
@@ -814,26 +806,6 @@ public final class ConquestNetwork {
                 && player.level().getBlockEntity(msg.pos()) instanceof rafasconquest.style.MarkerBlockEntity marker) {
             marker.setSpec(msg.spec());
             rafasconquest.style.MarkerBlock.LAST.put(player.getUUID(), msg.spec());
-        }
-    }
-
-    /** Client → server: an Artillery Block's weapon, to keep (creative, within reach). */
-    public record ArtillerySet(net.minecraft.core.BlockPos pos, rafasconquest.content.ArtilleryBlock.Weapon weapon) {
-    }
-
-    public static void setArtillery(net.minecraft.core.BlockPos pos, rafasconquest.content.ArtilleryBlock.Weapon weapon) {
-        CHANNEL.sendToServer(new ArtillerySet(pos, weapon));
-    }
-
-    private static void handleArtillerySet(ArtillerySet msg, IPayloadContext context) {
-        ServerPlayer player = SimpleChannel.sender(context);
-        if (player == null || !player.isCreative() || !player.blockPosition().closerThan(msg.pos(), 16)) {
-            return;
-        }
-        net.minecraft.world.level.block.state.BlockState state = player.level().getBlockState(msg.pos());
-        if (state.getBlock() instanceof rafasconquest.content.ArtilleryBlock
-                && rafasconquest.content.ArtilleryBlock.WEAPON.getPossibleValues().contains(msg.weapon())) {
-            player.level().setBlockAndUpdate(msg.pos(), state.setValue(rafasconquest.content.ArtilleryBlock.WEAPON, msg.weapon()));
         }
     }
 

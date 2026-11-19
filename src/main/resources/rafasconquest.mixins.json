@@ -14,11 +14,9 @@
     "EpicKnightsSlownessMixin",
     "EpicKnightsJoustingMixin",
     "BetterCombatOneHandMixin",
-    "SablePhysicsTimingMixin",
-    "SiegeworksShipCollisionMixin"
+    "SablePhysicsTimingMixin"
   ],
   "client": [
-    "FieldGunMountedMixin",
     "ClientChunkWindowMixin",
     "EpicKnightsCloakMixin",
     "ArmorLegsMixin",

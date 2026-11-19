@@ -59,8 +59,6 @@ public final class SeaLanes {
         public static final Size XXLARGE = builtIn("xxlarge");
         /** A ship of the line, Medium Cannons for guns: its crew stand only at the Character Markers in its hull and work them; never on the lanes. */
         public static final Size GUNSHIP = builtIn("gunship");
-        /** A Gunship with Mounted Light Cannons for guns ({@link #gunBlock}). */
-        public static final Size GUNSHIP_2 = builtIn("gunship2");
 
         public final String id;
         private int ordinal;
@@ -74,12 +72,12 @@ public final class SeaLanes {
         public String battle = "";
         public String hull = "";
         public String merchant = "";
-        /** The block a made gunship hull puts in its gun ports (an Artillery Block, or a kind of one). */
-        public String gunBlock = "rafasconquest:artillery";
+        /** The block a made gunship hull puts in its gun ports (a Medium Cannon: ships carry only our own guns). */
+        public String gunBlock = "rafasconquest:medium_cannon";
         /** "boarder": its unit stands on its deck and boards (the captains' AI); "gunship": it lies off and fires broadsides. */
         public String type = "boarder";
         /**
-         * Read from its hull ({@link rafasconquest.style.ShipHulls}): its guns (the engines on its Artillery Blocks, by id),
+         * Read from its hull ({@link rafasconquest.style.ShipHulls}): its guns (the engines of its gun blocks, by id),
          * those on its right side (-x) and its left (+x), a centreline gun on both; and where its crew stand, its Character
          * Markers, one post a soldier.
          */

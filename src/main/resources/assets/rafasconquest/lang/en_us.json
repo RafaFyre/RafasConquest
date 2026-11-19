@@ -61,8 +61,6 @@
   "block.rafasconquest.strategy_board": "Strategy Board",
   "block.rafasconquest.gate_block": "Gate Block",
   "block.rafasconquest.helm": "Helm",
-  "block.rafasconquest.artillery": "Artillery Block",
-  "block.rafasconquest.mounted_light_cannon": "Mounted Light Cannon",
   "block.rafasconquest.medium_cannon": "Medium Cannon",
   "block.rafasconquest.medium_cannon.taken": "Working the Medium Cannon: look to lay it, attack to fire, sneak to let go",
   "block.rafasconquest.medium_cannon.busy": "Someone else is working this cannon",

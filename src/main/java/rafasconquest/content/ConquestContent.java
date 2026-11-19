@@ -88,19 +88,6 @@ public final class ConquestContent {
             () -> new HelmBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.LECTERN).mapColor(net.minecraft.world.level.material.MapColor.COLOR_RED)));
     public static final DeferredHolder<Item, Item> HELM_ITEM = ITEMS.register("helm",
             () -> new BlockItem(HELM.get(), new Item.Properties()));
-    /** The Artillery Block: on a Sable ship, a Siegeworks engine stands on it, crewed by a siege engineer ({@link ArtilleryBlock}). */
-    public static final DeferredHolder<Block, Block> ARTILLERY = BLOCKS.register("artillery",
-            () -> new ArtilleryBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.SPRUCE_PLANKS)));
-    public static final DeferredHolder<Item, Item> ARTILLERY_ITEM = ITEMS.register("artillery",
-            () -> new BlockItem(ARTILLERY.get(), new Item.Properties()));
-    /** The Mounted Light Cannon: a culverin's barrel on a block of planks, 30 degrees either way ({@link MountedCannonBlock}). */
-    public static final DeferredHolder<Block, Block> MOUNTED_CANNON = BLOCKS.register("mounted_light_cannon",
-            () -> new MountedCannonBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS)));
-    public static final DeferredHolder<Item, Item> MOUNTED_CANNON_ITEM = ITEMS.register("mounted_light_cannon",
-            () -> new BlockItem(MOUNTED_CANNON.get(), new Item.Properties()));
-    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<ArtilleryMount>> ARTILLERY_ENTITY =
-            BLOCK_ENTITIES.register("artillery", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
-                    .of(ArtilleryMount::new, ARTILLERY.get(), MOUNTED_CANNON.get()).build(null));
     /** The Medium Cannon: our own gun on a carriage, not a Siegeworks one ({@link MediumCannonBlock}). */
     public static final DeferredHolder<Block, Block> MEDIUM_CANNON = BLOCKS.register("medium_cannon",
             () -> new MediumCannonBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS).noOcclusion()));
@@ -217,8 +204,6 @@ public final class ConquestContent {
                 output.accept(OAR_LEFT_ITEM.get());
                 output.accept(OAR_RIGHT_ITEM.get());
                 output.accept(HELM_ITEM.get());
-                output.accept(ARTILLERY_ITEM.get());
-                output.accept(MOUNTED_CANNON_ITEM.get());
                 output.accept(MEDIUM_CANNON_ITEM.get());
                 output.accept(MEDIUM_CANNON_ITEM.get());
                 output.accept(SAIL_STITCHER.get());

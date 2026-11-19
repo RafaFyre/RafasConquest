@@ -42,9 +42,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattlePlan.java": {
-    "mtime": 1795104553.4138796,
-    "seen": 1795104705.2425487,
-    "ast_hash": "2e66eacb76f90e99619d75370c6eb6ca",
+    "mtime": 1795116226.6882281,
+    "seen": 1795116475.9466026,
+    "ast_hash": "c59a251e9430f37c00c0d5fde6d0429d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattleSite.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1795114836.4306316,
-    "seen": 1795114958.7573197,
-    "ast_hash": "d9dda27432ca607beff5c5ccd136ca0d",
+    "mtime": 1795116279.4053323,
+    "seen": 1795116475.9466462,
+    "ast_hash": "6b365d0d909d741a33bfbc9e425199c1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -270,9 +270,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ClientScreens.java": {
-    "mtime": 1794953776.652735,
-    "seen": 1794953975.4445477,
-    "ast_hash": "de6650d7157721e343a27ec9f515ca29",
+    "mtime": 1795116195.3968446,
+    "seen": 1795116475.946699,
+    "ast_hash": "065b5d40de26ee0063021c52e4594696",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/ConquestWorldScreen.java": {
@@ -300,9 +300,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantArmyRenderer.java": {
-    "mtime": 1795114920.2602959,
-    "seen": 1795114958.7573884,
-    "ast_hash": "4e37101cf13feb11f11ee03f8cfd6aac",
+    "mtime": 1795115892.8239925,
+    "seen": 1795116108.6468105,
+    "ast_hash": "bd239ebfe64bdfa3b265932f5c7ce8df",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantHorizonsArmies.java": {
@@ -474,9 +474,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/ConquestContent.java": {
-    "mtime": 1795104481.6416392,
-    "seen": 1795104705.242764,
-    "ast_hash": "c90e3a45685b155900a6ea2abda8e697",
+    "mtime": 1795116185.4139373,
+    "seen": 1795116475.9468186,
+    "ast_hash": "5dd25b23c7edadaa8e406fb47458002b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/QuestBoardBlock.java": {
@@ -744,9 +744,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1795114790.9960961,
-    "seen": 1795114958.7576506,
-    "ast_hash": "c7ec571e76d360e0591d8090daa73d6d",
+    "mtime": 1795116195.5499523,
+    "seen": 1795116475.946954,
+    "ast_hash": "6d4352f3a1669d502ffe5349b68630e5",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1272,9 +1272,9 @@
     "semantic_hash": "fa1778aa5fe8f45bd2a794cf894fd7fd"
   },
   "src/main/resources/assets/rafasconquest/lang/en_us.json": {
-    "mtime": 1795104200.9865253,
-    "seen": 1795104705.24309,
-    "ast_hash": "1f1c141f9222e0bcdabef5fc11fa1c99",
+    "mtime": 1795116226.7626884,
+    "seen": 1795116475.947147,
+    "ast_hash": "ea15e04f143fc7ebb6cd7046e0fac7bf",
     "semantic_hash": ""
   },
   "src/main/resources/assets/rafasconquest/models/block/character_marker.json": {
@@ -2160,9 +2160,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/axe.json": {
-    "mtime": 1795103156.4000456,
-    "seen": 1795103208.2165604,
-    "ast_hash": "e092259a962821896a51bd1ad3a14bc3",
+    "mtime": 1795116226.809027,
+    "seen": 1795116475.9472275,
+    "ast_hash": "5eb095d07ff79d1621bf5ea4594afc46",
     "semantic_hash": ""
   },
   "src/main/resources/data/minecraft/tags/block/mineable/shovel.json": {
@@ -2280,21 +2280,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1795059074.1019685,
-    "seen": 1795059335.52719,
-    "ast_hash": "8ef8167353cdb4688e31c4bb7d3e7916",
+    "mtime": 1795116058.239827,
+    "seen": 1795116108.6468196,
+    "ast_hash": "b3e5be041783f281abe8ffac38875800",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
-    "mtime": 1795110255.5157306,
-    "seen": 1795110603.3432283,
-    "ast_hash": "9153c5bbaa76e320e93833916d57e3a9",
+    "mtime": 1795116226.644173,
+    "seen": 1795116475.946876,
+    "ast_hash": "19d393fdce36d0f1d75e69bc65965e65",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/ShipHulls.java": {
-    "mtime": 1795104553.3352494,
-    "seen": 1795104705.242997,
-    "ast_hash": "8cd0dde5ef446a13031e2d86f423db42",
+    "mtime": 1795116285.286287,
+    "seen": 1795116475.947058,
+    "ast_hash": "4df9ec3a191a6b1b28913eedbea988b8",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SeaLanesTest.java": {
@@ -2352,9 +2352,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/BattleShips.java": {
-    "mtime": 1795104212.7094052,
-    "seen": 1795104705.2425811,
-    "ast_hash": "a43aabb4f61548e79a13ba895e8d9819",
+    "mtime": 1795116285.244828,
+    "seen": 1795116475.9466357,
+    "ast_hash": "4800d6ef81093ba32c0ce0b186d8375b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {
@@ -2424,9 +2424,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SableSeen.java": {
-    "mtime": 1794605461.8458269,
-    "seen": 1794605572.660657,
-    "ast_hash": "c75dc26d0d20bd7dfe3ca0c2a48d7d45",
+    "mtime": 1795116051.0264244,
+    "seen": 1795116108.6468518,
+    "ast_hash": "2dfbc385789b1d5b0c45881b78e4f6f3",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SoldierFigure.java": {
@@ -2592,9 +2592,9 @@
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest.mixins.json": {
-    "mtime": 1795078970.1909993,
-    "seen": 1795079197.8493063,
-    "ast_hash": "743886134e9d7c9ea0b61b70a9dd510e",
+    "mtime": 1795116226.7156863,
+    "seen": 1795116475.9473476,
+    "ast_hash": "ff20ad457de37c58a5db86db8644dfad",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/RecruitsArrowCleanerMixin.java": {
@@ -3587,52 +3587,10 @@
     "ast_hash": "9dc3ce2c459caed7ad632c867404eb71",
     "semantic_hash": ""
   },
-  "src/main/java/rafasconquest/client/ArtilleryScreen.java": {
-    "mtime": 1794948094.5367787,
-    "seen": 1794953975.4445257,
-    "ast_hash": "ca03a071a6ce31f9c4a6123f1b59e04c",
-    "semantic_hash": ""
-  },
-  "src/main/java/rafasconquest/content/ArtilleryBlock.java": {
-    "mtime": 1795104481.4829917,
-    "seen": 1795104705.2427518,
-    "ast_hash": "d68a4e28fed2676208c4feb51c598a23",
-    "semantic_hash": ""
-  },
-  "src/main/java/rafasconquest/content/ArtilleryMount.java": {
-    "mtime": 1795104481.5279982,
-    "seen": 1795104705.242753,
-    "ast_hash": "82a3029120d18f62b3824c060b1e1ace",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/blockstates/artillery.json": {
-    "mtime": 1794616397.574891,
-    "seen": 1794616490.781198,
-    "ast_hash": "2b2d285bb61502fa4c9188c695d14560",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/models/block/artillery.json": {
-    "mtime": 1794616397.601267,
-    "seen": 1794616490.781227,
-    "ast_hash": "e2de11c20efc02fc1a65a53c2cbc5354",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/models/item/artillery.json": {
-    "mtime": 1794616397.6236022,
-    "seen": 1794616490.781251,
-    "ast_hash": "d052d8dc1313aa58c4541631d312cb4b",
-    "semantic_hash": ""
-  },
-  "src/main/resources/data/rafasconquest/loot_table/blocks/artillery.json": {
-    "mtime": 1794616397.6411197,
-    "seen": 1794616490.781303,
-    "ast_hash": "925f7eb6d2f6d005ceb3cc520974aee8",
-    "semantic_hash": ""
-  },
   "src/main/java/rafasconquest/client/OarFigures.java": {
-    "mtime": 1795114920.3748696,
-    "seen": 1795114958.7574184,
-    "ast_hash": "ad024efec202c5bc38bd0865a1f41a29",
+    "mtime": 1795115805.593808,
+    "seen": 1795116108.6468425,
+    "ast_hash": "16534cdc15ecdd62660d709d2b9c9630",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/Sail.java": {
@@ -4266,9 +4224,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/UnitCardsTest.java": {
-    "mtime": 1795104441.3244011,
-    "seen": 1795104705.2433896,
-    "ast_hash": "b0a3e321eb72744fb79241c40f2c7faf",
+    "mtime": 1795116434.0355446,
+    "seen": 1795116475.9474373,
+    "ast_hash": "bdb4733d066e2552b5f13b6a72c23f03",
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest_units/arms/gunship.json": {
@@ -4391,12 +4349,6 @@
     "ast_hash": "b2abcac19413116f8a369014cc52912e",
     "semantic_hash": ""
   },
-  "src/main/java/rafasconquest/mixin/SiegeworksShipCollisionMixin.java": {
-    "mtime": 1795070222.5084112,
-    "seen": 1795070445.8396068,
-    "ast_hash": "9a1b31acd84ee2534204cb38a833c042",
-    "semantic_hash": ""
-  },
   "src/main/java/rafasconquest/client/map/FleetFigure.java": {
     "mtime": 1795060817.2351635,
     "seen": 1795061096.0014033,
@@ -4413,54 +4365,6 @@
     "mtime": 1795110716.2694623,
     "seen": 1795113447.3610687,
     "ast_hash": "855c7a8648a8fbf91b56a4e1f980b48b",
-    "semantic_hash": ""
-  },
-  "src/main/java/rafasconquest/content/MountedCannonBlock.java": {
-    "mtime": 1795104481.781734,
-    "seen": 1795104705.2427797,
-    "ast_hash": "e922e451542b21156b0e7e6eedf7a231",
-    "semantic_hash": ""
-  },
-  "src/main/java/rafasconquest/mixin/FieldGunMountedMixin.java": {
-    "mtime": 1795078970.0513124,
-    "seen": 1795079197.8488955,
-    "ast_hash": "30bf52f3b6acae9bd2d105a306457afc",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/blockstates/mounted_light_cannon.json": {
-    "mtime": 1795078979.6764064,
-    "seen": 1795079197.8490875,
-    "ast_hash": "f22f4757e9822cb9c8819c0f3ee70b10",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/models/block/mounted_light_cannon.json": {
-    "mtime": 1795078979.7234247,
-    "seen": 1795079197.8491213,
-    "ast_hash": "1ee7e723be15127e52565cb1e010de99",
-    "semantic_hash": ""
-  },
-  "src/main/resources/assets/rafasconquest/models/item/mounted_light_cannon.json": {
-    "mtime": 1795078979.7707129,
-    "seen": 1795079197.8491573,
-    "ast_hash": "6cfcdf502912dba4725646dbfb783029",
-    "semantic_hash": ""
-  },
-  "src/main/resources/data/rafasconquest/loot_table/blocks/mounted_light_cannon.json": {
-    "mtime": 1795078979.8082986,
-    "seen": 1795079197.849217,
-    "ast_hash": "5882b35759be761d212168316e91608c",
-    "semantic_hash": ""
-  },
-  "src/main/resources/rafasconquest_units/arms/gunship2.json": {
-    "mtime": 1795078979.9230607,
-    "seen": 1795079197.8493264,
-    "ast_hash": "1eb2e48c909b6da5fc439229862a7183",
-    "semantic_hash": ""
-  },
-  "src/main/resources/rafasconquest_units/ships/gunship2.json": {
-    "mtime": 1795078979.8770075,
-    "seen": 1795079197.8493698,
-    "ast_hash": "2f558f9906719fd8cc81946ee9a5368c",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/MediumCannonBlock.java": {
@@ -4512,9 +4416,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CannonShots.java": {
-    "mtime": 1795114850.0332613,
-    "seen": 1795114958.757497,
-    "ast_hash": "71774acac656a89385e23461aab04caf",
+    "mtime": 1795116091.7770746,
+    "seen": 1795116108.64692,
+    "ast_hash": "7b9883a840f6cb28e2a2965e7b15de12",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/MediumCannonEntity.java": {
@@ -4551,6 +4455,12 @@
     "mtime": 1795113241.5374043,
     "seen": 1795113447.3610067,
     "ast_hash": "a209d80430272f967a1d4022c2b0b8eb",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/client/DeckLiftTest.java": {
+    "mtime": 1795115899.5353734,
+    "seen": 1795116108.6475723,
+    "ast_hash": "842ca79ace78d13cf5de0f8b9468f400",
     "semantic_hash": ""
   }
 }

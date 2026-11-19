@@ -89,9 +89,9 @@ public final class ShipHulls {
     }
 
     /**
-     * A card's guns and crew posts, from its hull: each Artillery Block's engine on the side it stands (right -x, left
+     * A card's guns and crew posts, from its hull: each gun block's engine on the side it stands (right -x, left
      * +x, both on the centreline), and its hull file's Character Markers, each a post for as many soldiers as it says;
-     * a post beside an Artillery Block (within a block) works that gun, the first post there only.
+     * a post beside a gun block (within a block) works that gun, the first post there only.
      */
     private static void fit(SeaLanes.Size size) {
         List<Part> parts = hull(size, false);
@@ -127,12 +127,9 @@ public final class ShipHulls {
         size.posts = List.copyOf(posts);
     }
 
-    /** The engine a gun block holds, by id (an Artillery Block's weapon, or the Medium Cannon); null for any other block. */
+    /** The engine a gun block holds, by id (the Medium Cannon: ships carry only our own guns); null for any other block. */
     @org.jetbrains.annotations.Nullable
     public static String gunOf(BlockState state) {
-        if (state.getBlock() instanceof rafasconquest.content.ArtilleryBlock) {
-            return state.getValue(rafasconquest.content.ArtilleryBlock.WEAPON).getSerializedName();
-        }
         return state.getBlock() instanceof rafasconquest.content.MediumCannonBlock ? rafasconquest.battle.Machine.MEDIUM_CANNON.id : null;
     }
 
@@ -324,16 +321,16 @@ public final class ShipHulls {
     }
 
     /**
-     * A warship made a gunship: over its full-beam middle, every third plank of the deck rail down both sides an Artillery
-     * Block (culverin) facing out, its gun standing on the deck in that gap (ArtilleryBlock.ARMED), and a Character Marker
-     * inboard of each for its gunner. The card's {@code gun_block} takes the Artillery Block's place (a Mounted Light Cannon's).
+     * A warship made a gunship: over its full-beam middle, every third plank of the deck rail down both sides a Medium
+     * Cannon facing out, and a Character Marker
+     * inboard of each for its gunner. The card's {@code gun_block} names the gun block (a Medium Cannon).
      */
     private static List<Part> gunned(List<Part> rowed, SeaLanes.Size size) {
         int beam = size.width / 2;
         int half = size.length / 2;
         net.minecraft.world.level.block.Block named = net.minecraft.core.registries.BuiltInRegistries.BLOCK
                 .get(net.minecraft.resources.ResourceLocation.tryParse(size.gunBlock));
-        BlockState gun = (gunOf(named.defaultBlockState()) != null ? named : ConquestContent.ARTILLERY.get()).defaultBlockState();
+        BlockState gun = (gunOf(named.defaultBlockState()) != null ? named : ConquestContent.MEDIUM_CANNON.get()).defaultBlockState();
         Set<Long> guns = new java.util.LinkedHashSet<>(); // in order, so the file and its posts come out the same each time
         Integer first = null;
         for (int z = -half; z <= half; z++) {

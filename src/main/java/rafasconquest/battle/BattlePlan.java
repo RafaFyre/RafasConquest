@@ -162,9 +162,7 @@ public final class BattlePlan {
         public static final Arm LARGE_SHIP = builtIn("large_ship");
         public static final Arm FLAGSHIP = builtIn("flagship");
         public static final Arm UNIT_SHIP = builtIn("unit_ship");
-        /** A Gunship 2's crew: a Gunship whose guns are Mounted Light Cannons. Last, so the cards before keep their numbers. */
-        public static final Arm GUNSHIP_2 = builtIn("gunship2");
-        /** The Medium Cannon's crews: only how its shots look and sound in the numbers; never on a roster. Last, as Gunship 2. */
+        /** The Medium Cannon's crews: only how its shots look and sound in the numbers; never on a roster. Last, so the cards before keep their numbers. */
         public static final Arm MEDIUM_CANNONS = builtIn("medium_cannons");
 
         public final String id;
