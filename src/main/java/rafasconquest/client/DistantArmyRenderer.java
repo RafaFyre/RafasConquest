@@ -107,6 +107,7 @@ public final class DistantArmyRenderer {
         }
 
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
+        DistantShips.rideDecks(formations, figures, lastShips);
         FarFlags.figures(formations, figures);
         boolean[] seen = new boolean[formations.size()];
         int[] light = new int[formations.size()];
@@ -449,6 +450,7 @@ public final class DistantArmyRenderer {
      */
     public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
         List<DistantShips.Far> ships = DistantShips.all(partialTick);
+        lastShips = ships;
         Vector3f left = camera.getLeftVector();
         double length = Math.hypot(left.x(), left.z());
         if (ships.isEmpty() || length < 1e-6) {
@@ -490,6 +492,9 @@ public final class DistantArmyRenderer {
         }
         FigureBatches.draw(pose.last().pose());
     }
+
+    /** The ships drawn last frame, whose float the figures on their decks ride (figures are drawn before ships). Render thread only. */
+    private static List<DistantShips.Far> lastShips = List.of();
 
     /** How many blocks nearer the camera a real ship's copy is drawn, so it covers the real one's depth. */
     private static final double REAL_SHIP_PULL = 4;

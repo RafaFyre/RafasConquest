@@ -32,7 +32,7 @@ final class SableSeen {
     /**
      * Where each Sable sub-level the client has is and how it lies: {x, z, yaw, fore, port}, the yaw a turn about the up
      * axis taking +z to its bow (as {@code Quaterniond.rotationY} turns), fore and port its deck's rise per block toward
-     * the bow and toward its +x side; none without Sable.
+     * the bow and toward its +x side, keel its keel's height at its middle; none without Sable.
      */
     static List<double[]> ships(ClientLevel level) {
         if (broken || !SableLink.available()) {
@@ -52,8 +52,12 @@ final class SableSeen {
                     Vector3d port = new Quaterniond(pose.orientation()).transform(new Vector3d(1, 0, 0));
                     // The middle of its blocks, not its pose's position (the point it turns about, its centre of mass).
                     Vector3d middle = sub.boundingBox().center();
+                    // Its keel's height at the middle of its blocks, as the server holds it (BattleShips.middle).
+                    BoundingBox3ic plot = sub.getPlot().getBoundingBox();
+                    double keel = pose.transformPosition(new Vector3d((plot.minX() + plot.maxX() + 1) / 2.0, plot.minY(),
+                            (plot.minZ() + plot.maxZ() + 1) / 2.0)).y;
                     ships.add(new double[]{middle.x, middle.z, Math.atan2(bow.x, bow.z),
-                            bow.y / Math.max(1e-6, Math.hypot(bow.x, bow.z)), port.y / Math.max(1e-6, Math.hypot(port.x, port.z))});
+                            bow.y / Math.max(1e-6, Math.hypot(bow.x, bow.z)), port.y / Math.max(1e-6, Math.hypot(port.x, port.z)), keel});
                 }
             }
             return ships;
