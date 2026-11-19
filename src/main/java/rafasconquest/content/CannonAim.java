@@ -72,11 +72,40 @@ public final class CannonAim {
         double dx = to.x - from.x;
         double dz = to.z - from.z;
         double d = Math.max(1e-6, Math.hypot(dx, dz));
-        double h = to.y - from.y;
         double v2 = SPEED * SPEED;
-        double root = v2 * v2 - GRAVITY * (GRAVITY * d * d + 2 * h * v2);
-        double angle = root < 0 ? Math.toRadians(45) : Math.atan((v2 - Math.sqrt(root)) / (GRAVITY * d));
+        double angle = 0;
+        // A ball moves, then falls (CannonShots.fly): over n ticks it drops g*n*(n-1)/2, half a tick's fall a tick less
+        // than the smooth parabola, so it would fly g*n/2 high. Solved for a mark lowered by that, its flight time from
+        // the last solution: twice settles it.
+        for (int pass = 0; pass < 3; pass++) {
+            double n = d / (SPEED * Math.cos(angle));
+            double h = to.y - from.y - GRAVITY * n / 2;
+            double root = v2 * v2 - GRAVITY * (GRAVITY * d * d + 2 * h * v2);
+            if (root < 0) {
+                angle = Math.toRadians(45);
+                break;
+            }
+            angle = Math.atan((v2 - Math.sqrt(root)) / (GRAVITY * d));
+        }
         return new Vector3d(dx / d * Math.cos(angle), Math.sin(angle), dz / d * Math.cos(angle));
+    }
+
+    /**
+     * Where to lay for a mark at {@code to} moving {@code v} blocks a tick: ahead of it by its way over the ball's
+     * flight, the flight timed from the lead mark again (twice settles it).
+     */
+    public static Vector3d lead(Vector3d from, Vector3d to, Vector3d v) {
+        Vector3d at = new Vector3d(to);
+        for (int pass = 0; pass < 2; pass++) {
+            double n = Math.hypot(at.x - from.x, at.z - from.z) / (SPEED * Math.cos(Math.asin(Math.min(1, ballistic(from, at).y))));
+            at.set(to).add(v.x * n, v.y * n, v.z * n);
+        }
+        return at;
+    }
+
+    /** Whether a lay is inside its arc: one held at an edge ({@link #layFor}) doesn't point at its mark. */
+    public static boolean bears(double[] lay) {
+        return Math.abs(lay[0]) < ARC && Math.abs(lay[1]) < ARC;
     }
 
     public static double clamp(double degrees) {

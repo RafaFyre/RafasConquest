@@ -6,6 +6,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -39,7 +40,10 @@ public class MediumCannonEntity extends BlockEntity {
     private static final double LEAVE = 4.5;
     /** How fast its crew lays it, degrees a tick; laid within {@link #ON} of the mark, it fires. */
     private static final double SLEW = 3;
-    private static final double ON = 1.5;
+    // A degree of elevation is some eight blocks of range at gun range: it fires laid, not still coming onto it.
+    private static final double ON = 0.25;
+    /** A mark moving faster than this, blocks a tick, between orders is another mark: no way to lead it by. */
+    private static final double MOST_WAY = 0.5;
     /** An order not renewed in this many ticks has lapsed. */
     private static final int ORDER_TICKS = 60;
     /** Clients learn its lay at most this often, ticks. */
@@ -49,7 +53,7 @@ public class MediumCannonEntity extends BlockEntity {
     public enum Shot { ROUNDSHOT }
 
     /** The battle's orders, by soldier: where to fire and with what. Server thread only. */
-    private record Order(Vec3 at, Shot shot, long tick) {
+    private record Order(Vec3 at, Vec3 way, Shot shot, long tick) {
     }
 
     private static final Map<UUID, Order> ORDERS = new java.util.HashMap<>();
@@ -79,7 +83,17 @@ public class MediumCannonEntity extends BlockEntity {
         if (ORDERS.size() > 1024) {
             ORDERS.values().removeIf(o -> tick - o.tick() > ORDER_TICKS); // soldiers gone without being let go
         }
-        ORDERS.put(crew, new Order(at, shot, tick));
+        // Its mark's way, from the last order: what it is led by (lay).
+        // shortcut: a new mark near the last reads as way for one order; pass the mark's own velocity if that shows.
+        Order last = ORDERS.get(crew);
+        Vec3 way = Vec3.ZERO;
+        if (last != null && tick > last.tick() && tick - last.tick() <= ORDER_TICKS) {
+            way = at.subtract(last.at()).scale(1.0 / (tick - last.tick()));
+            if (way.lengthSqr() > MOST_WAY * MOST_WAY) {
+                way = Vec3.ZERO;
+            }
+        }
+        ORDERS.put(crew, new Order(at, way, shot, tick));
     }
 
     /** Whether {@code soldier} works a Medium Cannon now. */
@@ -115,7 +129,7 @@ public class MediumCannonEntity extends BlockEntity {
             take(crew);
         }
         if (!(crew instanceof Player)) {
-            Vec3 mark = mark(crew, now);
+            Order mark = mark(crew, now);
             if (mark != null) {
                 lay(level, state, base, mark);
             }
@@ -123,27 +137,36 @@ public class MediumCannonEntity extends BlockEntity {
         flush(level, now);
     }
 
-    /** Where its crew is to fire: the battle's order for them, else their own target; null for nowhere. */
+    /**
+     * Where its crew is to fire, now, and the mark's way: the battle's order for them (carried on by its way since it
+     * was given), else their own target; null for nowhere.
+     */
     @Nullable
-    private Vec3 mark(Entity crew, long now) {
+    private Order mark(Entity crew, long now) {
         Order o = ORDERS.get(crew.getUUID());
         if (o != null && now - o.tick() <= ORDER_TICKS) {
             shot = o.shot();
-            return o.at();
+            return new Order(o.at().add(o.way().scale(now - o.tick())), o.way(), o.shot(), now);
         }
         if (crew instanceof Mob mob && mob.getTarget() != null && mob.getTarget().isAlive()) {
-            return mob.getTarget().position().add(0, mob.getTarget().getBbHeight() * 0.5, 0);
+            LivingEntity t = mob.getTarget();
+            return new Order(t.position().add(0, t.getBbHeight() * 0.5, 0), t.getDeltaMovement(), shot, now);
         }
         return null;
     }
 
-    /** Its crew lays it toward {@code mark} a little each tick, and fires once it bears and is loaded. */
-    private void lay(ServerLevel level, BlockState state, Vec3 base, Vec3 mark) {
+    /**
+     * Its crew lays it toward its mark, led by the mark's way over the ball's flight, a little each tick, and fires once
+     * it is laid on it and loaded: never held at the edge of its arc, short of where it must point.
+     */
+    private void lay(ServerLevel level, BlockState state, Vec3 base, Order mark) {
         Quaterniond ship = SableLink.turnAt(level, worldPosition);
         double facing = CannonAim.facing(state.getValue(MediumCannonBlock.FACING));
         Quaterniond carriage = CannonAim.carriage(ship, facing, yaw);
         Vector3d muzzle = CannonAim.muzzle(carriage, CannonAim.barrel(carriage, pitch)).add(base.x, base.y, base.z);
-        double[] want = CannonAim.layFor(CannonAim.ballistic(muzzle, new Vector3d(mark.x, mark.y, mark.z)), ship, facing);
+        Vector3d at = CannonAim.lead(muzzle, new Vector3d(mark.at().x, mark.at().y, mark.at().z),
+                new Vector3d(mark.way().x, mark.way().y, mark.way().z));
+        double[] want = CannonAim.layFor(CannonAim.ballistic(muzzle, at), ship, facing);
         float y = step(yaw, want[0]);
         float p = step(pitch, want[1]);
         if (y != yaw || p != pitch) {
@@ -151,7 +174,7 @@ public class MediumCannonEntity extends BlockEntity {
             pitch = p;
             unsynced = true;
         }
-        if (Math.abs(want[0] - yaw) <= ON && Math.abs(want[1] - pitch) <= ON) {
+        if (CannonAim.bears(want) && Math.abs(want[0] - yaw) <= ON && Math.abs(want[1] - pitch) <= ON) {
             fire(level, gunner == null ? null : level.getEntity(gunner));
         }
     }

@@ -2550,13 +2550,19 @@ public final class RecruitsBattle {
         }
         for (int i = 0; i < l.soldiers.length; i++) {
             AbstractRecruitEntity s = l.soldiers[i];
-            if (s == null || !s.isAlive() || commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || s.isInWater()) {
-                continue;
+            if (s == null || !s.isAlive() || commanded.contains(s.getId()) || climbing.containsKey(s.getId()) || s.isInWater()
+                    || s.isPassenger()) {
+                continue; // a passenger works a gun, which rides the ship
             }
-            Point spot = field.deckSpot(l.block, i);
+            // The spot keepDeck sends them to: a gunship gunner's is their post, which may stand above or below the deck.
+            Point spot = shipSpot(l.block, i);
             double[] at = SableLink.onDeck(l.block.shipId(), spot.x(), spot.z());
             if (at == null) {
                 return;
+            }
+            rafasconquest.core.SeaLanes.Size.Post post = post(l.block, i);
+            if (post != null) {
+                at[1] += post.y() - l.block.hull().deck;
             }
             if (!pinned.containsKey(s.getId()) && (Math.hypot(s.getX() - at[0], s.getZ() - at[2]) > PIN_REACH
                     || Math.abs(s.getY() - at[1]) > PIN_REACH)) {
@@ -2666,10 +2672,15 @@ public final class RecruitsBattle {
         Point centre = ship == null ? block.pos() : new Point(ship[0], ship[1]);
         double dirX = ship == null ? block.facingX() : ship[2];
         double dirZ = ship == null ? block.facingZ() : ship[3];
+        Point spot = shipSpot(block, i);
+        return BattlePlan.place(centre, dirX, dirZ, spot.x(), spot.z());
+    }
+
+    /** Soldier i's deck spot in its ship's frame, {right, back} of its middle: a gunship gunner's post, else its section's. */
+    private Point shipSpot(FieldBlock block, int i) {
         rafasconquest.core.SeaLanes.Size.Post post = post(block, i);
         // A hull's right (seen from astern) is its -x, and astern its -z.
-        Point spot = post != null ? new Point(-post.x(), -post.z()) : field.deckSpot(block, i);
-        return BattlePlan.place(centre, dirX, dirZ, spot.x(), spot.z());
+        return post != null ? new Point(-post.x(), -post.z()) : field.deckSpot(block, i);
     }
 
     /**

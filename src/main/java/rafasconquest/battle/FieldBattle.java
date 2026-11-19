@@ -655,12 +655,12 @@ public final class FieldBattle {
                         b.prey = mark(b, enemy, previous);
                     }
                     case GUNSHIP -> {
-                        // Lies off its mark at gun range with one side to it: the side that faced it when it first
-                        // engaged, kept, so it bombards with that side and never comes about to show the other.
+                        // Sails round its mark at gun range, under way, with one side to it: the side that faced it
+                        // when it first engaged, kept, so it bombards with that broadside as it goes and never comes
+                        // about to show the other.
                         FieldBlock e = ordered != null ? ordered
                                 : previous != null && previous.side != b.side && previous.alive > 0 && previous.afloat ? previous : foe;
                         b.prey = e;
-                        b.line = standOff(b, e, gunRange(b));
                         double d = Math.max(1e-6, b.pos.distanceTo(e.pos));
                         double ux = (e.pos.x() - b.pos.x()) / d;
                         double uz = (e.pos.z() - b.pos.z()) / d;
@@ -669,6 +669,7 @@ public final class FieldBattle {
                         }
                         b.settleX = b.gunSide * uz; // the heading whose (-z, x) side, times gunSide, points at the mark
                         b.settleZ = -b.gunSide * ux;
+                        b.line = circling(e.pos, -ux, -uz, b.settleX, b.settleZ, gunRange(b));
                     }
                     case SWORDSMEN -> {
                         Target t = claim(b, ordered != null ? List.of(ordered) : boardable, previous, taken);
@@ -838,6 +839,19 @@ public final class FieldBattle {
     private static Ramming.Hull footprint(FieldBlock b) {
         rafasconquest.core.SeaLanes.Size size = b.hull; // the general's a size up, a unit's the biggest
         return new Ramming.Hull(b.pos.x(), b.pos.z(), b.facingX, b.facingZ, size.length / 2.0, size.width / 2.0, 0, 0);
+    }
+
+    /** How far ahead round its mark a gunship makes for, radians: never reached, so it keeps under way, its mark abeam. */
+    static final double CIRCLE_LEAD = Math.toRadians(35);
+
+    /**
+     * The point {@code keep} from {@code centre}, {@link #CIRCLE_LEAD} on round from the radial ({@code rx, rz}, centre
+     * to ship) toward the heading ({@code tx, tz}, at right angles to it): sailing for it, a ship circles {@code centre}.
+     */
+    static Point circling(Point centre, double rx, double rz, double tx, double tz, double keep) {
+        double c = Math.cos(CIRCLE_LEAD);
+        double s = Math.sin(CIRCLE_LEAD);
+        return centre.plus((rx * c + tx * s) * keep, (rz * c + tz * s) * keep);
     }
 
     /** The point {@code keep} blocks from {@code foe}, on the line from it to {@code b}. */

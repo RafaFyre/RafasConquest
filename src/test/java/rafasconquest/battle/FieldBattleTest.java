@@ -865,6 +865,39 @@ class FieldBattleTest {
     }
 
     @Test
+    void aGunshipSailsRoundItsMarkUnderWayWithOneBroadsideToIt() {
+        // At (100, 0) bow to +z, its mark at the origin lies off its right side, (-z, x): gunSide 1.
+        FieldBlock g = new FieldBlock(1, 0, Arm.GUNSHIP, 20, FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false,
+                new Point(100, 0), 0, 1, Duty.FRONT);
+        g.pos = new Point(100, 0);
+        g.hull = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        g.ship = FieldBlock.ShipKind.GUNSHIP;
+        g.gunSide = 1;
+        Point mark = new Point(0, 0);
+        double keep = 100;
+        double swept = 0;
+        double last = Math.atan2(g.pos.z(), g.pos.x());
+        for (int s = 0; s < 120; s++) {
+            double d = g.pos.distanceTo(mark);
+            double ux = (mark.x() - g.pos.x()) / d;
+            double uz = (mark.z() - g.pos.z()) / d;
+            g.settleX = g.gunSide * uz;
+            g.settleZ = -g.gunSide * ux;
+            Point to = FieldBattle.circling(mark, -ux, -uz, g.settleX, g.settleZ, keep);
+            assertTrue(g.pos.distanceTo(to) > FieldBattle.AT_PLACE, "it got there and stopped");
+            FieldBattle.sail(g, to, List.of(g));
+            double now = Math.atan2(g.pos.z(), g.pos.x());
+            swept += Math.atan2(Math.sin(now - last), Math.cos(now - last));
+            last = now;
+            if (s > 40) {
+                assertEquals(keep, g.pos.distanceTo(mark), keep * 0.25, "it keeps at gun range");
+                assertEquals(1, FieldBattle.gunSide(g, mark), "its mark stays off its one broadside");
+            }
+        }
+        assertTrue(Math.abs(swept) > Math.PI, "it sailed only " + Math.toDegrees(swept) + " degrees round its mark");
+    }
+
+    @Test
     void aGunshipsMarkedSideFiresOnlyAtItsMarkAndTheOtherAtWill() {
         rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
         List<String> right = gunship.gunsRight;
