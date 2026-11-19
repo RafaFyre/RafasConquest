@@ -106,7 +106,9 @@ public final class CannonShots {
             return true;
         }
         BlockHitResult hit = level.clip(new ClipContext(b.at, next, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, CollisionContext.empty()));
-        Vec3 end = hit.getType() == HitResult.Type.MISS ? next : hit.getLocation();
+        // On a ship, Sable gives the hit in its plot's frame, millions of blocks off: back into the world, where the ball
+        // and whoever it strikes are (else strike's box spans the gap, Sable refuses it, and nobody aboard is hurt).
+        Vec3 end = hit.getType() == HitResult.Type.MISS ? next : rafasconquest.bridge.SableLink.outOfPlot(level, hit.getLocation());
         strike(level, b, b.at, end);
         if (b.v.lengthSquared() < SPENT * SPENT) {
             return false;

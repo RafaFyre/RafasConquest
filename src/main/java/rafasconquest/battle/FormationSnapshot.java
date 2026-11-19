@@ -63,9 +63,35 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
     /**
      * A formation's ship at sea, as its real one is built ({@link rafasconquest.style.ShipHulls#battle}): its sail's and
      * its stripe's dye colours (DyeColor ids), and its hull (a {@link rafasconquest.core.SeaLanes.Size} ordinal; -1 for a
-     * block aboard a ship another block of its unit draws).
+     * block aboard a ship another block of its unit draws). Aboard a gunship, {@code gun} is that gunship's hull (every
+     * block of its crew, so each stands at its own posts, {@link #layout}) and {@code berth} the block's place in its crew;
+     * -1 and 0 aboard any other ship. The formation then stands at its ship's middle, facing its bow.
      */
-    public record Ship(int sail, int stripe, int hull) {
+    public record Ship(int sail, int stripe, int hull, int gun, int berth) {
+        public Ship(int sail, int stripe, int hull) {
+            this(sail, stripe, hull, -1, 0);
+        }
+
+        /** The gunship this crew stands at the guns of; null aboard any other ship. */
+        @Nullable
+        public rafasconquest.core.SeaLanes.Size gunship() {
+            if (gun < 0) {
+                return null;
+            }
+            rafasconquest.core.SeaLanes.Size size = rafasconquest.core.SeaLanes.Size.get(gun);
+            return size == null || size.posts.isEmpty() ? null : size;
+        }
+    }
+
+    /**
+     * Where a gunship's post stands, its hull-frame ({@code across} as the hull's x, {@code up} from its keel, {@code along}
+     * to its bow) for a ship whose middle is here, facing its bow: as the real ship's gunners stand (RecruitsBattle.deckSpot).
+     */
+    public double[] onHull(rafasconquest.core.SeaLanes.Size hull, double across, double up, double along) {
+        // A hull's right (seen from astern) is its -x, and astern its -z; the formation's feet are on its deck.
+        double right = -across;
+        double back = -along;
+        return new double[]{x - facingZ * right - facingX * back, y + up - 1 - hull.deck, z + facingX * right - facingZ * back};
     }
 
     /** Aboard its ship, at sea. */
@@ -158,6 +184,20 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
         if (alive <= 0) {
             return sprites;
         }
+        rafasconquest.core.SeaLanes.Size gunship = ship == null ? null : ship.gunship();
+        if (gunship != null) {
+            // A gunship's crew at its posts, block by block in crew order, as the real ones stand; past the last post, below decks.
+            for (int i = 0; i < alive; i++) {
+                int n = ship.berth() * BattlePlan.SOLDIERS_PER_FORMATION + i;
+                if (n >= gunship.posts.size()) {
+                    break;
+                }
+                rafasconquest.core.SeaLanes.Size.Post post = gunship.posts.get(n);
+                double[] at = onHull(gunship, post.x(), post.y(), post.z());
+                sprites.add(new Sprite(at[0], at[1], at[2], leader && i == 0, false));
+            }
+            return sprites;
+        }
         double width = Math.max(halfWidth, MIN_HALF_EXTENT) * 2;
         double depth = Math.max(halfDepth, MIN_HALF_EXTENT) * 2;
         int files = (int) Math.max(1, Math.min(alive, Math.round(Math.sqrt(alive * width / depth))));
@@ -202,7 +242,9 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
                 if (ranks == null) {
                     ranks = layout();
                 }
-                sprites.add(ranks.get(i));
+                if (i < ranks.size()) { // a gunship's crew past its posts is below decks: not drawn
+                    sprites.add(ranks.get(i));
+                }
                 continue;
             }
             double[] feet = positions.of(soldierIds[i]);

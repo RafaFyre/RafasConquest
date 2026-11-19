@@ -142,4 +142,41 @@ class FormationSnapshotTest {
             previous = drawn;
         }
     }
+
+    /** A gunship's crew block, bow to +z with its middle at the origin, feet on its deck at y 64. */
+    private static FormationSnapshot gunCrew(int alive, int berth, int[] ids) {
+        rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        return new FormationSnapshot(5, Kind.ENGINES, 0, 0, alive, 0, 64, 0, 0, 1, 0, 0, false, false, ids, -1,
+                new FormationSnapshot.Ship(0, 0, -1, gunship.ordinal(), berth));
+    }
+
+    @Test
+    void aGunshipsFarCrewStandsAtItsPostsNotInABlockMidDeck() {
+        rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        List<rafasconquest.core.SeaLanes.Size.Post> posts = gunship.posts;
+        assertTrue(posts.size() > BattlePlan.SOLDIERS_PER_FORMATION, "the gunship's crew is more than one block");
+        List<Sprite> first = gunCrew(20, 0, new int[0]).layout();
+        assertEquals(20, first.size());
+        for (int i = 0; i < first.size(); i++) {
+            // Bow to +z, the hull's frame is the world's: each figure on its own post, on the deck it stands on.
+            rafasconquest.core.SeaLanes.Size.Post p = posts.get(i);
+            assertEquals(p.x(), first.get(i).x(), 1e-9);
+            assertEquals(p.z(), first.get(i).z(), 1e-9);
+            assertEquals(64 + p.y() - 1 - gunship.deck, first.get(i).y(), 1e-9);
+        }
+        // The second block takes the posts after the first's; the rest of it is below decks, not drawn.
+        List<Sprite> second = gunCrew(20, 1, new int[0]).place(id -> null);
+        assertEquals(posts.size() - BattlePlan.SOLDIERS_PER_FORMATION, second.size());
+        assertEquals(posts.get(BattlePlan.SOLDIERS_PER_FORMATION).x(), second.get(0).x(), 1e-9);
+    }
+
+    @Test
+    void aGunCrewSoldierTheClientLacksIsDrawnAtTheirPost() {
+        rafasconquest.core.SeaLanes.Size.Post p = rafasconquest.core.SeaLanes.Size.GUNSHIP.posts.get(1);
+        List<Sprite> sprites = gunCrew(2, 0, new int[]{100, 101}).place(id -> id == 100 ? new double[]{7, 70, 7} : null);
+        assertEquals(7, sprites.get(0).x(), 1e-9);
+        assertTrue(sprites.get(0).real());
+        assertEquals(p.x(), sprites.get(1).x(), 1e-9);
+        assertEquals(p.z(), sprites.get(1).z(), 1e-9);
+    }
 }

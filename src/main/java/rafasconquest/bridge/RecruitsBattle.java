@@ -2163,14 +2163,13 @@ public final class RecruitsBattle {
     private final Map<Integer, LivingEntity> cannonMarks = new HashMap<>();
 
     /**
-     * A Medium Cannon's crew is given its mark as a Siegeworks gunner is ({@link #aimGun}), twice a second; the cannon
-     * itself lays and fires ({@link rafasconquest.content.MediumCannonEntity}). Its shot is roundshot until captains choose.
+     * A Medium Cannon's crew is given its mark as a Siegeworks gunner is ({@link #aimGun}), each battle second (passOnOrders);
+     * the cannon itself lays and fires ({@link rafasconquest.content.MediumCannonEntity}). Its shot is roundshot until
+     * captains choose. (A gate on the soldier's id here, every tenth tick, met the once-a-second orders for only one
+     * gunner in ten: the rest never had a mark.)
      */
     private void aimCannon(AbstractRecruitEntity s, FieldBlock block) {
         long now = level.getGameTime();
-        if ((now + s.getId()) % 10 != 0) {
-            return;
-        }
         GunMark m = gunMark(s, block, rafasconquest.battle.Machine.MEDIUM_CANNON.reach, cannonMarks.get(s.getId()));
         if (m.target() == null) {
             cannonMarks.remove(s.getId());
@@ -2562,7 +2561,7 @@ public final class RecruitsBattle {
             }
             rafasconquest.core.SeaLanes.Size.Post post = post(l.block, i);
             if (post != null) {
-                at[1] += post.y() - l.block.hull().deck;
+                at[1] += post.y() - 1 - l.block.hull().deck; // onDeck is feet on the deck; a post's marker stands one over it
             }
             if (!pinned.containsKey(s.getId()) && (Math.hypot(s.getX() - at[0], s.getZ() - at[2]) > PIN_REACH
                     || Math.abs(s.getY() - at[1]) > PIN_REACH)) {
@@ -3563,6 +3562,9 @@ public final class RecruitsBattle {
                 AbstractRecruitEntity s = l.soldiers[i];
                 if (s == null || !s.isAlive() || commanded.contains(s.getId())) {
                     continue;
+                }
+                if (b.afloat() && post(b, i) != null) {
+                    continue; // a gunship's gunner stays at their gun: an officer commands the ship, not its gun crews
                 }
                 if (e.given.size() >= e.quota) {
                     return any;
@@ -6912,7 +6914,8 @@ public final class RecruitsBattle {
                     Point centre = ship != null ? new Point(ship[0], ship[1]) : block.pos();
                     double fx = ship != null ? ship[2] : block.facingX();
                     double fz = ship != null ? ship[3] : block.facingZ();
-                    Point at = block == field.holder(block) ? centre : BattlePlan.place(centre, fx, fz, section.x(), section.z());
+                    // A gunship's crew stands at its posts about the ship's middle (FormationSnapshot.layout).
+                    Point at = block == field.holder(block) || gunCrew(block) ? centre : BattlePlan.place(centre, fx, fz, section.x(), section.z());
                     all.add(new FormationSnapshot(block.id(), kind, s.uniform, s.mark, shown, at.x(),
                             level.getSeaLevel() + block.hull().deck, at.z(), fx, fz, // feet on the deck: keel a block under the sea, deck DECK + 1 over it
                             lone ? 0 : FieldBattle.DECK_FILES * FieldBattle.DECK_SPACING / 2, lone ? 0 : ranks * FieldBattle.DECK_SPACING / 2,
@@ -7000,15 +7003,23 @@ public final class RecruitsBattle {
         }
         FactionBanner flag = FactionBanner.of(sides[block.side()].faction.id());
         return new FormationSnapshot.Ship(flag.base(), flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(),
-                block == field.holder(block) ? block.hull().ordinal() : -1);
+                block == field.holder(block) ? block.hull().ordinal() : -1, gunCrew(block) ? block.hull().ordinal() : -1, block.berth());
+    }
+
+    /** Whether a block is a gunship's crew, at its posts (post): its far figures stand there too (FormationSnapshot.layout). */
+    private static boolean gunCrew(FieldBlock block) {
+        return block.afloat() && block.ship() == FieldBlock.ShipKind.GUNSHIP && !block.hull().posts.isEmpty();
     }
 
     /**
      * A real block, from where its real soldiers stand (with their entity ids) and, for a block only part real, where
      * the rest stand in its ranks (with no id, so the client draws them as figures there), in the order of the ranks.
      */
-    private static FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, double[] face, Live l,
-                                                  List<AbstractRecruitEntity> soldiers, @Nullable FormationSnapshot.Ship ship) {
+    private FormationSnapshot liveSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, double[] face, Live l,
+                                           List<AbstractRecruitEntity> soldiers, @Nullable FormationSnapshot.Ship ship) {
+        if (gunCrew(block)) {
+            return gunCrewSnapshot(block, kind, side, l, ship);
+        }
         float[] health = block.health();
         Point front = front(block, health);
         double groundY = 0;
@@ -7050,6 +7061,33 @@ public final class RecruitsBattle {
         }
         return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, face[0], face[1],
                 block.fighting(), leaderId >= 0, ids, leaderId, ship);
+    }
+
+    /**
+     * A real gunship crew: at its ship's middle, facing its bow, each soldier at their post in order (the real ones with
+     * their ids, the rest drawn at their posts by the client, FormationSnapshot.layout); those below decks aren't drawn.
+     */
+    private FormationSnapshot gunCrewSnapshot(FieldBlock block, FormationSnapshot.Kind kind, Side side, Live l,
+                                              @Nullable FormationSnapshot.Ship ship) {
+        double[] at = SableLink.shipAt(block.shipId());
+        Point centre = at != null ? new Point(at[0], at[1]) : block.pos();
+        double fx = at != null ? at[2] : block.facingX();
+        double fz = at != null ? at[3] : block.facingZ();
+        float[] health = block.health();
+        List<Integer> ids = new ArrayList<>();
+        for (int i = 0; i < health.length && post(block, i) != null; i++) {
+            AbstractRecruitEntity s = l.soldiers[i];
+            if (s != null && s.isAlive()) {
+                ids.add(s.getId());
+            } else if (s == null && health[i] > 0) {
+                ids.add(-1); // not real yet: at its post as a figure
+            }
+        }
+        AbstractRecruitEntity c = block.captain() >= 0 && block.captainAlive() ? l.soldiers[block.captain()] : null;
+        int leaderId = c != null && c.isAlive() ? c.getId() : -1;
+        return new FormationSnapshot(block.id(), kind, side.uniform, side.mark, ids.size(), centre.x(),
+                level.getSeaLevel() + block.hull().deck, centre.z(), fx, fz, 0, 0, block.fighting(), leaderId >= 0,
+                ids.stream().mapToInt(Integer::intValue).toArray(), leaderId, ship);
     }
 
     /** Tells everyone in the level that the battle's formations are gone. */

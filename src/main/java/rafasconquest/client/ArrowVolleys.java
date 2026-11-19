@@ -158,11 +158,20 @@ public final class ArrowVolleys {
             int arm = v < arms.length ? arms[v] : -1;
             Kind kind = Kind.of(arm);
             BattleSounds.Shot sound = BattlePlan.Arm.get(arm) == null ? null : BattleSounds.shot(BattlePlan.Arm.get(arm));
-            List<FormationSnapshot.Sprite> figures = archers.afloat() ? rail(archers, target) : archers.layout();
+            List<Vec3> guns = archers.afloat() ? guns(archers, target) : List.of();
+            List<FormationSnapshot.Sprite> figures = !guns.isEmpty() ? List.of() : archers.afloat() ? rail(archers, target) : archers.layout();
+            if (guns.isEmpty() && figures.isEmpty()) {
+                continue;
+            }
             int fired = Math.min(shots[v], MAX_PER_VOLLEY);
             for (int i = 0; i < fired; i++) {
-                FormationSnapshot.Sprite s = figures.get(RANDOM.nextInt(figures.size()));
-                Vec3 start = new Vec3(s.x(), s.y() + 1.4, s.z());
+                Vec3 start;
+                if (!guns.isEmpty()) {
+                    start = guns.get(RANDOM.nextInt(guns.size())); // a gunship's broadside leaves from its guns
+                } else {
+                    FormationSnapshot.Sprite s = figures.get(RANDOM.nextInt(figures.size()));
+                    start = new Vec3(s.x(), s.y() + 1.4, s.z());
+                }
                 // a recorded shot starts now; the shot leaves as its release comes
                 long when = now + RANDOM.nextInt(1000) + (sound == null ? 0 : sound.releaseMillis());
                 if (sound != null && i < MAX_SOUNDS_PER_VOLLEY) {
@@ -224,8 +233,28 @@ public final class ArrowVolleys {
     }
 
     /**
-     * A ship's figures on its side facing {@code target}, who shoot over that rail (a gunship's broadside leaves from the
-     * guns on that side); all of them if none stand there.
+     * A gunship's muzzles on its side facing {@code target}: each gun beside a post that works one, a block and a half
+     * outboard of the post, at a barrel's height; none for any other ship.
+     */
+    private static List<Vec3> guns(FormationSnapshot ship, FormationSnapshot target) {
+        rafasconquest.core.SeaLanes.Size hull = ship.ship() == null ? null : ship.ship().gunship();
+        if (hull == null) {
+            return List.of();
+        }
+        // The hull's right (seen from astern) is its -x: a gun at -x fires to the ship's right.
+        int side = (target.x() - ship.x()) * -ship.facingZ() + (target.z() - ship.z()) * ship.facingX() >= 0 ? -1 : 1;
+        List<Vec3> out = new ArrayList<>();
+        for (rafasconquest.core.SeaLanes.Size.Post p : hull.posts) {
+            if (!p.gun().isEmpty() && Integer.signum(p.x()) == side) {
+                double[] at = ship.onHull(hull, p.x() + side * 1.5, p.y(), p.z());
+                out.add(new Vec3(at[0], at[1] + 1, at[2]));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A ship's figures on its side facing {@code target}, who shoot over that rail; all of them if none stand there.
      */
     private static List<FormationSnapshot.Sprite> rail(FormationSnapshot ship, FormationSnapshot target) {
         List<FormationSnapshot.Sprite> figures = ship.layout();
