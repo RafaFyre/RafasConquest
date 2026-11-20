@@ -83,6 +83,9 @@ public final class ShipHulls {
     }
 
     private static List<Part> made(SeaLanes.Size size, boolean merchant) {
+        if (size == SeaLanes.Size.MAN_O_WAR) {
+            return manOWar(size);
+        }
         List<Part> plain = plain(size.length, size.width);
         return merchant ? plain : size.gunship() ? gunned(rowed(plain, size.length, size.width), size)
                 : rowed(plain, size.length, size.width);
@@ -290,7 +293,7 @@ public final class ShipHulls {
 
     /**
      * A battle ship's hull: its card's hull, its sails in its side's flag: {@code sail}'s dye with a band of {@code stripe}'s
-     * across their middle row. Each kind is built once and the same list handed out after, so the client can keep its shape by the list.
+     * across each sheet's middle row (a column's own run of sail blocks, so stacked sails and mast flags each get one). Each kind is built once and the same list handed out after, so the client can keep its shape by the list.
      */
     public static List<Part> battle(SeaLanes.Size size, DyeColor sail, DyeColor stripe) {
         return BATTLE.computeIfAbsent(new BattleKind(size, sail, stripe), k -> buildBattle(k.size(), k.sail(), k.stripe()));
@@ -303,19 +306,27 @@ public final class ShipHulls {
 
     private static List<Part> buildBattle(SeaLanes.Size size, DyeColor sail, DyeColor stripe) {
         List<Part> hull = hull(size, false);
-        int low = Integer.MAX_VALUE;
-        int high = Integer.MIN_VALUE;
+        Set<Long> sails = new HashSet<>();
         for (Part p : hull) {
             if (p.state().getBlock() instanceof SailBlock) {
-                low = Math.min(low, p.y());
-                high = Math.max(high, p.y());
+                sails.add(net.minecraft.core.BlockPos.asLong(p.x(), p.y(), p.z()));
             }
         }
-        int middle = (low + high) / 2;
         List<Part> parts = new ArrayList<>();
         for (Part p : hull) {
-            parts.add(p.state().getBlock() instanceof SailBlock && p.state().hasProperty(SailBlock.COLOR)
-                    ? new Part(p.x(), p.y(), p.z(), p.state().setValue(SailBlock.COLOR, p.y() == middle ? stripe : sail)) : p);
+            if (!(p.state().getBlock() instanceof SailBlock && p.state().hasProperty(SailBlock.COLOR))) {
+                parts.add(p);
+                continue;
+            }
+            int low = p.y();
+            int high = p.y();
+            while (sails.contains(net.minecraft.core.BlockPos.asLong(p.x(), low - 1, p.z()))) {
+                low--;
+            }
+            while (sails.contains(net.minecraft.core.BlockPos.asLong(p.x(), high + 1, p.z()))) {
+                high++;
+            }
+            parts.add(new Part(p.x(), p.y(), p.z(), p.state().setValue(SailBlock.COLOR, p.y() == (low + high) / 2 ? stripe : sail)));
         }
         return List.copyOf(parts);
     }
@@ -328,9 +339,7 @@ public final class ShipHulls {
     private static List<Part> gunned(List<Part> rowed, SeaLanes.Size size) {
         int beam = size.width / 2;
         int half = size.length / 2;
-        net.minecraft.world.level.block.Block named = net.minecraft.core.registries.BuiltInRegistries.BLOCK
-                .get(net.minecraft.resources.ResourceLocation.tryParse(size.gunBlock));
-        BlockState gun = (gunOf(named.defaultBlockState()) != null ? named : ConquestContent.MEDIUM_CANNON.get()).defaultBlockState();
+        BlockState gun = gunBlock(size);
         Set<Long> guns = new java.util.LinkedHashSet<>(); // in order, so the file and its posts come out the same each time
         Integer first = null;
         for (int z = -half; z <= half; z++) {
@@ -358,6 +367,106 @@ public final class ShipHulls {
             parts.add(new Part(x - Integer.signum(x), DECK + 1, z, ConquestContent.MARKER.get().defaultBlockState()));
         }
         return List.copyOf(parts);
+    }
+
+    /** The card's {@code gun_block}, if it names a gun block; else the Medium Cannon. */
+    private static BlockState gunBlock(SeaLanes.Size size) {
+        net.minecraft.world.level.block.Block named = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .get(net.minecraft.resources.ResourceLocation.tryParse(size.gunBlock));
+        return (gunOf(named.defaultBlockState()) != null ? named : ConquestContent.MEDIUM_CANNON.get()).defaultBlockState();
+    }
+
+    /**
+     * The Man O' War, a three-decker: a dark hull, a pale band along each gun row, narrowing to bow and stern as plain()'s;
+     * two closed gun decks under its open weather deck ({@code size.deck}), each deck a row of guns down both sides over
+     * the full-beam middle at gunned()'s spacing, a gunner's Character Marker inboard of each. A forecastle, a raised
+     * quarterdeck with the Helm, a bowsprit, and three masts (the main four blocks taller than the fore and mizzen), each
+     * with three sails under yards and a small flag at its head: sail blocks along the ship, so in battle they fly the
+     * side's colours as the sails do.
+     */
+    private static List<Part> manOWar(SeaLanes.Size size) {
+        BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
+        BlockState side = Blocks.DARK_OAK_PLANKS.defaultBlockState();
+        BlockState band = Blocks.BIRCH_PLANKS.defaultBlockState();
+        BlockState floor = Blocks.OAK_PLANKS.defaultBlockState();
+        BlockState mast = Blocks.SPRUCE_LOG.defaultBlockState();
+        BlockState yard = mast.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, Direction.Axis.X);
+        BlockState sprit = mast.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, Direction.Axis.Z);
+        BlockState sail = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.SOUTH);
+        BlockState flag = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.EAST);
+        BlockState gun = gunBlock(size);
+        BlockState marker = ConquestContent.MARKER.get().defaultBlockState();
+        int beam = size.width / 2;
+        int half = size.length / 2;
+        int top = size.deck;
+        int[] decks = {top - 6, top - 3, top}; // the lower and upper gun decks, then the weather deck
+        Map<Long, Part> at = new java.util.LinkedHashMap<>(); // a later block replaces an earlier one in its spot
+        Integer first = null;
+        for (int z = -half; z <= half; z++) {
+            int end = half - Math.abs(z);
+            int w = Math.min(beam, end * 2 * beam / Math.max(1, half / 2));
+            boolean forecastle = z > 0 && end <= 5;
+            boolean quarterdeck = z < 0 && end <= 6; // both clear of the full-beam middle, where the guns are
+            int rail = top + 1 + (forecastle ? 3 : quarterdeck ? 4 : 0);
+            for (int x = -w; x <= w; x++) {
+                put(at, x, 0, z, keel);
+                for (int d : decks) {
+                    put(at, x, d, z, floor);
+                }
+                if (rail > top + 1) {
+                    put(at, x, rail - 1, z, floor);
+                }
+                if (Math.abs(x) == w || end == 0) {
+                    for (int y = 1; y <= rail; y++) {
+                        put(at, x, y, z, y == decks[0] + 1 || y == decks[1] + 1 || y == decks[2] + 1 ? band : side);
+                    }
+                }
+            }
+            if (w == beam) {
+                first = first == null ? z : first;
+                if ((z - first) % 3 == 0) { // two planks between guns, as gunned()'s
+                    for (int d : decks) {
+                        put(at, -beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.WEST));
+                        put(at, beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.EAST));
+                        put(at, -beam + 1, d + 1, z, marker);
+                        put(at, beam - 1, d + 1, z, marker);
+                    }
+                }
+            }
+        }
+        // Fore, main, mizzen: where each stands, then its course's, topsail's and topgallant's heights.
+        int[][] masts = {{half - 13, 5, 5, 3}, {0, 7, 7, 3}, {-(half - 13), 5, 5, 3}};
+        for (int[] m : masts) {
+            int z = m[0];
+            int y = top + 5; // the course's foot, clear of the crews on deck
+            for (int i = 0; i < 3; i++) {
+                int w = beam - 2 * i;
+                for (int x = -w; x <= w; x++) {
+                    for (int r = 0; r < m[i + 1]; r++) {
+                        put(at, x, y + r, z + 1, sail); // hung before the mast, as plain()'s
+                    }
+                    put(at, x, y + m[i + 1], z + 1, yard); // and parts it from the sail above: three sheets, not one
+                }
+                y += m[i + 1] + 1;
+            }
+            for (int h = 1; h <= y; h++) {
+                put(at, 0, h, z, mast);
+            }
+            for (int r = y - 2; r <= y; r++) {
+                for (int f = 1; f <= 3; f++) {
+                    put(at, 0, r, z - f, flag);
+                }
+            }
+        }
+        for (int z = half; z <= half + 5; z++) {
+            put(at, 0, top + 3 + (z - half) / 3, z, sprit);
+        }
+        put(at, 0, top + 5, -half + 2, ConquestContent.HELM.get().defaultBlockState().setValue(HelmBlock.FACING, Direction.SOUTH));
+        return List.copyOf(at.values());
+    }
+
+    private static void put(Map<Long, Part> at, int x, int y, int z, BlockState state) {
+        at.put(net.minecraft.core.BlockPos.asLong(x, y, z), new Part(x, y, z, state));
     }
 
     /**

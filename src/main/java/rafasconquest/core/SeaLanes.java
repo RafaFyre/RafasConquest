@@ -59,6 +59,8 @@ public final class SeaLanes {
         public static final Size XXLARGE = builtIn("xxlarge");
         /** A ship of the line, Medium Cannons for guns: its crew stand only at the Character Markers in its hull and work them; never on the lanes. */
         public static final Size GUNSHIP = builtIn("gunship");
+        /** A three-decked gunship, three masts: its made hull is {@link rafasconquest.style.ShipHulls}'s own shape, not the plain one. */
+        public static final Size MAN_O_WAR = builtIn("manowar");
 
         public final String id;
         private int ordinal;

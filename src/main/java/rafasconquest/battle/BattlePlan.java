@@ -164,6 +164,8 @@ public final class BattlePlan {
         public static final Arm UNIT_SHIP = builtIn("unit_ship");
         /** The Medium Cannon's crews: only how its shots look and sound in the numbers; never on a roster. Last, so the cards before keep their numbers. */
         public static final Arm MEDIUM_CANNONS = builtIn("medium_cannons");
+        /** A Man O' War's crew, as {@link #GUNSHIP}'s. After the cannons, so the cards before keep their numbers. */
+        public static final Arm MAN_O_WAR = builtIn("manowar");
 
         public final String id;
         private int ordinal;
