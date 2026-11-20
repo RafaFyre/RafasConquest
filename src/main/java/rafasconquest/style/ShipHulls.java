@@ -382,8 +382,7 @@ public final class ShipHulls {
      * two closed gun decks under its open weather deck ({@code size.deck}), each deck a row of guns down both sides over
      * the middle at gunned()'s spacing, a gunner's Character Marker inboard of each. A forecastle, a raised
      * quarterdeck with the Helm, a bowsprit, and three masts (the main four blocks taller than the fore and mizzen), each
-     * with three sails under yards and a small flag at its head: sail blocks along the ship, so in battle they fly the
-     * side's colours as the sails do.
+     * with three sails under yards and a medium flag at its head, held on the mast's aft side and flying astern.
      */
     private static List<Part> manOWar(SeaLanes.Size size) {
         BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
@@ -394,7 +393,8 @@ public final class ShipHulls {
         BlockState yard = mast.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, Direction.Axis.X);
         BlockState sprit = mast.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, Direction.Axis.Z);
         BlockState sail = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.SOUTH);
-        BlockState flag = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.EAST);
+        BlockState flag = ConquestContent.FLAGS.get(1).get().defaultBlockState() // medium_flag
+                .setValue(rafasconquest.content.FlagBlock.FACING, Direction.NORTH);
         BlockState gun = gunBlock(size);
         BlockState marker = ConquestContent.MARKER.get().defaultBlockState();
         BlockState window = Blocks.GLASS_PANE.defaultBlockState();
@@ -464,11 +464,7 @@ public final class ShipHulls {
             for (int h = 1; h <= y; h++) {
                 put(at, 0, h, z, mast);
             }
-            for (int r = y - 2; r <= y; r++) {
-                for (int f = 1; f <= 3; f++) {
-                    put(at, 0, r, z - f, flag);
-                }
-            }
+            put(at, 0, y, z - 1, flag);
         }
         for (int z = half; z <= half + 5; z++) {
             put(at, 0, top + 3 + (z - half) / 3, z, sprit);

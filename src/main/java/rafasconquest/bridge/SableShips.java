@@ -124,7 +124,7 @@ final class SableShips {
 
     /** Builds the ship's hull on the water where it is, bow to +z, and hands it to Sable, then turns it to its heading. */
     private static void build(ServerLevel level, SeaLanes.Ship ship) {
-        ServerSubLevel sub = assemble(level, ship, TAG, ShipHulls.of(ship));
+        ServerSubLevel sub = assemble(level, ship, TAG, ShipHulls.of(ship), null);
         if (sub != null) {
             // Else Sable unloads it when it touches a chunk not fully loaded, we build it again, and Sable brings the old one back.
             SubLevelContainer.getContainer(level).addForceLoadTicket(sub, SubLevelLoadingTicketType.COMMAND_FORCED, net.minecraft.util.Unit.INSTANCE);
@@ -138,7 +138,9 @@ final class SableShips {
      * its waterline height kept as "y"; null if it can't be built there yet.
      */
     @org.jetbrains.annotations.Nullable
-    static ServerSubLevel assemble(ServerLevel level, SeaLanes.Ship ship, String key, List<ShipHulls.Part> parts) {
+    /** Builds {@code ship} from {@code parts}; its flags fly {@code nation}'s arms (null: the place's, as a structure's). */
+    static ServerSubLevel assemble(ServerLevel level, SeaLanes.Ship ship, String key, List<ShipHulls.Part> parts,
+                                   @org.jetbrains.annotations.Nullable java.util.UUID nation) {
         int sea = level.getSeaLevel();
         BlockPos centre = BlockPos.containing(ship.x(), sea, ship.z());
         if (!level.hasChunkAt(centre) || !level.getFluidState(centre.below()).is(FluidTags.WATER)) {
@@ -154,6 +156,9 @@ final class SableShips {
         }
         for (int i = 0; i < parts.size(); i++) {
             level.setBlock(blocks.get(i), parts.get(i).state(), Block.UPDATE_CLIENTS);
+            if (nation != null && level.getBlockEntity(blocks.get(i)) instanceof rafasconquest.content.BattleBannerBlockEntity flag) {
+                flag.claim(nation); // the side's, as its sails are
+            }
         }
         ServerSubLevel sub = SubLevelAssemblyHelper.assembleBlocks(level, centre, blocks, BoundingBox3i.from(blocks));
         if (sub == null) {

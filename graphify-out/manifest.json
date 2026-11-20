@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1795155352.4995422,
-    "seen": 1795155379.4398563,
-    "ast_hash": "141223ca5c616e20e97e6697144843eb",
+    "mtime": 1795199535.0126247,
+    "seen": 1795199613.4707081,
+    "ast_hash": "c06031a294bd99892403664f22009bd1",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -2268,15 +2268,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableLink.java": {
-    "mtime": 1795135157.7027361,
-    "seen": 1795135180.4128704,
-    "ast_hash": "d0a69c78c9cd34e21c3e2b6aa75fb6cc",
+    "mtime": 1795199534.8408885,
+    "seen": 1795199613.4707131,
+    "ast_hash": "506662ac150f6945f3bb086803fcbfcc",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/SableShips.java": {
-    "mtime": 1794953776.6467788,
-    "seen": 1794953975.4445028,
-    "ast_hash": "f68d734d3ad7224efcee638e4d8749e6",
+    "mtime": 1795199558.1371753,
+    "seen": 1795199613.470716,
+    "ast_hash": "ac10d8e5b644cc486763d2dbb1b882f4",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
@@ -2292,9 +2292,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/ShipHulls.java": {
-    "mtime": 1795153040.049299,
-    "seen": 1795154907.0185413,
-    "ast_hash": "ec6b992ec4d9713313f624101955d96c",
+    "mtime": 1795199335.6101952,
+    "seen": 1795199398.1262286,
+    "ast_hash": "58f625491d97c9ff13f3742a17a9e7c0",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SeaLanesTest.java": {
@@ -2352,9 +2352,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/BattleShips.java": {
-    "mtime": 1795148884.331795,
-    "seen": 1795149311.8038414,
-    "ast_hash": "8cd10fd9d0fa15496f88409cd158925a",
+    "mtime": 1795199535.1387937,
+    "seen": 1795199613.4706972,
+    "ast_hash": "42a2950765a378ebc74b922864cb2c18",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {

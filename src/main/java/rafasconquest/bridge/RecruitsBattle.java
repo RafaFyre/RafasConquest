@@ -2434,7 +2434,7 @@ public final class RecruitsBattle {
                 double faceZ = real ? block.settleZ() : block.facingZ();
                 afloat.add(new Afloat(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(), lashed, hooked, flag.base(),
-                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color()), near - keep, boarded));
+                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(), sides[side].faction.id()), near - keep, boarded));
             }
         }
         // Sable floats every real ship block by block (about 0.8 ms a tick each): only the nearest few are real, the rest

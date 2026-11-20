@@ -242,7 +242,7 @@ final class BattleShips {
         SeaLanes.Ship hull = new SeaLanes.Ship(key(h), x, z, h.faceX() / length, h.faceZ() / length, 0, 0, true,
                 size(h), "", "");
         ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h),
-                net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe())));
+                net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe())), h.nation());
         if (sub == null) {
             return false;
         }
