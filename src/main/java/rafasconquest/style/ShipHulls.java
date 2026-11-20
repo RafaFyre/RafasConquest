@@ -377,9 +377,10 @@ public final class ShipHulls {
     }
 
     /**
-     * The Man O' War, a three-decker: a dark hull, a pale band along each gun row, narrowing to bow and stern as plain()'s;
+     * The Man O' War, a three-decker: a dark hull, a pale band along each gun row, a rounded bow and a square stern, its
+     * bottom curving up to both, cabin windows along the quarterdeck's sides;
      * two closed gun decks under its open weather deck ({@code size.deck}), each deck a row of guns down both sides over
-     * the full-beam middle at gunned()'s spacing, a gunner's Character Marker inboard of each. A forecastle, a raised
+     * the middle at gunned()'s spacing, a gunner's Character Marker inboard of each. A forecastle, a raised
      * quarterdeck with the Helm, a bowsprit, and three masts (the main four blocks taller than the fore and mizzen), each
      * with three sails under yards and a small flag at its head: sail blocks along the ship, so in battle they fly the
      * side's colours as the sails do.
@@ -396,6 +397,7 @@ public final class ShipHulls {
         BlockState flag = ConquestContent.SAIL.get().defaultBlockState().setValue(SailBlock.FACING, Direction.EAST);
         BlockState gun = gunBlock(size);
         BlockState marker = ConquestContent.MARKER.get().defaultBlockState();
+        BlockState window = Blocks.GLASS_PANE.defaultBlockState();
         int beam = size.width / 2;
         int half = size.length / 2;
         int top = size.deck;
@@ -404,25 +406,35 @@ public final class ShipHulls {
         Integer first = null;
         for (int z = -half; z <= half; z++) {
             int end = half - Math.abs(z);
-            int w = Math.min(beam, end * 2 * beam / Math.max(1, half / 2));
-            boolean forecastle = z > 0 && end <= 5;
-            boolean quarterdeck = z < 0 && end <= 6; // both clear of the full-beam middle, where the guns are
+            // From above: a rounded bow and a square stern with rounded corners (BOW_BEAM, STERN_BEAM).
+            int[] plan = z > 0 ? BOW_BEAM : STERN_BEAM;
+            int w = Math.min(beam, end < plan.length ? plan[end] : beam);
+            boolean forecastle = z > 0 && end <= 9;
+            boolean quarterdeck = z < 0 && end <= 10; // both clear of the middle, where the guns are
             int rail = top + 1 + (forecastle ? 3 : quarterdeck ? 4 : 0);
+            // The bottom curves up to bow and stern (BOW, STERN: its height by blocks from the end).
+            int[] curve = z > 0 ? BOW : STERN;
+            int bottom = end < curve.length ? curve[end] : 0;
             for (int x = -w; x <= w; x++) {
-                put(at, x, 0, z, keel);
+                put(at, x, bottom, z, keel);
                 for (int d : decks) {
-                    put(at, x, d, z, floor);
+                    if (d > bottom) {
+                        put(at, x, d, z, floor);
+                    }
                 }
                 if (rail > top + 1) {
                     put(at, x, rail - 1, z, floor);
                 }
                 if (Math.abs(x) == w || end == 0) {
-                    for (int y = 1; y <= rail; y++) {
+                    for (int y = bottom + 1; y <= rail; y++) {
                         put(at, x, y, z, y == decks[0] + 1 || y == decks[1] + 1 || y == decks[2] + 1 ? band : side);
                     }
                 }
+                if (quarterdeck && Math.abs(x) == w && w > 1 && z % 2 == 0) {
+                    put(at, x, top + 2, z, window); // the captain's cabin's windows, under the quarterdeck
+                }
             }
-            if (w == beam) {
+            if (end >= GUNS_FROM_END) {
                 first = first == null ? z : first;
                 if ((z - first) % 3 == 0) { // two planks between guns, as gunned()'s
                     for (int d : decks) {
@@ -464,6 +476,16 @@ public final class ShipHulls {
         put(at, 0, top + 5, -half + 2, ConquestContent.HELM.get().defaultBlockState().setValue(HelmBlock.FACING, Direction.SOUTH));
         return List.copyOf(at.values());
     }
+
+    /** The Man O' War's bottom above its keel line, by blocks back from the stem: aft to fore, run 2 up 1, run 2 up 1, run 1 up 1, run 1 up 1, run 1 up 2. */
+    private static final int[] BOW = {7, 5, 4, 3, 2, 2, 1, 1};
+    /** The same by blocks forward from the stern: fore to aft, run 1 up 2, run 1 up 2, run 1 up 1, run 1 up 1, run 2 up 1. */
+    private static final int[] STERN = {7, 6, 6, 5, 4, 2};
+    /** Its half-beam by blocks back from the stem, and by blocks forward from the stern; full past these. */
+    private static final int[] BOW_BEAM = {1, 3, 4, 5, 6, 6, 7, 7, 7, 7};
+    private static final int[] STERN_BEAM = {5, 6, 7, 7, 7, 7};
+    /** Its guns stand this many blocks or more from either end: the middle, aft of the forecastle and fore of the quarterdeck. */
+    private static final int GUNS_FROM_END = 12;
 
     private static void put(Map<Long, Part> at, int x, int y, int z, BlockState state) {
         at.put(net.minecraft.core.BlockPos.asLong(x, y, z), new Part(x, y, z, state));

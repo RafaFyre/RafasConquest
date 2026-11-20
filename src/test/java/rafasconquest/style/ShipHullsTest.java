@@ -27,8 +27,7 @@ class ShipHullsTest {
         List<ShipHulls.Part> parts = ShipHulls.hull(mow, false);
         List<ShipHulls.Part> hull = parts.stream().filter(p -> p.y() <= mow.deck + 1).toList();
         assertEquals(17, hull.stream().mapToInt(ShipHulls.Part::x).max().getAsInt() - hull.stream().mapToInt(ShipHulls.Part::x).min().getAsInt() + 1);
-        assertEquals(57, hull.stream().filter(p -> p.y() == 0).mapToInt(ShipHulls.Part::z).max().getAsInt()
-                - hull.stream().filter(p -> p.y() == 0).mapToInt(ShipHulls.Part::z).min().getAsInt() + 1);
+        assertEquals(67, hull.stream().mapToInt(ShipHulls.Part::z).max().getAsInt() - hull.stream().mapToInt(ShipHulls.Part::z).min().getAsInt() + 1);
         // three rows of guns down each side, the same spacing on each
         List<ShipHulls.Part> right = parts.stream().filter(p -> p.state().getBlock() instanceof rafasconquest.content.MediumCannonBlock && p.x() < 0).toList();
         assertEquals(3, right.stream().map(ShipHulls.Part::y).distinct().count());
