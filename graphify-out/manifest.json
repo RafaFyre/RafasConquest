@@ -84,9 +84,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1795113124.9571505,
-    "seen": 1795113447.360134,
-    "ast_hash": "6809d4aa4749cb90ce03d299a027a111",
+    "mtime": 1795149243.2639165,
+    "seen": 1795149311.8038213,
+    "ast_hash": "4031cdca7b5003159b3ac863cab7e572",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
@@ -1662,9 +1662,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1795119156.7922487,
-    "seen": 1795119530.5933647,
-    "ast_hash": "ee4a0978dd51c2c5267f6c6dac4a15dd",
+    "mtime": 1795149191.6925642,
+    "seen": 1795149311.8046267,
+    "ast_hash": "29191f14d328fbdc1a1e95a8b5180799",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -2352,9 +2352,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/BattleShips.java": {
-    "mtime": 1795135157.6997442,
-    "seen": 1795135180.4128554,
-    "ast_hash": "65cdf3f3a25206f44a8613d175d6781e",
+    "mtime": 1795148884.331795,
+    "seen": 1795149311.8038414,
+    "ast_hash": "8cd10fd9d0fa15496f88409cd158925a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/worldgen/CitySlopeStructure.java": {

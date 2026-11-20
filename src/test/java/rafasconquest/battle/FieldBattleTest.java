@@ -602,6 +602,31 @@ class FieldBattleTest {
     }
 
     @Test
+    void pursuingShipsDoNotPileOntoOneAnother() {
+        FieldBattle battle = battle(60, 60, 3);
+        battle.setType(BattleType.OCEAN);
+        battle.second();
+        FieldBlock general = battle.army(1).commander();
+        battle.sync(general, general.pos(), new float[general.health().length]);
+        battle.second();
+        assertNotNull(battle.outcome());
+        battle.pursue();
+        for (int i = 0; i < 120; i++) {
+            battle.second();
+        }
+        for (int side = 0; side < 2; side++) {
+            java.util.List<FieldBlock> fleet = battle.army(side).blocks().stream()
+                    .filter(b -> b.alive() > 0 && b.afloat() && battle.holder(b) == b).toList();
+            for (int i = 0; i < fleet.size(); i++) {
+                for (int j = i + 1; j < fleet.size(); j++) {
+                    assertTrue(fleet.get(i).pos().distanceTo(fleet.get(j).pos()) > fleet.get(i).hull().width / 2.0,
+                            "side " + side + "'s ships piled on one another in the pursuit");
+                }
+            }
+        }
+    }
+
+    @Test
     void aSurrenderedArmyStaysWhereItStands() {
         FieldBattle battle = generalFalls();
         battle.standDown(true);

@@ -4211,6 +4211,8 @@ public final class FieldBattle {
         for (FieldArmy army : armies) {
             move(army);
         }
+        keepShipsApart(); // as in second(): else every pursuer sails into the one nearest fleeing ship
+        syncCrews();
         index();
         fight();
     }

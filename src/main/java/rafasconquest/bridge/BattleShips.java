@@ -122,11 +122,13 @@ final class BattleShips {
                 }
             }
         }
-        // Built only where it would lie clear of every other ship: else, next second.
+        // Built only where it would lie clear of every other ship: where its formation is, else beside it (formations
+        // stacked on one spot had only one ship ever built, the rest standing on the water for good); else, next second.
         Map<Integer, Ramming.Hull> sailingHulls = new HashMap<>(hulls);
         for (SableLink.Helm h : unbuilt) {
-            if (clearAt(h, h.x(), h.z()) && build(level, battle, h)) {
-                hulls.put(h.id(), footprint(h, h.x(), h.z())); // so none built after it this tick lies on it
+            double[] at = clearSpot(h);
+            if (at != null && build(level, battle, h, at[0], at[1])) {
+                hulls.put(h.id(), footprint(h, at[0], at[1])); // so none built after it this tick lies on it
             }
         }
         hulls.keySet().retainAll(sailingHulls.keySet()); // a ship just built is measured from next tick
@@ -211,10 +213,33 @@ final class BattleShips {
     /** The ship kinds whose gun count was logged already. */
     private static final java.util.Set<String> TOLD_SIZES = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    /** Builds formation {@code h}'s ship where its formation is; false if it couldn't be built there yet. */
-    private static boolean build(ServerLevel level, String battle, SableLink.Helm h) {
+    /** Ships tried this many places abeam each side of a blocked formation before waiting for the next second. */
+    private static final int MAX_SHIFT = 6;
+
+    /**
+     * Where formation {@code h}'s ship would lie clear ({@link #clearAt}): where it is, else a beam and room at a time
+     * abeam, nearest first, alternating sides; null if nowhere near is.
+     */
+    private static double[] clearSpot(SableLink.Helm h) {
         double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
-        SeaLanes.Ship hull = new SeaLanes.Ship(key(h), h.x(), h.z(), h.faceX() / length, h.faceZ() / length, 0, 0, true,
+        double ax = -h.faceZ() / length;
+        double az = h.faceX() / length;
+        double step = size(h).width + ROOM;
+        for (int i = 0; i <= 2 * MAX_SHIFT; i++) {
+            double k = (i + 1) / 2 * (i % 2 == 0 ? 1 : -1) * step; // 0, -1, +1, -2, +2 ...
+            double x = h.x() + ax * k;
+            double z = h.z() + az * k;
+            if (clearAt(h, x, z)) {
+                return new double[]{x, z};
+            }
+        }
+        return null;
+    }
+
+    /** Builds formation {@code h}'s ship at (x, z); false if it couldn't be built there yet. Its soldiers board it ({@code RecruitsBattle#keepDeck}). */
+    private static boolean build(ServerLevel level, String battle, SableLink.Helm h, double x, double z) {
+        double length = Math.max(1e-6, Math.hypot(h.faceX(), h.faceZ()));
+        SeaLanes.Ship hull = new SeaLanes.Ship(key(h), x, z, h.faceX() / length, h.faceZ() / length, 0, 0, true,
                 size(h), "", "");
         ServerSubLevel sub = SableShips.assemble(level, hull, TAG, ShipHulls.battle(size(h),
                 net.minecraft.world.item.DyeColor.byId(h.sail()), net.minecraft.world.item.DyeColor.byId(h.stripe())));
@@ -244,7 +269,7 @@ final class BattleShips {
             double oz = middle.z - pose.position().z();
             double cos = Math.cos(hull.yaw());
             double sin = Math.sin(hull.yaw());
-            body.teleport(new Vector3d(h.x() - (ox * cos + oz * sin), sub.getUserDataTag().getDouble("y"), h.z() - (oz * cos - ox * sin)),
+            body.teleport(new Vector3d(x - (ox * cos + oz * sin), sub.getUserDataTag().getDouble("y"), z - (oz * cos - ox * sin)),
                     new Quaterniond().rotationY(hull.yaw()));
         }
         return true;
