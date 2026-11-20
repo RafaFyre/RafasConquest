@@ -142,6 +142,8 @@ public final class FieldBattle {
             for (FieldBlock b : army.blocks) {
                 b.afloat = type == BattleType.OCEAN || type == BattleType.AMPHIBIOUS && army.side == 0;
                 b.ship = null;
+                b.role = null;
+                b.wedgeAt = null;
                 b.shipId = b.id;
                 b.berth = 0;
                 b.hull = rafasconquest.core.SeaLanes.Size.LARGE;
@@ -157,20 +159,45 @@ public final class FieldBattle {
                 }
                 byShip.computeIfAbsent(command ? -1 : b.platoon >= 0 ? b.platoon : -2 - b.id, k -> new ArrayList<>()).add(b);
             }
+            // The admiral, their guard and standard go aboard the fleet's biggest ship on top of its own crew, and fight as it
+            // does; a flagship of their own only with no other ship in the fleet.
+            List<FieldBlock> command = byShip.remove(-1);
+            if (command != null) {
+                List<FieldBlock> biggest = byShip.values().stream().max(Comparator.comparingInt((List<FieldBlock> c) -> {
+                    rafasconquest.core.SeaLanes.Size s = shipOf(c);
+                    return s.length * s.width;
+                }).thenComparing(c -> shipOf(c).gunship())).orElse(null); // a gunship of the same size first: it sails in a battle line
+                if (biggest == null) {
+                    byShip.put(-1, command);
+                } else {
+                    command.forEach(c -> c.ship = biggest.get(0).ship);
+                    biggest.addAll(command);
+                }
+            }
             for (List<FieldBlock> crew : byShip.values()) {
+                rafasconquest.core.SeaLanes.Size hull = crew.get(0).duty == Duty.GENERAL || crew.get(0).duty == Duty.GUARD || crew.get(0).duty == Duty.BEARER
+                        ? rafasconquest.core.SeaLanes.Size.battle("flagship", rafasconquest.core.SeaLanes.Size.XLARGE) : shipOf(crew);
                 crew.sort(Comparator.comparingInt((FieldBlock b) -> b.duty == Duty.GENERAL ? 0 : 1).thenComparingInt(b -> b.id));
-                boolean flagship = crew.get(0).duty == Duty.GENERAL || crew.get(0).duty == Duty.GUARD || crew.get(0).duty == Duty.BEARER;
-                rafasconquest.core.SeaLanes.Size named = crew.get(0).arm.ship(); // the ship its card sails, if it names one
                 for (int i = 0; i < crew.size(); i++) {
                     FieldBlock b = crew.get(i);
                     b.shipId = crew.get(0).id;
                     b.berth = i;
-                    b.hull = flagship ? rafasconquest.core.SeaLanes.Size.battle("flagship", rafasconquest.core.SeaLanes.Size.XLARGE)
-                            : named != null ? named : rafasconquest.core.SeaLanes.Size.unitShip();
+                    b.hull = hull;
                 }
                 crews.put(crew.get(0).id, crew);
             }
-            spreadShips(army, type == BattleType.OCEAN ? FLEETS_APART / 2 : 0);
+            if (type == BattleType.OCEAN) {
+                formFleet(army, fleetsApart() / 2);
+                for (List<FieldBlock> crew : byShip.values()) {
+                    for (FieldBlock c : crew) { // everyone aboard has its ship's part, whoever sails it later
+                        c.role = crew.get(0).role;
+                        c.battleLine = crew.get(0).battleLine;
+                        c.lineIndex = crew.get(0).lineIndex;
+                    }
+                }
+            } else {
+                spreadShips(army, 0);
+            }
         }
         syncCrews(); // everyone aboard where their ship now lies
     }
@@ -323,31 +350,144 @@ public final class FieldBattle {
         return rafasconquest.core.SeaLanes.Size.unitShip().length / 2.0;
     }
 
-    /** In a sea battle the two fleets start this much further apart than the armies' fronts would. */
-    public static final double FLEETS_APART = 100;
+    /**
+     * In a sea battle the two fleets start this much further apart than the armies' fronts would: their fronts twice as
+     * far apart as they once were (the armies' fronts, two half unit ships and 100 blocks more).
+     */
+    public static double fleetsApart() {
+        double once = 2 * BattlePlan.DEPLOY_DISTANCE + 2 * fleetBack() + 100;
+        return 2 * once - 2 * BattlePlan.DEPLOY_DISTANCE - 2 * fleetBack();
+    }
+
+    /** The ship a unit's crew sails: the one its first block's card names, else a unit's ship. */
+    private static rafasconquest.core.SeaLanes.Size shipOf(List<FieldBlock> crew) {
+        rafasconquest.core.SeaLanes.Size named = crew.get(0).arm.ship();
+        return named != null ? named : rafasconquest.core.SeaLanes.Size.unitShip();
+    }
+
+    /** Whether {@code b} sails the admiral's ship. */
+    private static boolean flagship(FieldArmy army, FieldBlock b) {
+        return army.commander != null && b.shipId == army.commander.shipId;
+    }
+
+    /** A fleet's ships, each by the block sailing it, in the order they stood from left to right. */
+    private static List<FieldBlock> fleet(FieldArmy army) {
+        return army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
+                .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
+                .toList();
+    }
 
     /**
      * A fleet deploys in one line abreast across its army's front, {@link #fleetSpacing} apart, its ships in the order
      * they stood from left to right, {@code extra} further back than {@link #fleetBack}.
      */
     private static void spreadShips(FieldArmy army, double extra) {
-        List<FieldBlock> fleet = army.blocks.stream().filter(o -> o.afloat && o.shipId == o.id)
-                .sorted(Comparator.comparingDouble(b -> BattlePlan.offset(army.origin, army.facingX, army.facingZ, b.pos).x()))
-                .toList();
-        lineAbreast(army, fleet, fleetBack() + extra);
+        lineAbreast(army, fleet(army), fleetBack() + extra);
+    }
+
+    /**
+     * A fleet at sea deploys by its age, {@code extra} further back than {@link #fleetBack}: one with gunships (Gunpowder)
+     * in {@link #battleLines}, any other (Bronze, Steel) in {@link #rows}.
+     */
+    private static void formFleet(FieldArmy army, double extra) {
+        List<FieldBlock> fleet = fleet(army);
+        if (fleet.stream().anyMatch(b -> b.ship == FieldBlock.ShipKind.GUNSHIP)) {
+            battleLines(army, fleet, fleetBack() + extra);
+        } else {
+            rows(army, fleet, fleetBack() + extra);
+        }
+    }
+
+    /**
+     * Room across between two ships' middles in a fleet's formation: three of its widest ships and a little, so two ships
+     * boarding the facing sides of two neighbours never make for the same water between them.
+     */
+    private static double formationBeam(List<FieldBlock> fleet) {
+        return 3.0 * fleet.stream().mapToInt(b -> b.hull.width).max().orElse(rafasconquest.core.SeaLanes.Size.unitShip().width) + 3;
+    }
+
+    /** Room fore and aft between two ships' middles in a fleet's formation: its longest ship and ten blocks. */
+    private static double formationLength(List<FieldBlock> fleet) {
+        return fleet.stream().mapToInt(b -> b.hull.length).max().orElse(rafasconquest.core.SeaLanes.Size.unitShip().length) + 10;
+    }
+
+    /**
+     * A Steel fleet deploys as a rectangle of rows abreast, a row four times as long as the rectangle is deep (16 ships: two
+     * rows of eight): boarding ships to the front, archers and shock ships behind, the admiral in the middle of the back row.
+     */
+    private static void rows(FieldArmy army, List<FieldBlock> fleet, double back) {
+        List<FieldBlock> order = new ArrayList<>(fleet.stream().filter(b -> !flagship(army, b))
+                .sorted(Comparator.comparingInt(b -> b.ship == FieldBlock.ShipKind.SWORDSMEN ? 0 : b.ship == FieldBlock.ShipKind.ARCHERS ? 1 : 2))
+                .toList());
+        int n = fleet.size();
+        int rows = Math.max(1, (int) Math.round(Math.sqrt(n / 4.0)));
+        int cols = (n + rows - 1) / rows;
+        rows = (n + cols - 1) / cols;
+        int lastRow = (rows - 1) * cols;
+        fleet.stream().filter(b -> flagship(army, b)).forEach(a -> order.add(Math.min(order.size(), lastRow + (n - lastRow) / 2), a));
+        double beam = formationBeam(fleet);
+        double length = formationLength(fleet);
+        int behind = 0;
+        for (int i = 0; i < order.size(); i++) {
+            int row = i / cols;
+            int inRow = row == rows - 1 ? n - lastRow : cols;
+            FieldBlock b = order.get(i);
+            place(army, b, (i % cols - (inRow - 1) / 2.0) * beam, back + row * length);
+            // The back rows: every other ship follows the front to help; the rest, and the admiral, wait.
+            b.role = row == 0 ? FieldBlock.FleetRole.FRONT
+                    : !flagship(army, b) && behind++ % 2 == 0 ? FieldBlock.FleetRole.SUPPORT : FieldBlock.FleetRole.RESERVE;
+        }
+    }
+
+    /**
+     * A Gunpowder fleet deploys its gunships in battle lines of three to nine, each in line ahead, bows to the enemy, the
+     * lines abreast; the admiral's ship in the middle of the middle line; its smaller ships in a screen abreast ahead of them.
+     */
+    private static void battleLines(FieldArmy army, List<FieldBlock> fleet, double back) {
+        List<FieldBlock> screen = fleet.stream().filter(b -> !flagship(army, b) && b.ship != FieldBlock.ShipKind.GUNSHIP).toList();
+        List<FieldBlock> guns = new ArrayList<>(fleet.stream().filter(b -> !flagship(army, b) && b.ship == FieldBlock.ShipKind.GUNSHIP).toList());
+        int g = guns.size() + (int) fleet.stream().filter(b -> flagship(army, b)).count();
+        int lines = Math.max(1, Math.min((g + 8) / 9, g / 3));
+        int[] sizes = new int[lines];
+        for (int k = 0; k < lines; k++) {
+            sizes[k] = g / lines + (k < g % lines ? 1 : 0);
+        }
+        int middle = lines / 2;
+        int before = java.util.Arrays.stream(sizes, 0, middle).sum();
+        fleet.stream().filter(b -> flagship(army, b)).forEach(a -> guns.add(Math.min(guns.size(), before + sizes[middle] / 2), a));
+        double beam = formationBeam(fleet);
+        double length = formationLength(fleet);
+        boolean screened = !screen.isEmpty();
+        for (int i = 0; i < screen.size(); i++) {
+            place(army, screen.get(i), (i - (screen.size() - 1) / 2.0) * beam, back);
+            screen.get(i).role = FieldBlock.FleetRole.SCREEN;
+        }
+        for (int k = 0, i = 0; k < lines; k++) {
+            for (int j = 0; j < sizes[k]; j++, i++) {
+                FieldBlock b = guns.get(i);
+                place(army, b, (k - (lines - 1) / 2.0) * 2 * beam, back + ((screened ? 1 : 0) + j) * length);
+                b.role = FieldBlock.FleetRole.LINE;
+                b.battleLine = k;
+                b.lineIndex = j;
+            }
+        }
+    }
+
+    /** Ship {@code b} deployed {@code right} of the army's middle and {@code back} behind its front, bow to the enemy. */
+    private static void place(FieldArmy army, FieldBlock b, double right, double back) {
+        b.pos = BattlePlan.place(army.origin, army.facingX, army.facingZ, right, back);
+        b.line = b.pos;
+        b.deployed = b.pos;
+        b.facingX = army.facingX;
+        b.facingZ = army.facingZ;
+        b.settleX = army.facingX;
+        b.settleZ = army.facingZ;
     }
 
     /** Ships in one line abreast, centred on the army's front, {@code back} behind it. */
     private static void lineAbreast(FieldArmy army, List<FieldBlock> ships, double back) {
         for (int i = 0; i < ships.size(); i++) {
-            FieldBlock b = ships.get(i);
-            b.pos = BattlePlan.place(army.origin, army.facingX, army.facingZ, (i - (ships.size() - 1) / 2.0) * fleetSpacing(), back);
-            b.line = b.pos;
-            b.deployed = b.pos;
-            b.facingX = army.facingX; // bows toward the enemy, and so they lie whenever they keep their places
-            b.facingZ = army.facingZ;
-            b.settleX = army.facingX;
-            b.settleZ = army.facingZ;
+            place(army, ships.get(i), (i - (ships.size() - 1) / 2.0) * fleetSpacing(), back);
         }
     }
 
@@ -574,6 +714,7 @@ public final class FieldBattle {
         for (int side = 0; side < 2; side++) {
             FieldArmy enemy = armies[1 - side];
             java.util.Set<Long> taken = new java.util.HashSet<>();
+            List<Point> archerSpots = new ArrayList<>(); // where our archer ships already make for
             for (FieldBlock e : enemy.blocks) {
                 for (FieldBlock o : e.lashed) {
                     taken.add(sideKey(e, sideOf(e, o.pos))); // grappled there already
@@ -590,8 +731,21 @@ public final class FieldBattle {
                     held.add(holder(e.hookedTo));
                 }
             }
+            // Fleet tactics: the enemy ships fighting ours, those beating one of ours, how far our front has come, whether
+            // it is half gone (then everyone goes in), and each battle line's ships, leader first.
+            List<FieldBlock> helping = boardable.stream().filter(e -> !e.lashed.isEmpty()).toList();
+            List<FieldBlock> losing = helping.stream().filter(e -> e.lashed.stream()
+                    .anyMatch(o -> crewAlive(o) < o.lashed.stream().mapToInt(this::crewAlive).sum())).toList();
+            Point advance = frontAdvance(armies[side]);
+            boolean allIn = frontHalfGone(armies[side]);
+            java.util.Map<Integer, List<FieldBlock>> lines = new java.util.HashMap<>();
+            armies[side].blocks.stream().filter(b -> b.role == FieldBlock.FleetRole.LINE && b.alive > 0 && b.afloat && b == holder(b))
+                    .sorted(Comparator.comparingInt(b -> b.lineIndex))
+                    .forEach(b -> lines.computeIfAbsent(b.battleLine, k -> new ArrayList<>()).add(b));
             List<FieldBlock> order = new ArrayList<>(armies[side].blocks);
-            order.sort(Comparator.comparingInt(b -> b.ship == FieldBlock.ShipKind.SHOCK ? 0 : 1));
+            // The front claims its enemies first, then those helping it, then the reserve; shock ships first in each.
+            order.sort(Comparator.comparingInt((FieldBlock b) -> b.role == FieldBlock.FleetRole.SUPPORT ? 1 : b.role == FieldBlock.FleetRole.RESERVE ? 2 : 0)
+                    .thenComparingInt(b -> b.ship == FieldBlock.ShipKind.SHOCK ? 0 : 1));
             for (FieldBlock b : order) {
                 FieldBlock previous = b.prey;
                 b.lashed.removeIf(o -> o.alive == 0 || !o.afloat);
@@ -640,6 +794,10 @@ public final class FieldBattle {
                     continue;
                 }
                 b.prey = null;
+                if (ordered == null && b.role == FieldBlock.FleetRole.LINE) {
+                    sailInLine(b, lines.getOrDefault(b.battleLine, List.of(b)), enemy); // the admiral's ship too
+                    continue;
+                }
                 if (b.ship == null) {
                     b.line = b.deployed != null ? b.deployed : b.pos; // the general's ship keeps its place
                     continue;
@@ -649,9 +807,30 @@ public final class FieldBattle {
                     b.line = b.pos;
                     continue;
                 }
+                List<FieldBlock> among = boardable; // the enemy ships it may board
+                List<FieldBlock> rammable = engaged; // and ram
+                if (ordered == null && b.role == FieldBlock.FleetRole.SCREEN) {
+                    kind = FieldBlock.ShipKind.ARCHERS; // a Gunpowder fleet's smaller ships keep the enemy busy at range
+                } else if (ordered == null && !allIn && (b.role == FieldBlock.FleetRole.SUPPORT || b.role == FieldBlock.FleetRole.RESERVE)) {
+                    // Support joins any fight of ours, the reserve only one we are losing; till then they follow the front, or wait.
+                    List<FieldBlock> need = b.role == FieldBlock.FleetRole.SUPPORT ? helping : losing;
+                    if (need.isEmpty()) {
+                        Point home = b.deployed != null ? b.deployed : b.pos;
+                        b.line = b.role == FieldBlock.FleetRole.SUPPORT ? home.plus(advance.x(), advance.z()) : home;
+                        continue;
+                    }
+                    among = need;
+                    rammable = need;
+                    foe = need.stream().min(Comparator.comparingDouble(e -> e.pos.distanceTo(b.pos))).orElse(foe);
+                }
                 switch (kind) {
                     case ARCHERS -> {
-                        b.line = standOff(b, foe, ARCHER_STANDOFF);
+                        // An archer ship behind another, both on the line from one foe, keeps a ship's length further off.
+                        double keep = ARCHER_STANDOFF;
+                        for (b.line = standOff(b, foe, keep); clash(b.line, archerSpots); b.line = standOff(b, foe, keep)) {
+                            keep += shipLength();
+                        }
+                        archerSpots.add(b.line);
                         b.prey = mark(b, enemy, previous);
                     }
                     case GUNSHIP -> {
@@ -672,7 +851,7 @@ public final class FieldBattle {
                         b.line = circling(e.pos, -ux, -uz, b.settleX, b.settleZ, gunRange(b));
                     }
                     case SWORDSMEN -> {
-                        Target t = claim(b, ordered != null ? List.of(ordered) : boardable, previous, taken);
+                        Target t = claim(b, ordered != null ? List.of(ordered) : among, previous, taken);
                         if (t == null) {
                             b.line = standOff(b, foe, SHOCK_STANDOFF); // every side taken: wait clear of the fight
                             break;
@@ -695,7 +874,7 @@ public final class FieldBattle {
                         }
                     }
                     case SHOCK -> {
-                        Target t = claim(b, ordered != null ? List.of(ordered) : engaged, previous, taken);
+                        Target t = claim(b, ordered != null ? List.of(ordered) : rammable, previous, taken);
                         if (t == null) {
                             b.line = standOff(b, foe, SHOCK_STANDOFF);
                             break;
@@ -858,6 +1037,108 @@ public final class FieldBattle {
     private static Point standOff(FieldBlock b, FieldBlock foe, double keep) {
         double d = Math.max(1e-6, b.pos.distanceTo(foe.pos));
         return foe.pos.plus((b.pos.x() - foe.pos.x()) / d * keep, (b.pos.z() - foe.pos.z()) / d * keep);
+    }
+
+    /** Soldiers standing aboard {@code b}'s ship. */
+    private int crewAlive(FieldBlock b) {
+        return crew(b).stream().mapToInt(c -> c.alive).sum();
+    }
+
+    /** How far a Steel fleet's front row has come from where it deployed, on average (zero with none left). */
+    private Point frontAdvance(FieldArmy army) {
+        List<FieldBlock> front = army.blocks.stream().filter(b -> b.role == FieldBlock.FleetRole.FRONT && b.alive > 0
+                && b.afloat && b == holder(b) && b.deployed != null).toList();
+        return front.isEmpty() ? new Point(0, 0) : new Point(
+                front.stream().mapToDouble(b -> b.pos.x() - b.deployed.x()).average().orElse(0),
+                front.stream().mapToDouble(b -> b.pos.z() - b.deployed.z()).average().orElse(0));
+    }
+
+    /** Whether half a Steel fleet's front and support ships are gone: then its reserve goes in too, wherever it can. */
+    private static boolean frontHalfGone(FieldArmy army) {
+        java.util.Set<Integer> ships = new java.util.HashSet<>();
+        java.util.Set<Integer> afloat = new java.util.HashSet<>();
+        for (FieldBlock b : army.blocks) {
+            if (b.role == FieldBlock.FleetRole.FRONT || b.role == FieldBlock.FleetRole.SUPPORT) {
+                ships.add(b.shipId);
+                if (b.alive > 0 && b.afloat) {
+                    afloat.add(b.shipId);
+                }
+            }
+        }
+        return !ships.isEmpty() && afloat.size() * 2 < ships.size();
+    }
+
+    /**
+     * A battle line's ship: its leader drives through a gap between enemy ships ({@link #wedge}), both broadsides firing
+     * at whatever lies abeam ({@link #broadside}, no mark), and comes about to drive through again; the rest follow in
+     * line ahead, each in the wake of the ship before it.
+     */
+    private void sailInLine(FieldBlock b, List<FieldBlock> mates, FieldArmy enemy) {
+        int k = mates.indexOf(b);
+        if (k > 0) {
+            FieldBlock a = mates.get(k - 1);
+            double gap = (a.hull.length + b.hull.length) / 2.0 + 10;
+            b.line = a.pos.plus(-a.facingX * gap, -a.facingZ * gap);
+            b.settleX = a.facingX;
+            b.settleZ = a.facingZ;
+            return;
+        }
+        if (b.wedgeAt == null || b.pos.distanceTo(b.wedgeAt) < shipLength()) {
+            b.wedgeAt = wedge(b, enemy);
+        }
+        if (b.wedgeAt == null) {
+            b.line = b.pos;
+            return;
+        }
+        double d = Math.max(1e-6, b.pos.distanceTo(b.wedgeAt));
+        b.line = b.wedgeAt;
+        b.settleX = (b.wedgeAt.x() - b.pos.x()) / d;
+        b.settleZ = (b.wedgeAt.z() - b.pos.z()) / d;
+    }
+
+    /**
+     * Where a battle line's leader {@code b} makes for: two ship lengths beyond the middle of the nearest gap between two
+     * enemy ships (no wider than six ships abreast), a gap ahead of its bow before one behind; with no such gap, past the
+     * nearest enemy ship at half its gun range. Null with no enemy ship afloat.
+     */
+    @Nullable
+    private Point wedge(FieldBlock b, FieldArmy enemy) {
+        List<FieldBlock> foes = enemy.blocks.stream().filter(e -> e.alive > 0 && e.afloat && e == holder(e)).toList();
+        if (foes.isEmpty()) {
+            return null;
+        }
+        Point mid = null;
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < foes.size(); i++) {
+            for (int j = i + 1; j < foes.size(); j++) {
+                Point p = foes.get(i).pos;
+                Point q = foes.get(j).pos;
+                if (p.distanceTo(q) > 6 * shipBeam()) {
+                    continue;
+                }
+                Point m = new Point((p.x() + q.x()) / 2, (p.z() + q.z()) / 2);
+                boolean ahead = (m.x() - b.pos.x()) * b.facingX + (m.z() - b.pos.z()) * b.facingZ > 0;
+                double score = b.pos.distanceTo(m) + (ahead ? 0 : 1000);
+                if (score < best) {
+                    best = score;
+                    mid = m;
+                }
+            }
+        }
+        if (mid == null) {
+            FieldBlock e = nearestShip(b, enemy);
+            double d = Math.max(1e-6, b.pos.distanceTo(e.pos));
+            double ux = (e.pos.x() - b.pos.x()) / d;
+            double uz = (e.pos.z() - b.pos.z()) / d;
+            mid = e.pos.plus(-uz * gunRange(b) / 2, ux * gunRange(b) / 2); // off its side, guns bearing as it passes
+        }
+        double d = Math.max(1e-6, b.pos.distanceTo(mid));
+        return mid.plus((mid.x() - b.pos.x()) / d * 2 * shipLength(), (mid.z() - b.pos.z()) / d * 2 * shipLength());
+    }
+
+    /** Whether {@code at} lies within a ship's length of any of {@code spots}. */
+    private static boolean clash(Point at, List<Point> spots) {
+        return spots.stream().anyMatch(p -> p.distanceTo(at) < shipLength());
     }
 
     /** The nearest enemy ship afloat. */
@@ -3565,6 +3846,9 @@ public final class FieldBattle {
      * (but those it is grappled to, hooking or going for) it backs astern instead, to where it has room to turn.
      */
     static void sail(FieldBlock b, Point target, List<FieldBlock> ships) {
+        if (!b.lashed.isEmpty()) {
+            return; // grappled (a rammer the second it strikes too): it holds fast while its soldiers board
+        }
         List<Ramming.Hull> others = new ArrayList<>();
         List<Ramming.Hull> allies = new ArrayList<>();
         for (FieldBlock o : ships) {

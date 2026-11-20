@@ -818,7 +818,7 @@ public final class RecruitsBattle {
         battle.broadcast(say("begins", "name", battle.name));
         for (Side side : sides) {
             FieldArmy army = battle.field.army(side == sides[0] ? 0 : 1);
-            String title = say(army.started() >= Rank.GRAND_MARSHAL.leads() ? "title_grand_marshal" : "title_general");
+            String title = field.type() == BattleType.OCEAN ? say("title_admiral") : say(army.started() >= Rank.GRAND_MARSHAL.leads() ? "title_grand_marshal" : "title_general");
             battle.broadcast(say("led_by", "nation", side.faction.name(), "title", title, "general", side.general.name(), "plan",
                     side.general.plan().describe()));
             if (army.winged()) {
@@ -2848,7 +2848,7 @@ public final class RecruitsBattle {
         for (FieldBattle.Event event : field.takeEvents()) {
             Side side = sides[event.side()];
             // The order itself in the nation's colour, so it stands out from the reports.
-            String who = say("report", "seconds", field.seconds(), "nation", side.faction.name(), "general", side.general.name());
+            String who = say("report", "seconds", field.seconds(), "nation", side.faction.name(), "title", chief(), "general", side.general.name());
             TextColor color = color(event.side());
             broadcast(who + event.text(), Component.literal(who).append(Component.literal(event.text()).withStyle(style -> style.withColor(color))));
         }
@@ -3621,7 +3621,7 @@ public final class RecruitsBattle {
         }
         FieldBlock strike = b.strikeAt();
         if (strike != null && strike != e.lastStrike && strike.alive() > 0 && strike == field.army(1 - e.side).commander()) {
-            title(e, say("orders.kill_general", "general", sides[1 - e.side].general.name()));
+            title(e, say("orders.kill_general", "title", chief(), "general", sides[1 - e.side].general.name()));
         } else if (strike != null && strike != e.lastStrike && strike.alive() > 0) {
             title(e, say("orders.target", "nation", sides[1 - e.side].faction.name(), "where", wingTitle(strike.wing(), field.army(1 - e.side).winged())));
         }
@@ -3629,7 +3629,7 @@ public final class RecruitsBattle {
         FieldBlock prey = b.prey();
         if (!e.toldKill && prey != null && prey.duty() == Duty.GENERAL && (b.charged() || b.approaching())) {
             e.toldKill = true;
-            title(e, say("orders.kill_general", "general", sides[1 - e.side].general.name()));
+            title(e, say("orders.kill_general", "title", chief(), "general", sides[1 - e.side].general.name()));
         }
         showTitle(e, player);
     }
@@ -5133,7 +5133,7 @@ public final class RecruitsBattle {
             FieldBlock commander = army.commander();
             if (!chargeAnnounced[side] && commander != null && commander.charged()) {
                 chargeAnnounced[side] = true;
-                broadcast(sides[side].faction.name() + "'s general charges");
+                broadcast(sides[side].faction.name() + "'s " + chief() + " charges");
             }
         }
         if (!meleeAnnounced && field.finalMelee()) {
@@ -5184,7 +5184,7 @@ public final class RecruitsBattle {
         } else if (!field.army(1 - outcome.winner()).generalAlive()) {
             Side loser = sides[1 - outcome.winner()];
             result = say("result_general_fell", "winner", describe(outcome.winner()), "nation", loser.faction.name(),
-                    "general", loser.general.name());
+                    "title", chief(), "general", loser.general.name());
         } else {
             result = say("result_routs", "winner", describe(outcome.winner()), "loser", describe(1 - outcome.winner()));
         }
@@ -5193,7 +5193,7 @@ public final class RecruitsBattle {
                 "nation_b", sides[1].faction.name(), "alive_b", field.army(1).alive(), "started_b", field.army(1).started(), "whole", whole.describe()));
         for (int side = 0; side < 2; side++) {
             FieldArmy army = field.army(side);
-            broadcast(say("over_side", "side", describe(side), "general", say(army.generalAlive() ? "general_survived" : "general_fell"),
+            broadcast(say("over_side", "title", chief(), "side", describe(side), "general", say(army.generalAlive() ? "general_survived" : "general_fell"),
                     "standard", say(army.standardAlive() ? "standard_flies" : "standard_fell")));
         }
         reportCalibration();
@@ -6143,8 +6143,8 @@ public final class RecruitsBattle {
         // Not beside them (the word reached them at their place): the box alone, no one to turn to.
         int who = m != null && m.distanceTo(player) <= 8 ? m.getId() : -1;
         List<WarCouncil.Said> lines = new ArrayList<>();
-        for (String text : List.of(say("messenger.word", "rank", e.rank.title(), "general", sides[e.side].general.name()),
-                say("messenger.orders", "role", task.role().title()), task.reason(), say("messenger.ring"))) {
+        for (String text : List.of(say("messenger.word", "title", chief(), "rank", e.rank.title(), "general", sides[e.side].general.name()),
+                say("messenger.orders", "title", chief(), "role", task.role().title()), task.reason(), say("messenger.ring"))) {
             lines.add(new WarCouncil.Said(who, say("messenger_name"), sides[e.side].faction.name(), mainColor(sides[e.side].faction),
                     markColor(sides[e.side].faction), text));
         }
@@ -6309,12 +6309,12 @@ public final class RecruitsBattle {
             if (pursue) {
                 field.pursue();
                 setPhase(Phase.PURSUIT);
-                broadcast(say("pursues", "general", w.general.name(), "nation", sides[loser].faction.name()));
+                broadcast(say("pursues", "title", chief(), "general", w.general.name(), "nation", sides[loser].faction.name()));
                 announce(winner, say("orders.pursue"));
             } else {
                 field.standDown(false);
                 setPhase(Phase.AFTERMATH);
-                broadcast(say("lets_go", "general", w.general.name(), "nation", sides[loser].faction.name()));
+                broadcast(say("lets_go", "title", chief(), "general", w.general.name(), "nation", sides[loser].faction.name()));
             }
         } else {
             surrendered = true;
@@ -7043,6 +7043,11 @@ public final class RecruitsBattle {
     }
 
     /** To every player; the server log gets it too. */
+    /** What the battle calls a side's commander: Admiral at sea, General elsewhere. */
+    private String chief() {
+        return say(field.type() == BattleType.OCEAN ? "title_admiral" : "title_general");
+    }
+
     /** A battle line from {@code dialogue/battle.toml}. */
     private static String say(String key, Object... vars) {
         return rafasconquest.data.Dialogue.say("battle." + key, vars);

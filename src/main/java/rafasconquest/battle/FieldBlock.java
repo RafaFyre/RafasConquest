@@ -24,6 +24,20 @@ public final class FieldBlock {
         GUNSHIP
     }
 
+    /** A ship's part in its fleet's formation at sea. */
+    public enum FleetRole {
+        /** Steel: the front row, fights as its kind from the start. */
+        FRONT,
+        /** Steel: half the back rows, follows the front and joins whichever of its fights it can. */
+        SUPPORT,
+        /** Steel: the rest of the back rows, waits, and goes in where one of ours is losing (all go in once the front is half gone). */
+        RESERVE,
+        /** Gunpowder: a battle line's ship, in line ahead behind its leader, firing both broadsides as it drives between enemies. */
+        LINE,
+        /** Gunpowder: a smaller ship, keeping the enemy busy at range. */
+        SCREEN
+    }
+
     /** What a block is doing in its army. */
     public enum Duty {
         /** Holding its file of the front line, marching or fighting. */
@@ -131,6 +145,15 @@ public final class FieldBlock {
     double settleZ;
     /** A gunship's firing side (1 or -1, see FieldBattle's captains), kept once chosen; 0 before it first engages. */
     int gunSide;
+    /** In a sea battle, its ship's part in its fleet's formation (null: none, its captain fights as its kind). */
+    @Nullable
+    FleetRole role;
+    /** A battle line's ship: its line (0 first) and its place in it (0 the leader). */
+    int battleLine;
+    int lineIndex;
+    /** A battle line's leader: the gap between enemy ships it drives through, kept until it is there. */
+    @Nullable
+    Point wedgeAt;
     int lastThreat;
     /** Real soldiers stand for it now (they walk and fight themselves; the battle reads them back each second). */
     boolean live;
@@ -324,6 +347,11 @@ public final class FieldBlock {
     @Nullable
     public ShipKind ship() {
         return ship;
+    }
+
+    @Nullable
+    public FleetRole role() {
+        return role;
     }
 
     /** The ship it rides at sea, shared by its unit's blocks ({@link FieldBattle#crew}). */

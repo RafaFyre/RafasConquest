@@ -42,9 +42,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattlePlan.java": {
-    "mtime": 1795119337.8647568,
-    "seen": 1795119530.5925386,
-    "ast_hash": "d7d239858e99c2971d0dba42f1b41fce",
+    "mtime": 1795149682.676698,
+    "seen": 1795154907.0180895,
+    "ast_hash": "67d5ad46a0cd4668b583cc5afef15d25",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/BattleSite.java": {
@@ -84,15 +84,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBattle.java": {
-    "mtime": 1795149243.2639165,
-    "seen": 1795149311.8038213,
-    "ast_hash": "4031cdca7b5003159b3ac863cab7e572",
+    "mtime": 1795156729.770779,
+    "seen": 1795157003.991665,
+    "ast_hash": "5e52d0256a2f9b55e0ac5bb43a479810",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldBlock.java": {
-    "mtime": 1795066524.635033,
-    "seen": 1795066691.8309035,
-    "ast_hash": "606c271bfb5bfd4bfe4b07753b119c1a",
+    "mtime": 1795155832.6423464,
+    "seen": 1795157003.9916673,
+    "ast_hash": "02bb1887ee055c8e9e0093657e273935",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/battle/FieldRules.java": {
@@ -132,9 +132,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBattle.java": {
-    "mtime": 1795135157.7017388,
-    "seen": 1795135180.4128659,
-    "ast_hash": "2e25229728ea5c794896839cb3d6de2d",
+    "mtime": 1795155352.4995422,
+    "seen": 1795155379.4398563,
+    "ast_hash": "141223ca5c616e20e97e6697144843eb",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/bridge/RecruitsBridge.java": {
@@ -1662,9 +1662,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FieldBattleTest.java": {
-    "mtime": 1795149191.6925642,
-    "seen": 1795149311.8046267,
-    "ast_hash": "29191f14d328fbdc1a1e95a8b5180799",
+    "mtime": 1795156868.760552,
+    "seen": 1795157003.9924853,
+    "ast_hash": "1b602a42c2b06705ff745fe1032e1e8c",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/FormationSnapshotTest.java": {
@@ -2286,15 +2286,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
-    "mtime": 1795116226.644173,
-    "seen": 1795116475.946876,
-    "ast_hash": "19d393fdce36d0f1d75e69bc65965e65",
+    "mtime": 1795149682.7386246,
+    "seen": 1795154907.0183642,
+    "ast_hash": "498c14a150104dbf29391c2117b7d898",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/ShipHulls.java": {
-    "mtime": 1795116285.286287,
-    "seen": 1795116475.947058,
-    "ast_hash": "4df9ec3a191a6b1b28913eedbea988b8",
+    "mtime": 1795153040.049299,
+    "seen": 1795154907.0185413,
+    "ast_hash": "ec6b992ec4d9713313f624101955d96c",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/SeaLanesTest.java": {
@@ -4224,9 +4224,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/battle/UnitCardsTest.java": {
-    "mtime": 1795119377.9531229,
-    "seen": 1795119530.5933735,
-    "ast_hash": "ab3a9be8ff6fc1d65037ef5e23c87d22",
+    "mtime": 1795149813.8950098,
+    "seen": 1795154907.0189202,
+    "ast_hash": "7e679d0eab43216665d2d6913ecefc1f",
     "semantic_hash": ""
   },
   "src/main/resources/rafasconquest_units/arms/gunship.json": {
@@ -4362,9 +4362,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/style/ShipHullsTest.java": {
-    "mtime": 1795110716.2694623,
-    "seen": 1795113447.3610687,
-    "ast_hash": "855c7a8648a8fbf91b56a4e1f980b48b",
+    "mtime": 1795152586.1310568,
+    "seen": 1795154907.0190141,
+    "ast_hash": "3e8e8c35a0dad6d809769a63522ef871",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/MediumCannonBlock.java": {
@@ -4467,6 +4467,18 @@
     "mtime": 1795122066.7707872,
     "seen": 1795122126.9313915,
     "ast_hash": "56d05f142f5386f3ee2790e6e234d3a1",
+    "semantic_hash": ""
+  },
+  "src/main/resources/rafasconquest_units/arms/manowar.json": {
+    "mtime": 1795149682.8632169,
+    "seen": 1795154907.0188549,
+    "ast_hash": "e16e0d380a7d74f6692de5402bb3fbeb",
+    "semantic_hash": ""
+  },
+  "src/main/resources/rafasconquest_units/ships/manowar.json": {
+    "mtime": 1795152586.0716674,
+    "seen": 1795154907.0188942,
+    "ast_hash": "623c17156ac57ab158cc1b6543038f05",
     "semantic_hash": ""
   }
 }
