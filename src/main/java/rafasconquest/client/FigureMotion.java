@@ -115,6 +115,7 @@ final class FigureMotion {
     /**
      * As above; {@code targets} gives each formation's latest snapshot, whose facing and shape the ranks are laid out in
      * (only its middle glides), so a turning block's places jump once to the turned ranks rather than swinging round.
+     * Not afloat: there the ranks come round with the ship as it is drawn, not ahead of it.
      */
     static List<List<Placed>> step(List<FormationSnapshot> formations, IntFunction<FormationSnapshot> targets,
                                    FormationSnapshot.Positions positions, long now) {
@@ -123,7 +124,7 @@ final class FigureMotion {
         List<List<Placed>> all = new ArrayList<>(formations.size());
         for (FormationSnapshot f : formations) {
             FormationSnapshot target = targets.apply(f.id());
-            FormationSnapshot ranks = target == null ? f : target.movedTo(f.x(), f.y(), f.z());
+            FormationSnapshot ranks = target == null || f.afloat() ? f : target.movedTo(f.x(), f.y(), f.z());
             all.add(step(f, ranks, foe(f, formations), positions, now, dt));
         }
         if (now - pruned > 1000) {
@@ -188,6 +189,13 @@ final class FigureMotion {
                 // In the air: carried along its flight from its place, landing where the flight ends, then walking back.
                 state.x = tx + thrown[0];
                 state.z = tz + thrown[2];
+            } else if (f.afloat() && !s.real()) {
+                // Aboard, a figure stands at its post as its ship sails: walking there at a foot's pace left it astern.
+                state.x = tx;
+                state.z = tz;
+                state.fx = faceX;
+                state.fz = faceZ;
+                state.amount = 0;
             } else {
                 double ox = state.x;
                 double oz = state.z;

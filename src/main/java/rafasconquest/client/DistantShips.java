@@ -45,10 +45,12 @@ final class DistantShips {
      * whether the client has the real ship there (and so where it really is). A sea lane's ship has its {@code lane}; a
      * battle's, its formation's {@code battle} ship. It floats as the real one does: its deck rising {@code fore} a block
      * toward the bow and {@code port} toward its left, its waterline {@code lift} off the still sea. Its left and right
-     * oars row {@code rowLeft} and {@code rowRight} ({@link OarFigures.Rowing}).
+     * oars row {@code rowLeft} and {@code rowRight} ({@link OarFigures.Rowing}). It was {@code want}ed where its lane or
+     * formation has it, which for a real ship is behind where it really is.
      */
     record Far(double x, double z, double yaw, SeaLanes.Size size, boolean real, @Nullable SeaLanes.Ship lane,
-               @Nullable FormationSnapshot.Ship battle, double fore, double port, double lift, float rowLeft, float rowRight) {
+               @Nullable FormationSnapshot.Ship battle, double fore, double port, double lift, float rowLeft, float rowRight,
+               @Nullable Want want) {
         boolean warship() {
             return lane == null || lane.warship();
         }
@@ -73,11 +75,28 @@ final class DistantShips {
             // Into its own frame (as OarFigures shears the hull): +z to the bow, +x to port.
             return lift + (dx * sin + dz * cos) * fore + (dx * cos - dz * sin) * port;
         }
+
+        /**
+         * A figure laid out about where this ship was wanted (its formation, which the client has a second or two late:
+         * {@link DistantArmies}), moved and turned with the ship onto where it is drawn now, and lifted as its deck lies there.
+         */
+        FigureMotion.Placed carry(FigureMotion.Placed p) {
+            double turn = yaw - want.yaw();
+            double sin = Math.sin(turn);
+            double cos = Math.cos(turn);
+            double dx = p.x() - want.x();
+            double dz = p.z() - want.z();
+            // Turned as Quaterniond.rotationY turns, +z toward +x.
+            double x = this.x + dx * cos + dz * sin;
+            double z = this.z - dx * sin + dz * cos;
+            return new FigureMotion.Placed(x, p.y() + deckLift(x, z), z, p.fx() * cos + p.fz() * sin, p.fz() * cos - p.fx() * sin,
+                    p.leader(), false, p.swing(), p.amount());
+        }
     }
 
     /**
-     * Lifts the figures of each block afloat as its ship floats ({@link Far#deckLift}), so they heave, pitch and roll
-     * with the hull drawn under them. Real soldiers already stand on the real deck.
+     * Carries the figures of each block afloat on the ship drawn under them ({@link Far#carry}), so they sail, heave,
+     * pitch and roll with it rather than trailing it by the formation's lag. Real soldiers already stand on the real deck.
      */
     static void rideDecks(List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, List<Far> ships) {
         for (int f = 0; f < formations.size(); f++) {
@@ -90,21 +109,26 @@ final class DistantShips {
             for (int i = 0; i < list.size(); i++) {
                 FigureMotion.Placed p = list.get(i);
                 if (!p.real()) {
-                    list.set(i, new FigureMotion.Placed(p.x(), p.y() + ship.deckLift(p.x(), p.z()), p.z(), p.fx(), p.fz(),
-                            p.leader(), false, p.swing(), p.amount()));
+                    list.set(i, ship.carry(p));
                 }
             }
         }
     }
 
-    /** The battle ship whose deck (x, z) is on: the nearest within half its length (and a block); null if none. */
+    /**
+     * The battle ship whose deck (x, z) is on, both where the formations have them, which the real ship may be well
+     * ahead of: the nearest within half its length (and a block); null if none.
+     */
     @Nullable
     private static Far shipUnder(double x, double z, List<Far> ships) {
         Far best = null;
         double nearest = Double.MAX_VALUE;
         for (Far s : ships) {
-            double d = Math.hypot(s.x() - x, s.z() - z);
-            if (s.battle() != null && d < nearest && d <= s.size().length / 2.0 + 1) {
+            if (s.battle() == null) {
+                continue;
+            }
+            double d = Math.hypot(s.want().x() - x, s.want().z() - z);
+            if (d < nearest && d <= s.size().length / 2.0 + 1) {
                 best = s;
                 nearest = d;
             }
@@ -145,7 +169,7 @@ final class DistantShips {
         if (mc.level == null) {
             return List.of();
         }
-        List<double[]> real = SableSeen.ships(mc.level);
+        List<double[]> real = SableSeen.ships(mc.level, partialTick);
         List<Want> wants = new ArrayList<>();
         for (SeaLanes.Ship s : lanes(partialTick)) {
             wants.add(new Want(s.id(), s.x(), s.z(), s.yaw(), s.size(), s, null));
@@ -164,7 +188,7 @@ final class DistantShips {
         int battleReal = 0;
         for (int i = 0; i < wants.size(); i++) {
             Want w = wants.get(i);
-            Far ship = far(owns[i], eye, w.key, w.x, w.z, w.yaw, w.size, w.lane, w.battle);
+            Far ship = far(owns[i], eye, w);
             ships.add(ship);
             if (w.battle != null) {
                 battle++;
@@ -220,25 +244,25 @@ final class DistantShips {
         return owns;
     }
 
-    private static Far far(@Nullable double[] own, net.minecraft.world.phys.Vec3 eye, Object key, double x, double z, double yaw,
-                           SeaLanes.Size size, @Nullable SeaLanes.Ship lane, @Nullable FormationSnapshot.Ship battle) {
-        if (own != null) {
-            x = own[0];
-            z = own[1];
-            yaw = own[2];
-        }
+    private static Far far(@Nullable double[] own, net.minecraft.world.phys.Vec3 eye, Want w) {
+        double x = own != null ? own[0] : w.x;
+        double z = own != null ? own[1] : w.z;
+        double yaw = own != null ? own[2] : w.yaw;
+        SeaLanes.Size size = w.size;
+        SeaLanes.Ship lane = w.lane;
+        FormationSnapshot.Ship battle = w.battle;
         // Only a ship drawn as a level of detail shows its float: a sprite is too far, and Sable floats the real one.
         // Floating every lane ship in the world was a sixth of a sea battle's frame.
         double flat = Math.hypot(x - eye.x, z - eye.z);
         // A real ship lies as Sable has it: heaved off where its keel sits on a still sea, so its deck's figures ride with it.
         double heave = own != null ? own[5] - keel() : 0;
         if (flat > SPRITE_PAST || own != null && flat < REAL_WITHIN) {
-            return new Far(x, z, yaw, size, own != null, lane, battle, own != null ? own[3] : 0, own != null ? own[4] : 0, heave, 0, 0);
+            return new Far(x, z, yaw, size, own != null, lane, battle, own != null ? own[3] : 0, own != null ? own[4] : 0, heave, 0, 0, w);
         }
-        Riding r = ride(key, x, z, yaw, size);
+        Riding r = ride(w.key, x, z, yaw, size);
         Swell.Ride ride = r.ride;
-        return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], heave, r.rowLeft, r.rowRight)
-                : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset(), r.rowLeft, r.rowRight);
+        return own != null ? new Far(x, z, yaw, size, true, lane, battle, own[3], own[4], heave, r.rowLeft, r.rowRight, w)
+                : new Far(x, z, yaw, size, false, lane, battle, ride.fore(), ride.port(), ride.offset(), r.rowLeft, r.rowRight, w);
     }
 
     /**

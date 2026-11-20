@@ -2280,9 +2280,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/DistantShips.java": {
-    "mtime": 1795116058.239827,
-    "seen": 1795116108.6468196,
-    "ast_hash": "b3e5be041783f281abe8ffac38875800",
+    "mtime": 1795126423.715382,
+    "seen": 1795126515.6821918,
+    "ast_hash": "327038306bd7c7a27f6296159afb429b",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/SeaLanes.java": {
@@ -2424,9 +2424,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SableSeen.java": {
-    "mtime": 1795116051.0264244,
-    "seen": 1795116108.6468518,
-    "ast_hash": "2dfbc385789b1d5b0c45881b78e4f6f3",
+    "mtime": 1795126439.8259318,
+    "seen": 1795126515.6822238,
+    "ast_hash": "79e30fc8c77506aaa3814d52b4730879",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/SoldierFigure.java": {
@@ -2994,15 +2994,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/FigureMotion.java": {
-    "mtime": 1794675194.1069462,
-    "seen": 1794675200.3792558,
-    "ast_hash": "d6427a79bcdf641a8bbebfbb7f1cc11e",
+    "mtime": 1795126439.6464117,
+    "seen": 1795126515.6822019,
+    "ast_hash": "6d317069aa5c4d9b88baca707dc367cc",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/FigureMotionTest.java": {
-    "mtime": 1794675194.1797564,
-    "seen": 1794675200.3798985,
-    "ast_hash": "156ad1574f7e7ee45725964a423d8177",
+    "mtime": 1795126472.9085953,
+    "seen": 1795126515.6829133,
+    "ast_hash": "62331ce99687a652b92a3f5e8b27db97",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/ClientChunkWindowMixin.java": {
@@ -4458,9 +4458,9 @@
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/DeckLiftTest.java": {
-    "mtime": 1795115899.5353734,
-    "seen": 1795116108.6475723,
-    "ast_hash": "842ca79ace78d13cf5de0f8b9468f400",
+    "mtime": 1795126472.7536771,
+    "seen": 1795126515.6829076,
+    "ast_hash": "97d69aef53cc1e3769e03ec31c741245",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/mixin/ShoulderSurfingPickMixin.java": {

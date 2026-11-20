@@ -32,6 +32,18 @@ class FigureMotionTest {
     }
 
     @Test
+    void aboardAShipFiguresStandAtTheirPostsAsItSails() {
+        FormationSnapshot.Ship hull = new FormationSnapshot.Ship(0, 0, rafasconquest.core.SeaLanes.Size.LARGE.ordinal());
+        FormationSnapshot at = new FormationSnapshot(1, Kind.LEVY, 0xFF0000, 0, 6, 0, 64, 0, 0, 1, 2, 1, false, false, new int[0], -1, hull);
+        FigureMotion.step(List.of(at), id -> null, 1000);
+        FormationSnapshot on = at.movedTo(3, 64, 0);
+        List<FormationSnapshot.Sprite> posts = on.layout();
+        for (FigureMotion.Placed p : FigureMotion.step(List.of(on), id -> null, 1050).get(0)) {
+            assertTrue(posts.stream().anyMatch(s -> Math.hypot(s.x() - p.x(), s.z() - p.z()) < 1e-9), "at a post, not walking after it");
+        }
+    }
+
+    @Test
     void whenABlockTurnsItsSoldiersWalkRoundRatherThanTheBlockSwinging() {
         FormationSnapshot north = block(1, 0xFF0000, 0, 0, 0, -1, false);
         List<FigureMotion.Placed> before = FigureMotion.step(List.of(north), id -> null, 1000).get(0);
