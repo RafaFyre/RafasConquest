@@ -65,11 +65,12 @@ public record FormationSnapshot(int id, Kind kind, int rgb, int mark, int alive,
      * its stripe's dye colours (DyeColor ids), and its hull (a {@link rafasconquest.core.SeaLanes.Size} ordinal; -1 for a
      * block aboard a ship another block of its unit draws). Aboard a gunship, {@code gun} is that gunship's hull (every
      * block of its crew, so each stands at its own posts, {@link #layout}) and {@code berth} the block's place in its crew;
-     * -1 and 0 aboard any other ship. The formation then stands at its ship's middle, facing its bow.
+     * -1 and 0 aboard any other ship. The formation then stands at its ship's middle, facing its bow. {@code sub} is the
+     * id of the real Sable ship it rides (the same on every client), so it is drawn on that very ship; null with none sailing.
      */
-    public record Ship(int sail, int stripe, int hull, int gun, int berth) {
+    public record Ship(int sail, int stripe, int hull, int gun, int berth, @Nullable java.util.UUID sub) {
         public Ship(int sail, int stripe, int hull) {
-            this(sail, stripe, hull, -1, 0);
+            this(sail, stripe, hull, -1, 0, null);
         }
 
         /** The gunship this crew stands at the guns of; null aboard any other ship. */

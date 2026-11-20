@@ -14,9 +14,9 @@ import org.joml.Vector3d;
 import rafasconquest.RafasConquest;
 import rafasconquest.bridge.SableLink;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.WeakHashMap;
 
 /**
@@ -32,19 +32,19 @@ final class SableSeen {
     /**
      * Where each Sable sub-level the client has is and how it lies: {x, z, yaw, fore, port}, the yaw a turn about the up
      * axis taking +z to its bow (as {@code Quaterniond.rotationY} turns), fore and port its deck's rise per block toward
-     * the bow and toward its +x side, keel its keel's height at its middle; none without Sable. Each as drawn this
-     * frame, so the figures on its deck ride the hull Sable draws.
+     * the bow and toward its +x side, keel its keel's height at its middle; by its Sable id; none without Sable. Each as
+     * drawn this frame, so the figures on its deck ride the hull Sable draws.
      */
-    static List<double[]> ships(ClientLevel level, float partialTick) {
+    static Map<UUID, double[]> ships(ClientLevel level, float partialTick) {
         if (broken || !SableLink.available()) {
-            return List.of();
+            return Map.of();
         }
         try {
             ClientSubLevelContainer container = SubLevelContainer.getContainer(level);
             if (container == null) {
-                return List.of();
+                return Map.of();
             }
-            List<double[]> ships = new ArrayList<>();
+            Map<UUID, double[]> ships = new LinkedHashMap<>();
             for (ClientSubLevel sub : container.getAllSubLevels()) {
                 // Not until its blocks have come: till then Sable draws nothing there, and the stand-in must stay.
                 if (!sub.isRemoved() && columns(level, sub) != null) {
@@ -57,7 +57,7 @@ final class SableSeen {
                     BoundingBox3ic plot = sub.getPlot().getBoundingBox();
                     Vector3d keel = pose.transformPosition(new Vector3d((plot.minX() + plot.maxX() + 1) / 2.0, plot.minY(),
                             (plot.minZ() + plot.maxZ() + 1) / 2.0));
-                    ships.add(new double[]{keel.x, keel.z, Math.atan2(bow.x, bow.z),
+                    ships.put(sub.getUniqueId(), new double[]{keel.x, keel.z, Math.atan2(bow.x, bow.z),
                             bow.y / Math.max(1e-6, Math.hypot(bow.x, bow.z)), port.y / Math.max(1e-6, Math.hypot(port.x, port.z)), keel.y});
                 }
             }
@@ -65,7 +65,7 @@ final class SableSeen {
         } catch (LinkageError e) {
             broken = true;
             RafasConquest.LOGGER.warn("Sable's client API doesn't match; every battle ship will be drawn as a stand-in", e);
-            return List.of();
+            return Map.of();
         }
     }
 

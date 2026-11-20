@@ -155,6 +155,19 @@ public final class SableLink {
         }
     }
 
+    /** Formation {@code id}'s battle ship's Sable id, the same on its clients; null with none sailing. */
+    @org.jetbrains.annotations.Nullable
+    public static java.util.UUID shipUuid(int id) {
+        if (!enabled) {
+            return null;
+        }
+        try {
+            return BattleShips.id(id);
+        } catch (LinkageError e) {
+            return null;
+        }
+    }
+
     /** Whether Sable ship {@code sub} (a ServerSubLevel, typed loosely so this class loads without Sable) is a battle's. */
     public static boolean battleShip(Object sub) {
         return enabled && BattleShips.battleShip((dev.ryanhcode.sable.sublevel.ServerSubLevel) sub);

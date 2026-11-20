@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * The ships the client draws, beyond the real ones: the sea lanes', and a battle's (one under each formation afloat).
@@ -101,7 +102,7 @@ final class DistantShips {
     static void rideDecks(List<FormationSnapshot> formations, List<List<FigureMotion.Placed>> figures, List<Far> ships) {
         for (int f = 0; f < formations.size(); f++) {
             FormationSnapshot formation = formations.get(f);
-            Far ship = formation.afloat() ? shipUnder(formation.x(), formation.z(), ships) : null;
+            Far ship = formation.afloat() ? shipUnder(formation, ships) : null;
             if (ship == null) {
                 continue;
             }
@@ -116,11 +117,20 @@ final class DistantShips {
     }
 
     /**
-     * The battle ship whose deck (x, z) is on, both where the formations have them, which the real ship may be well
-     * ahead of: the nearest within half its length (and a block); null if none.
+     * The battle ship a formation afloat is aboard: the one of the Sable ship the server named, else (none named) the
+     * one whose deck it is on, both where the formations have them, which the real ship may be well ahead of: the
+     * nearest within half its length (and a block); null if none.
      */
     @Nullable
-    private static Far shipUnder(double x, double z, List<Far> ships) {
+    private static Far shipUnder(FormationSnapshot formation, List<Far> ships) {
+        UUID sub = formation.ship().sub();
+        for (Far s : ships) {
+            if (sub != null && s.battle() != null && sub.equals(s.battle().sub())) {
+                return s;
+            }
+        }
+        double x = formation.x();
+        double z = formation.z();
         Far best = null;
         double nearest = Double.MAX_VALUE;
         for (Far s : ships) {
@@ -169,7 +179,7 @@ final class DistantShips {
         if (mc.level == null) {
             return List.of();
         }
-        List<double[]> real = SableSeen.ships(mc.level, partialTick);
+        Map<UUID, double[]> real = SableSeen.ships(mc.level, partialTick);
         List<Want> wants = new ArrayList<>();
         for (SeaLanes.Ship s : lanes(partialTick)) {
             wants.add(new Want(s.id(), s.x(), s.z(), s.yaw(), s.size(), s, null));
@@ -214,14 +224,30 @@ final class DistantShips {
     }
 
     /**
-     * Each wanted ship's real one, or null: nearest pairs first, each real ship given to one ship at most. Else, in a
-     * packed fleet, two ships both took one real ship, one of them was hidden with its own real hull elsewhere, and as
-     * they drifted the claim swapped back and forth: ships blinking out right by the player.
+     * Each wanted ship's real one, or null. A battle ship the server named the Sable ship of has that one or none: by
+     * distance its formation, a second or two late, lay nearer the hull of the ship astern in a line than its own.
+     * The rest by distance, nearest pairs first, each real ship given to one ship at most. Else, in a packed fleet,
+     * two ships both took one real ship, one of them was hidden with its own real hull elsewhere, and as they drifted
+     * the claim swapped back and forth: ships blinking out right by the player.
      */
-    static double[][] match(List<Want> wants, List<double[]> real) {
+    static double[][] match(List<Want> wants, Map<UUID, double[]> seen) {
+        double[][] owns = new double[wants.size()][];
+        List<double[]> real = new ArrayList<>(seen.values());
+        boolean[] taken = new boolean[real.size()];
+        boolean[] named = new boolean[wants.size()];
+        for (int i = 0; i < wants.size(); i++) {
+            UUID sub = wants.get(i).battle == null ? null : wants.get(i).battle.sub();
+            if (sub != null) {
+                named[i] = true;
+                owns[i] = seen.get(sub);
+                if (owns[i] != null) {
+                    taken[real.indexOf(owns[i])] = true;
+                }
+            }
+        }
         List<double[]> pairs = new ArrayList<>(); // {distance, want, real}
         for (int i = 0; i < wants.size(); i++) {
-            for (int j = 0; j < real.size(); j++) {
+            for (int j = 0; j < real.size() && !named[i]; j++) {
                 double dx = real.get(j)[0] - wants.get(i).x;
                 double dz = real.get(j)[1] - wants.get(i).z;
                 double d = dx * dx + dz * dz; // squared: it only ranks the pairs
@@ -231,8 +257,6 @@ final class DistantShips {
             }
         }
         pairs.sort((a, b) -> Double.compare(a[0], b[0]));
-        double[][] owns = new double[wants.size()][];
-        boolean[] taken = new boolean[real.size()];
         for (double[] p : pairs) {
             int i = (int) p[1];
             int j = (int) p[2];

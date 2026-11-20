@@ -90,6 +90,7 @@ public final class DistantArmyRenderer {
     }
 
     public static void render(PoseStack pose, Camera camera, net.minecraft.client.renderer.culling.Frustum frustum, float partialTick) {
+        shipsThisFrame = DistantShips.all(partialTick);
         Minecraft mc = Minecraft.getInstance();
         double renderBlocks = mc.options.getEffectiveRenderDistance() * 16.0;
         Vec3 eye = camera.getPosition();
@@ -107,7 +108,7 @@ public final class DistantArmyRenderer {
         }
 
         List<List<FigureMotion.Placed>> figures = FigureMotion.step(formations, DistantArmies::target, DistantArmies.positions(partialTick), net.minecraft.Util.getMillis());
-        DistantShips.rideDecks(formations, figures, lastShips);
+        DistantShips.rideDecks(formations, figures, shipsThisFrame);
         FarFlags.figures(formations, figures);
         boolean[] seen = new boolean[formations.size()];
         int[] light = new int[formations.size()];
@@ -449,8 +450,7 @@ public final class DistantArmyRenderer {
      * a hull under a mast and sail ({@link FigureBatches}). Both are drawn instanced, as the soldiers are.
      */
     public static void renderShips(PoseStack pose, Camera camera, float partialTick) {
-        List<DistantShips.Far> ships = DistantShips.all(partialTick);
-        lastShips = ships;
+        List<DistantShips.Far> ships = shipsThisFrame;
         Vector3f left = camera.getLeftVector();
         double length = Math.hypot(left.x(), left.z());
         if (ships.isEmpty() || length < 1e-6) {
@@ -493,8 +493,11 @@ public final class DistantArmyRenderer {
         FigureBatches.draw(pose.last().pose());
     }
 
-    /** The ships drawn last frame, whose float the figures on their decks ride (figures are drawn before ships). Render thread only. */
-    private static List<DistantShips.Far> lastShips = List.of();
+    /**
+     * This frame's ships, worked out before its figures (drawn before the ships) so those on a deck ride the hull as it
+     * is drawn now: last frame's left them a frame astern. Render thread only.
+     */
+    private static List<DistantShips.Far> shipsThisFrame = List.of();
 
     /** How many blocks nearer the camera a real ship's copy is drawn, so it covers the real one's depth. */
     private static final double REAL_SHIP_PULL = 4;

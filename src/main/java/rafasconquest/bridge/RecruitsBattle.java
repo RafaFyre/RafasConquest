@@ -6943,7 +6943,8 @@ public final class RecruitsBattle {
         }
         FactionBanner flag = FactionBanner.of(sides[block.side()].faction.id());
         return new FormationSnapshot.Ship(flag.base(), flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(),
-                block == field.holder(block) ? block.hull().ordinal() : -1, gunCrew(block) ? block.hull().ordinal() : -1, block.berth());
+                block == field.holder(block) ? block.hull().ordinal() : -1, gunCrew(block) ? block.hull().ordinal() : -1, block.berth(),
+                SableLink.shipUuid(block.shipId()));
     }
 
     /** Whether a block is a gunship's crew, at its posts (post): its far figures stand there too (FormationSnapshot.layout). */
@@ -6977,11 +6978,17 @@ public final class RecruitsBattle {
                 at.add(new double[]{feet.getX(), feet.getY(), feet.getZ()});
                 idList.add(s.getId());
             } else if (s == null && health[i] > 0) {
-                Point p = slot(block, front, i);
+                // Aboard, on its ship's deck where it will be put: about the field's own place it lay ahead of the ship
+                // chasing it, and the client's ships and figures parted.
+                Point p = block.afloat() ? deckSpot(block, i) : slot(block, front, i);
                 at.add(new double[]{p.x(), groundY, p.z()});
                 idList.add(-1);
             }
         }
+        // Aboard a sailing ship, facing its bow, as when it is only numbers: the ranks are laid along its deck.
+        double[] sailing = block.afloat() ? SableLink.shipAt(block.shipId()) : null;
+        double faceX = sailing != null ? sailing[2] : face[0];
+        double faceZ = sailing != null ? sailing[3] : face[1];
         int n = at.size();
         double[] xs = new double[n];
         double[] ys = new double[n];
@@ -6999,7 +7006,7 @@ public final class RecruitsBattle {
             AbstractRecruitEntity c = l.soldiers[captain];
             leaderId = c != null && c.isAlive() ? c.getId() : -1;
         }
-        return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, face[0], face[1],
+        return FormationSnapshot.of(block.id(), kind, side.uniform, side.mark, xs, ys, zs, faceX, faceZ,
                 block.fighting(), leaderId >= 0, ids, leaderId, ship);
     }
 

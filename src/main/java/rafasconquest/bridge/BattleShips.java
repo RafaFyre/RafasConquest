@@ -164,6 +164,13 @@ final class BattleShips {
         return h == null ? null : new double[]{h.x(), h.z(), h.dirX(), h.dirZ(), decks.getOrDefault(id, Double.NaN)};
     }
 
+    /** Formation {@code id}'s Sable ship's id (as its clients have it too); null with no ship sailing. */
+    @org.jetbrains.annotations.Nullable
+    static java.util.UUID id(int id) {
+        ServerSubLevel sub = ships.get("battle-" + id);
+        return sub == null || sub.isRemoved() ? null : sub.getUniqueId();
+    }
+
     /**
      * Where a spot on formation {@code id}'s deck is in the world: {@code right} and {@code back} of its hull's middle,
      * standing on the deck as the ship lies now, turned, rolled and pitched: {x, y, z}; null with no ship sailing.

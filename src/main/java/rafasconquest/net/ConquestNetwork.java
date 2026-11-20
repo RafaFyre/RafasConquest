@@ -1336,7 +1336,7 @@ public final class ConquestNetwork {
                 buf.writeFloat((float) f.halfDepth());
                 FormationSnapshot.Ship ship = f.ship();
                 FormationSnapshot.Engine engine = f.engine();
-                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0)                        | (engine != null ? 16 : 0) | (engine != null && engine.up() ? 32 : 0));
+                buf.writeByte((f.fighting() ? 1 : 0) | (f.leader() ? 2 : 0) | (ship != null ? 4 : 0) | (ship != null && ship.sub() != null ? 8 : 0) | (engine != null ? 16 : 0) | (engine != null && engine.up() ? 32 : 0));
                 buf.writeVarIntArray(f.soldierIds());
                 buf.writeVarInt(f.leaderId() + 1);
                 if (ship != null) {
@@ -1345,6 +1345,9 @@ public final class ConquestNetwork {
                     buf.writeByte(ship.hull());
                     buf.writeByte(ship.gun());
                     buf.writeByte(ship.berth());
+                    if (ship.sub() != null) {
+                        buf.writeUUID(ship.sub());
+                    }
                 }
                 if (engine != null) {
                     buf.writeByte(engine.kind());
@@ -1360,7 +1363,8 @@ public final class ConquestNetwork {
         /** A formation's ship, after the rest of it; null if its flags say it is ashore. */
         @org.jetbrains.annotations.Nullable
         private static FormationSnapshot.Ship readShip(FriendlyByteBuf buf, int flags) {
-            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), buf.readByte(), buf.readByte(), buf.readByte());
+            return (flags & 4) == 0 ? null : new FormationSnapshot.Ship(buf.readByte(), buf.readByte(), buf.readByte(), buf.readByte(), buf.readByte(),
+                    (flags & 8) == 0 ? null : buf.readUUID());
         }
 
         static BattleSnapshot read(FriendlyByteBuf buf) {

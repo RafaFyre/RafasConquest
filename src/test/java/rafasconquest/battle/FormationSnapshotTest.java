@@ -147,7 +147,7 @@ class FormationSnapshotTest {
     private static FormationSnapshot gunCrew(int alive, int berth, int[] ids) {
         rafasconquest.core.SeaLanes.Size gunship = rafasconquest.core.SeaLanes.Size.GUNSHIP;
         return new FormationSnapshot(5, Kind.ENGINES, 0, 0, alive, 0, 64, 0, 0, 1, 0, 0, false, false, ids, -1,
-                new FormationSnapshot.Ship(0, 0, -1, gunship.ordinal(), berth));
+                new FormationSnapshot.Ship(0, 0, -1, gunship.ordinal(), berth, null));
     }
 
     @Test
