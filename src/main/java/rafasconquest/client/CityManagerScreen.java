@@ -22,11 +22,20 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import rafasconquest.core.CityPlates;
 import rafasconquest.core.SeatCities;
+import rafasconquest.peerage.CityStock;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Camera;
+import net.minecraft.client.gui.components.Button;
+import org.jetbrains.annotations.Nullable;
 import rafasconquest.net.ConquestNetwork;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.List;
 
 /**
@@ -54,6 +63,19 @@ public class CityManagerScreen extends Screen {
     private final List<AbstractRecruitEntity> council = new ArrayList<>();
     private List<CityHud.Spot> spots = List.of();
     private String hudKey = "";
+    /** The last city state the server sent; {@link #mine()} says whether it is this city's. */
+    @Nullable
+    private static ConquestNetwork.CityState state;
+    /** Picking plates to flatten: a click toggles one, a drag paints, a right-drag turns the view. */
+    private boolean flattening;
+    private boolean paintAdd;
+    private final Set<Long> selection = new LinkedHashSet<>();
+    @Nullable
+    private Long hover;
+    @Nullable
+    private Button confirm;
+    @Nullable
+    private Button cancel;
 
     public CityManagerScreen(SeatCities.City city, String name) {
         super(Component.literal(name));
@@ -70,6 +92,7 @@ public class CityManagerScreen extends Screen {
             DistantHorizonsLink.lodOnly(true); // the whole city as Distant Horizons draws it, no vanilla chunks
             aim();
         }
+        addButtons();
         if (council.isEmpty() && minecraft != null && minecraft.level != null) {
             // Five unlike figures: their own skins, and coats and hoods dyed apart, as Frostpunk 2's are.
             int[][] looks = {{6, 4, 0x5A4A3A}, {1, 0, 0x3A4048}, {11, 3, 0x7A1E18}, {16, 1, 0x2C3A30}, {3, 2, 0x6A5A40}};
@@ -87,6 +110,128 @@ public class CityManagerScreen extends Screen {
                 }
             }
         }
+    }
+
+    private void addButtons() {
+        confirm = addRenderableWidget(Button.builder(Component.literal("Confirm"), b -> confirmFlatten()).bounds(10, height - 80, 90, 20).build());
+        cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> toggleFlatten()).bounds(105, height - 80, 70, 20).build());
+        confirm.visible = cancel.visible = flattening;
+    }
+
+    private boolean mine() {
+        return state != null && state.province() == city.province();
+    }
+
+    /** The server's word on a city: its stockpile and plates. */
+    public static void state(ConquestNetwork.CityState s) {
+        state = s;
+        if (net.minecraft.client.Minecraft.getInstance().screen instanceof CityManagerScreen screen && screen.mine()) {
+            screen.selection.removeAll(s.flat());
+            screen.selection.removeAll(s.pending());
+        }
+    }
+
+    private void toggleFlatten() {
+        flattening = !flattening && mine();
+        selection.clear();
+        if (confirm != null) {
+            confirm.visible = cancel.visible = flattening;
+        }
+    }
+
+    /** Plates flat or being levelled: what new ones may grow from. */
+    private Set<Long> reach() {
+        Set<Long> r = new HashSet<>(state.flat());
+        r.addAll(state.pending());
+        return r;
+    }
+
+    /** The selected plates that may be flattened. */
+    private List<Long> accepted() {
+        return state.plates().accept(selection, reach());
+    }
+
+    private void confirmFlatten() {
+        List<Long> ok = accepted();
+        if (!ok.isEmpty()) {
+            ConquestNetwork.cityFlatten(city.province(), ok);
+        }
+        selection.clear();
+    }
+
+    /** The ground under a point of the screen, marched along the camera's ray over the loaded chunks; null over the sky. */
+    @Nullable
+    private Vec3 ground(double mx, double my) {
+        if (camera == null || minecraft.level == null) {
+            return null;
+        }
+        double yawR = Math.toRadians(yaw);
+        Vec3 f = forward();
+        Vec3 right = new Vec3(-Math.cos(yawR), 0, -Math.sin(yawR));
+        Vec3 up = right.cross(f);
+        double tan = Math.tan(Math.toRadians(minecraft.options.fov().get()) / 2);
+        Vec3 dir = f.add(right.scale((2 * mx / width - 1) * tan * width / height)).add(up.scale((1 - 2 * my / height) * tan)).normalize();
+        Vec3 from = camera.position();
+        for (double t = 0; t < 600; t += 0.5) {
+            Vec3 q = from.add(dir.scale(t));
+            int x = Mth.floor(q.x);
+            int z = Mth.floor(q.z);
+            if (minecraft.level.hasChunkAt(x, z) && q.y <= minecraft.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)) {
+                return q;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private Long plateAt(double mx, double my) {
+        Vec3 at = mine() ? ground(mx, my) : null;
+        return at == null ? null : state.plates().at(at.x, at.z);
+    }
+
+    /** The plates' outlines over the world while flattening: flat green, being levelled blue, picked gold (red: not allowed). */
+    public static void renderWorld(PoseStack pose, Camera cam) {
+        if (!(net.minecraft.client.Minecraft.getInstance().screen instanceof CityManagerScreen s) || !s.flattening || !s.mine()) {
+            return;
+        }
+        CityPlates p = state.plates();
+        Vec3 c = cam.getPosition();
+        List<Long> ok = s.accepted();
+        RenderSystem.disableDepthTest(); // the city is Distant Horizons' terrain, not in the depth buffer
+        for (long k : state.flat()) {
+            plate(pose, c, p, k, 0, 0xA060C060);
+        }
+        for (long k : state.pending()) {
+            plate(pose, c, p, k, 0x3060A0E0, 0xE060A0E0);
+        }
+        for (long k : s.selection) {
+            boolean good = ok.contains(k);
+            plate(pose, c, p, k, good ? 0x40E0B040 : 0x40D8402C, good ? 0xFFE0B040 : 0xFFD8402C);
+        }
+        if (s.hover != null && !s.selection.contains(s.hover)) {
+            Set<Long> reach = s.reach();
+            reach.addAll(ok);
+            boolean good = !p.accept(List.of(s.hover), reach).isEmpty();
+            plate(pose, c, p, s.hover, 0, good ? 0xFFFFFFFF : 0xFFD8402C);
+        }
+        RenderSystem.enableDepthTest();
+    }
+
+    /** One plate at the height it is levelled to: a fill (none if 0) and its outline. */
+    private static void plate(PoseStack pose, Vec3 cam, CityPlates p, long k, int fill, int line) {
+        double x0 = p.minX(CityPlates.i(k));
+        double z0 = p.minZ(CityPlates.j(k));
+        double x1 = x0 + CityPlates.PLATE;
+        double z1 = z0 + CityPlates.PLATE;
+        double y = p.plateY() + 1;
+        if (fill != 0) {
+            BattleSpotRing.strip(pose, cam, new Vec3(x0, y, z0 + CityPlates.PLATE / 2.0), new Vec3(x1, y, z0 + CityPlates.PLATE / 2.0), CityPlates.PLATE / 2F, fill);
+        }
+        float half = 0.6F;
+        BattleSpotRing.strip(pose, cam, new Vec3(x0 - half, y, z0), new Vec3(x1 + half, y, z0), half, line);
+        BattleSpotRing.strip(pose, cam, new Vec3(x1, y, z0), new Vec3(x1, y, z1), half, line);
+        BattleSpotRing.strip(pose, cam, new Vec3(x1 + half, y, z1), new Vec3(x0 - half, y, z1), half, line);
+        BattleSpotRing.strip(pose, cam, new Vec3(x0, y, z1), new Vec3(x0, y, z0), half, line);
     }
 
     private static ItemStack dyed(net.minecraft.world.item.Item item, int rgb) {
@@ -161,6 +306,15 @@ public class CityManagerScreen extends Screen {
         RenderSystem.disableBlend();
         g.pose().popPose();
         drawCouncil(g, h);
+        if (flattening && mine() && confirm != null) {
+            hover = plateAt(mouseX, mouseY);
+            int n = accepted().size();
+            g.drawString(font, n == 0 ? "Click plates to flatten: drag to paint, right-drag to turn"
+                    : "Flatten " + n + " plates: " + n * CityStock.FLATTEN_GOLD + " gold, " + n * CityStock.FLATTEN_WORKERS + " workers", 10, height - 94, 0xFFE6D7A6);
+            confirm.active = n > 0;
+            confirm.render(g, mouseX, mouseY, partialTick); // not super.render: that would dim the city behind
+            cancel.render(g, mouseX, mouseY, partialTick);
+        }
 
         double rx = mouseX * guiScale() / s();
         double ry = mouseY * guiScale() / s();
@@ -178,13 +332,13 @@ public class CityManagerScreen extends Screen {
     /** Paints the HUD texture again if the window or the day has changed. */
     private void repaint(int w, int h) {
         long day = day();
-        String key = w + "x" + h + ":" + day;
+        String key = w + "x" + h + ":" + day + ":" + (mine() ? java.util.Arrays.toString(state.res()) + state.busy() : "");
         if (key.equals(hudKey) || w <= 0 || h <= 0) {
             return;
         }
         hudKey = key;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        spots = CityHud.paint(img, title.getString(), date(), day, this::back);
+        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, this::toggleFlatten);
         minecraft.getTextureManager().register(HUD, upload(img));
     }
 
@@ -250,12 +404,34 @@ public class CityManagerScreen extends Screen {
                 }
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        Long k = button == 0 && flattening ? plateAt(mouseX, mouseY) : null;
+        if (k != null) {
+            paintAdd = selection.add(k);
+            if (!paintAdd) {
+                selection.remove(k);
+            }
+            return true;
+        }
+        return false;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
-        if (button == 0) {
+        if (flattening && button == 0) {
+            Long k = plateAt(mouseX, mouseY);
+            if (k != null) {
+                if (paintAdd) {
+                    selection.add(k);
+                } else {
+                    selection.remove(k);
+                }
+            }
+            return true;
+        }
+        if (button == 0 || flattening && button == 1) {
             yaw += dx * TURN;
             pitch = Mth.clamp(pitch + dy * TURN, 10, 85);
             return true;

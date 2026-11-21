@@ -2,6 +2,8 @@ package rafasconquest.client;
 
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
+import rafasconquest.peerage.CityStock;
+import rafasconquest.peerage.CityStock.Resource;
 
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
@@ -72,6 +74,11 @@ final class CityHud {
     final List<Spot> spots = new ArrayList<>();
     private final Graphics2D g;
     private final float refH;
+    /** The city's stockpile by {@link rafasconquest.peerage.CityStock.Resource} ordinal, null until the server sends it. */
+    @Nullable
+    private int[] res;
+    private int busy;
+    private Runnable flatten;
 
     private CityHud(Graphics2D g, float refH) {
         this.g = g;
@@ -101,10 +108,13 @@ final class CityHud {
     }
 
     /** The whole HUD on a window-sized image; returns its hover spots in reference units. */
-    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back) {
+    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten) {
         float s = img.getWidth() / REF_W;
         Graphics2D g = smooth(img, s);
         CityHud hud = new CityHud(g, img.getHeight() / s);
+        hud.res = res;
+        hud.busy = busy;
+        hud.flatten = flatten;
         hud.draw(name, date, day, back);
         g.dispose();
         return hud.spots;
@@ -169,13 +179,13 @@ final class CityHud {
                 Component.literal("Click: back to the fief menu").withColor(0xE0B040)), back));
 
         // People, then currencies.
-        stat(262, 23, "people", "47777", 17, TEXT, "Population", "Everyone living in the city", null);
+        stat(262, 23, "people", amount(Resource.POPULATION), 17, TEXT, "Population", "Everyone living in the city", null);
         dots(266, 31, 70, 6);
-        stat(344, 23, "workers", "8977", 17, TEXT, "Workforce", "People free to work: districts, building and frostbreaking take from it", null);
-        stat(404, 23, "sick", "0", 17, TEXT, "Sick and injured", "People who cannot work until a hospital heals them", null);
-        stat(554, 23, "stamps", "1248", 17, TEXT, "Heatstamps", "The city's money: pays for building and research; earned each week by population", null);
-        stat(628, 23, "prefabs", "2456", 17, TEXT, "Prefabs", "Needed to build and repair districts and buildings", null);
-        stat(712, 23, "cores", "48", 17, TEXT, "Cores", "Rare: only found in the Frostland; for advanced buildings", null);
+        stat(344, 23, "workers", res == null ? "-" : (res[Resource.WORKERS.ordinal()] - busy) + "/" + res[Resource.WORKERS.ordinal()], 17, TEXT,
+                "Workers", "Free of all the city's workers; flattening holds " + CityStock.FLATTEN_WORKERS + " a plate until it is flat", null);
+        stat(554, 23, "stamps", amount(Resource.GOLD), 17, TEXT, "Gold", "The city's money: pays for flattening, districts and research", null);
+        stat(628, 23, "prefabs", amount(Resource.RAW), 17, TEXT, "Raw materials", "Needed to build districts", null);
+        stat(712, 23, "cores", amount(Resource.HIGH_GRADE), 17, TEXT, "High grade materials", "For advanced buildings", null);
 
         // The centre panel: heat, then the fuels.
         stat(840, 30, "heat", "-935", 21, TEXT, "Heat", "Heat supply minus demand. Negative: the city is short of heat and districts go cold.",
@@ -190,14 +200,9 @@ final class CityHud {
         stat(1100, 30, "steam", "0", 19, new Color(0x5C656C), "Steam", "Steam fuel: not unlocked", null);
 
         // Needs (output minus demand, with a bar), then guards and teams.
-        stat(1250, 23, "house", "-94", 17, TEXT, "Shelter", "Housing output minus demand. Short: people go cold. Not stored.", null);
-        bar(1250, 33, 60, -0.3F);
-        stat(1318, 23, "food", "-159", 17, TEXT, "Food", "Output minus demand. Short: hunger, and disease is likelier. Bar: red short, gold stored.", null);
-        bar(1320, 33, 66, -0.55F);
-        stat(1392, 23, "materials", "-200", 17, TEXT, "Materials", "Output minus demand. Short: squalor, and districts break down.", null);
-        bar(1394, 33, 64, -0.85F);
-        stat(1466, 23, "goods", "-104", 17, TEXT, "Goods", "Output minus demand. Short: crime, and fewer heatstamps each week.", null);
-        bar(1468, 33, 60, 0.25F);
+        stat(1250, 23, "house", amount(Resource.HOUSING), 17, TEXT, "Housing", "Homes for the city's people", null);
+        stat(1318, 23, "food", amount(Resource.FOOD), 17, TEXT, "Food", "The city's food store", null);
+        stat(1392, 23, "goods", amount(Resource.LUXURY), 17, TEXT, "Luxury goods", "The city's store of luxury goods", null);
         stat(1736, 23, "guard", "52", 17, TEXT, "Guard squads", "Cut crime and put down protests; raised at watchtowers", null);
         stat(1802, 23, "teams", "15", 17, TEXT, "Frostland teams", "Scouts for expeditions and outposts; logistics districts train them", null);
 
@@ -446,13 +451,22 @@ final class CityHud {
 
     private void buttons() {
         medallion(148, b(1090), "district", "Districts (B)", "Lay out a district on cleared ground: housing, food, extraction, industry, logistics");
-        medallion(215, b(1090), "pick", "Frostbreaking", "Clear frozen ground before building on it; takes workforce");
+        medallion(215, b(1090), "pick", "Flatten ground", "Level 32-block plates round the city before building districts on them: "
+                + CityStock.FLATTEN_GOLD + " gold and " + CityStock.FLATTEN_WORKERS + " workers a plate", flatten);
         medallion(283, b(1090), "hub", "Hubs and buildings", "Hubs serve the districts beside them; buildings fill a district's slots");
         ringButton(383, b(1080), 31, "spiral", "Council and laws", "Propose laws and see how each faction will vote");
         ringButton(1617, b(1080), 31, "tree", "Idea Tree (R)", "Research: Survival, Economy and Society; each faction backs its own solution");
     }
 
+    private String amount(Resource r) {
+        return res == null ? "-" : Integer.toString(res[r.ordinal()]);
+    }
+
     private void medallion(float x, float y, String glyph, String name, String detail) {
+        medallion(x, y, glyph, name, detail, null);
+    }
+
+    private void medallion(float x, float y, String glyph, String name, String detail, @Nullable Runnable click) {
         float r = 24;
         g.setPaint(new RadialGradientPaint(x - 8, y - 9, r * 1.5F, new float[]{0, 0.5F, 1},
                 new Color[]{new Color(0xF8E092), new Color(0xC48C32), new Color(0x6A4810)}));
@@ -466,7 +480,8 @@ final class CityHud {
         g.setColor(new Color(228, 233, 238, 150));
         g.draw(circle(x, y, r + 5)); // the trace ring round each medallion
         icon(glyph, x, y, 25, new Color(0x3E2A0C));
-        spots.add(new Spot(x - r, y - r, 2 * r, 2 * r, List.of(Component.literal(name), mutedLine(detail), mutedLine("Not built yet")), null));
+        spots.add(new Spot(x - r, y - r, 2 * r, 2 * r, List.of(Component.literal(name), mutedLine(detail),
+                click == null ? mutedLine("Not built yet") : Component.literal("Click: start or stop").withColor(0xE0B040)), click));
     }
 
     private void ringButton(float x, float y, float r, String glyph, String name, String detail) {

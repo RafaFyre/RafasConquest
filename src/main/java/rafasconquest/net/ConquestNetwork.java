@@ -27,7 +27,7 @@ import java.util.Map;
  * beyond the range at which soldiers are seen.
  */
 public final class ConquestNetwork {
-    private static final String VERSION = "4";
+    private static final String VERSION = "5";
     private static final int MAP_PART_BYTES = 256 * 1024;
     private static final SimpleChannel CHANNEL = new SimpleChannel(VERSION);
 
@@ -418,6 +418,73 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(CityState.class, 52, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(CityState::write)
+                .decoder(CityState::read)
+                .consumerMainThread((m, context) -> rafasconquest.client.CityManagerScreen.state(m))
+                .add();
+        CHANNEL.messageBuilder(CityFlatten.class, 53, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.province());
+                    b.writeCollection(m.plates(), FriendlyByteBuf::writeLong);
+                })
+                .decoder(b -> new CityFlatten(b.readVarInt(), b.readList(FriendlyByteBuf::readLong)))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null && m.plates().size() <= 256) {
+                        rafasconquest.peerage.CityStock.flatten(player, m.province(), m.plates());
+                    }
+                })
+                .add();
+    }
+
+    /**
+     * Server → client: a city's stockpile (by {@link rafasconquest.peerage.CityStock.Resource} ordinal), its workers
+     * busy flattening, its plate grid, its flat plates and those still being levelled.
+     */
+    public record CityState(int province, int[] res, int busy, rafasconquest.core.CityPlates plates, List<Long> flat, List<Long> pending) {
+        void write(FriendlyByteBuf b) {
+            b.writeVarInt(province);
+            b.writeVarIntArray(res);
+            b.writeVarInt(busy);
+            b.writeInt(plates.ax()).writeInt(plates.az()).writeVarInt(plates.boxSize()).writeInt(plates.plateY());
+            for (int[] box : new int[][]{plates.walled(), plates.harbour(), plates.annex()}) {
+                b.writeBoolean(box != null);
+                if (box != null) {
+                    b.writeVarIntArray(box);
+                }
+            }
+            b.writeCollection(flat, FriendlyByteBuf::writeLong);
+            b.writeCollection(pending, FriendlyByteBuf::writeLong);
+        }
+
+        static CityState read(FriendlyByteBuf b) {
+            int province = b.readVarInt();
+            int[] res = b.readVarIntArray();
+            int busy = b.readVarInt();
+            int ax = b.readInt();
+            int az = b.readInt();
+            int size = b.readVarInt();
+            int plateY = b.readInt();
+            int[][] boxes = new int[3][];
+            for (int i = 0; i < 3; i++) {
+                boxes[i] = b.readBoolean() ? b.readVarIntArray() : null;
+            }
+            return new CityState(province, res, busy, new rafasconquest.core.CityPlates(ax, az, size, plateY, boxes[0], boxes[1], boxes[2]),
+                    b.readList(FriendlyByteBuf::readLong), b.readList(FriendlyByteBuf::readLong));
+        }
+    }
+
+    public static void cityState(ServerPlayer player, CityState state) {
+        CHANNEL.send(player, state);
+    }
+
+    /** Client → server: flatten these plates round the city seating {@code province}. */
+    public record CityFlatten(int province, List<Long> plates) {
+    }
+
+    public static void cityFlatten(int province, List<Long> plates) {
+        CHANNEL.sendToServer(new CityFlatten(province, plates));
     }
 
     /** Server → client: the game speed (0-4), whether it is voted on, whether this player may propose, ticks until the top speed may be slowed (-1: not at it). */

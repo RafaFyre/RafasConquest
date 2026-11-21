@@ -50,6 +50,7 @@ public final class ConquestEvents {
             CapitalLayout.setLand(level.getSeed(), SettlementBiomes.land(generator.getBiomeSource(),
                     level.getChunkSource().randomState().sampler(), generator.getSeaLevel()));
             ConquestServer.attach(level, data);
+            rafasconquest.peerage.CityStock.clear();
             // The map, and so the titles and their seat cities, before the first chunk is made.
             rafasconquest.map.BaseMap map = ConquestServer.get().mapStore().loadOrDrawNow();
             ConquestRuntime.publishFounders(map.holders().clone()); // who founded each city, before the wars
@@ -157,6 +158,7 @@ public final class ConquestEvents {
         rafasconquest.politics.Wars.tick(event.getServer());
         PlaceMusic.tick(event.getServer());
         rafasconquest.content.PlacedBanners.tick(event.getServer());
+        rafasconquest.peerage.CityStock.tick(event.getServer());
     }
 
     @SubscribeEvent

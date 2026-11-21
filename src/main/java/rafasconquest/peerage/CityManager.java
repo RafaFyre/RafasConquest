@@ -50,10 +50,22 @@ public final class CityManager {
         int y = level.getChunk(city.x() >> 4, city.z() >> 4).getHeight(Heightmap.Types.MOTION_BLOCKING, city.x() & 15, city.z() & 15);
         player.setGameMode(GameType.SPECTATOR);
         player.teleportTo(level, city.x() + 0.5, y + ABOVE, city.z() + 0.5, player.getYRot(), player.getXRot());
+        VIEWING.put(player.getUUID(), province);
+        CityStock.send(player, province);
+    }
+
+    /** Who is looking over which city (by province). */
+    private static final java.util.Map<java.util.UUID, Integer> VIEWING = new java.util.HashMap<>();
+
+    /** The players looking over the city seating {@code province}. */
+    static java.util.List<ServerPlayer> viewers(net.minecraft.server.MinecraftServer server, int province) {
+        return VIEWING.entrySet().stream().filter(e -> e.getValue() == province)
+                .map(e -> server.getPlayerList().getPlayer(e.getKey())).filter(java.util.Objects::nonNull).toList();
     }
 
     /** Leaving the city manager (or the game): back where and as they were. Nothing if they were not away. */
     public static void close(ServerPlayer player) {
+        VIEWING.remove(player.getUUID());
         CompoundTag away = player.getPersistentData().getCompound(AWAY);
         if (!player.getPersistentData().contains(AWAY)) {
             return;
