@@ -71,8 +71,8 @@ public final class UnitCards {
     }
 
     /**
-     * Reads every card and engine file under {@code root}, first writing out the built-in ones that are missing. A file
-     * that can't be read is left out (logged), its card keeping the built-in values.
+     * Reads every card and engine file under {@code root}, first writing out the built-in ones that are missing or still
+     * as an older jar wrote them ({@link rafasconquest.data.BuiltInFiles}). A file that can't be read is left out (logged), its card keeping the built-in values.
      */
     public static void load(Path root) {
         READ.clear();
@@ -85,16 +85,17 @@ public final class UnitCards {
                         : folder.equals(ENGINES)
                         ? java.util.Arrays.stream(Machine.values()).map(m -> m.id).toList()
                         : java.util.Arrays.stream(BattlePlan.Arm.values()).filter(BattlePlan.Arm::builtIn).map(a -> a.id).toList();
+                rafasconquest.data.BuiltInFiles kept = rafasconquest.data.BuiltInFiles.in(dir);
                 for (String id : builtIns) {
-                    Path file = dir.resolve(id + ".json");
                     String text = jarText(folder, id);
-                    if (!Files.exists(file) && text != null) {
-                        Files.writeString(file, text);
+                    if (text != null) {
+                        kept.keep(id + ".json", text); // written, or brought up to this jar's unless edited
                     }
                 }
+                kept.save();
                 List<Path> files;
                 try (var listing = Files.list(dir)) {
-                    files = listing.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().toList();
+                    files = listing.filter(p -> p.getFileName().toString().endsWith(".json") && !p.getFileName().toString().startsWith(".")).sorted().toList(); // not BuiltInFiles' record
                 }
                 for (Path file : files) {
                     String name = file.getFileName().toString();
@@ -230,6 +231,8 @@ public final class UnitCards {
         s.type = str(o, "type", s.type).toLowerCase(Locale.ROOT);
         s.gunBlock = str(o, "gun_block", s.gunBlock);
         s.propulsionSet = upper(o, "propulsion", s.propulsionSet, rafasconquest.core.SeaLanes.Propulsion.class);
+        s.archerReach = Math.max(0.1, num(o, "archer_reach", s.archerReach));
+        s.bowGuns = Math.max(0, Math.min(2, (int) num(o, "bow_guns", s.bowGuns)));
     }
 
     private static String str(JsonObject o, String key, String otherwise) {

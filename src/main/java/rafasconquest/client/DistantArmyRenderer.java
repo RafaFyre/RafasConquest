@@ -102,6 +102,7 @@ public final class DistantArmyRenderer {
         float rightX = (float) (-left.x() / length);
         float rightZ = (float) (-left.z() / length);
         player(mc, pose, eye, rightX, rightZ, renderBlocks, partialTick);
+        shipEngines(mc, pose, eye, renderBlocks, partialTick);
         List<FormationSnapshot> formations = DistantArmies.now();
         if (formations.isEmpty()) {
             return;
@@ -436,6 +437,54 @@ public final class DistantArmyRenderer {
         }
         FigureBatches.add(shape, palette, (float) (dx * scale * back), (float) ((glow ? dy - 0.1 : dy) * scale * back), (float) (dz * scale * back),
                 (float) scale * size * (glow ? HALO_GROWTH : 1), (float) fx, (float) fz, lit, glow);
+    }
+
+    /** How much of the way to its swing a drawn ship engine goes each frame, as the cannons ease (OarFigures). */
+    private static final float ENGINE_EASE = 0.2F;
+
+    /**
+     * Each loaded ship engine block ({@link rafasconquest.content.ShipEngineBlock}) as its engine's own Siegeworks
+     * model, in the same instanced batch as the far engines ({@link RecruitFigures#engine}), swung to its crew's lay
+     * on its ship as it lies. Past {@link DistantShips#REAL_WITHIN} the far ship's copy has it, as the oars and cannons.
+     * shortcut: turned about the upright only, so it stays level as its ship rolls; tilt it with the ship if that shows.
+     */
+    private static void shipEngines(Minecraft mc, PoseStack pose, Vec3 eye, double renderBlocks, float partialTick) {
+        java.util.Map<Integer, List<rafasconquest.content.MediumCannonEntity>> byKind = new java.util.TreeMap<>();
+        for (rafasconquest.content.MediumCannonEntity e : rafasconquest.content.MediumCannonEntity.CLIENT_LOADED) {
+            if (!e.isRemoved() && e.getBlockState().getBlock() instanceof rafasconquest.content.ShipEngineBlock block) {
+                byKind.computeIfAbsent(block.machine().ordinal(), k -> new ArrayList<>()).add(e);
+            }
+        }
+        if (byKind.isEmpty()) {
+            return;
+        }
+        RecruitFigures.begin();
+        for (Map.Entry<Integer, List<rafasconquest.content.MediumCannonEntity>> kind : byKind.entrySet()) {
+            if (!RecruitFigures.engine(kind.getKey(), false)) {
+                continue; // no Siegeworks model to draw it with
+            }
+            for (rafasconquest.content.MediumCannonEntity e : kind.getValue()) {
+                net.minecraft.core.BlockPos pos = e.getBlockPos();
+                org.joml.Vector3d at = new org.joml.Vector3d(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+                org.joml.Quaterniond ship = OarFigures.shipTurn(mc, pos, partialTick, at);
+                double dx = at.x - eye.x;
+                double dy = at.y - eye.y;
+                double dz = at.z - eye.z;
+                if (dx * dx + dz * dz > DistantShips.REAL_WITHIN * DistantShips.REAL_WITHIN) {
+                    continue;
+                }
+                e.shownYaw += (e.yaw - e.shownYaw) * ENGINE_EASE;
+                org.joml.Quaterniond turn = rafasconquest.content.CannonAim.carriage(ship, rafasconquest.content.CannonAim.facing(
+                        e.getBlockState().getValue(rafasconquest.content.MediumCannonBlock.FACING)), e.shownYaw);
+                org.joml.Vector3d ahead = turn.transform(new org.joml.Vector3d(0, 0, 1));
+                double flat = Math.max(1e-6, Math.hypot(ahead.x, ahead.z));
+                double scale = DistantOcclusion.scale(Math.sqrt(dx * dx + dy * dy + dz * dz), renderBlocks);
+                int lit = FigureBatches.lightColour(net.minecraft.client.renderer.LevelRenderer.getLightColor(e.getLevel(), pos.above()));
+                RecruitFigures.add((float) (dx * scale), (float) (dy * scale), (float) (dz * scale), (float) scale,
+                        (float) (ahead.x / flat), (float) (ahead.z / flat), 0, 0, lit, 0, 0);
+            }
+        }
+        RecruitFigures.draw(pose.last().pose(), false);
     }
 
     /** Whether the client has a real Siegeworks engine about this spot (a tower stands up to its height over it). */

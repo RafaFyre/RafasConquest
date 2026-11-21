@@ -29,6 +29,66 @@ class ShipHullsTest {
         assertEquals(SeaLanes.Propulsion.SAIL, SeaLanes.Size.GUNSHIP.propulsion, "the card's propulsion wins over its oars");
     }
 
+    /** The z of a hull's mast: its upright logs on the centreline, above the deck. */
+    private static java.util.Set<Integer> mastRows(List<ShipHulls.Part> parts) {
+        return parts.stream().filter(p -> p.x() == 0 && p.y() > ShipHulls.DECK + 2 && p.state().is(net.minecraft.world.level.block.Blocks.SPRUCE_LOG))
+                .map(ShipHulls.Part::z).collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Test
+    void aGalleysMastStandsAmidshipsAMerchantsAstern() {
+        assertEquals(java.util.Set.of(0), mastRows(ShipHulls.hull(SeaLanes.Size.LARGE, false)));
+        int stern = -(SeaLanes.Size.LARGE.length / 2) + 2;
+        assertEquals(java.util.Set.of(stern), mastRows(ShipHulls.hull(SeaLanes.Size.LARGE, true)), "the large merchant's");
+    }
+
+    @Test
+    void aCannonGalleyCarriesTwoGunsOverItsBowEachWithAGunner() {
+        SeaLanes.Size g = SeaLanes.Size.CANNON_GALLEY;
+        assertEquals(SeaLanes.Propulsion.OARS, g.propulsion);
+        assertTrue(g.length > SeaLanes.Size.XXLARGE.length, "no longer than a plain galley");
+        assertEquals(2, g.gunsBow.size());
+        assertTrue(g.gunsRight.isEmpty() && g.gunsLeft.isEmpty(), "bow guns counted in a broadside");
+        assertEquals(2, g.posts.stream().filter(p -> !p.gun().isEmpty()).count(), "a gunner for each gun");
+        assertTrue(g.posts.stream().allMatch(p -> p.z() > g.length / 4), "the gunners stand forward");
+        assertEquals(rafasconquest.battle.BattlePlan.Arm.CANNON_GALLEY.ship(), g);
+    }
+
+    @Test
+    void engineGalleysCarryTheirEnginesOverTheBowEachWithItsCrew() {
+        Object[][] galleys = {
+                {SeaLanes.Size.ONAGER_GALLEY, rafasconquest.battle.Machine.ONAGER, 1},
+                {SeaLanes.Size.TREBUCHET_GALLEY, rafasconquest.battle.Machine.TREBUCHET, 1},
+                {SeaLanes.Size.BALLISTA_GALLEY, rafasconquest.battle.Machine.ARCBALLISTA, 2},
+                {SeaLanes.Size.CATAPULT_GALLEY, rafasconquest.battle.Machine.CATAPULT, 2}};
+        for (Object[] row : galleys) {
+            SeaLanes.Size g = (SeaLanes.Size) row[0];
+            rafasconquest.battle.Machine engine = (rafasconquest.battle.Machine) row[1];
+            int count = (int) row[2];
+            assertEquals(SeaLanes.Propulsion.OARS, g.propulsion, g.id);
+            assertEquals(java.util.Collections.nCopies(count, engine.id), g.gunsBow, g.id);
+            assertTrue(g.gunsRight.isEmpty() && g.gunsLeft.isEmpty(), g.id + ": an engine counted in a broadside");
+            assertEquals(count, g.posts.stream().filter(p -> engine.id.equals(p.gun())).count(), g.id + ": a crew for each engine");
+            assertTrue(g.length > SeaLanes.Size.XXLARGE.length, g.id + " is no longer than a plain galley");
+            assertEquals(java.util.Set.of(0), mastRows(ShipHulls.hull(g, false)), g.id + "'s mast");
+        }
+        assertEquals("siegeworks:onager", rafasconquest.battle.Machine.CATAPULT.entity(), "the catapult takes the onager's model");
+    }
+
+    @Test
+    void aFightingTowerGalleysArchersStandOnItsRaisedPlatform() {
+        SeaLanes.Size t = SeaLanes.Size.TOWER_GALLEY;
+        assertEquals(SeaLanes.Propulsion.OARS, t.propulsion);
+        assertEquals(25, t.posts.size());
+        assertTrue(t.posts.stream().allMatch(p -> p.y() == ShipHulls.DECK + ShipHulls.TOWER_HEIGHT + 1 && p.gun().isEmpty()));
+        assertTrue(t.archerReach > 1, "no further from the tower");
+        assertTrue(rafasconquest.battle.BattlePlan.Arm.TOWER_GALLEY.shoots(), "the tower galley's crew aren't archers");
+        // every post is on the hull, inside its rails
+        List<ShipHulls.Part> parts = ShipHulls.hull(t, false);
+        int maxZ = parts.stream().mapToInt(ShipHulls.Part::z).max().getAsInt();
+        assertTrue(t.posts.stream().allMatch(p -> p.z() < maxZ && Math.abs(p.x()) <= 2));
+    }
+
     @Test
     void theManOWarHasThreeGunDecksAndThreeMastsTheMainTallest() {
         SeaLanes.Size mow = SeaLanes.Size.MAN_O_WAR;

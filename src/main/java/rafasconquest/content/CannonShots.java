@@ -53,6 +53,8 @@ public final class CannonShots {
         @Nullable
         final Entity by;
         final float damage;
+        /** Its speed leaving the gun: it hurts less as it slows from that. */
+        final double launched;
         int smashed;
         int age;
         final Set<Integer> struck = new HashSet<>();
@@ -64,6 +66,7 @@ public final class CannonShots {
             this.shot = shot;
             this.by = by;
             this.damage = damage;
+            this.launched = Math.max(1e-6, v.length());
         }
     }
 
@@ -80,7 +83,8 @@ public final class CannonShots {
     private CannonShots() {
     }
 
-    static void fire(ServerLevel level, Vec3 muzzle, Vector3d v, MediumCannonEntity.Shot shot, @Nullable Entity by, double damage) {
+    /** A shot of {@code card} (the Medium Cannon or a ship engine), leaving {@code muzzle} at {@code v}; clients draw it as that card's projectile. */
+    static void fire(ServerLevel level, Vec3 muzzle, Vector3d v, MediumCannonEntity.Shot shot, @Nullable Entity by, double damage, rafasconquest.battle.Machine card) {
         FLYING.computeIfAbsent(level, k -> new ArrayList<>()).add(new Ball(muzzle, v, shot, by, (float) damage));
         note("fired");
         List<ServerPlayer> near = new ArrayList<>();
@@ -89,7 +93,7 @@ public final class CannonShots {
                 near.add(p);
             }
         }
-        rafasconquest.net.ConquestNetwork.sendCannonShot(near, muzzle, v.x, v.y, v.z, shot.ordinal());
+        rafasconquest.net.ConquestNetwork.sendCannonShot(near, muzzle, v.x, v.y, v.z, card.ordinal());
     }
 
     /** Each tick of each level. */
@@ -165,7 +169,7 @@ public final class CannonShots {
             }
             b.struck.add(e.getId());
             note("soldiers struck");
-            double speed = b.v.length() / CannonAim.SPEED;
+            double speed = b.v.length() / b.launched;
             e.hurt(level.damageSources().explosion(null, b.by), (float) (b.damage * Math.min(1, speed)));
             b.v.mul(THROUGH_BODY);
         }

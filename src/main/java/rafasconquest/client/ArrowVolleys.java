@@ -200,7 +200,17 @@ public final class ArrowVolleys {
      * followed here, through this client's own blocks and ships, to where it first strikes, and drawn as a parabola
      * (it flies one: no drag), with the gun's flash, smoke and report.
      */
-    public static void cannonShot(double x, double y, double z, double vx, double vy, double vz) {
+    public static void cannonShot(double x, double y, double z, double vx, double vy, double vz, int machine) {
+        rafasconquest.battle.Machine card = rafasconquest.battle.Machine.get(machine);
+        if (card == null) {
+            card = rafasconquest.battle.Machine.MEDIUM_CANNON;
+        }
+        Kind kind;
+        try {
+            kind = Kind.valueOf(card.projectile().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            kind = Kind.BALL;
+        }
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || ARROWS.size() >= MAX_IN_FLIGHT) {
             return;
@@ -224,9 +234,9 @@ public final class ArrowVolleys {
         Vec3 end = new Vec3(x + vx * ticks, y + vy * ticks - rafasconquest.content.CannonAim.GRAVITY * ticks * (ticks - 1) / 2.0, z + vz * ticks);
         long now = Util.getMillis();
         double g = rafasconquest.content.CannonAim.GRAVITY;
-        ARROWS.add(new Arrow(Kind.BALL, start, end, g * ticks * ticks / 8, now, ticks / 20.0));
-        smoke(Kind.BALL, start, start.add(vx, 0, vz), now);
-        BattleSounds.Shot sound = BattleSounds.shot(BattlePlan.Arm.of(rafasconquest.battle.Machine.MEDIUM_CANNON));
+        ARROWS.add(new Arrow(kind, start, end, g * ticks * ticks / 8, now, ticks / 20.0));
+        smoke(kind, start, start.add(vx, 0, vz), now);
+        BattleSounds.Shot sound = BattleSounds.shot(BattlePlan.Arm.of(card));
         if (sound != null) {
             BattleSounds.queue(sound, start, now - sound.releaseMillis());
         }

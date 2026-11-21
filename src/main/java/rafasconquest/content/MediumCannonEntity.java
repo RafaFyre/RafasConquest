@@ -100,13 +100,38 @@ public class MediumCannonEntity extends BlockEntity {
     public static boolean bears(ServerLevel level, UUID crew, Vec3 at) {
         BlockPos pos = CREWS.get(crew);
         BlockState state = pos == null ? null : level.getBlockState(pos);
-        if (state == null || !state.hasProperty(MediumCannonBlock.FACING)) {
+        if (state == null || !(state.getBlock() instanceof MediumCannonBlock block)) {
             return true;
         }
         Vec3 base = SableLink.outOfPlot(level, Vec3.atBottomCenterOf(pos)).add(0, 1, 0);
-        return CannonAim.bears(CannonAim.layFor(CannonAim.ballistic(new Vector3d(base.x, base.y, base.z), new Vector3d(at.x, at.y, at.z)),
-                SableLink.turnAt(level, pos), CannonAim.facing(state.getValue(MediumCannonBlock.FACING))));
+        double[] lay = CannonAim.layFor(CannonAim.ballistic(new Vector3d(base.x, base.y, base.z), new Vector3d(at.x, at.y, at.z)),
+                SableLink.turnAt(level, pos), CannonAim.facing(state.getValue(MediumCannonBlock.FACING)));
+        // An engine only swings: its throw's angle is its crew's to pick, so only its swing need reach.
+        return block.machine() == rafasconquest.battle.Machine.MEDIUM_CANNON ? CannonAim.bears(lay) : Math.abs(lay[0]) < CannonAim.ARC;
     }
+
+    /** How far the gun or engine {@code crew} works throws (blocks): its card's reach; a cannon's while it works none. */
+    public static double reachOf(ServerLevel level, UUID crew) {
+        BlockPos pos = CREWS.get(crew);
+        return pos != null && level.getBlockState(pos).getBlock() instanceof MediumCannonBlock block ? block.machine().reach
+                : rafasconquest.battle.Machine.MEDIUM_CANNON.reach;
+    }
+
+    /** The engine card it fires as ({@link MediumCannonBlock#machine}). */
+    public rafasconquest.battle.Machine machine() {
+        return getBlockState().getBlock() instanceof MediumCannonBlock block ? block.machine() : rafasconquest.battle.Machine.MEDIUM_CANNON;
+    }
+
+    /** Whether it is a gun with a barrel to tip (the Medium Cannon), not an engine that only swings. */
+    private boolean barrelled() {
+        return machine() == rafasconquest.battle.Machine.MEDIUM_CANNON;
+    }
+
+    /** Where an engine throws from, over its block's bottom middle: about its arm's height. */
+    private static final double THROW_HEIGHT = 2;
+    /** Where its crew last laid it on, for its throw's angle; null with none. */
+    @Nullable
+    private Vec3 laidOn;
 
     /** Whether {@code soldier} works a Medium Cannon now. */
     public static boolean crewing(UUID soldier) {
@@ -174,6 +199,26 @@ public class MediumCannonEntity extends BlockEntity {
     private void lay(ServerLevel level, BlockState state, Vec3 base, Order mark) {
         Quaterniond ship = SableLink.turnAt(level, worldPosition);
         double facing = CannonAim.facing(state.getValue(MediumCannonBlock.FACING));
+        if (!barrelled()) {
+            // An engine swings to the mark (led by its way over the throw's flight), then throws.
+            rafasconquest.battle.Machine card = machine();
+            Vector3d from = new Vector3d(base.x, base.y + THROW_HEIGHT, base.z);
+            Vector3d to = new Vector3d(mark.at().x, mark.at().y, mark.at().z);
+            double flight = Math.hypot(to.x - from.x, to.z - from.z) / (CannonAim.speedFor(card) * Math.cos(Math.toRadians(45)));
+            to.add(mark.way().x * flight, mark.way().y * flight, mark.way().z * flight);
+            double[] want = CannonAim.layFor(new Vector3d(to).sub(from).setComponent(1, 0), ship, facing);
+            float y = step(yaw, want[0]);
+            if (y != yaw || pitch != 0) {
+                yaw = y;
+                pitch = 0;
+                unsynced = true;
+            }
+            if (Math.abs(want[0]) < CannonAim.ARC && Math.abs(want[0] - yaw) <= ON * 4) {
+                laidOn = new Vec3(to.x, to.y, to.z);
+                fire(level, gunner == null ? null : level.getEntity(gunner));
+            }
+            return;
+        }
         Quaterniond carriage = CannonAim.carriage(ship, facing, yaw);
         Vector3d muzzle = CannonAim.muzzle(carriage, CannonAim.barrel(carriage, pitch)).add(base.x, base.y, base.z);
         Vector3d at = CannonAim.lead(muzzle, new Vector3d(mark.at().x, mark.at().y, mark.at().z),
@@ -200,14 +245,27 @@ public class MediumCannonEntity extends BlockEntity {
         if (reload > 0) {
             return;
         }
-        rafasconquest.battle.Machine card = rafasconquest.battle.Machine.MEDIUM_CANNON;
+        rafasconquest.battle.Machine card = machine();
         reload = (int) Math.round(card.reload * 20);
         Vec3 base = SableLink.outOfPlot(level, Vec3.atBottomCenterOf(worldPosition));
         Quaterniond ship = SableLink.turnAt(level, worldPosition);
         Quaterniond carriage = CannonAim.carriage(ship, CannonAim.facing(getBlockState().getValue(MediumCannonBlock.FACING)), yaw);
+        if (!barrelled()) {
+            // Its crew throw onto where they laid it; a player, along its swing at 45 degrees and their pitch over that.
+            Vector3d from = new Vector3d(base.x, base.y + THROW_HEIGHT, base.z);
+            Vector3d way;
+            if (laidOn != null && !(by instanceof Player)) {
+                way = CannonAim.ballistic(from, new Vector3d(laidOn.x, laidOn.y, laidOn.z), CannonAim.speedFor(card), card.throwing());
+            } else {
+                way = CannonAim.barrel(carriage, 45 + pitch).transform(new Vector3d(0, 0, 1));
+            }
+            laidOn = null;
+            CannonShots.fire(level, new Vec3(from.x, from.y, from.z), way.mul(CannonAim.speedFor(card)), shot, by, card.damage, card);
+            return;
+        }
         Quaterniond barrel = CannonAim.barrel(carriage, pitch);
         Vector3d muzzle = CannonAim.muzzle(carriage, barrel).add(base.x, base.y, base.z);
-        CannonShots.fire(level, new Vec3(muzzle.x, muzzle.y, muzzle.z), CannonAim.bore(barrel).mul(CannonAim.SPEED), shot, by, card.damage);
+        CannonShots.fire(level, new Vec3(muzzle.x, muzzle.y, muzzle.z), CannonAim.bore(barrel).mul(CannonAim.SPEED), shot, by, card.damage, card);
     }
 
     /** The cannon at {@code pos} if {@code player} works it, else null. */

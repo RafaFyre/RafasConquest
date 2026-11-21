@@ -1,0 +1,26 @@
+{
+  "name": "Catapult Galley",
+  "icon": "minecraft:oak_boat",
+  "kind": "foot",
+  "hits": 1,
+  "takes": 1,
+  "pace": 1,
+  "nerve": 1,
+  "traits": [],
+  "missile": "none",
+  "recruit": "recruits:recruit",
+  "kit": "skirmisher",
+  "gear": {
+    "head": "minecraft:leather_helmet",
+    "chest": "minecraft:leather_chestplate",
+    "mainhand": "minecraft:iron_sword",
+    "offhand": "none"
+  },
+  "figure": "skirmishers",
+  "front": 4,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": "",
+  "ship": "catapult_galley"
+}

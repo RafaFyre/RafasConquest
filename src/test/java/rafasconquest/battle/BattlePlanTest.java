@@ -148,7 +148,7 @@ class BattlePlanTest {
         assertFalse(Arm.of(Machine.MEDIUM_CANNON).roster(), "the Medium Cannon is a ship's, never an army's");
         assertTrue(Machine.allowed(gunpowder, plains, BattleType.SIEGE, true).stream().noneMatch(m -> m == Machine.MEDIUM_CANNON));
         for (Machine m : Machine.values()) {
-            if (m == Machine.MEDIUM_CANNON) {
+            if (m == Machine.MEDIUM_CANNON || m == Machine.CATAPULT) { // ships' engines, never an army's
                 continue;
             }
             boolean train = m == Machine.BATTERING_RAM || m == Machine.SIEGE_TOWER || m == Machine.MANTLET;

@@ -93,9 +93,24 @@ public final class ConquestContent {
             () -> new MediumCannonBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS).noOcclusion()));
     public static final DeferredHolder<Item, Item> MEDIUM_CANNON_ITEM = ITEMS.register("medium_cannon",
             () -> new BlockItem(MEDIUM_CANNON.get(), new Item.Properties()));
+    /** Ship engines on their own blocks, worked as the cannon is, drawn with Siegeworks' models ({@link ShipEngineBlock}): by engine card id. */
+    public static final java.util.List<String> SHIP_ENGINE_IDS = java.util.List.of("onager", "trebuchet", "arcballista", "catapult");
+    public static final java.util.Map<String, DeferredHolder<Block, Block>> SHIP_ENGINES = new java.util.LinkedHashMap<>();
+    public static final java.util.Map<String, DeferredHolder<Item, Item>> SHIP_ENGINE_ITEMS = new java.util.LinkedHashMap<>();
+
+    static {
+        for (String id : SHIP_ENGINE_IDS) {
+            DeferredHolder<Block, Block> block = BLOCKS.register("ship_" + id,
+                    () -> new ShipEngineBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.OAK_PLANKS).noOcclusion(), id));
+            SHIP_ENGINES.put(id, block);
+            SHIP_ENGINE_ITEMS.put(id, ITEMS.register("ship_" + id, () -> new BlockItem(block.get(), new Item.Properties())));
+        }
+    }
+
     public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<MediumCannonEntity>> MEDIUM_CANNON_ENTITY =
             BLOCK_ENTITIES.register("medium_cannon", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder
-                    .of(MediumCannonEntity::new, MEDIUM_CANNON.get()).build(null));
+                    .of(MediumCannonEntity::new, java.util.stream.Stream.concat(java.util.stream.Stream.of(MEDIUM_CANNON.get()),
+                            SHIP_ENGINES.values().stream().map(DeferredHolder::get)).toArray(Block[]::new)).build(null));
     /** The sail stitcher: an iron stick (does nothing yet). */
     public static final DeferredHolder<Item, Item> SAIL_STITCHER = ITEMS.register("sail_stitcher",
             () -> new Item(new Item.Properties().stacksTo(1)));
@@ -205,7 +220,7 @@ public final class ConquestContent {
                 output.accept(OAR_RIGHT_ITEM.get());
                 output.accept(HELM_ITEM.get());
                 output.accept(MEDIUM_CANNON_ITEM.get());
-                output.accept(MEDIUM_CANNON_ITEM.get());
+                SHIP_ENGINE_ITEMS.values().forEach(i -> output.accept(i.get()));
                 output.accept(SAIL_STITCHER.get());
                 output.accept(SAIL_ITEM.get());
                 output.accept(PATHFINDING_BLOCK_ITEM.get());

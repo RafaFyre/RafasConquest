@@ -151,7 +151,7 @@ final class OarFigures {
         java.util.Map<ClientSubLevel, Pose3dc> poses = new java.util.IdentityHashMap<>();
         for (rafasconquest.content.MediumCannonEntity gun : rafasconquest.content.MediumCannonEntity.CLIENT_LOADED) {
             BlockState state = gun.getBlockState();
-            if (gun.isRemoved() || !(state.getBlock() instanceof rafasconquest.content.MediumCannonBlock)) {
+            if (gun.isRemoved() || !(state.getBlock() instanceof rafasconquest.content.MediumCannonBlock) || state.getBlock() instanceof rafasconquest.content.ShipEngineBlock) { // engines: DistantArmyRenderer.shipEngines
                 continue;
             }
             BlockPos pos = gun.getBlockPos();

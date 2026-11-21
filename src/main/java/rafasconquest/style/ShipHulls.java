@@ -87,26 +87,128 @@ public final class ShipHulls {
         if (guns != null) {
             return manOWar(size, guns);
         }
-        List<Part> plain = plain(size.length, size.width);
-        return merchant ? plain : size.gunship() ? gunned(rowed(plain, size.length, size.width), size)
-                : rowed(plain, size.length, size.width);
+        // A galley steps its mast amidships; a merchant, and a rowed hull carded to sail (the Gunship), near the stern.
+        boolean galley = !merchant && size.propulsionSet != SeaLanes.Propulsion.SAIL;
+        List<Part> plain = plain(size.length, size.width, galley ? 0 : -(size.length / 2) + 2);
+        if (merchant) {
+            return plain;
+        }
+        List<Part> rowed = rowed(plain, size.length, size.width);
+        return size.gunship() ? gunned(rowed, size)
+                : size.bowGuns > 0 ? bowGuns(rowed, size)
+                : size == SeaLanes.Size.TOWER_GALLEY ? fightingTower(rowed, size)
+                : rowed;
+    }
+
+    /** plain()'s half-beam at {@code z}: full over the middle, narrowing over the last quarter at each end. */
+    private static int beamAt(int z, int length, int width) {
+        int half = length / 2;
+        return Math.min(width / 2, (half - Math.abs(z)) * 2 * (width / 2) / Math.max(1, half / 2));
+    }
+
+    /** The furthest row forward where the deck is at least {@code room} blocks either side of the middle. */
+    private static int bowRow(int length, int width, int room) {
+        int z = length / 2;
+        while (z > 0 && beamAt(z, length, width) < room) {
+            z--;
+        }
+        return z;
+    }
+
+    /**
+     * A galley with its card's {@code bow_guns} of its {@code gun_block} on the foredeck, pointing over the bow, as the
+     * galleys of Lepanto carried guns and Roman ones engines, each with its crew's Character Marker behind it: one on the
+     * centreline, or two side by side (a cannon's carriage a block either side, an engine's frame two). An engine stands
+     * further back, its Siegeworks model reaching past its block. Its card's hull is longer than a plain galley's for them.
+     */
+    private static List<Part> bowGuns(List<Part> rowed, SeaLanes.Size size) {
+        BlockState gun = gunBlock(size).setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.SOUTH); // the bow is +z
+        boolean engine = gun.getBlock() instanceof rafasconquest.content.ShipEngineBlock;
+        int z = engine ? bowRow(size.length, size.width, 4) - 3 : bowRow(size.length, size.width, 3) - 1;
+        int apart = engine ? 2 : 1;
+        int[] xs = size.bowGuns == 1 ? new int[]{0} : new int[]{-apart, apart};
+        List<Part> parts = new ArrayList<>();
+        for (Part p : rowed) {
+            boolean taken = false;
+            for (int x : xs) {
+                taken |= p.y() == DECK + 1 && p.x() == x && (p.z() == z || p.z() == z - 1);
+            }
+            if (!taken) {
+                parts.add(p);
+            }
+        }
+        for (int x : xs) {
+            parts.add(new Part(x, DECK + 1, z, gun));
+            parts.add(new Part(x, DECK + 1, z - 1, ConquestContent.MARKER.get().defaultBlockState()));
+        }
+        return List.copyOf(parts);
+    }
+
+    /** How high a Fighting Tower Galley's platform stands over its deck. */
+    static final int TOWER_HEIGHT = 7;
+
+    /**
+     * A Fighting Tower Galley: a wooden tower on the foredeck, seven blocks square, four log posts holding a planked
+     * platform {@link #TOWER_HEIGHT} over the deck behind a fence, a ladder up a fifth post at its back, and a Character Marker on each
+     * of its inner 25 blocks for its archers, who shoot down on enemy decks from it. Its card's hull is longer for it.
+     */
+    private static List<Part> fightingTower(List<Part> rowed, SeaLanes.Size size) {
+        int front = bowRow(size.length, size.width, 3);
+        int zc = front - 3;
+        int top = DECK + TOWER_HEIGHT;
+        BlockState post = Blocks.SPRUCE_LOG.defaultBlockState();
+        BlockState floor = Blocks.SPRUCE_PLANKS.defaultBlockState();
+        BlockState fence = Blocks.SPRUCE_FENCE.defaultBlockState();
+        BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(net.minecraft.world.level.block.LadderBlock.FACING, Direction.NORTH);
+        Map<Long, Part> at = new java.util.LinkedHashMap<>();
+        for (Part p : rowed) {
+            at.put(net.minecraft.core.BlockPos.asLong(p.x(), p.y(), p.z()), p);
+        }
+        for (int x = -3; x <= 3; x++) {
+            for (int z = zc - 3; z <= zc + 3; z++) {
+                boolean corner = Math.abs(x) == 3 && Math.abs(z - zc) == 3;
+                if (corner) {
+                    for (int y = DECK + 1; y < top; y++) {
+                        put(at, x, y, z, post);
+                    }
+                }
+                put(at, x, top, z, floor);
+                if (Math.abs(x) == 3 || Math.abs(z - zc) == 3) {
+                    if (!(x == 0 && z == zc - 3)) { // a gap in the fence over the ladder
+                        put(at, x, top + 1, z, fence);
+                    }
+                } else {
+                    put(at, x, top + 1, z, ConquestContent.MARKER.get().defaultBlockState());
+                }
+            }
+        }
+        for (int y = DECK + 1; y <= top; y++) {
+            if (y < top) {
+                put(at, 0, y, zc - 3, post); // a middle post on the tower's back, for the ladder to hang on
+            }
+            put(at, 0, y, zc - 4, ladder); // facing aft; up it, over the fence's gap onto the platform
+        }
+        return List.copyOf(at.values());
     }
 
     /**
      * A card's guns and crew posts, from its hull: each gun block's engine on the side it stands (right -x, left
-     * +x, both on the centreline), and its hull file's Character Markers, each a post for as many soldiers as it says;
+     * +x, both on the centreline; one laid over the bow, ahead), and its hull file's Character Markers, each a post for as many soldiers as it says;
      * a post beside a gun block (within a block) works that gun, the first post there only.
      */
     private static void fit(SeaLanes.Size size) {
         List<Part> parts = hull(size, false);
         List<String> right = new ArrayList<>();
         List<String> left = new ArrayList<>();
+        List<String> bow = new ArrayList<>();
         // shortcut: no engine block yet, so steam only by the card's "propulsion"; read an engine block in stage 4.
         size.propulsion = size.propulsionSet != null ? size.propulsionSet
                 : parts.stream().anyMatch(p -> p.state().getBlock() instanceof OarBlock) ? SeaLanes.Propulsion.OARS : SeaLanes.Propulsion.SAIL;
         for (Part p : parts) {
             String gun = gunOf(p.state());
-            if (gun != null) {
+            if (gun != null && p.state().getValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING) == Direction.SOUTH) {
+                bow.add(gun); // laid over the bow (+z): it fires ahead, not in a broadside
+            } else if (gun != null) {
                 if (p.x() <= 0) {
                     right.add(gun);
                 }
@@ -117,6 +219,7 @@ public final class ShipHulls {
         }
         size.gunsRight = List.copyOf(right);
         size.gunsLeft = List.copyOf(left);
+        size.gunsBow = List.copyOf(bow);
         List<SeaLanes.Size.Post> posts = new ArrayList<>();
         Set<Part> manned = new HashSet<>();
         for (SeaLanes.Size.Post post : POSTS.getOrDefault(size.hull, List.of())) {
@@ -137,7 +240,7 @@ public final class ShipHulls {
     /** The engine a gun block holds, by id (the Medium Cannon: ships carry only our own guns); null for any other block. */
     @org.jetbrains.annotations.Nullable
     public static String gunOf(BlockState state) {
-        return state.getBlock() instanceof rafasconquest.content.MediumCannonBlock ? rafasconquest.battle.Machine.MEDIUM_CANNON.id : null;
+        return state.getBlock() instanceof rafasconquest.content.MediumCannonBlock gun ? gun.machine().id : null; // an engine block's own card
     }
 
     private static void fitAll() {
@@ -147,11 +250,12 @@ public final class ShipHulls {
     }
 
     /**
-     * Reads every card's hull files in {@code dir}, first writing the built-in cards' plain hulls where theirs are missing.
-     * A file that can't be read is left out (logged): its card sails a plain hull of its size.
+     * Reads every card's hull files in {@code dir}, first writing the built-in cards' made hulls where theirs are missing or
+     * still as an older jar wrote them ({@link rafasconquest.data.BuiltInFiles}). A file that can't be read is left out (logged): its card sails a plain hull of its size.
      */
     public static void load(Path dir) {
         clear();
+        rafasconquest.data.BuiltInFiles kept = rafasconquest.data.BuiltInFiles.in(dir);
         for (SeaLanes.Size size : SeaLanes.Size.values()) {
             for (boolean merchant : new boolean[]{false, true}) {
                 String name = merchant ? size.merchant : size.hull;
@@ -160,8 +264,10 @@ public final class ShipHulls {
                 }
                 Path file = dir.resolve(name);
                 try {
-                    if (!Files.exists(file) && size.builtIn()) {
-                        NbtIo.writeCompressed(structure(made(size, merchant)), file);
+                    if (size.builtIn()) { // written, or brought up to this jar's hull unless edited
+                        java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                        NbtIo.writeCompressed(structure(made(size, merchant)), bytes);
+                        kept.keep(name, bytes.toByteArray());
                     }
                     if (Files.exists(file)) {
                         put(name, Files.readAllBytes(file));
@@ -173,6 +279,7 @@ public final class ShipHulls {
                 }
             }
         }
+        kept.save();
         fitAll();
     }
 
@@ -524,9 +631,9 @@ public final class ShipHulls {
 
     /**
      * A plain flat-topped boat, six blocks tall: a keel, planked sides up to a flat deck narrowing to bow and stern, a rail one block high round the
-     * deck's edge, and one mast with a sail stepped near the stern, clear of the deck's middle where soldiers stand.
+     * deck's edge, and one mast with a sail stepped at row {@code mastZ} (0 amidships, a galley's; near the stern, a merchant's).
      */
-    private static List<Part> plain(int length, int width) {
+    private static List<Part> plain(int length, int width, int mastZ) {
         BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
         BlockState deck = Blocks.OAK_PLANKS.defaultBlockState();
         BlockState mast = Blocks.SPRUCE_LOG.defaultBlockState();
@@ -548,15 +655,14 @@ public final class ShipHulls {
                 }
             }
         }
-        int stern = -half + 2;
         int top = DECK + 2 + length / 2;
         for (int y = DECK + 1; y <= top; y++) {
-            parts.add(new Part(0, y, stern, mast));
+            parts.add(new Part(0, y, mastZ, mast));
         }
         int sailHalf = width / 2 + 1;
         for (int y = DECK + 4; y < top; y++) {
             for (int x = -sailHalf; x <= sailHalf; x++) {
-                parts.add(new Part(x, y, stern + 1, sail)); // hung before the mast, so it is one sheet
+                parts.add(new Part(x, y, mastZ + 1, sail)); // hung before the mast, so it is one sheet
             }
         }
         return List.copyOf(parts);

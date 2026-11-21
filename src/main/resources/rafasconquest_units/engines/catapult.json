@@ -1,0 +1,24 @@
+{
+  "name": "Catapult",
+  "entity": "onager",
+  "role": "shooter",
+  "per_unit": 8,
+  "age": "bronze",
+  "homeland": null,
+  "field": false,
+  "attack": false,
+  "defence": false,
+  "reach": 70,
+  "reload": 9,
+  "damage": 40,
+  "batter": 0.3,
+  "ammo": {
+    "minecraft:stone": 64
+  },
+  "projectile": "rock",
+  "sound": "rafasconquest:battle.onager",
+  "body": "onager",
+  "size": 0.8,
+  "heavy": false,
+  "throwing": false
+}

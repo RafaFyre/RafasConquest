@@ -69,25 +69,38 @@ public final class CannonAim {
      * be laid (along the arc's top) when out of reach.
      */
     public static Vector3d ballistic(Vector3d from, Vector3d to) {
+        return ballistic(from, to, SPEED, false);
+    }
+
+    /**
+     * The same for a shot leaving at {@code speed}: the low arc, or ({@code high}) the high one a trebuchet lobs; laid
+     * at 45 degrees, its longest throw, when out of reach.
+     */
+    public static Vector3d ballistic(Vector3d from, Vector3d to, double speed, boolean high) {
         double dx = to.x - from.x;
         double dz = to.z - from.z;
         double d = Math.max(1e-6, Math.hypot(dx, dz));
-        double v2 = SPEED * SPEED;
-        double angle = 0;
+        double v2 = speed * speed;
+        double angle = high ? Math.toRadians(60) : 0;
         // A ball moves, then falls (CannonShots.fly): over n ticks it drops g*n*(n-1)/2, half a tick's fall a tick less
         // than the smooth parabola, so it would fly g*n/2 high. Solved for a mark lowered by that, its flight time from
         // the last solution: twice settles it.
         for (int pass = 0; pass < 3; pass++) {
-            double n = d / (SPEED * Math.cos(angle));
+            double n = d / (speed * Math.cos(angle));
             double h = to.y - from.y - GRAVITY * n / 2;
             double root = v2 * v2 - GRAVITY * (GRAVITY * d * d + 2 * h * v2);
             if (root < 0) {
                 angle = Math.toRadians(45);
                 break;
             }
-            angle = Math.atan((v2 - Math.sqrt(root)) / (GRAVITY * d));
+            angle = Math.atan((v2 + (high ? 1 : -1) * Math.sqrt(root)) / (GRAVITY * d));
         }
         return new Vector3d(dx / d * Math.cos(angle), Math.sin(angle), dz / d * Math.cos(angle));
+    }
+
+    /** How fast an engine's shot leaves it, blocks a tick: enough to throw it its reach at 45 degrees, and a little over. */
+    public static double speedFor(rafasconquest.battle.Machine machine) {
+        return machine == rafasconquest.battle.Machine.MEDIUM_CANNON ? SPEED : Math.sqrt(machine.reach * GRAVITY) * 1.05;
     }
 
     /**

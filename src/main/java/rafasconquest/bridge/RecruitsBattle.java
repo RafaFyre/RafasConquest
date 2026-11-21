@@ -2130,7 +2130,7 @@ public final class RecruitsBattle {
      */
     private void aimCannon(AbstractRecruitEntity s, FieldBlock block) {
         long now = level.getGameTime();
-        GunMark m = gunMark(s, block, rafasconquest.battle.Machine.MEDIUM_CANNON.reach, cannonMarks.get(s.getId()));
+        GunMark m = gunMark(s, block, rafasconquest.content.MediumCannonEntity.reachOf(level, s.getUUID()), cannonMarks.get(s.getId())); // its own gun's or engine's
         if (m.target() == null) {
             cannonMarks.remove(s.getId());
         } else {
@@ -2159,6 +2159,9 @@ public final class RecruitsBattle {
         double fx = ship == null ? holder.facingX() : ship[2];
         double fz = ship == null ? holder.facingZ() : ship[3];
         java.util.function.ToIntFunction<Point> sideOf = p -> (p.x() - centre.x()) * -fz + (p.z() - centre.z()) * fx >= 0 ? 1 : -1;
+        if (!holder.hull().gunsBow.isEmpty() && (s.getX() - centre.x()) * fx + (s.getZ() - centre.z()) * fz > holder.hull().length / 4.0) {
+            return bowMark(s, block, holder, reach, kept); // a bow gunner (a broadside's guns stand over the middle half)
+        }
         int side = sideOf.applyAsInt(new Point(s.getX(), s.getZ()));
         FieldBlock mark = block.prey();
         boolean marked = mark != null && mark.side() != block.side() && mark.alive() > 0 && mark.afloat()
@@ -2179,6 +2182,31 @@ public final class RecruitsBattle {
         FieldBlock foe = field.broadsideFoe(holder, field.army(1 - block.side()), side);
         double[] afloat = foe == null ? null : SableLink.shipAt(foe.shipId());
         Point hull = foe == null ? null : afloat != null ? new Point(afloat[0], afloat[1]) : foe.pos(); // a far ship: where its sprite sails
+        if (hull == null || hull.distanceTo(new Point(s.getX(), s.getZ())) > reach) {
+            return new GunMark(null, null, false);
+        }
+        double y = afloat != null && !Double.isNaN(afloat[4]) ? afloat[4] : level.getSeaLevel() + 1;
+        return new GunMark(null, BlockPos.containing(hull.x(), y, hull.z()), afloat == null);
+    }
+
+    /**
+     * A bow gunner's mark, as the ship's bow guns aim ({@link FieldBattle#bowGuns}): the soldiers of the ship it is going
+     * for, else any enemy, that its gun can swing onto; with nobody real there, the hull of the ship its bow guns bear on.
+     */
+    private GunMark bowMark(AbstractRecruitEntity s, FieldBlock block, FieldBlock holder, double reach, @Nullable LivingEntity kept) {
+        List<AbstractRecruitEntity> may = preyOf(block, enemiesOf(block.side(), false)).stream()
+                .filter(e -> rafasconquest.content.MediumCannonEntity.bears(level, s.getUUID(), e.position().add(0, e.getBbHeight() * 0.5, 0)))
+                .toList();
+        LivingEntity target = kept;
+        if (!(target != null && target.isAlive() && target.distanceTo(s) <= reach && may.contains(target))) {
+            target = nearestTo(s, may).filter(f -> f.distanceTo(s) <= reach).orElse(null);
+        }
+        if (target != null) {
+            return new GunMark(target, null, false);
+        }
+        FieldBlock foe = field.bowFoe(holder, field.army(1 - block.side()));
+        double[] afloat = foe == null ? null : SableLink.shipAt(foe.shipId());
+        Point hull = foe == null ? null : afloat != null ? new Point(afloat[0], afloat[1]) : foe.pos();
         if (hull == null || hull.distanceTo(new Point(s.getX(), s.getZ())) > reach) {
             return new GunMark(null, null, false);
         }
@@ -2651,12 +2679,13 @@ public final class RecruitsBattle {
     }
 
     /**
-     * A gunship's soldier i's post (its hull's Character Markers, in its unit's crew order, block by block); null for any
-     * other ship's, and for those past the last post, who stay below decks ({@link #makeReal} doesn't spawn them).
+     * Soldier i's post on its ship (its hull's Character Markers, in its unit's crew order, block by block): a gunship's
+     * gunners, a Cannon Galley's bow gunners, a Fighting Tower Galley's tower archers. Null past the last post: on a
+     * gunship they stay below decks ({@link #makeReal} doesn't spawn them), on any other ship they stand on its deck.
      */
     @org.jetbrains.annotations.Nullable
     private static rafasconquest.core.SeaLanes.Size.Post post(FieldBlock block, int i) {
-        if (block.ship() != FieldBlock.ShipKind.GUNSHIP) {
+        if (block.ship() == null) {
             return null;
         }
         List<rafasconquest.core.SeaLanes.Size.Post> posts = block.hull().posts;

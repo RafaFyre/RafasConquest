@@ -366,7 +366,7 @@ public final class ConquestNetwork {
                     b.writeByte(m.shot());
                 })
                 .decoder(b -> new CannonShot(b.readDouble(), b.readDouble(), b.readDouble(), b.readFloat(), b.readFloat(), b.readFloat(), b.readByte()))
-                .consumerMainThread((m, context) -> rafasconquest.client.ArrowVolleys.cannonShot(m.x(), m.y(), m.z(), m.vx(), m.vy(), m.vz()))
+                .consumerMainThread((m, context) -> rafasconquest.client.ArrowVolleys.cannonShot(m.x(), m.y(), m.z(), m.vx(), m.vy(), m.vz(), m.shot()))
                 .add();
         CHANNEL.messageBuilder(CannonTaken.class, 46, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder((m, b) -> b.writeBlockPos(m.pos()))
@@ -405,7 +405,7 @@ public final class ConquestNetwork {
                 .add();
     }
 
-    /** Server → client: a Medium Cannon fired a ball from (x, y, z) at (vx, vy, vz) blocks a tick, of {@code shot} (its ordinal). */
+    /** Server → client: a Medium Cannon or ship engine fired from (x, y, z) at (vx, vy, vz) blocks a tick; {@code shot}: its engine card's ordinal (Machine). */
     public record CannonShot(double x, double y, double z, double vx, double vy, double vz, int shot) {
     }
 

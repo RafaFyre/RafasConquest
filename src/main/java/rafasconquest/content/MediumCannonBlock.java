@@ -36,6 +36,11 @@ public class MediumCannonBlock extends HorizontalDirectionalBlock implements Ent
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
+    /** The engine card it fires as: the Medium Cannon's; an engine block's own ({@link ShipEngineBlock}). */
+    public rafasconquest.battle.Machine machine() {
+        return rafasconquest.battle.Machine.MEDIUM_CANNON;
+    }
+
     @Override
     protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
         return CODEC;
@@ -77,7 +82,7 @@ public class MediumCannonBlock extends HorizontalDirectionalBlock implements Ent
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide || type != ConquestContent.MEDIUM_CANNON_ENTITY.get() ? null
+        return level.isClientSide || type != ConquestContent.MEDIUM_CANNON_ENTITY.get() ? null // engine blocks share its type
                 : (l, p, s, be) -> ((MediumCannonEntity) be).serverTick((ServerLevel) l, s);
     }
 }

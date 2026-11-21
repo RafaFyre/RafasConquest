@@ -170,6 +170,14 @@ public final class BattlePlan {
         public static final Arm SECOND_RATE = builtIn("second_rate");
         public static final Arm FIRST_RATE = builtIn("first_rate");
         public static final Arm GRAND_FLAGSHIP = builtIn("grand_flagship");
+        /** A Cannon Galley's crew (boarders, two of them at its bow guns) and a Fighting Tower Galley's archers. Last, so the cards before keep their numbers. */
+        public static final Arm CANNON_GALLEY = builtIn("cannon_galley");
+        public static final Arm TOWER_GALLEY = builtIn("tower_galley");
+        /** The engine galleys' crews: boarders, a few at the bow engines. Last, so the cards before keep their numbers. */
+        public static final Arm ONAGER_GALLEY = builtIn("onager_galley");
+        public static final Arm TREBUCHET_GALLEY = builtIn("trebuchet_galley");
+        public static final Arm BALLISTA_GALLEY = builtIn("ballista_galley");
+        public static final Arm CATAPULT_GALLEY = builtIn("catapult_galley");
 
         public final String id;
         private int ordinal;

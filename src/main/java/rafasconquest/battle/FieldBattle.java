@@ -614,7 +614,7 @@ public final class FieldBattle {
     static double gunRange(FieldBlock b) {
         double reach = java.util.stream.Stream.concat(b.hull.gunsRight.stream(), b.hull.gunsLeft.stream())
                 .map(Machine::byId).filter(java.util.Objects::nonNull).mapToDouble(m -> m.reach).min().orElse(0);
-        return reach > 0 ? reach * GUN_STANDOFF : ARCHER_STANDOFF;
+        return reach > 0 ? reach * GUN_STANDOFF : ARCHER_STANDOFF * b.hull.archerReach;
     }
 
     /**
@@ -630,28 +630,69 @@ public final class FieldBattle {
         for (int side : new int[]{1, -1}) {
             List<String> guns = side > 0 ? b.hull.gunsRight : b.hull.gunsLeft;
             FieldBlock foe = guns.isEmpty() ? null : broadsideFoe(b, enemy, side);
-            if (foe == null || real && crew(foe).stream().anyMatch(c -> c.live)) {
-                continue;
-            }
-            double d = b.pos.distanceTo(foe.pos);
-            double damage = 0;
-            List<Machine> fired = new ArrayList<>();
-            for (String id : guns) {
-                Machine m = Machine.byId(id);
-                if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
-                    damage += m.damage;
-                    fired.add(m);
-                }
-            }
-            if (damage > 0) {
-                FieldBlock hit = spread(b, crew(foe));
-                targets.add(hit);
-                damages.add(damage * hit.arm.takes());
-                if (!real) { // drawn by clients, ball, smoke and flash; a real gunship's gunners fire real guns
-                    fired.forEach(m -> volleys.add(new Volley(b, hit, 1, m)));
-                }
+            fireGuns(b, foe, guns, real, targets, damages);
+        }
+    }
+
+    /**
+     * Ship {@code b}'s {@code guns} fire at {@code foe} (none: no shot): each in reach once a reload, at random, falling on
+     * its crew as arrows do. A ship with real soldiers aboard fires only at a ship with none ({@link #broadside}).
+     */
+    private void fireGuns(FieldBlock b, @Nullable FieldBlock foe, List<String> guns, boolean real, List<FieldBlock> targets, List<Double> damages) {
+        if (foe == null || real && crew(foe).stream().anyMatch(c -> c.live)) {
+            return;
+        }
+        double d = b.pos.distanceTo(foe.pos);
+        double damage = 0;
+        List<Machine> fired = new ArrayList<>();
+        for (String id : guns) {
+            Machine m = Machine.byId(id);
+            if (m != null && d <= m.reach && random.nextDouble() < 1 / Math.max(1, m.reload)) {
+                damage += m.damage;
+                fired.add(m);
             }
         }
+        if (damage > 0) {
+            FieldBlock hit = spread(b, crew(foe));
+            targets.add(hit);
+            damages.add(damage * hit.arm.takes());
+            if (!real) { // drawn by clients, ball, smoke and flash; a real ship's gunners fire real guns
+                fired.forEach(m -> volleys.add(new Volley(b, hit, 1, m)));
+            }
+        }
+    }
+
+    /**
+     * A ship's bow guns (a Cannon Galley's) fire ahead as it closes, at the ship it is going for if that lies within
+     * their arc off the bow, else the nearest enemy ship that does.
+     */
+    void bowGuns(FieldBlock b, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
+        fireGuns(b, bowFoe(b, enemy), b.hull.gunsBow, crew(b).stream().anyMatch(c -> c.live), targets, damages);
+    }
+
+    /** The enemy ship ship {@code b}'s bow guns bear on ({@link #bowGuns}); null for none. */
+    @Nullable
+    public FieldBlock bowFoe(FieldBlock b, FieldArmy enemy) {
+        if (b.prey != null && b.prey.alive > 0 && b.prey.afloat && b.prey.side != b.side && ahead(b, b.prey.pos)) {
+            return holder(b.prey);
+        }
+        FieldBlock foe = null;
+        double best = Double.MAX_VALUE;
+        for (FieldBlock e : enemy.blocks) {
+            if (e.alive > 0 && e.afloat && e == holder(e) && ahead(b, e.pos) && b.pos.distanceTo(e.pos) < best) {
+                best = b.pos.distanceTo(e.pos);
+                foe = e;
+            }
+        }
+        return foe;
+    }
+
+    /** Whether {@code at} lies within a bow gun's arc off ship {@code b}'s bow. */
+    static boolean ahead(FieldBlock b, Point at) {
+        double dx = at.x() - b.pos.x();
+        double dz = at.z() - b.pos.z();
+        double along = dx * b.facingX + dz * b.facingZ;
+        return along > 0 && Math.atan2(Math.abs(dx * -b.facingZ + dz * b.facingX), along) <= Math.toRadians(rafasconquest.content.CannonAim.ARC);
     }
 
     /**
@@ -835,7 +876,7 @@ public final class FieldBattle {
                 switch (kind) {
                     case ARCHERS -> {
                         // An archer ship behind another, both on the line from one foe, keeps a ship's length further off.
-                        double keep = ARCHER_STANDOFF;
+                        double keep = ARCHER_STANDOFF * b.hull.archerReach;
                         for (b.line = standOff(b, foe, keep); clash(b.line, archerSpots); b.line = standOff(b, foe, keep)) {
                             keep += shipLength();
                         }
@@ -935,7 +976,7 @@ public final class FieldBattle {
         FieldBlock grappled = null;
         for (FieldBlock e : enemy.blocks) {
             double d = b.pos.distanceTo(e.pos);
-            if (e.alive == 0 || !e.afloat || d > FieldRules.ARCHER_RANGE) {
+            if (e.alive == 0 || !e.afloat || d > FieldRules.ARCHER_RANGE * b.hull.archerReach) {
                 continue;
             }
             if (nearest == null || d < b.pos.distanceTo(nearest.pos)) {
@@ -946,7 +987,7 @@ public final class FieldBattle {
             }
         }
         boolean keep = previous != null && previous.side != b.side && previous.alive > 0 && previous.afloat
-                && b.pos.distanceTo(previous.pos) <= FieldRules.ARCHER_RANGE && (grappled == null || !previous.lashed.isEmpty());
+                && b.pos.distanceTo(previous.pos) <= FieldRules.ARCHER_RANGE * b.hull.archerReach && (grappled == null || !previous.lashed.isEmpty());
         return keep ? previous : grappled != null ? grappled : nearest;
     }
 
@@ -4083,6 +4124,9 @@ public final class FieldBattle {
                 if (block.ship == FieldBlock.ShipKind.GUNSHIP && block.afloat && block == holder(block)) {
                     broadside(block, enemy, targets, damages);
                 }
+                if (block.afloat && block == holder(block) && !block.hull.gunsBow.isEmpty()) {
+                    bowGuns(block, enemy, targets, damages);
+                }
             }
         }
         for (int i = 0; i < targets.size(); i++) {
@@ -4297,7 +4341,7 @@ public final class FieldBattle {
      */
     private void shoot(FieldArmy army, FieldBlock archers, FieldArmy enemy, List<FieldBlock> targets, List<Double> damages) {
         Machine machine = archers.machine;
-        double reach = machine != null ? machine.reach : FieldRules.ARCHER_RANGE;
+        double reach = machine != null ? machine.reach : FieldRules.ARCHER_RANGE * (archers.afloat ? archers.hull.archerReach : 1); // a tower galley's shoot further
         if (siege != null && siege.batters(archers)) {
             int shots = Math.min(archers.arrows, engineShots(archers));
             archers.arrows -= shots;

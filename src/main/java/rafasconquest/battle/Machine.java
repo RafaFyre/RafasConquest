@@ -44,6 +44,8 @@ public final class Machine {
     public static final Machine MANTLET = builtIn("mantlet");
     /** The Medium Cannon: a ship's gun on its own block (MediumCannonBlock), not a Siegeworks engine; never an army's. */
     public static final Machine MEDIUM_CANNON = builtIn("medium_cannon");
+    /** A light Bronze-age stone thrower (drawn with the Onager's model: Siegeworks has no catapult). Last, so the others keep their numbers. */
+    public static final Machine CATAPULT = builtIn("catapult");
 
     /** Its file's name; its entity's path under {@link #MOD} unless {@link #entity} says otherwise. */
     public final String id;
@@ -100,7 +102,7 @@ public final class Machine {
 
     /** Drops every engine but the built-in ones, before another's set is added in its order ({@link UnitCards#replace}). */
     static void keepBuiltIns() {
-        ALL.subList(MEDIUM_CANNON.ordinal + 1, ALL.size()).clear();
+        ALL.subList(CATAPULT.ordinal + 1, ALL.size()).clear(); // the last built-in
         array = ALL.toArray(Machine[]::new);
     }
 

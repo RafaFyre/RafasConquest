@@ -1,0 +1,21 @@
+{
+  "name": "Fighting Tower Galley",
+  "icon": "minecraft:spruce_boat",
+  "kind": "ranged",
+  "hits": 1,
+  "takes": 1,
+  "pace": 1,
+  "nerve": 1,
+  "traits": [],
+  "missile": "arrows",
+  "recruit": "recruits:bowman",
+  "kit": "archer",
+  "gear": {},
+  "figure": "archers",
+  "front": 1,
+  "requires": "",
+  "otherwise": "",
+  "roster": true,
+  "engine": "",
+  "ship": "tower_galley"
+}

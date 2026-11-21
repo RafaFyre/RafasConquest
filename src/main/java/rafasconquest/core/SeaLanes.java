@@ -72,6 +72,14 @@ public final class SeaLanes {
         public static final Size SECOND_RATE = builtIn("second_rate");
         public static final Size FIRST_RATE = builtIn("first_rate");
         public static final Size GRAND_FLAGSHIP = builtIn("grand_flagship");
+        /** Galleys with something on their foredeck, their hulls longer for it: two bow cannons; a fighting tower of archers. */
+        public static final Size CANNON_GALLEY = builtIn("cannon_galley");
+        public static final Size TOWER_GALLEY = builtIn("tower_galley");
+        /** Galleys carrying engines over their bows (ShipEngineBlock): one onager or trebuchet; two ballistas or catapults. */
+        public static final Size ONAGER_GALLEY = builtIn("onager_galley");
+        public static final Size TREBUCHET_GALLEY = builtIn("trebuchet_galley");
+        public static final Size BALLISTA_GALLEY = builtIn("ballista_galley");
+        public static final Size CATAPULT_GALLEY = builtIn("catapult_galley");
 
         public final String id;
         private int ordinal;
@@ -100,6 +108,12 @@ public final class SeaLanes {
          */
         public List<String> gunsRight = List.of();
         public List<String> gunsLeft = List.of();
+        /** Its guns laid over the bow (a Cannon Galley's), which fire ahead as it closes rather than in a broadside. */
+        public List<String> gunsBow = List.of();
+        /** A made galley hull's guns or engines ({@code gun_block}) on its foredeck over the bow: 0 none, 1 on the centreline, else 2. */
+        public int bowGuns;
+        /** Its archers' reach at sea, times the usual: further from a Fighting Tower Galley's raised platform. */
+        public double archerReach = 1;
         public List<Post> posts = List.of();
 
         /** A crewman's place in the hull's frame (x across, y up from the keel, z to the bow), and the gun beside it ("" none). */
