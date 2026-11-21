@@ -1,6 +1,6 @@
 {
-  "name": "Flagship",
-  "icon": "minecraft:mangrove_boat",
+  "name": "1st Rate",
+  "icon": "minecraft:dark_oak_boat",
   "kind": "foot",
   "hits": 1,
   "takes": 1,
@@ -22,5 +22,5 @@
   "otherwise": "",
   "roster": true,
   "engine": "",
-  "ship": "xlarge"
+  "ship": "first_rate"
 }

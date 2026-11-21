@@ -61,6 +61,12 @@ public final class SeaLanes {
         public static final Size GUNSHIP = builtIn("gunship");
         /** A three-decked gunship, three masts: its made hull is {@link rafasconquest.style.ShipHulls}'s own shape, not the plain one. */
         public static final Size MAN_O_WAR = builtIn("manowar");
+        /** A bigger Man O' War: longer, wider, taller decks, 50 guns a side. */
+        public static final Size THIRD_RATE = builtIn("third_rate");
+        /** Bigger again, each step: 60, 70 and 80 guns a side. The biggest is "Flagship" by name. */
+        public static final Size SECOND_RATE = builtIn("second_rate");
+        public static final Size FIRST_RATE = builtIn("first_rate");
+        public static final Size GRAND_FLAGSHIP = builtIn("grand_flagship");
 
         public final String id;
         private int ordinal;

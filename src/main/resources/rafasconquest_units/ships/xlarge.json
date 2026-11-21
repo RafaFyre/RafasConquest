@@ -1,1 +1,1 @@
-{"name": "Flagship", "length": 31, "width": 9, "deck": 4, "speed": 1, "lanes": 10, "battle": "flagship", "hull": "xlarge.nbt", "merchant": "xlarge_merchant.nbt", "type": "boarder"}
+{"name": "Extra Large Boarder", "length": 31, "width": 9, "deck": 4, "speed": 1, "lanes": 10, "battle": "flagship", "hull": "xlarge.nbt", "merchant": "xlarge_merchant.nbt", "type": "boarder"}

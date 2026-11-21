@@ -19,6 +19,21 @@ class BattlePlanTest {
     private static final int FORMED = BattlePlan.FORMING_SECONDS;
 
     @Test
+    void aFleetSailsOneFlagshipAtMostAndTheRestGoToTheOtherCards() {
+        int f = Arm.GRAND_FLAGSHIP.ordinal();
+        int[] mix = BattlePlan.navalMix(200);
+        assertEquals(1, mix[f]);
+        assertEquals(200, java.util.Arrays.stream(mix).sum(), "no ship lost to the cap");
+        int[] cards = new int[Arm.values().length];
+        cards[f] = 20;
+        cards[Arm.GUNSHIP.ordinal()] = 5;
+        int[] capped = BattlePlan.capFlagships(cards);
+        assertEquals(1, capped[f]);
+        assertEquals(5, capped[Arm.GUNSHIP.ordinal()]);
+        assertEquals(20, cards[f], "the army's own cards are left alone");
+    }
+
+    @Test
     void armiesComeInWholeBlocksOfTwentyWithinTheLimits() {
         assertEquals(5, BattlePlan.blocks(100));
         assertEquals(100, BattlePlan.blocks(2000));

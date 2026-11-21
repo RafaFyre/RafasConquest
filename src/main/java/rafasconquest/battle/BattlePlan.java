@@ -160,12 +160,16 @@ public final class BattlePlan {
         public static final Arm SMALL_SHIP = builtIn("small_ship");
         public static final Arm MEDIUM_SHIP = builtIn("medium_ship");
         public static final Arm LARGE_SHIP = builtIn("large_ship");
-        public static final Arm FLAGSHIP = builtIn("flagship");
         public static final Arm UNIT_SHIP = builtIn("unit_ship");
         /** The Medium Cannon's crews: only how its shots look and sound in the numbers; never on a roster. Last, so the cards before keep their numbers. */
         public static final Arm MEDIUM_CANNONS = builtIn("medium_cannons");
         /** A Man O' War's crew, as {@link #GUNSHIP}'s. After the cannons, so the cards before keep their numbers. */
         public static final Arm MAN_O_WAR = builtIn("manowar");
+        /** A 3rd Rate's crew, as {@link #MAN_O_WAR}'s. Last, so the cards before keep their numbers. */
+        public static final Arm THIRD_RATE = builtIn("third_rate");
+        public static final Arm SECOND_RATE = builtIn("second_rate");
+        public static final Arm FIRST_RATE = builtIn("first_rate");
+        public static final Arm GRAND_FLAGSHIP = builtIn("grand_flagship");
 
         public final String id;
         private int ordinal;
@@ -578,10 +582,31 @@ public final class BattlePlan {
             return null;
         }
         int[] mix = new int[Arm.values().length];
-        for (int i = 0; i < Math.max(1, blocks); i++) {
-            mix[ships[i % ships.length].ordinal()]++;
+        List<Arm> turn = new ArrayList<>(List.of(ships));
+        for (int i = 0, k = 0; i < Math.max(1, blocks) && !turn.isEmpty(); i++) {
+            Arm a = turn.get(k % turn.size());
+            mix[a.ordinal()]++;
+            if (a == Arm.GRAND_FLAGSHIP && mix[a.ordinal()] >= MAX_FLAGSHIPS) {
+                turn.remove(k % turn.size()); // the rest go to the other cards
+            } else {
+                k++;
+            }
         }
         return mix;
+    }
+
+    /** Flagships a side may sail: each is a 111-block three-decker of 160 guns, and twenty a side brought the PC down. */
+    public static final int MAX_FLAGSHIPS = 1;
+
+    /** {@code mix} with its Flagships cut to {@link #MAX_FLAGSHIPS} (a copy when cut; null stays null). */
+    public static int[] capFlagships(int[] mix) {
+        int f = Arm.GRAND_FLAGSHIP.ordinal();
+        if (mix == null || f >= mix.length || mix[f] <= MAX_FLAGSHIPS) {
+            return mix;
+        }
+        int[] capped = mix.clone();
+        capped[f] = MAX_FLAGSHIPS;
+        return capped;
     }
 
     /** How an army of {@code blocks} blocks deploys in plain lines ({@link #deployment(int, boolean)}). */

@@ -83,8 +83,9 @@ public final class ShipHulls {
     }
 
     private static List<Part> made(SeaLanes.Size size, boolean merchant) {
-        if (size == SeaLanes.Size.MAN_O_WAR) {
-            return manOWar(size);
+        Integer guns = SIDE_GUNS.get(size);
+        if (guns != null) {
+            return manOWar(size, guns);
         }
         List<Part> plain = plain(size.length, size.width);
         return merchant ? plain : size.gunship() ? gunned(rowed(plain, size.length, size.width), size)
@@ -384,7 +385,7 @@ public final class ShipHulls {
      * quarterdeck with the Helm, a bowsprit, and three masts (the main four blocks taller than the fore and mizzen), each
      * with three sails under yards and a medium flag at its head, held on the mast's aft side and flying astern.
      */
-    private static List<Part> manOWar(SeaLanes.Size size) {
+    private static List<Part> manOWar(SeaLanes.Size size, int sideGuns) {
         BlockState keel = Blocks.SPRUCE_PLANKS.defaultBlockState();
         BlockState side = Blocks.DARK_OAK_PLANKS.defaultBlockState();
         BlockState band = Blocks.BIRCH_PLANKS.defaultBlockState();
@@ -401,14 +402,21 @@ public final class ShipHulls {
         int beam = size.width / 2;
         int half = size.length / 2;
         int top = size.deck;
-        int[] decks = {top - 6, top - 3, top}; // the lower and upper gun decks, then the weather deck
+        int gap = top / 3; // the bigger rates' decks stand further apart
+        int[] decks = {top - 2 * gap, top - gap, top}; // the lower and upper gun decks, then the weather deck
+        // Each deck a row of a third of the side's guns, rounded up, the weather deck's foremost left out for the rest:
+        // 15/15/15 the Man O' War, 17/17/16 the 3rd Rate, 20s the 2nd, 24/24/22 the 1st, 27/27/26 the Flagship.
+        int row = (sideGuns + 2) / 3;
+        int topRow = sideGuns - 2 * row;
+        int firstGun = -(3 * (row - 1)) / 2; // the rows centred, two planks between guns as gunned()'s
+        int grow = beam - 8; // masts and sails grow with the beam over the Man O' War's
         Map<Long, Part> at = new java.util.LinkedHashMap<>(); // a later block replaces an earlier one in its spot
-        Integer first = null;
         for (int z = -half; z <= half; z++) {
             int end = half - Math.abs(z);
             // From above: a rounded bow and a square stern with rounded corners (BOW_BEAM, STERN_BEAM).
             int[] plan = z > 0 ? BOW_BEAM : STERN_BEAM;
-            int w = Math.min(beam, end < plan.length ? plan[end] : beam);
+            // past the plan, a block wider each step to the full beam (the Man O' War's reaches it at once)
+            int w = Math.min(beam, end < plan.length ? plan[end] : plan[plan.length - 1] + end - plan.length + 1);
             boolean forecastle = z > 0 && end <= 9;
             boolean quarterdeck = z < 0 && end <= 10; // both clear of the middle, where the guns are
             int rail = top + 1 + (forecastle ? 3 : quarterdeck ? 4 : 0);
@@ -434,20 +442,24 @@ public final class ShipHulls {
                     put(at, x, top + 2, z, window); // the captain's cabin's windows, under the quarterdeck
                 }
             }
-            if (end >= GUNS_FROM_END) {
-                first = first == null ? z : first;
-                if ((z - first) % 3 == 0) { // two planks between guns, as gunned()'s
-                    for (int d : decks) {
-                        put(at, -beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.WEST));
-                        put(at, beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.EAST));
-                        put(at, -beam + 1, d + 1, z, marker);
-                        put(at, beam - 1, d + 1, z, marker);
+            int gunAt = z - firstGun;
+            if (gunAt >= 0 && gunAt % 3 == 0 && gunAt / 3 < row) {
+                for (int d : decks) {
+                    if (d == top && gunAt / 3 >= topRow) {
+                        continue;
                     }
+                    put(at, -beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.WEST));
+                    put(at, beam, d + 1, z, gun.setValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING, Direction.EAST));
+                    put(at, -beam + 1, d + 1, z, marker);
+                    put(at, beam - 1, d + 1, z, marker);
                 }
             }
         }
         // Fore, main, mizzen: where each stands, then its course's, topsail's and topgallant's heights.
-        int[][] masts = {{half - 13, 5, 5, 3}, {0, 7, 7, 3}, {-(half - 13), 5, 5, 3}};
+        // On a bigger rate each mast stands further out and every sail is taller, the topgallant by half as much.
+        int out = (half * 3 + 2) / 5; // the Man O' War's 20
+        int[][] masts = {{out, 5 + grow, 5 + grow, 3 + grow / 2}, {0, 7 + grow, 7 + grow, 3 + grow / 2},
+                {-out, 5 + grow, 5 + grow, 3 + grow / 2}};
         for (int[] m : masts) {
             int z = m[0];
             int y = top + 5; // the course's foot, clear of the crews on deck
@@ -466,7 +478,7 @@ public final class ShipHulls {
             }
             put(at, 0, y, z - 1, flag);
         }
-        for (int z = half; z <= half + 5; z++) {
+        for (int z = half; z <= half + 5 + grow; z++) {
             put(at, 0, top + 3 + (z - half) / 3, z, sprit);
         }
         put(at, 0, top + 5, -half + 2, ConquestContent.HELM.get().defaultBlockState().setValue(HelmBlock.FACING, Direction.SOUTH));
@@ -480,8 +492,9 @@ public final class ShipHulls {
     /** Its half-beam by blocks back from the stem, and by blocks forward from the stern; full past these. */
     private static final int[] BOW_BEAM = {1, 3, 4, 5, 6, 6, 7, 7, 7, 7};
     private static final int[] STERN_BEAM = {5, 6, 7, 7, 7, 7};
-    /** Its guns stand this many blocks or more from either end: the middle, aft of the forecastle and fore of the quarterdeck. */
-    private static final int GUNS_FROM_END = 12;
+    /** The made three-deckers and their guns a side; their lengths (the cards') keep the gun rows 12+ blocks from either end, clear of forecastle and quarterdeck. */
+    private static final Map<SeaLanes.Size, Integer> SIDE_GUNS = Map.of(SeaLanes.Size.MAN_O_WAR, 45, SeaLanes.Size.THIRD_RATE, 50,
+            SeaLanes.Size.SECOND_RATE, 60, SeaLanes.Size.FIRST_RATE, 70, SeaLanes.Size.GRAND_FLAGSHIP, 80);
 
     private static void put(Map<Long, Part> at, int x, int y, int z, BlockState state) {
         at.put(net.minecraft.core.BlockPos.asLong(x, y, z), new Part(x, y, z, state));

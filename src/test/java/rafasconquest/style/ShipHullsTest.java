@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShipHullsTest {
     @Test
@@ -47,6 +48,38 @@ class ShipHullsTest {
         assertEquals(3, h.size());
         assertEquals(h.get(0), h.get(2));
         assertEquals(4, h.get(1) - h.get(0));
+    }
+
+    @Test
+    void eachRateIsBiggerThanTheLastWithTenMoreGunsASideAndTallerMastsAndSails() {
+        SeaLanes.Size[] rates = {SeaLanes.Size.MAN_O_WAR, SeaLanes.Size.THIRD_RATE, SeaLanes.Size.SECOND_RATE,
+                SeaLanes.Size.FIRST_RATE, SeaLanes.Size.GRAND_FLAGSHIP};
+        rafasconquest.battle.BattlePlan.Arm[] arms = {rafasconquest.battle.BattlePlan.Arm.MAN_O_WAR, rafasconquest.battle.BattlePlan.Arm.THIRD_RATE,
+                rafasconquest.battle.BattlePlan.Arm.SECOND_RATE, rafasconquest.battle.BattlePlan.Arm.FIRST_RATE, rafasconquest.battle.BattlePlan.Arm.GRAND_FLAGSHIP};
+        int[] sideGuns = {45, 50, 60, 70, 80};
+        long lastMast = 0;
+        long lastSail = 0;
+        for (int i = 0; i < rates.length; i++) {
+            SeaLanes.Size s = rates[i];
+            assertEquals(s, arms[i].ship());
+            List<ShipHulls.Part> parts = ShipHulls.hull(s, false);
+            List<ShipHulls.Part> guns = parts.stream().filter(p -> p.state().getBlock() instanceof rafasconquest.content.MediumCannonBlock).toList();
+            assertEquals(sideGuns[i], guns.stream().filter(p -> p.x() < 0).count(), s.id);
+            assertEquals(sideGuns[i], guns.stream().filter(p -> p.x() > 0).count(), s.id);
+            assertEquals(sideGuns[i], s.gunsRight.size(), s.id);
+            assertEquals(2L * sideGuns[i], s.posts.stream().filter(p -> !p.gun().isEmpty()).count(), "a gunner for every gun: " + s.id);
+            int half = s.length / 2;
+            assertTrue(guns.stream().allMatch(p -> half - Math.abs(p.z()) >= 12), "guns clear of forecastle and quarterdeck: " + s.id);
+            long mast = parts.stream().filter(p -> p.state().is(net.minecraft.world.level.block.Blocks.SPRUCE_LOG) && p.x() == 0).mapToInt(ShipHulls.Part::y).max().getAsInt();
+            long sail = parts.stream().filter(p -> p.state().getBlock() instanceof rafasconquest.content.SailBlock).count();
+            if (i > 0) {
+                SeaLanes.Size last = rates[i - 1];
+                assertTrue(s.length > last.length && s.width > last.width && s.deck > last.deck, s.id + " bigger than " + last.id);
+                assertTrue(mast > lastMast && sail > lastSail, s.id + "'s masts and sails bigger than " + last.id + "'s");
+            }
+            lastMast = mast;
+            lastSail = sail;
+        }
     }
 
     @Test

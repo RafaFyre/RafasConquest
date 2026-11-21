@@ -669,6 +669,8 @@ public final class RecruitsBattle {
         if (type == BattleType.OCEAN) { // fleets sail ship cards only: no land units at sea
             firstMix = firstMix != null ? firstMix : BattlePlan.navalMix(BattlePlan.blocks(firstSoldiers));
             secondMix = secondMix != null ? secondMix : BattlePlan.navalMix(BattlePlan.blocks(secondSoldiers));
+            firstMix = BattlePlan.capFlagships(firstMix); // a grand strategy fleet's cards too
+            secondMix = BattlePlan.capFlagships(secondMix);
             // Diagnostic for guns that never appear: which ship cards each fleet sails, and the ship each names.
             for (int[] mix : new int[][]{firstMix, secondMix}) {
                 StringBuilder cards = new StringBuilder();
