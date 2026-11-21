@@ -266,10 +266,10 @@ public final class CityStock extends SavedData {
     }
 
     /**
-     * Lays a road on the land: 5 wide in cobblestone, at the city's height over its box and flat plates, elsewhere on
-     * the ground smoothed along its length and at most a block up or down from one block to the next; cleared 4 high
-     * above, propped up to 12 deep below.
-     * shortcut: whole-block steps, no slabs; over water it is a causeway, not a bridge.
+     * Lays a road on the land: 5 wide in cobblestone, climbing in {@link CityPlates#STEP}-block tiles along its length
+     * (4 full blocks, then 4 slabs for the half step to the next tile), at the city's height over its box and flat
+     * plates; cleared 4 high above, propped up to 12 deep below.
+     * shortcut: over water it is a causeway, not a bridge.
      */
     private static void lay(ServerLevel level, CityPlates p, Stock s, int[] r) {
         int n = (int) Math.ceil(CityPlates.length(r));
@@ -282,29 +282,18 @@ public final class CityStock extends SavedData {
             fixed[k] = p.inBoxArea(x, z) || s.flat.contains(p.at(x, z));
             h[k] = fixed[k] ? p.plateY() : level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
         }
-        int[] smooth = h.clone();
-        for (int k = 0; k <= n; k++) {
-            if (!fixed[k]) {
-                int sum = 0;
-                int count = 0;
-                for (int q = Math.max(0, k - 3); q <= Math.min(n, k + 3); q++) {
-                    sum += h[q];
-                    count++;
-                }
-                smooth[k] = Math.round((float) sum / count);
-            }
-        }
-        for (int k = 1; k <= n; k++) {
-            smooth[k] = Math.max(smooth[k - 1] - 1, Math.min(smooth[k - 1] + 1, smooth[k]));
-        }
-        for (int k = n - 1; k >= 0; k--) {
-            smooth[k] = Math.max(smooth[k + 1] - 1, Math.min(smooth[k + 1] + 1, smooth[k]));
-        }
+        int[] steps = CityPlates.steps(h, fixed, p.plateY());
+        BlockState slab = Blocks.COBBLESTONE_SLAB.defaultBlockState();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int[] col : CityPlates.columns(r)) {
-            int y = smooth[(int) Math.round(CityPlates.along(col[0], col[1], r) / Math.max(1e-9, CityPlates.length(r)) * n)];
-            level.setBlock(pos.set(col[0], y, col[1]), Blocks.COBBLESTONE.defaultBlockState(), 2);
-            for (int up = 1; up <= 4; up++) {
+            int[] top = CityPlates.surface(steps, CityPlates.along(col[0], col[1], r));
+            int y = top[0];
+            level.setBlock(pos.set(col[0], y, col[1]), top[1] == 1 ? slab : Blocks.COBBLESTONE.defaultBlockState(), 2);
+            if (top[1] == 1) {
+                level.setBlock(pos.setY(y - 1), Blocks.COBBLESTONE.defaultBlockState(), 2);
+                y--; // propped up from under the block beneath the slab
+            }
+            for (int up = top[0] - y + 1; up <= top[0] - y + 4; up++) {
                 level.setBlock(pos.setY(y + up), Blocks.AIR.defaultBlockState(), 2);
             }
             for (int down = 1; down <= 12; down++) {

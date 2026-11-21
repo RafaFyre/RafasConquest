@@ -55,6 +55,24 @@ class CityPlatesTest {
     }
 
     @Test
+    void roadsClimbInEightBlockTilesOfFourBlocksThenFourSlabs() {
+        int[] ground = new int[24];
+        for (int k = 0; k < 24; k++) {
+            ground[k] = 64 + k; // a steep hill: one block up each block
+        }
+        boolean[] fixed = new boolean[24];
+        fixed[0] = true; // starts on the city's flat ground at 64
+        int[] steps = CityPlates.steps(ground, fixed, 64);
+        assertEquals(List.of(64, 65, 66), java.util.Arrays.stream(steps).boxed().toList());
+        assertEquals(List.of(64, 0), java.util.Arrays.stream(CityPlates.surface(steps, 3)).boxed().toList()); // full block
+        assertEquals(List.of(65, 1), java.util.Arrays.stream(CityPlates.surface(steps, 5)).boxed().toList()); // slab up
+        assertEquals(List.of(65, 0), java.util.Arrays.stream(CityPlates.surface(steps, 9)).boxed().toList()); // next tile
+        assertEquals(List.of(66, 0), java.util.Arrays.stream(CityPlates.surface(steps, 21)).boxed().toList()); // last tile: flat
+        int[] down = {70, 69};
+        assertEquals(List.of(70, 1), java.util.Arrays.stream(CityPlates.surface(down, 6)).boxed().toList()); // slab down, on 69
+    }
+
+    @Test
     void keysRoundTripNegatives() {
         long k = CityPlates.key(-3, -7);
         assertEquals(-3, CityPlates.i(k));

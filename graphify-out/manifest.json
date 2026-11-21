@@ -4722,21 +4722,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/CityPlates.java": {
-    "mtime": 1795289482.1675372,
-    "seen": 1795289595.0419517,
-    "ast_hash": "977a274bb0d2a06dfbfb2112ce97bb3c",
+    "mtime": 1795289964.5042326,
+    "seen": 1795290044.26571,
+    "ast_hash": "84175ba66f1a2185b5bc65f5aa18cd0d",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/CityStock.java": {
-    "mtime": 1795289482.1685338,
-    "seen": 1795289595.0420597,
-    "ast_hash": "60464b50eabe3c48f2b15a05ba267ff0",
+    "mtime": 1795289987.4537437,
+    "seen": 1795290044.2658308,
+    "ast_hash": "9ff8b9a4af66f43ec3cf5f2de6a49a4f",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/CityPlatesTest.java": {
-    "mtime": 1795289482.1695309,
-    "seen": 1795289595.0425508,
-    "ast_hash": "1a179f0d35b87fe5b461435c31b0d425",
+    "mtime": 1795289964.6439857,
+    "seen": 1795290044.266384,
+    "ast_hash": "f60bf2978870cf2b22ef5e75900dacf5",
     "semantic_hash": ""
   }
 }

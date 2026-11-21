@@ -201,6 +201,51 @@ public record CityPlates(int ax, int az, int boxSize, int plateY, int[] walled, 
         return null;
     }
 
+    /** A road climbs in tiles this long along it, at most a block from one tile to the next. */
+    public static final int STEP = 8;
+
+    /**
+     * A road's tile heights from the ground under it, one sample a block along it: each tile the mean of its samples
+     * (the city's height if any lies on {@code fixed} flat ground), then held within a block of its neighbours.
+     */
+    public static int[] steps(int[] ground, boolean[] fixed, int plateY) {
+        int n = (ground.length + STEP - 1) / STEP;
+        int[] h = new int[n];
+        for (int m = 0; m < n; m++) {
+            int sum = 0;
+            int count = 0;
+            boolean flat = false;
+            for (int k = m * STEP; k < Math.min(ground.length, (m + 1) * STEP); k++) {
+                sum += ground[k];
+                count++;
+                flat |= fixed[k];
+            }
+            h[m] = flat ? plateY : Math.round((float) sum / count);
+        }
+        for (int m = 1; m < n; m++) {
+            h[m] = Math.max(h[m - 1] - 1, Math.min(h[m - 1] + 1, h[m]));
+        }
+        for (int m = n - 2; m >= 0; m--) {
+            h[m] = Math.max(h[m + 1] - 1, Math.min(h[m + 1] + 1, h[m]));
+        }
+        return h;
+    }
+
+    /**
+     * A road's top {@code along} blocks in, as {y, slab}: a full block at y (slab 0), or a bottom slab at y on a full
+     * block below (slab 1). A tile's first half is full blocks at its height; its second half, where the next tile is
+     * a block up or down, is slabs making the half step between them.
+     */
+    public static int[] surface(int[] steps, double along) {
+        int m = Math.max(0, Math.min(steps.length - 1, (int) Math.floor(along / STEP)));
+        int h = steps[m];
+        int next = m + 1 < steps.length ? steps[m + 1] : h;
+        if (along - m * STEP < STEP / 2.0 || next == h) {
+            return new int[]{h, 0};
+        }
+        return next > h ? new int[]{h + 1, 1} : new int[]{h, 1};
+    }
+
     /** The plates any of {@code roads} paves part of. */
     public Set<Long> roadPlates(List<int[]> roads) {
         Set<Long> plates = new HashSet<>();
