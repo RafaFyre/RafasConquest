@@ -43,6 +43,7 @@ public final class StyleLibrary {
     public static final List<String> SLOTS = List.of(
             "city/walls/corners", "city/walls/gates", "city/walls/watchtowers", "city/walls/walls", "city/walls/junctions",
             "city/buildings/common", "city/buildings/noble",
+            "city/districts/housing", "city/districts/food", "city/districts/extraction", "city/districts/industrial", "city/districts/logistics",
             "city/buildings/landmarks/mandatory/palace/small", "city/buildings/landmarks/mandatory/palace/medium",
             "city/buildings/landmarks/mandatory/palace/large", "city/buildings/landmarks/mandatory/palace/xlarge",
             "city/buildings/landmarks/mandatory/palace/xxlarge",

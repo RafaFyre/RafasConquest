@@ -55,6 +55,27 @@ public final class CityStock extends SavedData {
         }
     }
 
+    public static final int DISTRICT_GOLD = 40;
+    public static final int DISTRICT_RAW = 200;
+
+    /** What a district is for; its buildings come from its style's {@code city/districts/<name>} folder. */
+    public enum District {
+        HOUSING("Housing", 0xC08A50), FOOD("Food", 0x78B040), EXTRACTION("Extraction", 0x9A9A9A), INDUSTRIAL("Industrial", 0xB85A30),
+        LOGISTICS("Logistics", 0x4A88C8);
+
+        public final String label;
+        public final int rgb;
+
+        District(String label, int rgb) {
+            this.label = label;
+            this.rgb = rgb;
+        }
+
+        public String slot() {
+            return "city/districts/" + name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
     /** shortcut: every city starts with this placeholder stockpile and nothing produces yet; real numbers come with districts. */
     private static final int[] START = {1000, 250, 0, 0, 0, 1000, 0, 200};
 
@@ -63,6 +84,8 @@ public final class CityStock extends SavedData {
         final int[] res = START.clone();
         final Set<Long> flat = new LinkedHashSet<>();
         final List<Long> pending = new ArrayList<>();
+        /** Districts by plate, as {@link District} ordinals. */
+        final Map<Long, Integer> districts = new java.util.LinkedHashMap<>();
         /** Columns of the first pending plate already levelled; not saved, so a restart levels it again from the start. */
         int column;
 
@@ -94,7 +117,7 @@ public final class CityStock extends SavedData {
     /** The plate grid round a city, from the terrain plan that built it. */
     static CityPlates plates(ServerLevel level, SeatCities.City c) {
         return PLATES.computeIfAbsent(c.province(), p -> {
-            CityLayout.Site site = new CityLayout.Site(c.x(), c.z(), c.tier().ordinal() >= rafasconquest.core.TitleMap.Tier.KINGDOM.ordinal(), c.districts());
+            CityLayout.Site site = site(c);
             var chunks = level.getChunkSource();
             Structure.GenerationContext ctx = new Structure.GenerationContext(level.registryAccess(), chunks.getGenerator(),
                     chunks.getGenerator().getBiomeSource(), chunks.randomState(), level.getStructureManager(), level.getSeed(),
@@ -136,6 +159,69 @@ public final class CityStock extends SavedData {
             data.setDirty();
         }
         send(player, province);
+    }
+
+    /**
+     * A player orders districts of one kind on the plates {@code wanted} round the city seating {@code province}: flat
+     * plates touching the city or a district. Each is paid for and built at once.
+     */
+    public static void placeDistricts(ServerPlayer player, int province, int kind, Collection<Long> wanted) {
+        SeatCities.City c = city(province);
+        if (c == null || kind < 0 || kind >= District.values().length || Peerage.get(player.server).of(player.getUUID()).hold != province) {
+            return;
+        }
+        CityStock data = get(player.server);
+        Stock s = data.stock(province);
+        ServerLevel level = player.server.overworld();
+        CityPlates p = plates(level, c);
+        List<Long> ok = p.acceptDistricts(wanted, s.flat, s.districts.keySet());
+        int n = ok.size();
+        if (n == 0) {
+            player.sendSystemMessage(Component.literal("A district needs flat ground touching the city or another district."));
+        } else if (s.res[Resource.GOLD.ordinal()] < n * DISTRICT_GOLD || s.res[Resource.RAW.ordinal()] < n * DISTRICT_RAW) {
+            player.sendSystemMessage(Component.literal(n + " districts need " + n * DISTRICT_GOLD + " gold and " + n * DISTRICT_RAW + " raw materials."));
+        } else {
+            s.res[Resource.GOLD.ordinal()] -= n * DISTRICT_GOLD;
+            s.res[Resource.RAW.ordinal()] -= n * DISTRICT_RAW;
+            District d = District.values()[kind];
+            CityLayout.Site site = site(c);
+            boolean built = false;
+            for (long k : ok) {
+                s.districts.put(k, kind);
+                built |= build(level, site, p, k, d);
+            }
+            data.setDirty();
+            if (!built) {
+                player.sendSystemMessage(Component.literal("No buildings in this city's style for " + d.label
+                        + " districts yet: add .nbt files to structures/style/<style>/" + d.slot() + "."));
+            }
+        }
+        send(player, province);
+    }
+
+    private static CityLayout.Site site(SeatCities.City c) {
+        return new CityLayout.Site(c.x(), c.z(), c.tier().ordinal() >= rafasconquest.core.TitleMap.Tier.KINGDOM.ordinal(), c.districts());
+    }
+
+    /** Fills a district's plate with its style's buildings, packed as a city block's houses are; false if it has none. */
+    private static boolean build(ServerLevel level, CityLayout.Site site, CityPlates p, long plate, District d) {
+        List<rafasconquest.style.CityStyles.Building> buildings = rafasconquest.style.CityStyles.buildings(site, d.slot()).stream()
+                .filter(b -> b.x() <= CityPlates.PLATE && b.z() <= CityPlates.PLATE).toList();
+        if (buildings.isEmpty()) {
+            return false;
+        }
+        List<rafasconquest.style.BlockPacker.Size> sizes = buildings.stream().map(b -> new rafasconquest.style.BlockPacker.Size(b.x(), b.z())).toList();
+        java.util.Random random = new java.util.Random(level.getSeed() ^ plate * 0x9E3779B97F4A7C15L);
+        int x0 = p.minX(CityPlates.i(plate));
+        int z0 = p.minZ(CityPlates.j(plate));
+        for (rafasconquest.style.BlockPacker.Placed b : rafasconquest.style.BlockPacker.pack(CityPlates.PLATE, sizes, random)) {
+            for (rafasconquest.style.StylePiece piece : rafasconquest.style.StylePiece.at(buildings.get(b.building()).file(), x0 + b.x(), p.plateY(), z0 + b.z(), b.turns())) {
+                net.minecraft.world.level.levelgen.structure.BoundingBox box = piece.getBoundingBox();
+                piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.getRandom(), box,
+                        new ChunkPos(box.minX() >> 4, box.minZ() >> 4), box.getCenter());
+            }
+        }
+        return true;
     }
 
     /** Levels a few columns of each city's first pending plate in turn; called each server tick. */
@@ -199,7 +285,7 @@ public final class CityStock extends SavedData {
         CityStock data = get(player.server);
         Stock s = data.stock(province);
         ConquestNetwork.cityState(player, new ConquestNetwork.CityState(province, s.res.clone(), s.busyWorkers(),
-                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending)));
+                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending), new HashMap<>(s.districts)));
     }
 
     @Override
@@ -210,6 +296,8 @@ public final class CityStock extends SavedData {
             one.putIntArray("res", s.res);
             one.put("flat", new LongArrayTag(new ArrayList<>(s.flat)));
             one.put("pending", new LongArrayTag(s.pending));
+            one.put("districts", new LongArrayTag(new ArrayList<>(s.districts.keySet())));
+            one.putIntArray("districtKinds", s.districts.values().stream().mapToInt(Integer::intValue).toArray());
             all.put(Integer.toString(province), one);
         });
         tag.put("cities", all);
@@ -229,6 +317,11 @@ public final class CityStock extends SavedData {
             }
             for (long k : one.getLongArray("pending")) {
                 s.pending.add(k);
+            }
+            long[] plates = one.getLongArray("districts");
+            int[] kinds = one.getIntArray("districtKinds");
+            for (int i = 0; i < Math.min(plates.length, kinds.length); i++) {
+                s.districts.put(plates[i], kinds[i]);
             }
             data.cities.put(Integer.parseInt(key), s);
         }

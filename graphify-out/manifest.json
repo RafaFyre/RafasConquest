@@ -744,9 +744,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1795287856.1768632,
-    "seen": 1795288010.9675488,
-    "ast_hash": "53c4e86399fa95b284119a37d8b7b68e",
+    "mtime": 1795288366.1574502,
+    "seen": 1795288486.7864294,
+    "ast_hash": "fc60186db0c34e9d2e0b4a69e343732a",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1080,9 +1080,9 @@
     "semantic_hash": "4cf8b217a42269e4d10903db55825ef8"
   },
   "src/main/java/rafasconquest/style/StyleLibrary.java": {
-    "mtime": 1795281547.7592,
-    "seen": 1795282562.4138572,
-    "ast_hash": "a3d6dabf2e632b5a59e517761ba22ccd",
+    "mtime": 1795288320.4386678,
+    "seen": 1795288486.786534,
+    "ast_hash": "4e132eaed0f4e77c7c7b88a1f92d8ee5",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/style/StylePiece.java": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/CityManagerScreen.java": {
-    "mtime": 1795287931.2207658,
-    "seen": 1795288010.967276,
-    "ast_hash": "b23313ce3e2e865eedfbe051ccf7e67b",
+    "mtime": 1795288459.1916182,
+    "seen": 1795288486.7861562,
+    "ast_hash": "6b0ec659495de889bf5a3aa44b63a527",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/CityManager.java": {
@@ -3822,15 +3822,15 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/CityHud.java": {
-    "mtime": 1795287856.104685,
-    "seen": 1795288010.9672742,
-    "ast_hash": "adf15ef47130205ccd6abb2d93323efe",
+    "mtime": 1795288420.152734,
+    "seen": 1795288486.7861543,
+    "ast_hash": "989ac98d618782cb73872218d4b2e189",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/client/CityHudPreviewTest.java": {
-    "mtime": 1795287957.255458,
-    "seen": 1795288010.9681046,
-    "ast_hash": "a0623ed8633ae46825776a95f73ca8c0",
+    "mtime": 1795288416.0636396,
+    "seen": 1795288486.786975,
+    "ast_hash": "fec94430580f4883de95bea38f3b035e",
     "semantic_hash": ""
   },
   "gui-previews/city_hud.png": {
@@ -4722,21 +4722,21 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/core/CityPlates.java": {
-    "mtime": 1795287719.466511,
-    "seen": 1795288010.967441,
-    "ast_hash": "06ac56a300d07adc59ba0a7dbf446aec",
+    "mtime": 1795288321.4999747,
+    "seen": 1795288486.786324,
+    "ast_hash": "a0fddc4fa304a17fa844066c0aef6f86",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/peerage/CityStock.java": {
-    "mtime": 1795287775.089539,
-    "seen": 1795288010.9675648,
-    "ast_hash": "c595a06e2b1d0f0dae9560f4bf2f2fea",
+    "mtime": 1795288365.7657368,
+    "seen": 1795288486.7864456,
+    "ast_hash": "e336eac30e4c51c21bf4fe646fa80d52",
     "semantic_hash": ""
   },
   "src/test/java/rafasconquest/core/CityPlatesTest.java": {
-    "mtime": 1795287719.5792763,
-    "seen": 1795288010.9681373,
-    "ast_hash": "f23a6cea7c331f07a163efd66fefc7a1",
+    "mtime": 1795288326.3056176,
+    "seen": 1795288486.7870066,
+    "ast_hash": "ab2774d806cd29f86caa12f9136459c9",
     "semantic_hash": ""
   }
 }

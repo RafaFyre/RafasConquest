@@ -79,6 +79,7 @@ final class CityHud {
     private int[] res;
     private int busy;
     private Runnable flatten;
+    private Runnable districts;
 
     private CityHud(Graphics2D g, float refH) {
         this.g = g;
@@ -108,13 +109,14 @@ final class CityHud {
     }
 
     /** The whole HUD on a window-sized image; returns its hover spots in reference units. */
-    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten) {
+    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts) {
         float s = img.getWidth() / REF_W;
         Graphics2D g = smooth(img, s);
         CityHud hud = new CityHud(g, img.getHeight() / s);
         hud.res = res;
         hud.busy = busy;
         hud.flatten = flatten;
+        hud.districts = districts;
         hud.draw(name, date, day, back);
         g.dispose();
         return hud.spots;
@@ -450,7 +452,8 @@ final class CityHud {
     // --- The menu buttons ---
 
     private void buttons() {
-        medallion(148, b(1090), "district", "Districts (B)", "Lay out a district on cleared ground: housing, food, extraction, industry, logistics");
+        medallion(148, b(1090), "district", "Districts", "Build a district on flat ground touching the city or another district: housing, food, extraction, industrial, logistics; "
+                + CityStock.DISTRICT_GOLD + " gold and " + CityStock.DISTRICT_RAW + " raw materials each", districts);
         medallion(215, b(1090), "pick", "Flatten ground", "Level 32-block plates round the city before building districts on them: "
                 + CityStock.FLATTEN_GOLD + " gold and " + CityStock.FLATTEN_WORKERS + " workers a plate", flatten);
         medallion(283, b(1090), "hub", "Hubs and buildings", "Hubs serve the districts beside them; buildings fill a district's slots");

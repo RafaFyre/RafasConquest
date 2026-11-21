@@ -66,8 +66,14 @@ public class CityManagerScreen extends Screen {
     /** The last city state the server sent; {@link #mine()} says whether it is this city's. */
     @Nullable
     private static ConquestNetwork.CityState state;
-    /** Picking plates to flatten: a click toggles one, a drag paints, a right-drag turns the view. */
-    private boolean flattening;
+    /** Picking plates to flatten or build on: a click toggles one, a drag paints, a right-drag turns the view. */
+    private int mode;
+    private static final int NONE = 0;
+    private static final int FLATTEN = 1;
+    private static final int DISTRICT = 2;
+    /** The district kind being placed, a {@link CityStock.District} ordinal. */
+    private int kind;
+    private final List<Button> kinds = new ArrayList<>();
     private boolean paintAdd;
     private final Set<Long> selection = new LinkedHashSet<>();
     @Nullable
@@ -113,9 +119,18 @@ public class CityManagerScreen extends Screen {
     }
 
     private void addButtons() {
-        confirm = addRenderableWidget(Button.builder(Component.literal("Confirm"), b -> confirmFlatten()).bounds(10, height - 80, 90, 20).build());
-        cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> toggleFlatten()).bounds(105, height - 80, 70, 20).build());
-        confirm.visible = cancel.visible = flattening;
+        confirm = addRenderableWidget(Button.builder(Component.literal("Confirm"), b -> confirm()).bounds(10, height - 80, 90, 20).build());
+        cancel = addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> toggle(mode)).bounds(105, height - 80, 70, 20).build());
+        kinds.clear();
+        CityStock.District[] all = CityStock.District.values();
+        for (int i = 0; i < all.length; i++) {
+            int k = i;
+            kinds.add(addRenderableWidget(Button.builder(Component.literal(all[i].label), b -> {
+                kind = k;
+                showButtons();
+            }).bounds(10 + i * 76, height - 104, 72, 20).build()));
+        }
+        showButtons();
     }
 
     private boolean mine() {
@@ -126,16 +141,30 @@ public class CityManagerScreen extends Screen {
     public static void state(ConquestNetwork.CityState s) {
         state = s;
         if (net.minecraft.client.Minecraft.getInstance().screen instanceof CityManagerScreen screen && screen.mine()) {
-            screen.selection.removeAll(s.flat());
-            screen.selection.removeAll(s.pending());
+            if (screen.mode == DISTRICT) { // picked plates are flat: only those now built on are done with
+                screen.selection.removeAll(s.districts().keySet());
+            } else {
+                screen.selection.removeAll(s.flat());
+                screen.selection.removeAll(s.pending());
+            }
         }
     }
 
-    private void toggleFlatten() {
-        flattening = !flattening && mine();
+    /** Into mode {@code m}, or out of it if already there (Cancel passes the mode it is in). */
+    private void toggle(int m) {
+        mode = mode == m || !mine() ? NONE : m;
         selection.clear();
-        if (confirm != null) {
-            confirm.visible = cancel.visible = flattening;
+        showButtons();
+    }
+
+    private void showButtons() {
+        if (confirm == null) {
+            return;
+        }
+        confirm.visible = cancel.visible = mode != NONE;
+        for (int i = 0; i < kinds.size(); i++) {
+            kinds.get(i).visible = mode == DISTRICT;
+            kinds.get(i).active = i != kind; // the kind being placed shows pressed
         }
     }
 
@@ -146,15 +175,32 @@ public class CityManagerScreen extends Screen {
         return r;
     }
 
-    /** The selected plates that may be flattened. */
+    /** The selected plates that may be flattened, or built on in district mode. */
     private List<Long> accepted() {
-        return state.plates().accept(selection, reach());
+        return mode == DISTRICT ? state.plates().acceptDistricts(selection, new HashSet<>(state.flat()), state.districts().keySet())
+                : state.plates().accept(selection, reach());
     }
 
-    private void confirmFlatten() {
+    /** Whether one more plate, beside those already accepted, may be picked. */
+    private boolean allowed(long k, List<Long> ok) {
+        if (mode == DISTRICT) {
+            Set<Long> districts = new HashSet<>(state.districts().keySet());
+            districts.addAll(ok);
+            return !state.plates().acceptDistricts(List.of(k), new HashSet<>(state.flat()), districts).isEmpty();
+        }
+        Set<Long> reach = reach();
+        reach.addAll(ok);
+        return !state.plates().accept(List.of(k), reach).isEmpty();
+    }
+
+    private void confirm() {
         List<Long> ok = accepted();
         if (!ok.isEmpty()) {
-            ConquestNetwork.cityFlatten(city.province(), ok);
+            if (mode == DISTRICT) {
+                ConquestNetwork.cityDistrict(city.province(), kind, ok);
+            } else {
+                ConquestNetwork.cityFlatten(city.province(), ok);
+            }
         }
         selection.clear();
     }
@@ -189,9 +235,12 @@ public class CityManagerScreen extends Screen {
         return at == null ? null : state.plates().at(at.x, at.z);
     }
 
-    /** The plates' outlines over the world while flattening: flat green, being levelled blue, picked gold (red: not allowed). */
+    /**
+     * The plates' outlines over the world while picking: flat green, being levelled blue, districts in their kind's
+     * colour, picked gold (red: not allowed), the one under the mouse white.
+     */
     public static void renderWorld(PoseStack pose, Camera cam) {
-        if (!(net.minecraft.client.Minecraft.getInstance().screen instanceof CityManagerScreen s) || !s.flattening || !s.mine()) {
+        if (!(net.minecraft.client.Minecraft.getInstance().screen instanceof CityManagerScreen s) || s.mode == NONE || !s.mine()) {
             return;
         }
         CityPlates p = state.plates();
@@ -199,7 +248,13 @@ public class CityManagerScreen extends Screen {
         List<Long> ok = s.accepted();
         RenderSystem.disableDepthTest(); // the city is Distant Horizons' terrain, not in the depth buffer
         for (long k : state.flat()) {
-            plate(pose, c, p, k, 0, 0xA060C060);
+            Integer d = state.districts().get(k);
+            if (d == null) {
+                plate(pose, c, p, k, 0, 0xA060C060);
+            } else {
+                int rgb = CityStock.District.values()[d].rgb;
+                plate(pose, c, p, k, 0x50000000 | rgb, 0xE0000000 | rgb);
+            }
         }
         for (long k : state.pending()) {
             plate(pose, c, p, k, 0x3060A0E0, 0xE060A0E0);
@@ -209,10 +264,7 @@ public class CityManagerScreen extends Screen {
             plate(pose, c, p, k, good ? 0x40E0B040 : 0x40D8402C, good ? 0xFFE0B040 : 0xFFD8402C);
         }
         if (s.hover != null && !s.selection.contains(s.hover)) {
-            Set<Long> reach = s.reach();
-            reach.addAll(ok);
-            boolean good = !p.accept(List.of(s.hover), reach).isEmpty();
-            plate(pose, c, p, s.hover, 0, good ? 0xFFFFFFFF : 0xFFD8402C);
+            plate(pose, c, p, s.hover, 0, s.allowed(s.hover, ok) ? 0xFFFFFFFF : 0xFFD8402C);
         }
         RenderSystem.enableDepthTest();
     }
@@ -306,14 +358,23 @@ public class CityManagerScreen extends Screen {
         RenderSystem.disableBlend();
         g.pose().popPose();
         drawCouncil(g, h);
-        if (flattening && mine() && confirm != null) {
+        if (mode != NONE && mine() && confirm != null) {
             hover = plateAt(mouseX, mouseY);
             int n = accepted().size();
-            g.drawString(font, n == 0 ? "Click plates to flatten: drag to paint, right-drag to turn"
-                    : "Flatten " + n + " plates: " + n * CityStock.FLATTEN_GOLD + " gold, " + n * CityStock.FLATTEN_WORKERS + " workers", 10, height - 94, 0xFFE6D7A6);
+            String d = CityStock.District.values()[kind].label;
+            String line = mode == DISTRICT
+                    ? n == 0 ? "Click flat plates touching the city or a district: drag to paint, right-drag to turn"
+                    : "Place " + n + " " + d + " district" + (n == 1 ? "" : "s") + ": " + n * CityStock.DISTRICT_GOLD + " gold, "
+                    + n * CityStock.DISTRICT_RAW + " raw materials"
+                    : n == 0 ? "Click plates to flatten: drag to paint, right-drag to turn"
+                    : "Flatten " + n + " plates: " + n * CityStock.FLATTEN_GOLD + " gold, " + n * CityStock.FLATTEN_WORKERS + " workers";
+            g.drawString(font, line, 10, height - 118, 0xFFE6D7A6);
             confirm.active = n > 0;
             confirm.render(g, mouseX, mouseY, partialTick); // not super.render: that would dim the city behind
             cancel.render(g, mouseX, mouseY, partialTick);
+            for (Button b : kinds) {
+                b.render(g, mouseX, mouseY, partialTick);
+            }
         }
 
         double rx = mouseX * guiScale() / s();
@@ -338,7 +399,7 @@ public class CityManagerScreen extends Screen {
         }
         hudKey = key;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, this::toggleFlatten);
+        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT));
         minecraft.getTextureManager().register(HUD, upload(img));
     }
 
@@ -407,7 +468,7 @@ public class CityManagerScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
-        Long k = button == 0 && flattening ? plateAt(mouseX, mouseY) : null;
+        Long k = button == 0 && mode != NONE ? plateAt(mouseX, mouseY) : null;
         if (k != null) {
             paintAdd = selection.add(k);
             if (!paintAdd) {
@@ -420,7 +481,7 @@ public class CityManagerScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
-        if (flattening && button == 0) {
+        if (mode != NONE && button == 0) {
             Long k = plateAt(mouseX, mouseY);
             if (k != null) {
                 if (paintAdd) {
@@ -431,7 +492,7 @@ public class CityManagerScreen extends Screen {
             }
             return true;
         }
-        if (button == 0 || flattening && button == 1) {
+        if (button == 0 || mode != NONE && button == 1) {
             yaw += dx * TURN;
             pitch = Mth.clamp(pitch + dy * TURN, 10, 85);
             return true;

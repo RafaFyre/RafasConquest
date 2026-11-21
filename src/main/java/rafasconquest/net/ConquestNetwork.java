@@ -436,13 +436,29 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(CityDistrict.class, 54, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.province());
+                    b.writeVarInt(m.kind());
+                    b.writeCollection(m.plates(), FriendlyByteBuf::writeLong);
+                })
+                .decoder(b -> new CityDistrict(b.readVarInt(), b.readVarInt(), b.readList(FriendlyByteBuf::readLong)))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null && m.plates().size() <= 64) {
+                        rafasconquest.peerage.CityStock.placeDistricts(player, m.province(), m.kind(), m.plates());
+                    }
+                })
+                .add();
     }
 
     /**
      * Server → client: a city's stockpile (by {@link rafasconquest.peerage.CityStock.Resource} ordinal), its workers
-     * busy flattening, its plate grid, its flat plates and those still being levelled.
+     * busy flattening, its plate grid, its flat plates, those still being levelled, and its districts (plate to
+     * {@link rafasconquest.peerage.CityStock.District} ordinal).
      */
-    public record CityState(int province, int[] res, int busy, rafasconquest.core.CityPlates plates, List<Long> flat, List<Long> pending) {
+    public record CityState(int province, int[] res, int busy, rafasconquest.core.CityPlates plates, List<Long> flat, List<Long> pending,
+                            Map<Long, Integer> districts) {
         void write(FriendlyByteBuf b) {
             b.writeVarInt(province);
             b.writeVarIntArray(res);
@@ -456,6 +472,7 @@ public final class ConquestNetwork {
             }
             b.writeCollection(flat, FriendlyByteBuf::writeLong);
             b.writeCollection(pending, FriendlyByteBuf::writeLong);
+            b.writeMap(districts, FriendlyByteBuf::writeLong, FriendlyByteBuf::writeVarInt);
         }
 
         static CityState read(FriendlyByteBuf b) {
@@ -471,8 +488,16 @@ public final class ConquestNetwork {
                 boxes[i] = b.readBoolean() ? b.readVarIntArray() : null;
             }
             return new CityState(province, res, busy, new rafasconquest.core.CityPlates(ax, az, size, plateY, boxes[0], boxes[1], boxes[2]),
-                    b.readList(FriendlyByteBuf::readLong), b.readList(FriendlyByteBuf::readLong));
+                    b.readList(FriendlyByteBuf::readLong), b.readList(FriendlyByteBuf::readLong), b.readMap(FriendlyByteBuf::readLong, FriendlyByteBuf::readVarInt));
         }
+    }
+
+    /** Client → server: districts of one kind ({@link rafasconquest.peerage.CityStock.District} ordinal) on these plates. */
+    public record CityDistrict(int province, int kind, List<Long> plates) {
+    }
+
+    public static void cityDistrict(int province, int kind, List<Long> plates) {
+        CHANNEL.sendToServer(new CityDistrict(province, kind, plates));
     }
 
     public static void cityState(ServerPlayer player, CityState state) {

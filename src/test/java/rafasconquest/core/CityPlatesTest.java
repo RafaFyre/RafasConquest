@@ -29,6 +29,18 @@ class CityPlatesTest {
     }
 
     @Test
+    void districtsGoOnFlatPlatesTouchingTheCityOrADistrict() {
+        long near = CityPlates.key(-1, 1);
+        long out = CityPlates.key(-2, 1);
+        long far = CityPlates.key(-3, 1);
+        Set<Long> flat = Set.of(near, out, far);
+        assertEquals(List.of(), plates.acceptDistricts(List.of(out), flat, Set.of())); // flat, but not touching the city
+        assertEquals(List.of(out, near), plates.acceptDistricts(List.of(out, near), flat, Set.of()));
+        assertEquals(List.of(out), plates.acceptDistricts(List.of(near, out), flat, Set.of(near))); // near has one already
+        assertEquals(List.of(), plates.acceptDistricts(List.of(CityPlates.key(-1, 2)), flat, Set.of())); // not flat
+    }
+
+    @Test
     void keysRoundTripNegatives() {
         long k = CityPlates.key(-3, -7);
         assertEquals(-3, CityPlates.i(k));

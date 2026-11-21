@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * The 32-block plates a city grows by in the city manager. Plate (0, 0) starts at the north-west corner of the city's
@@ -80,15 +81,26 @@ public record CityPlates(int ax, int az, int boxSize, int plateY, int[] walled, 
      * a flat plate or another accepted one; in the order wanted.
      */
     public List<Long> accept(Collection<Long> wanted, Set<Long> flat) {
-        Set<Long> reach = new HashSet<>(flat);
+        return grow(wanted, flat, k -> !flat.contains(k) && !inBox(i(k), j(k)) && !blocked(i(k), j(k)));
+    }
+
+    /**
+     * Those of {@code wanted} a district may go on: flat plates without one, each touching the box, a district or
+     * another accepted plate; in the order wanted.
+     */
+    public List<Long> acceptDistricts(Collection<Long> wanted, Set<Long> flat, Set<Long> districts) {
+        return grow(wanted, districts, k -> flat.contains(k) && !districts.contains(k));
+    }
+
+    /** Those of {@code wanted} that {@code ok} allows and that touch the box, {@code from} or one accepted before. */
+    private List<Long> grow(Collection<Long> wanted, Set<Long> from, Predicate<Long> ok) {
+        Set<Long> reach = new HashSet<>(from);
         Set<Long> accepted = new LinkedHashSet<>();
         boolean grew = true;
         while (grew) {
             grew = false;
             for (long k : wanted) {
-                int i = i(k);
-                int j = j(k);
-                if (!accepted.contains(k) && !flat.contains(k) && !inBox(i, j) && !blocked(i, j) && touches(i, j, reach)) {
+                if (!accepted.contains(k) && ok.test(k) && touches(i(k), j(k), reach)) {
                     accepted.add(k);
                     reach.add(k);
                     grew = true;
