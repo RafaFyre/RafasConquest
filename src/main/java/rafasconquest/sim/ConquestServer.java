@@ -77,6 +77,7 @@ public final class ConquestServer {
         PENDING_LINKS.clear();
         PENDING_BANNER_CHUNKS.clear();
         current = new ConquestServer(overworld, data);
+        GameSpeed.reset();
         if (overworld.getGameRules().getBoolean(ConquestGameRules.PASS_INGAME_TIME_FOR_IRL_TIME)) {
             current.catchUpRemaining = DayClock.missedDays(System.currentTimeMillis(), data.lastSavedRealTime(), data.settings().maxCatchUpDays());
         }
@@ -147,6 +148,7 @@ public final class ConquestServer {
             precomputer.precomputeRegion((int) r[0], (int) r[1]);
         }
         catchUpStep();
+        GameSpeed.tick(overworld);
         dayStep();
     }
 

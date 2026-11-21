@@ -403,6 +403,37 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(GameSpeedState.class, 50, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder((m, b) -> b.writeVarInt(m.speed()).writeBoolean(m.voting()).writeBoolean(m.canPropose()).writeVarLong(m.slowIn() + 1))
+                .decoder(b -> new GameSpeedState(b.readVarInt(), b.readBoolean(), b.readBoolean(), b.readVarLong() - 1))
+                .consumerMainThread((m, context) -> rafasconquest.client.map.GrandStrategyScreen.gameSpeed(m.speed(), m.voting(), m.canPropose(), m.slowIn()))
+                .add();
+        CHANNEL.messageBuilder(GameSpeedRequest.class, 51, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> b.writeVarInt(m.speed()).writeVarInt(m.seconds()))
+                .decoder(b -> new GameSpeedRequest(b.readVarInt(), b.readVarInt()))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null) {
+                        rafasconquest.sim.GameSpeed.request(player, m.speed(), m.seconds());
+                    }
+                })
+                .add();
+    }
+
+    /** Server → client: the game speed (0-4), whether it is voted on, whether this player may propose, ticks until the top speed may be slowed (-1: not at it). */
+    public record GameSpeedState(int speed, boolean voting, boolean canPropose, long slowIn) {
+    }
+
+    /** Client → server: set, or propose, game speed {@code speed} for {@code seconds}. */
+    public record GameSpeedRequest(int speed, int seconds) {
+    }
+
+    public static void sendGameSpeed(ServerPlayer player, int speed, boolean voting, boolean canPropose, long slowIn) {
+        CHANNEL.send(player, new GameSpeedState(speed, voting, canPropose, slowIn));
+    }
+
+    public static void requestGameSpeed(int speed, int seconds) {
+        CHANNEL.sendToServer(new GameSpeedRequest(speed, seconds));
     }
 
     /** Server → client: a Medium Cannon or ship engine fired from (x, y, z) at (vx, vy, vz) blocks a tick; {@code shot}: its engine card's ordinal (Machine). */
@@ -856,6 +887,7 @@ public final class ConquestNetwork {
     }
 
     public static void sendGrandStrategy(ServerPlayer player, rafasconquest.peerage.GrandStrategy.View view) {
+        rafasconquest.sim.GameSpeed.sync(player); // first: the screen's speed buttons are right as it opens
         CHANNEL.send(player, new GrandStrategyView(view));
     }
 

@@ -73,6 +73,27 @@ public class GrandStrategyScreen extends FactionMapScreen {
     private static final int COLOURED = 19;
     /** The realms drawn in their colours (on by default); static, so it stays as set the next time the map opens. */
     private static boolean colouredMap = true;
+    /** The first of the five speed buttons in {@link #spots()}, bottom right beside the date. */
+    private static final int SPEEDS = 20;
+    private static final int SPEED_W = 14;
+    /** The game speed as the server last told it (0-4), whether it is voted on, whether this player may propose. */
+    private static int speed;
+    private static boolean speedVoting;
+    private static boolean speedPropose;
+    /** When anyone may bring the top speed down (millis); MAX below it. */
+    private static long slowAt = Long.MAX_VALUE;
+    /** The speed the open proposal prompt would propose (-1: no prompt), its duration's index, when it opened. */
+    private int proposing = -1;
+    private int lasting;
+    private long promptAt;
+
+    /** The server's game speed ({@link rafasconquest.sim.GameSpeed#sync}). */
+    public static void gameSpeed(int s, boolean voting, boolean canPropose, long slowIn) {
+        speed = s;
+        speedVoting = voting;
+        speedPropose = canPropose;
+        slowAt = slowIn < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + slowIn * 50;
+    }
 
     /** Something on the HUD: its box, what it is (hover), and what a click does (null: nothing yet). */
     private record Spot(int x, int y, int w, int h, List<Component> tip, @Nullable Runnable click) {
@@ -493,7 +514,98 @@ public class GrandStrategyScreen extends FactionMapScreen {
         spots.add(new Spot(92, height - 51, 21, 21, tip("Skills", NOT_BUILT), null));
         spots.add(new Spot(139, height - 25, 20, 20, tip("Coloured map", colouredMap ? "On: the realms in their colours" : "Off: the land as it is"),
                 () -> colouredMap = !colouredMap));
+        // Fast forward, left of the date.
+        int left = width - font.width(date(today())) - 13 - 5 * SPEED_W;
+        for (int i = 0; i < 5; i++) {
+            int s = i;
+            boolean slow = s == speed - 1 && System.currentTimeMillis() >= slowAt;
+            String how = !speedVoting ? (s == speed ? "The speed now" : "Click: change speed. Change it as often as you need")
+                    : s == speed ? "The speed now" : slow ? "Click: bring it down from speed 5"
+                    : speedPropose ? "Click: propose it to the Dukes, Kings and Emperors" : "Only Dukes, Kings and Emperors may propose a speed";
+            spots.add(new Spot(left + i * SPEED_W, height - 18, SPEED_W, 18,
+                    tip("Speed " + (s + 1) + ": " + rafasconquest.sim.GameSpeed.perDay(s), how), () -> speedClicked(s)));
+        }
         return spots;
+    }
+
+    /** Today, from the clock as it runs (the view's day is only the day the map opened). */
+    private long today() {
+        return minecraft == null || minecraft.level == null ? fief.day() : minecraft.level.getDayTime() / 24000L;
+    }
+
+    private void speedClicked(int s) {
+        if (s == speed) {
+            return;
+        }
+        if (!speedVoting || s == speed - 1 && System.currentTimeMillis() >= slowAt) {
+            ConquestNetwork.requestGameSpeed(s, 0);
+        } else if (speedPropose) {
+            proposing = s;
+            lasting = 0;
+            promptAt = System.currentTimeMillis();
+        }
+    }
+
+    /** The proposal prompt's box (x, y, w, h), its text's start, and the duration's x span within the text. */
+    private int[] promptBox() {
+        String head = "Propose to change speed to " + (proposing + 1) + " for ";
+        String time = rafasconquest.sim.GameSpeed.lasting(rafasconquest.sim.GameSpeed.DURATIONS[lasting]);
+        int textW = font.width(head + time + "?");
+        int w = textW + 24;
+        int x = (width - w) / 2;
+        int y = height / 2 - 30;
+        int timeX = x + 12 + font.width(head);
+        return new int[]{x, y, w, 56, x + 12, timeX, timeX + font.width(time)};
+    }
+
+    private static int fade(int argb, float a) {
+        return (int) ((argb >>> 24) * a) << 24 | argb & 0xFFFFFF;
+    }
+
+    /** "Propose to change speed to 3 for 5 minutes?": the duration cycles on a click; Yes sends it, No shuts it. */
+    private void renderPrompt(GuiGraphics g, int mouseX, int mouseY) {
+        float a = Math.max(0.05F, Math.min(1, (System.currentTimeMillis() - promptAt) / 250F)); // fades in
+        int[] b = promptBox();
+        g.fill(b[0] - 1, b[1] - 1, b[0] + b[2] + 1, b[1] + b[3] + 1, fade(EDGE, a));
+        g.fill(b[0], b[1], b[0] + b[2], b[1] + b[3], fade(PANEL_BACK, a));
+        String head = "Propose to change speed to " + (proposing + 1) + " for ";
+        String time = rafasconquest.sim.GameSpeed.lasting(rafasconquest.sim.GameSpeed.DURATIONS[lasting]);
+        g.drawString(font, head, b[4], b[1] + 10, fade(TEXT, a), false);
+        boolean overTime = mouseX >= b[5] && mouseX < b[6] && mouseY >= b[1] + 8 && mouseY < b[1] + 20;
+        g.drawString(font, Component.literal(time).withStyle(net.minecraft.ChatFormatting.UNDERLINE), b[5], b[1] + 10,
+                fade(overTime ? 0xFFFFE680 : GOLD, a), false);
+        g.drawString(font, "?", b[6], b[1] + 10, fade(TEXT, a), false);
+        String[] labels = {"Yes", "No"};
+        for (int i = 0; i < 2; i++) {
+            int bx = promptButton(b, i);
+            int by = b[1] + b[3] - 22;
+            boolean over = mouseX >= bx && mouseX < bx + 50 && mouseY >= by && mouseY < by + 16;
+            g.fill(bx, by, bx + 50, by + 16, fade(HUD_EDGE, a));
+            g.fill(bx + 1, by + 1, bx + 49, by + 15, fade(over ? HUD_HOVER : HUD, a));
+            g.drawCenteredString(font, labels[i], bx + 25, by + 4, fade(TEXT, a));
+        }
+    }
+
+    private static int promptButton(int[] b, int i) {
+        return b[0] + b[2] / 2 + (i == 0 ? -56 : 6);
+    }
+
+    private void promptClicked(double mx, double my) {
+        int[] b = promptBox();
+        if (mx >= b[5] && mx < b[6] && my >= b[1] + 8 && my < b[1] + 20) {
+            lasting = (lasting + 1) % rafasconquest.sim.GameSpeed.DURATIONS.length;
+            return;
+        }
+        int by = b[1] + b[3] - 22;
+        for (int i = 0; i < 2; i++) {
+            int bx = promptButton(b, i);
+            if (mx >= bx && mx < bx + 50 && my >= by && my < by + 16) {
+                if (i == 0) {
+                    ConquestNetwork.requestGameSpeed(proposing, rafasconquest.sim.GameSpeed.DURATIONS[lasting]);
+                }
+                proposing = -1;
+            }
+        }
     }
 
     /** Once: the map looks at the hold. Twice: the hold's city view. */
@@ -724,7 +836,9 @@ public class GrandStrategyScreen extends FactionMapScreen {
         if (panelArmy() != null) {
             panel.render(g, font, width, height, panelArmy(), mouseX, mouseY);
         }
-        if (menuOpen()) {
+        if (proposing >= 0) {
+            renderPrompt(g, mouseX, mouseY);
+        } else if (menuOpen()) {
             renderMenu(g, mouseX, mouseY);
         } else if (hovered != null) {
             g.renderComponentTooltip(font, seatTip(hovered), mouseX, mouseY);
@@ -891,11 +1005,18 @@ public class GrandStrategyScreen extends FactionMapScreen {
         g.renderItem(new ItemStack(Items.FILLED_MAP), 0, 0);
         g.pose().popPose();
         // The date, bottom right.
-        String date = date(fief.day());
+        String date = date(today());
         int w = font.width(date) + 12;
         g.fill(width - w - 1, height - 18, width, height, HUD_EDGE);
         g.fill(width - w, height - 17, width, height, HUD);
         g.drawString(font, date, width - w + 6, height - 12, TEXT, false);
+        // Fast forward: the speed now in gold.
+        for (int i = 0; i < 5; i++) {
+            Spot s = spots.get(SPEEDS + i);
+            g.fill(s.x(), s.y(), s.x() + s.w(), s.y() + s.h(), i == speed ? GOLD : HUD_EDGE);
+            g.fill(s.x() + 1, s.y() + 1, s.x() + s.w() - 1, s.y() + s.h(), s.over(mouseX, mouseY) ? HUD_HOVER : i == speed ? HUD_DARK : HUD);
+            g.drawCenteredString(font, String.valueOf(i + 1), s.x() + s.w() / 2, s.y() + 6, i == speed ? GOLD : TEXT);
+        }
     }
 
     /**
@@ -1009,11 +1130,17 @@ public class GrandStrategyScreen extends FactionMapScreen {
                 || x < 135 && y >= height - 52
                 || x < 17 && y >= height - 92
                 || x >= 139 && x < 159 && y >= height - 25 && y < height - 5
-                || y >= height - 18 && x >= width - font.width(date(fief.day())) - 13;
+                || y >= height - 18 && x >= width - font.width(date(today())) - 13 - 5 * SPEED_W;
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (proposing >= 0) { // the prompt takes every click while it is up
+            if (button == 0) {
+                promptClicked(mouseX, mouseY);
+            }
+            return true;
+        }
         if (menuOpen()) { // any click closes the menu; one on its row also does it
             SeatCities.City city = menu;
             double[] at = spawnAt;

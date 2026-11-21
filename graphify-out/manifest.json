@@ -462,9 +462,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/command/PveCommands.java": {
-    "mtime": 1795281547.674427,
-    "seen": 1795282562.4136367,
-    "ast_hash": "7ad1d797e10edf619a2819cf83ed0973",
+    "mtime": 1795286382.81332,
+    "seen": 1795286499.9340146,
+    "ast_hash": "90071cb1ef29dba6a47c7de962b593c9",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/CommandTableBlock.java": {
@@ -744,9 +744,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/ConquestNetwork.java": {
-    "mtime": 1795284907.355834,
-    "seen": 1795285382.5491183,
-    "ast_hash": "e2aff15e220bc85a71b236e3ec0eda5b",
+    "mtime": 1795286382.5390215,
+    "seen": 1795286499.934166,
+    "ast_hash": "6038968aed74e2326e5327feb2a45f06",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/net/FactionInfo.java": {
@@ -1020,9 +1020,9 @@
     "semantic_hash": "2ca7bf679c99a87fc3261222a94e6c8c"
   },
   "src/main/java/rafasconquest/sim/ConquestServer.java": {
-    "mtime": 1795281547.7552106,
-    "seen": 1795282562.4138439,
-    "ast_hash": "8e64348973fbd103f8eca0cd19de4425",
+    "mtime": 1795286365.906627,
+    "seen": 1795286499.9342499,
+    "ast_hash": "64640514473c6d6a87922b3e7a08347f",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/sim/EconomyTick.java": {
@@ -2040,9 +2040,9 @@
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/client/map/GrandStrategyScreen.java": {
-    "mtime": 1795281547.6684427,
-    "seen": 1795282562.4136202,
-    "ast_hash": "d58ac12824ef700729f3f63326b07817",
+    "mtime": 1795286441.0459242,
+    "seen": 1795286499.9339955,
+    "ast_hash": "08aa92e0579d4704aa77929bae0f87ca",
     "semantic_hash": ""
   },
   "src/main/java/rafasconquest/content/GrandStrategyBlock.java": {
@@ -4707,6 +4707,18 @@
     "mtime": 1795285121.7820067,
     "seen": 1795285382.549727,
     "ast_hash": "905c1e3d3aa566feb14d5bd6955f7503",
+    "semantic_hash": ""
+  },
+  "src/main/java/rafasconquest/sim/GameSpeed.java": {
+    "mtime": 1795286357.8102348,
+    "seen": 1795286499.934253,
+    "ast_hash": "1b85a3c503680d7ef083ead87a10130e",
+    "semantic_hash": ""
+  },
+  "src/test/java/rafasconquest/sim/GameSpeedTest.java": {
+    "mtime": 1795286446.285681,
+    "seen": 1795286499.9347808,
+    "ast_hash": "6e46ba043e91c8aed60be048f7b04dcf",
     "semantic_hash": ""
   }
 }

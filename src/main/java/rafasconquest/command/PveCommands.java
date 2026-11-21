@@ -73,8 +73,18 @@ public final class PveCommands {
                             }
                             return 1;
                         })));
+        // Speed votes, clicked in chat by Dukes, Kings and Emperors.
+        dispatcher.register(Commands.literal("speed")
+                .then(Commands.literal("vote")
+                        .then(Commands.literal("yes").executes(ctx -> speedVote(ctx, true)))
+                        .then(Commands.literal("no").executes(ctx -> speedVote(ctx, false)))));
         dispatcher.register(Commands.literal("pve")
                 .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("speed") // admins: past any vote; seconds 0 = until changed
+                        .then(Commands.argument("speed", IntegerArgumentType.integer(1, 5))
+                                .executes(ctx -> speedSet(ctx, 0))
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(0))
+                                        .executes(ctx -> speedSet(ctx, IntegerArgumentType.getInteger(ctx, "seconds"))))))
                 .then(Commands.literal("faction")
                         .then(Commands.literal("list").executes(PveCommands::factionList))
                         .then(Commands.literal("info")
@@ -696,6 +706,16 @@ public final class PveCommands {
      * Gives a player a noble title outright. Count grants the county the player stands in, held freely, its character
      * holder dismissed; a county another player holds is refused. Knight or none gives up any county they hold.
      */
+    private static int speedVote(CommandContext<CommandSourceStack> ctx, boolean yes) throws CommandSyntaxException {
+        rafasconquest.sim.GameSpeed.vote(ctx.getSource().getPlayerOrException(), yes);
+        return 1;
+    }
+
+    private static int speedSet(CommandContext<CommandSourceStack> ctx, int seconds) {
+        rafasconquest.sim.GameSpeed.force(ctx.getSource().getServer(), IntegerArgumentType.getInteger(ctx, "speed") - 1, seconds);
+        return 1;
+    }
+
     private static int titleSet(CommandContext<CommandSourceStack> ctx, ServerPlayer player, rafasconquest.peerage.NobleTitle title)
             throws CommandSyntaxException {
         rafasconquest.peerage.Peerage peerage = rafasconquest.peerage.Peerage.get(ctx.getSource().getServer());
