@@ -86,6 +86,8 @@ public final class CityStock extends SavedData {
         final List<Long> pending = new ArrayList<>();
         /** Districts by plate, as {@link District} ordinals. */
         final Map<Long, Integer> districts = new java.util.LinkedHashMap<>();
+        /** Main roads, {x1, z1, x2, z2} ({@link CityPlates}). */
+        final List<int[]> roads = new ArrayList<>();
         /** Columns of the first pending plate already levelled; not saved, so a restart levels it again from the start. */
         int column;
 
@@ -174,10 +176,10 @@ public final class CityStock extends SavedData {
         Stock s = data.stock(province);
         ServerLevel level = player.server.overworld();
         CityPlates p = plates(level, c);
-        List<Long> ok = p.acceptDistricts(wanted, s.flat, s.districts.keySet());
+        List<Long> ok = p.acceptDistricts(wanted, s.flat, s.districts.keySet(), p.roadPlates(s.roads));
         int n = ok.size();
         if (n == 0) {
-            player.sendSystemMessage(Component.literal("A district needs flat ground touching the city or another district."));
+            player.sendSystemMessage(Component.literal("A district needs flat ground touching the city, another district or a main road."));
         } else if (s.res[Resource.GOLD.ordinal()] < n * DISTRICT_GOLD || s.res[Resource.RAW.ordinal()] < n * DISTRICT_RAW) {
             player.sendSystemMessage(Component.literal(n + " districts need " + n * DISTRICT_GOLD + " gold and " + n * DISTRICT_RAW + " raw materials."));
         } else {
@@ -188,7 +190,7 @@ public final class CityStock extends SavedData {
             boolean built = false;
             for (long k : ok) {
                 s.districts.put(k, kind);
-                built |= build(level, site, p, k, d);
+                built |= build(level, site, p, k, d, s.roads);
             }
             data.setDirty();
             if (!built) {
@@ -204,7 +206,7 @@ public final class CityStock extends SavedData {
     }
 
     /** Fills a district's plate with its style's buildings, packed as a city block's houses are; false if it has none. */
-    private static boolean build(ServerLevel level, CityLayout.Site site, CityPlates p, long plate, District d) {
+    private static boolean build(ServerLevel level, CityLayout.Site site, CityPlates p, long plate, District d, List<int[]> roads) {
         List<rafasconquest.style.CityStyles.Building> buildings = rafasconquest.style.CityStyles.buildings(site, d.slot()).stream()
                 .filter(b -> b.x() <= CityPlates.PLATE && b.z() <= CityPlates.PLATE).toList();
         if (buildings.isEmpty()) {
@@ -214,7 +216,7 @@ public final class CityStock extends SavedData {
         java.util.Random random = new java.util.Random(level.getSeed() ^ plate * 0x9E3779B97F4A7C15L);
         int x0 = p.minX(CityPlates.i(plate));
         int z0 = p.minZ(CityPlates.j(plate));
-        for (rafasconquest.style.BlockPacker.Placed b : rafasconquest.style.BlockPacker.pack(CityPlates.PLATE, sizes, random)) {
+        for (rafasconquest.style.BlockPacker.Placed b : rafasconquest.style.BlockPacker.pack(free(x0, z0, roads), CityPlates.PLATE, CityPlates.PLATE, sizes, random)) {
             for (rafasconquest.style.StylePiece piece : rafasconquest.style.StylePiece.at(buildings.get(b.building()).file(), x0 + b.x(), p.plateY(), z0 + b.z(), b.turns())) {
                 net.minecraft.world.level.levelgen.structure.BoundingBox box = piece.getBoundingBox();
                 piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.getRandom(), box,
@@ -222,6 +224,97 @@ public final class CityStock extends SavedData {
             }
         }
         return true;
+    }
+
+    /** A plate's room for buildings: whole, less the 4-block squares a road runs through (and a gap round them). */
+    private static List<rafasconquest.style.BlockPacker.Rect> free(int x0, int z0, List<int[]> roads) {
+        List<rafasconquest.style.BlockPacker.Rect> free = List.of(new rafasconquest.style.BlockPacker.Rect(0, 0, CityPlates.PLATE, CityPlates.PLATE));
+        Set<Long> cut = new java.util.HashSet<>();
+        for (int[] r : roads) {
+            for (int[] c : CityPlates.columns(r)) {
+                int lx = c[0] - x0;
+                int lz = c[1] - z0;
+                if (lx >= 0 && lz >= 0 && lx < CityPlates.PLATE && lz < CityPlates.PLATE && cut.add(CityPlates.key(lx / 4, lz / 4))) {
+                    free = rafasconquest.style.BlockPacker.cut(free, new rafasconquest.style.BlockPacker.Rect(lx / 4 * 4, lz / 4 * 4, 4, 4));
+                }
+            }
+        }
+        return free;
+    }
+
+    /** A player lays main roads round the city seating {@code province}, each checked beside those before it. Free for now. */
+    public static void placeRoads(ServerPlayer player, int province, List<int[]> wanted) {
+        SeatCities.City c = city(province);
+        if (c == null || Peerage.get(player.server).of(player.getUUID()).hold != province) {
+            return;
+        }
+        CityStock data = get(player.server);
+        Stock s = data.stock(province);
+        ServerLevel level = player.server.overworld();
+        CityPlates p = plates(level, c);
+        for (int[] r : wanted) {
+            String problem = r.length != 4 ? "Not a road" : p.roadProblem(r, s.roads, s.districts.keySet());
+            if (problem != null) {
+                player.sendSystemMessage(Component.literal(problem + "."));
+                break;
+            }
+            s.roads.add(r.clone());
+            lay(level, p, s, r);
+            data.setDirty();
+        }
+        send(player, province);
+    }
+
+    /**
+     * Lays a road on the land: 5 wide in cobblestone, at the city's height over its box and flat plates, elsewhere on
+     * the ground smoothed along its length and at most a block up or down from one block to the next; cleared 4 high
+     * above, propped up to 12 deep below.
+     * shortcut: whole-block steps, no slabs; over water it is a causeway, not a bridge.
+     */
+    private static void lay(ServerLevel level, CityPlates p, Stock s, int[] r) {
+        int n = (int) Math.ceil(CityPlates.length(r));
+        int[] h = new int[n + 1];
+        boolean[] fixed = new boolean[n + 1];
+        for (int k = 0; k <= n; k++) {
+            double t = n == 0 ? 0 : (double) k / n;
+            int x = (int) Math.round(r[0] + t * (r[2] - r[0]));
+            int z = (int) Math.round(r[1] + t * (r[3] - r[1]));
+            fixed[k] = p.inBoxArea(x, z) || s.flat.contains(p.at(x, z));
+            h[k] = fixed[k] ? p.plateY() : level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+        }
+        int[] smooth = h.clone();
+        for (int k = 0; k <= n; k++) {
+            if (!fixed[k]) {
+                int sum = 0;
+                int count = 0;
+                for (int q = Math.max(0, k - 3); q <= Math.min(n, k + 3); q++) {
+                    sum += h[q];
+                    count++;
+                }
+                smooth[k] = Math.round((float) sum / count);
+            }
+        }
+        for (int k = 1; k <= n; k++) {
+            smooth[k] = Math.max(smooth[k - 1] - 1, Math.min(smooth[k - 1] + 1, smooth[k]));
+        }
+        for (int k = n - 1; k >= 0; k--) {
+            smooth[k] = Math.max(smooth[k + 1] - 1, Math.min(smooth[k + 1] + 1, smooth[k]));
+        }
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int[] col : CityPlates.columns(r)) {
+            int y = smooth[(int) Math.round(CityPlates.along(col[0], col[1], r) / Math.max(1e-9, CityPlates.length(r)) * n)];
+            level.setBlock(pos.set(col[0], y, col[1]), Blocks.COBBLESTONE.defaultBlockState(), 2);
+            for (int up = 1; up <= 4; up++) {
+                level.setBlock(pos.setY(y + up), Blocks.AIR.defaultBlockState(), 2);
+            }
+            for (int down = 1; down <= 12; down++) {
+                BlockState below = level.getBlockState(pos.setY(y - down));
+                if (!below.isAir() && !below.liquid() && !below.canBeReplaced()) {
+                    break;
+                }
+                level.setBlock(pos, Blocks.COBBLESTONE.defaultBlockState(), 2);
+            }
+        }
     }
 
     /** Levels a few columns of each city's first pending plate in turn; called each server tick. */
@@ -249,6 +342,11 @@ public final class CityStock extends SavedData {
                 s.column = 0;
                 s.pending.remove(0);
                 s.flat.add(plate);
+                for (int[] r : s.roads) { // a road over it is laid again at its new height
+                    if (p.roadPlates(List.of(r)).contains(plate)) {
+                        lay(level, p, s, r);
+                    }
+                }
                 data.setDirty();
                 CityManager.viewers(server, e.getKey()).forEach(pl -> send(pl, e.getKey()));
             }
@@ -285,7 +383,7 @@ public final class CityStock extends SavedData {
         CityStock data = get(player.server);
         Stock s = data.stock(province);
         ConquestNetwork.cityState(player, new ConquestNetwork.CityState(province, s.res.clone(), s.busyWorkers(),
-                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending), new HashMap<>(s.districts)));
+                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending), new HashMap<>(s.districts), new ArrayList<>(s.roads)));
     }
 
     @Override
@@ -298,6 +396,7 @@ public final class CityStock extends SavedData {
             one.put("pending", new LongArrayTag(s.pending));
             one.put("districts", new LongArrayTag(new ArrayList<>(s.districts.keySet())));
             one.putIntArray("districtKinds", s.districts.values().stream().mapToInt(Integer::intValue).toArray());
+            one.putIntArray("roads", s.roads.stream().flatMapToInt(java.util.Arrays::stream).toArray());
             all.put(Integer.toString(province), one);
         });
         tag.put("cities", all);
@@ -322,6 +421,10 @@ public final class CityStock extends SavedData {
             int[] kinds = one.getIntArray("districtKinds");
             for (int i = 0; i < Math.min(plates.length, kinds.length); i++) {
                 s.districts.put(plates[i], kinds[i]);
+            }
+            int[] roads = one.getIntArray("roads");
+            for (int i = 0; i + 3 < roads.length; i += 4) {
+                s.roads.add(java.util.Arrays.copyOfRange(roads, i, i + 4));
             }
             data.cities.put(Integer.parseInt(key), s);
         }

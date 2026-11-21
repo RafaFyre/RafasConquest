@@ -80,6 +80,7 @@ final class CityHud {
     private int busy;
     private Runnable flatten;
     private Runnable districts;
+    private Runnable roads;
 
     private CityHud(Graphics2D g, float refH) {
         this.g = g;
@@ -109,7 +110,7 @@ final class CityHud {
     }
 
     /** The whole HUD on a window-sized image; returns its hover spots in reference units. */
-    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts) {
+    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts, Runnable roads) {
         float s = img.getWidth() / REF_W;
         Graphics2D g = smooth(img, s);
         CityHud hud = new CityHud(g, img.getHeight() / s);
@@ -117,6 +118,7 @@ final class CityHud {
         hud.busy = busy;
         hud.flatten = flatten;
         hud.districts = districts;
+        hud.roads = roads;
         hud.draw(name, date, day, back);
         g.dispose();
         return hud.spots;
@@ -452,6 +454,7 @@ final class CityHud {
     // --- The menu buttons ---
 
     private void buttons() {
+        medallion(81, b(1090), "road", "Main roads", "Drag a main road out from the city's edge or another road, at any angle, over any ground: 5 wide, cobblestone; free for now", roads);
         medallion(148, b(1090), "district", "Districts", "Build a district on flat ground touching the city or another district: housing, food, extraction, industrial, logistics; "
                 + CityStock.DISTRICT_GOLD + " gold and " + CityStock.DISTRICT_RAW + " raw materials each", districts);
         medallion(215, b(1090), "pick", "Flatten ground", "Level 32-block plates round the city before building districts on them: "
@@ -799,6 +802,14 @@ final class CityHud {
                 hex.closePath();
                 q.draw(hex);
                 q.fill(circle(0, 0, 3.5F));
+            }
+            case "road" -> { // two edges closing toward the horizon, a dashed middle
+                q.setStroke(new BasicStroke(2.2F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                q.draw(new Line2D.Float(-9, 9, -3, -9));
+                q.draw(new Line2D.Float(9, 9, 3, -9));
+                q.draw(new Line2D.Float(0, 8, 0, 4));
+                q.draw(new Line2D.Float(0, 0, 0, -3));
+                q.draw(new Line2D.Float(0, -6, 0, -8));
             }
             case "pick" -> {
                 q.setStroke(new BasicStroke(2.4F, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));

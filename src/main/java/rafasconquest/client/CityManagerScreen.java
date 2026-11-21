@@ -71,6 +71,11 @@ public class CityManagerScreen extends Screen {
     private static final int NONE = 0;
     private static final int FLATTEN = 1;
     private static final int DISTRICT = 2;
+    private static final int ROAD = 3;
+    /** Roads drawn and not yet confirmed, and the one being dragged out ({x1, z1, x2, z2}), or null. */
+    private final List<int[]> drafts = new ArrayList<>();
+    @Nullable
+    private int[] drag;
     /** The district kind being placed, a {@link CityStock.District} ordinal. */
     private int kind;
     private final List<Button> kinds = new ArrayList<>();
@@ -154,7 +159,31 @@ public class CityManagerScreen extends Screen {
     private void toggle(int m) {
         mode = mode == m || !mine() ? NONE : m;
         selection.clear();
+        drafts.clear();
+        drag = null;
         showButtons();
+    }
+
+    /** The roads drawn so far that may be laid, each checked beside those before it; up to the first that may not. */
+    private List<int[]> roadsAccepted() {
+        List<int[]> roads = new ArrayList<>(state.roads());
+        List<int[]> ok = new ArrayList<>();
+        for (int[] r : drafts) {
+            if (state.plates().roadProblem(r, roads, state.districts().keySet()) != null) {
+                break;
+            }
+            roads.add(r);
+            ok.add(r);
+        }
+        return ok;
+    }
+
+    /** Why the road being dragged may not be laid, or null. */
+    @Nullable
+    private String dragProblem() {
+        List<int[]> roads = new ArrayList<>(state.roads());
+        roads.addAll(roadsAccepted());
+        return state.plates().roadProblem(drag, roads, state.districts().keySet());
     }
 
     private void showButtons() {
@@ -177,8 +206,8 @@ public class CityManagerScreen extends Screen {
 
     /** The selected plates that may be flattened, or built on in district mode. */
     private List<Long> accepted() {
-        return mode == DISTRICT ? state.plates().acceptDistricts(selection, new HashSet<>(state.flat()), state.districts().keySet())
-                : state.plates().accept(selection, reach());
+        return mode == DISTRICT ? state.plates().acceptDistricts(selection, new HashSet<>(state.flat()), state.districts().keySet(),
+                state.plates().roadPlates(state.roads())) : state.plates().accept(selection, reach());
     }
 
     /** Whether one more plate, beside those already accepted, may be picked. */
@@ -186,7 +215,7 @@ public class CityManagerScreen extends Screen {
         if (mode == DISTRICT) {
             Set<Long> districts = new HashSet<>(state.districts().keySet());
             districts.addAll(ok);
-            return !state.plates().acceptDistricts(List.of(k), new HashSet<>(state.flat()), districts).isEmpty();
+            return !state.plates().acceptDistricts(List.of(k), new HashSet<>(state.flat()), districts, state.plates().roadPlates(state.roads())).isEmpty();
         }
         Set<Long> reach = reach();
         reach.addAll(ok);
@@ -194,6 +223,14 @@ public class CityManagerScreen extends Screen {
     }
 
     private void confirm() {
+        if (mode == ROAD) {
+            List<int[]> roads = roadsAccepted();
+            if (!roads.isEmpty()) {
+                ConquestNetwork.cityRoads(city.province(), roads);
+            }
+            drafts.clear();
+            return;
+        }
         List<Long> ok = accepted();
         if (!ok.isEmpty()) {
             if (mode == DISTRICT) {
@@ -263,10 +300,42 @@ public class CityManagerScreen extends Screen {
             boolean good = ok.contains(k);
             plate(pose, c, p, k, good ? 0x40E0B040 : 0x40D8402C, good ? 0xFFE0B040 : 0xFFD8402C);
         }
-        if (s.hover != null && !s.selection.contains(s.hover)) {
+        if (s.mode != ROAD && s.hover != null && !s.selection.contains(s.hover)) {
             plate(pose, c, p, s.hover, 0, s.allowed(s.hover, ok) ? 0xFFFFFFFF : 0xFFD8402C);
         }
+        for (int[] r : state.roads()) {
+            road(pose, c, p, r, 0x70FFFFFF);
+        }
+        if (s.mode == ROAD) {
+            List<int[]> good = s.roadsAccepted();
+            for (int[] r : s.drafts) {
+                road(pose, c, p, r, good.contains(r) ? 0xC0E0B040 : 0xC0D8402C);
+            }
+            if (s.drag != null) {
+                road(pose, c, p, s.drag, s.dragProblem() == null ? 0xC0FFFFFF : 0xC0D8402C);
+            }
+        }
         RenderSystem.enableDepthTest();
+    }
+
+    /** A road's band on the ground, 5 wide, in 4-block pieces on the client's land (the city's height on its flat ground). */
+    private static void road(PoseStack pose, Vec3 cam, CityPlates p, int[] r, int argb) {
+        var level = net.minecraft.client.Minecraft.getInstance().level;
+        int n = Math.max(1, (int) Math.ceil(CityPlates.length(r) / 4));
+        Vec3 last = null;
+        for (int k = 0; k <= n; k++) {
+            double x = r[0] + 0.5 + (r[2] - r[0]) * (double) k / n;
+            double z = r[1] + 0.5 + (r[3] - r[1]) * (double) k / n;
+            int bx = Mth.floor(x);
+            int bz = Mth.floor(z);
+            boolean flat = p.inBoxArea(bx, bz) || state.flat().contains(p.at(bx, bz));
+            double y = flat || level == null || !level.hasChunkAt(bx, bz) ? p.plateY() + 1 : level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
+            Vec3 at = new Vec3(x, y, z);
+            if (last != null) {
+                BattleSpotRing.strip(pose, cam, last, at, (float) CityPlates.ROAD_HALF, argb);
+            }
+            last = at;
+        }
     }
 
     /** One plate at the height it is levelled to: a fill (none if 0) and its outline. */
@@ -359,16 +428,21 @@ public class CityManagerScreen extends Screen {
         g.pose().popPose();
         drawCouncil(g, h);
         if (mode != NONE && mine() && confirm != null) {
-            hover = plateAt(mouseX, mouseY);
-            int n = accepted().size();
+            hover = mode == ROAD ? null : plateAt(mouseX, mouseY);
+            int n = mode == ROAD ? roadsAccepted().size() : accepted().size();
             String d = CityStock.District.values()[kind].label;
-            String line = mode == DISTRICT
+            String problem = mode == ROAD && drag != null ? dragProblem() : null;
+            String line = mode == ROAD
+                    ? drag != null ? problem != null ? problem : Math.round(CityPlates.length(drag)) + " blocks"
+                    : n == 0 ? "Drag a main road out from the city's edge or another road: right-drag to turn"
+                    : "Lay " + n + " main road" + (n == 1 ? "" : "s") + " (free for now)"
+                    : mode == DISTRICT
                     ? n == 0 ? "Click flat plates touching the city or a district: drag to paint, right-drag to turn"
                     : "Place " + n + " " + d + " district" + (n == 1 ? "" : "s") + ": " + n * CityStock.DISTRICT_GOLD + " gold, "
                     + n * CityStock.DISTRICT_RAW + " raw materials"
                     : n == 0 ? "Click plates to flatten: drag to paint, right-drag to turn"
                     : "Flatten " + n + " plates: " + n * CityStock.FLATTEN_GOLD + " gold, " + n * CityStock.FLATTEN_WORKERS + " workers";
-            g.drawString(font, line, 10, height - 118, 0xFFE6D7A6);
+            g.drawString(font, line, 10, height - 118, problem != null ? 0xFFD8402C : 0xFFE6D7A6);
             confirm.active = n > 0;
             confirm.render(g, mouseX, mouseY, partialTick); // not super.render: that would dim the city behind
             cancel.render(g, mouseX, mouseY, partialTick);
@@ -399,7 +473,7 @@ public class CityManagerScreen extends Screen {
         }
         hudKey = key;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT));
+        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT), () -> toggle(ROAD));
         minecraft.getTextureManager().register(HUD, upload(img));
     }
 
@@ -468,6 +542,13 @@ public class CityManagerScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
+        if (mode == ROAD && button == 0) {
+            Vec3 at = mine() ? ground(mouseX, mouseY) : null;
+            if (at != null) {
+                drag = new int[]{Mth.floor(at.x), Mth.floor(at.z), Mth.floor(at.x), Mth.floor(at.z)};
+            }
+            return true;
+        }
         Long k = button == 0 && mode != NONE ? plateAt(mouseX, mouseY) : null;
         if (k != null) {
             paintAdd = selection.add(k);
@@ -481,6 +562,14 @@ public class CityManagerScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dx, double dy) {
+        if (mode == ROAD && button == 0) {
+            Vec3 at = drag == null ? null : ground(mouseX, mouseY);
+            if (at != null) {
+                drag[2] = Mth.floor(at.x);
+                drag[3] = Mth.floor(at.z);
+            }
+            return true;
+        }
         if (mode != NONE && button == 0) {
             Long k = plateAt(mouseX, mouseY);
             if (k != null) {
@@ -498,6 +587,18 @@ public class CityManagerScreen extends Screen {
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (mode == ROAD && button == 0 && drag != null) {
+            if (CityPlates.length(drag) >= CityPlates.ROAD_MIN) {
+                drafts.add(drag);
+            }
+            drag = null;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override

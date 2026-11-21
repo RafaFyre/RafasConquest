@@ -34,10 +34,24 @@ class CityPlatesTest {
         long out = CityPlates.key(-2, 1);
         long far = CityPlates.key(-3, 1);
         Set<Long> flat = Set.of(near, out, far);
-        assertEquals(List.of(), plates.acceptDistricts(List.of(out), flat, Set.of())); // flat, but not touching the city
-        assertEquals(List.of(out, near), plates.acceptDistricts(List.of(out, near), flat, Set.of()));
-        assertEquals(List.of(out), plates.acceptDistricts(List.of(near, out), flat, Set.of(near))); // near has one already
-        assertEquals(List.of(), plates.acceptDistricts(List.of(CityPlates.key(-1, 2)), flat, Set.of())); // not flat
+        assertEquals(List.of(), plates.acceptDistricts(List.of(out), flat, Set.of(), Set.of())); // flat, but not touching the city
+        assertEquals(List.of(out, near), plates.acceptDistricts(List.of(out, near), flat, Set.of(), Set.of()));
+        assertEquals(List.of(out), plates.acceptDistricts(List.of(near, out), flat, Set.of(near), Set.of())); // near has one already
+        assertEquals(List.of(), plates.acceptDistricts(List.of(CityPlates.key(-1, 2)), flat, Set.of(), Set.of())); // not flat
+        assertEquals(List.of(far), plates.acceptDistricts(List.of(far), flat, Set.of(), Set.of(far))); // a road crosses it
+    }
+
+    @Test
+    void roadsStartAtTheCityEdgeOrARoadAndAvoidWallsAndDistricts() {
+        int[] west = {10, 50, -60, 50}; // from the margin west of the walls, outward
+        assertEquals(null, plates.roadProblem(west, List.of(), Set.of()));
+        assertEquals("A road must start on the city's edge or on another road", plates.roadProblem(new int[]{-100, 0, -150, 0}, List.of(), Set.of()));
+        assertEquals(null, plates.roadProblem(new int[]{-50, 51, -50, 0}, List.of(west), Set.of())); // branches off it
+        assertEquals("A road may not cross the walls, the harbour or the noble district", plates.roadProblem(new int[]{10, 50, 50, 50}, List.of(), Set.of()));
+        assertEquals("A road may not cross a district", plates.roadProblem(west, List.of(), Set.of(CityPlates.key(-2, 1))));
+        assertEquals("Too short", plates.roadProblem(new int[]{10, 50, 12, 50}, List.of(), Set.of()));
+        assertEquals(true, plates.roadPlates(List.of(west)).contains(CityPlates.key(-2, 1)));
+        assertEquals(5, CityPlates.columns(new int[]{0, 0, 0, 10}).stream().filter(c -> c[1] == 5).count()); // 5 wide
     }
 
     @Test
