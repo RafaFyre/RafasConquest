@@ -18,7 +18,7 @@ import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSeriali
 
 /**
  * A stretch of city ground laid at its own height column by column ({@code ys}, x-major over the box): a road of gravel,
- * or cobblestone where the noble district's, eased with a slab on the lower side of each 1-block step along it; or,
+ * or cobblestone where the noble district's, the 4 columns before each 1-block step up along it slabs, half a step; or,
  * with no slab, the flat ground a building stands on. Each column is laid on solid ground: land up to 3 blocks above
  * it is cleared and gaps up to 3 below it filled, as the tile it crosses may stand a step or two off.
  */
@@ -95,18 +95,29 @@ public class CityRoadPiece extends StructurePiece {
         }
     }
 
-    /** Whether a column beside (x, z) in this piece stands one higher. */
+    /**
+     * Whether a column of this piece within {@link #SLAB_RUN} along a straight line from (x, z) stands one higher: the
+     * half of an 8-block tile nearest the next one up is slabs, so a tile is 4 blocks, 4 slabs, then the next tile.
+     */
     private boolean higherBeside(int x, int z, int y) {
         int[][] around = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
         for (int[] d : around) {
-            int nx = x + d[0];
-            int nz = z + d[1];
-            if (nx >= boundingBox.minX() && nx <= boundingBox.maxX() && nz >= boundingBox.minZ() && nz <= boundingBox.maxZ() && y(nx, nz) == y + 1) {
-                return true;
+            for (int k = 1; k <= SLAB_RUN; k++) {
+                int nx = x + d[0] * k;
+                int nz = z + d[1] * k;
+                if (nx < boundingBox.minX() || nx > boundingBox.maxX() || nz < boundingBox.minZ() || nz > boundingBox.maxZ() || y(nx, nz) != y) {
+                    if (nx >= boundingBox.minX() && nx <= boundingBox.maxX() && nz >= boundingBox.minZ() && nz <= boundingBox.maxZ() && y(nx, nz) == y + 1) {
+                        return true;
+                    }
+                    break;
+                }
             }
         }
         return false;
     }
+
+    /** Slabs leading up to each step: half an 8-block tile. */
+    private static final int SLAB_RUN = 4;
 
     /** Natural ground (or what the city laid as ground), never a building. */
     private static boolean isLand(BlockState state) {
