@@ -85,6 +85,11 @@ public final class BattleScreen extends Screen {
 
     private static List<UnitInfo> units = List.of();
     private static boolean heard;
+    /** The wind's way in a battle with ships (toward, as an angle, {@link rafasconquest.battle.Wind}); NaN ashore. */
+    private static float wind = Float.NaN;
+    /** The wind vane's radius and top edge, top middle of the screen, under the help line. */
+    private static final int VANE_R = 16;
+    private static final int VANE_TOP = 18;
     /** The player's groups (shift+tab): unit number → group number. Selecting one of a group selects all of it. */
     private static final Map<Integer, Integer> groups = new java.util.HashMap<>();
     /** Where the player's own body is walking to, sent like any other unit; null when it stands. */
@@ -162,8 +167,9 @@ public final class BattleScreen extends Screen {
     }
 
     /** The server's answer: the player's units now (none: no battle for them). */
-    public static void receive(List<UnitInfo> latest) {
+    public static void receive(List<UnitInfo> latest, float windNow) {
         units = latest;
+        wind = windNow;
         heard = true;
     }
 
@@ -559,11 +565,13 @@ public final class BattleScreen extends Screen {
         }
         g.drawString(font, "WASD move · space/ctrl rise/sink · shift fast · middle-drag turn · right-drag line up · scroll zoom · drag to select platoons (ctrl: blocks, shift: add) · shift+tab group · right-click to order",
                 6, 6, 0xFFF4EEDC);
+        drawWindVane(g);
+        int hintY = Float.isNaN(wind) ? 20 : VANE_TOP + 2 * VANE_R + 4; // below the vane at sea
         if (leading) {
-            g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, 20, GOLD);
+            g.drawCenteredString(font, "Lead charge: right-click an enemy formation", width / 2, hintY, GOLD);
         }
         if (ramming != null) {
-            g.drawCenteredString(font, "Ram: right-click an enemy ship", width / 2, 20, GOLD);
+            g.drawCenteredString(font, "Ram: right-click an enemy ship", width / 2, hintY, GOLD);
         }
         drawTrack(g, mouseX, mouseY);
         drawPlayer(g, mouseX, mouseY);
@@ -571,6 +579,41 @@ public final class BattleScreen extends Screen {
         if (menu != null) {
             drawMenu(g, mouseX, mouseY);
         }
+    }
+
+    /**
+     * At sea, a wind vane top middle, as Empire's: a disc with an arrow the way the wind blows and an N for north, both
+     * turned with the camera, so the arrow points across the screen as the wind blows across the water below.
+     */
+    private void drawWindVane(GuiGraphics g) {
+        if (Float.isNaN(wind)) {
+            return;
+        }
+        int cx = width / 2;
+        int cy = VANE_TOP + VANE_R;
+        for (int dy = -VANE_R - 1; dy <= VANE_R + 1; dy++) { // a dark rim, then the parchment face
+            int rim = (int) Math.sqrt((VANE_R + 1) * (VANE_R + 1) - dy * dy);
+            g.fill(cx - rim, cy + dy, cx + rim + 1, cy + dy + 1, 0xFF5A4630);
+            if (Math.abs(dy) <= VANE_R) {
+                int face = (int) Math.sqrt(VANE_R * VANE_R - dy * dy);
+                g.fill(cx - face, cy + dy, cx + face + 1, cy + dy + 1, 0xE0F4EEDC);
+            }
+        }
+        // A world way at angle a (atan2(x, z)) lies a + yaw anticlockwise of the camera's forward, so clockwise from up: -(a + yaw).
+        double yawR = Math.toRadians(yaw);
+        float arrow = (float) -(wind + yawR);
+        double north = -(Math.PI + yawR); // north is -z: atan2(0, -1)
+        g.drawCenteredString(font, "N", cx + (int) Math.round(Math.sin(north) * (VANE_R - 5)),
+                cy - (int) Math.round(Math.cos(north) * (VANE_R - 5)) - 4, 0xFF8A2A1A);
+        g.pose().pushPose();
+        g.pose().translate(cx, cy, 0);
+        g.pose().mulPose(com.mojang.math.Axis.ZP.rotation(arrow));
+        g.fill(-1, -VANE_R + 8, 1, VANE_R - 3, 0xFF2A3A5A); // the shaft, its head up (-y)
+        for (int row = 0; row < 6; row++) { // the head, widening downward
+            g.fill(-row, -VANE_R + 3 + row, row + 1, -VANE_R + 4 + row, 0xFF2A3A5A);
+        }
+        g.fill(-3, VANE_R - 4, 4, VANE_R - 3, 0xFF2A3A5A); // the tail
+        g.pose().popPose();
     }
 
     private void drawTrack(GuiGraphics g, int mouseX, int mouseY) {

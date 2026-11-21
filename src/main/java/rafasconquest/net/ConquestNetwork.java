@@ -1064,12 +1064,12 @@ public final class ConquestNetwork {
     private static void handleUnitsRequest(UnitsRequest msg, IPayloadContext context) {
         ServerPlayer player = SimpleChannel.sender(context);
         if (player != null) {
-            CHANNEL.send(player, new UnitsState(rafasconquest.bridge.RecruitsBattle.unitInfo(player)));
+            CHANNEL.send(player, new UnitsState(rafasconquest.bridge.RecruitsBattle.unitInfo(player), rafasconquest.bridge.RecruitsBattle.wind()));
         }
     }
 
-    /** Server → client: the player's units. */
-    public record UnitsState(List<UnitInfo> units) {
+    /** Server → client: the player's units, and the wind's way at sea (toward, as an angle; NaN ashore or out of battle). */
+    public record UnitsState(List<UnitInfo> units, float wind) {
         void write(FriendlyByteBuf buf) {
             buf.writeVarInt(units.size());
             for (UnitInfo u : units) {
@@ -1092,6 +1092,7 @@ public final class ConquestNetwork {
                 buf.writeVarInt(u.block());
                 writeMorale(buf, u.morale());
             }
+            buf.writeFloat(wind);
         }
 
         static UnitsState read(FriendlyByteBuf buf) {
@@ -1102,7 +1103,7 @@ public final class ConquestNetwork {
                         buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readInt(), buf.readVarInt(), buf.readBoolean(),
                         buf.readVarInt(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean(), buf.readVarIntArray(256), buf.readVarInt(), readMorale(buf)));
             }
-            return new UnitsState(units);
+            return new UnitsState(units, buf.readFloat());
         }
 
         private static void writeMorale(FriendlyByteBuf buf, @org.jetbrains.annotations.Nullable rafasconquest.battle.FieldBattle.Morale m) {
@@ -1126,7 +1127,7 @@ public final class ConquestNetwork {
     }
 
     private static void handleUnitsState(UnitsState msg, IPayloadContext context) {
-        rafasconquest.client.BattleScreen.receive(msg.units());
+        rafasconquest.client.BattleScreen.receive(msg.units(), msg.wind());
     }
 
     /** Client → server: the orders given in the war horn's screen, each to some units, with a place for a move. */

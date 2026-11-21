@@ -4566,6 +4566,13 @@ public final class RecruitsBattle {
     }
 
     /** What the battle screen shows of a player's units: number, size, where, how, and their card. */
+    /** The wind's way in the battle now (toward, as an angle), if it is fought with ships; NaN otherwise. */
+    public static float wind() {
+        RecruitsBattle battle = current;
+        return battle == null || battle.field.type() != BattleType.OCEAN && battle.field.type() != BattleType.AMPHIBIOUS
+                ? Float.NaN : (float) battle.field.wind();
+    }
+
     public static List<ConquestNetwork.UnitInfo> unitInfo(ServerPlayer player) {
         RecruitsBattle battle = current;
         List<ConquestNetwork.UnitInfo> info = new ArrayList<>();
