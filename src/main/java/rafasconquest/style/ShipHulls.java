@@ -101,6 +101,9 @@ public final class ShipHulls {
         List<Part> parts = hull(size, false);
         List<String> right = new ArrayList<>();
         List<String> left = new ArrayList<>();
+        // shortcut: no engine block yet, so steam only by the card's "propulsion"; read an engine block in stage 4.
+        size.propulsion = size.propulsionSet != null ? size.propulsionSet
+                : parts.stream().anyMatch(p -> p.state().getBlock() instanceof OarBlock) ? SeaLanes.Propulsion.OARS : SeaLanes.Propulsion.SAIL;
         for (Part p : parts) {
             String gun = gunOf(p.state());
             if (gun != null) {

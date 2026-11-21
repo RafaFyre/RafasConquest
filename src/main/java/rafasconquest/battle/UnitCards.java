@@ -229,6 +229,7 @@ public final class UnitCards {
         s.merchant = str(o, "merchant", s.merchant);
         s.type = str(o, "type", s.type).toLowerCase(Locale.ROOT);
         s.gunBlock = str(o, "gun_block", s.gunBlock);
+        s.propulsionSet = upper(o, "propulsion", s.propulsionSet, rafasconquest.core.SeaLanes.Propulsion.class);
     }
 
     private static String str(JsonObject o, String key, String otherwise) {

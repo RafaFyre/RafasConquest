@@ -386,16 +386,22 @@ public final class FieldBattle {
     }
 
     /**
-     * A fleet at sea deploys by its age, {@code extra} further back than {@link #fleetBack}: one with gunships (Gunpowder)
-     * in {@link #battleLines}, any other (Bronze, Steel) in {@link #rows}.
+     * A fleet at sea deploys by what drives most of its ships, {@code extra} further back than {@link #fleetBack}: a galley
+     * fleet (more oared ships than not) in {@link #rows} to ram and board, a sail or steam fleet in {@link #battleLines}.
      */
     private static void formFleet(FieldArmy army, double extra) {
         List<FieldBlock> fleet = fleet(army);
-        if (fleet.stream().anyMatch(b -> b.ship == FieldBlock.ShipKind.GUNSHIP)) {
+        if (!galleys(fleet)) {
             battleLines(army, fleet, fleetBack() + extra);
         } else {
             rows(army, fleet, fleetBack() + extra);
         }
+    }
+
+    /** Whether more of {@code fleet}'s ships are rowed than not (a tie fights in battle lines). */
+    static boolean galleys(List<FieldBlock> fleet) {
+        long oars = fleet.stream().filter(b -> b.hull.propulsion == rafasconquest.core.SeaLanes.Propulsion.OARS).count();
+        return oars * 2 > fleet.size();
     }
 
     /**

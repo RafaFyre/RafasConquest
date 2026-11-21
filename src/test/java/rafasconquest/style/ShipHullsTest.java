@@ -22,6 +22,14 @@ class ShipHullsTest {
     }
 
     @Test
+    void oaredHullsAreGalleysTheRatesAndTheGunshipSail() {
+        assertEquals(SeaLanes.Propulsion.OARS, SeaLanes.Size.XXLARGE.propulsion);
+        assertEquals(SeaLanes.Propulsion.SAIL, SeaLanes.Size.MAN_O_WAR.propulsion);
+        assertEquals(SeaLanes.Propulsion.SAIL, SeaLanes.Size.FIRST_RATE.propulsion);
+        assertEquals(SeaLanes.Propulsion.SAIL, SeaLanes.Size.GUNSHIP.propulsion, "the card's propulsion wins over its oars");
+    }
+
+    @Test
     void theManOWarHasThreeGunDecksAndThreeMastsTheMainTallest() {
         SeaLanes.Size mow = SeaLanes.Size.MAN_O_WAR;
         assertEquals(mow, rafasconquest.battle.BattlePlan.Arm.MAN_O_WAR.ship());

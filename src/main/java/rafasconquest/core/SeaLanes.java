@@ -40,6 +40,11 @@ public final class SeaLanes {
     /** Ships each port sends to sea per lane at launch. */
     static final int AT_SEA_PER_SIDE = 4;
 
+    /** What drives a ship, and so how its fleet fights: oars (galleys, ram and board), sails or an engine (battle lines). */
+    public enum Propulsion {
+        OARS, SAIL, STEAM
+    }
+
     /**
      * A ship card: a kind of ship, from its file in {@code mods/RafasConquest/units/ships} ({@link rafasconquest.battle.UnitCards}).
      * Its hull is a structure {@code .nbt} beside it ({@link rafasconquest.style.ShipHulls}; {@code merchant} the lanes'
@@ -84,6 +89,10 @@ public final class SeaLanes {
         public String gunBlock = "rafasconquest:medium_cannon";
         /** "boarder": its unit stands on its deck and boards (the captains' AI); "gunship": it lies off and fires broadsides. */
         public String type = "boarder";
+        /** What drives it: the card's "propulsion" if set, else read from its hull ({@link rafasconquest.style.ShipHulls}). */
+        public Propulsion propulsion = Propulsion.SAIL;
+        /** The card's own "propulsion", null to read it from the hull. */
+        public Propulsion propulsionSet;
         /**
          * Read from its hull ({@link rafasconquest.style.ShipHulls}): its guns (the engines of its gun blocks, by id),
          * those on its right side (-x) and its left (+x), a centreline gun on both; and where its crew stand, its Character
