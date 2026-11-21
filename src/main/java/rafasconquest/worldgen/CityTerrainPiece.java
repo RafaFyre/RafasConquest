@@ -110,12 +110,16 @@ public class CityTerrainPiece extends StructurePiece {
                     ? CityTerrain.Edge.values()[Math.min(encoded.charAt(i) - '0', CityTerrain.Edge.FILL.ordinal())] : CityTerrain.Edge.CARVE;
             carveTo[i / segments][i % segments] = i < carve.length ? carve[i] : 0;
         }
-        return new CityTerrain.Plan(tag.getInt(prefix + "plateY"), edges, carveTo, cells, outset, size, run);
+        return new CityTerrain.Plan(tag.getInt(prefix + "plateY"), edges, carveTo, cells, outset, size, run,
+                tag.contains(prefix + "levels") ? tag.getIntArray(prefix + "levels") : null);
     }
 
     private static void write(CompoundTag tag, String prefix, CityTerrain.Plan plan) {
         tag.putInt(prefix + "plateY", plan.plateY());
         tag.putInt(prefix + "cells", plan.cells());
+        if (plan.levels() != null) {
+            tag.putIntArray(prefix + "levels", plan.levels());
+        }
         tag.putInt(prefix + "outset", plan.outset());
         tag.putInt(prefix + "size", plan.size());
         tag.putInt(prefix + "run", plan.run());

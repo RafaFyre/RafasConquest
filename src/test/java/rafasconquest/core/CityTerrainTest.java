@@ -3,6 +3,7 @@ package rafasconquest.core;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -135,6 +136,47 @@ class CityTerrainTest {
             assertTrue(c.low() <= previous && previous - c.low() <= 2, "fill drops from " + previous + " to " + c.low() + " at " + d);
             previous = c.low();
         }
+    }
+
+    @Test
+    void lowestAboveMatchesTheBruteForceField() {
+        java.util.Random r = new java.util.Random(7);
+        int n = 13;
+        for (int round = 0; round < 20; round++) {
+            int[] a = new int[n * n];
+            for (int k = 0; k < a.length; k++) {
+                a[k] = 60 + r.nextInt(40);
+            }
+            int[] fast = a.clone();
+            CityTerrain.lowestAbove(fast, n);
+            for (int k = 0; k < a.length; k++) {
+                int best = Integer.MAX_VALUE;
+                for (int m = 0; m < a.length; m++) {
+                    best = Math.min(best, a[m] + Math.max(Math.abs(k % n - m % n), Math.abs(k / n - m / n)));
+                }
+                assertEquals(best, fast[k], "tile " + k);
+            }
+        }
+    }
+
+    @Test
+    void tilesFollowAHillOneBlockApartAndPinsStayFlat() {
+        // A hill rising 1 block every 2 east: steeper than the field may climb.
+        CityTerrain.Pin square = new CityTerrain.Pin(200, 200, 260, 260, false);
+        CityTerrain.Plan plan = CityTerrain.plan(SITE, local((x, z) -> 70 + Math.max(0, x) / 2), SEA, CityLayout.WALL_OUTSET, false, List.of(square));
+        assertTrue(plan.level(CityTerrain.BOX_MAX, MID) - plan.level(CityTerrain.BOX_MIN, MID) > 30, "the city climbs the hill");
+        for (int x = CityTerrain.BOX_MIN; x < CityTerrain.BOX_MAX; x++) {
+            for (int z = CityTerrain.BOX_MIN; z < CityTerrain.BOX_MAX; z += 7) {
+                assertTrue(Math.abs(plan.level(x + 1, z) - plan.level(x, z)) <= 1, "step at " + x + ", " + z);
+                assertTrue(Math.abs(plan.level(x, z + 1) - plan.level(x, z)) <= 1, "step at " + x + ", " + z);
+            }
+        }
+        int pinned = plan.level(200, 200);
+        for (int x = 200; x <= 260; x++) {
+            assertEquals(pinned, plan.level(x, 260 - (x - 200)), "the pinned square is flat");
+        }
+        assertEquals(plan.plateY(), CityTerrain.plan(SITE, local((x, z) -> 70 + Math.max(0, x) / 2), SEA, CityLayout.WALL_OUTSET, false,
+                List.of(new CityTerrain.Pin(0, 0, 40, 40, true))).level(20, 20), "a pin at the plate keeps the plate");
     }
 
     @Test

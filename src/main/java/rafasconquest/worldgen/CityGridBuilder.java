@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Builds one cell of a city's planned grid: first its share of the flattened ground ({@link CityTerrainPiece}), then
  * its roads, a vanilla building on every plot (or the town centre on the middle block), and its part of the wall,
- * all at the plate height. Buildings are turned so their entrance faces a road and placed against it;
+ * each on the tiles of the shaped ground ({@link CityTerrain}), buildings on a footprint levelled to the road at their door. Buildings are turned so their entrance faces a road and placed against it;
  * anything they link to through their own jigsaws (villagers, cats, golems) is attached the way vanilla does it.
  */
 public final class CityGridBuilder {
@@ -67,7 +67,7 @@ public final class CityGridBuilder {
     private final StructureTemplateManager templates;
     private final Registry<StructureTemplatePool> pools;
     private final CityTerrain.Plan plan;
-    /** Height of the flattened plate: the ground level of every road, building and wall in the city. */
+    /** The plate: the harbour's ground level (each tile has its own, {@link #y}). */
     private final int plate;
     /** Bounding boxes of everything placed in the current city block, so lamp posts can avoid them. */
     private final List<BoundingBox> occupied = new java.util.ArrayList<>();
@@ -139,14 +139,15 @@ public final class CityGridBuilder {
         // The box reaches past the walls: a style's own may stand further out than the mod's.
         int outset = rafasconquest.style.CityPlan.wallOutset(site);
         boolean port = Harbour.sideOf(site) != null;
+        List<CityTerrain.Pin> pins = pins(site, outset);
         CityTerrain.plan(site, (x, z) -> {
             wanted.add(xz(x, z));
             return sea;
-        }, sea, outset, port);
+        }, sea, outset, port, pins);
         java.util.Map<Long, Integer> read = new java.util.concurrent.ConcurrentHashMap<>();
         // On a pool of its own, a quarter of the threads: the rest stay free for the world generation going on meanwhile.
         SURVEY.submit(() -> wanted.parallelStream().forEach(k -> read.put(k, surface(ctx, (int) (k >> 32), (int) (long) k)))).join();
-        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea, outset, port);
+        CityTerrain.Plan plan = CityTerrain.plan(site, (x, z) -> read.computeIfAbsent(xz(x, z), k -> surface(ctx, x, z)), sea, outset, port, pins);
         int[] counts = new int[CityTerrain.Edge.values().length];
         for (CityTerrain.Edge[] side : plan.edges()) {
             for (CityTerrain.Edge e : side) {
@@ -156,6 +157,97 @@ public final class CityGridBuilder {
         RafasConquest.LOGGER.info("Planned city terrain at {}, {}: plate y {}, edges {} carve / {} fill, in {} ms",
                 site.x(), site.z(), plan.plateY(), counts[0], counts[1],(System.nanoTime() - start) / 1_000_000);
         return plan;
+    }
+
+    /**
+     * Where a city's ground must stand flat, in the order the tile field lays them: a port's harbour side and the path
+     * out to an outside noble district at the plate (their pieces are built there), then the noble district, the town
+     * centre's block, the Barracks' block, the plan's other buildings, and each wall segment.
+     */
+    static List<CityTerrain.Pin> pins(CityLayout.Site site, int outset) {
+        List<CityTerrain.Pin> pins = new java.util.ArrayList<>();
+        rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site);
+        int min = CityTerrain.boxMin(site.cells(), outset);
+        int max = CityTerrain.boxMax(site.cells(), outset);
+        CityLayout.Side harbour = Harbour.sideOf(site);
+        if (harbour != null) {
+            int in = CityLayout.ROAD_WIDTH - 1;
+            int far = site.size() - CityLayout.ROAD_WIDTH;
+            pins.add(switch (harbour) {
+                case NORTH -> new CityTerrain.Pin(min, min, max, in, true);
+                case SOUTH -> new CityTerrain.Pin(min, far, max, max, true);
+                case WEST -> new CityTerrain.Pin(min, min, in, max, true);
+                case EAST -> new CityTerrain.Pin(far, min, max, max, true);
+            });
+        }
+        if (!styled.path().isEmpty()) {
+            int[] r = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+            for (int[] c : styled.path()) {
+                r = new int[]{Math.min(r[0], c[0]), Math.min(r[1], c[1]), Math.max(r[2], c[0]), Math.max(r[3], c[1])};
+            }
+            pins.add(new CityTerrain.Pin(r[0], r[1], r[2], r[3], true));
+        }
+        if (styled.noble()) {
+            pins.add(new CityTerrain.Pin(styled.areaMinX(), styled.areaMinZ(), styled.areaMaxX(), styled.areaMaxZ(), false));
+        }
+        pins.add(blockPin(site.centerBlock(), site.centerBlock()));
+        pins.add(blockPin(Barracks.blockX(site), Barracks.blockZ(site)));
+        for (rafasconquest.style.CityPlan.Piece p : styled.pieces()) {
+            boolean inNoble = styled.noble() && p.centreX() >= styled.areaMinX() && p.centreX() <= styled.areaMaxX()
+                    && p.centreZ() >= styled.areaMinZ() && p.centreZ() <= styled.areaMaxZ();
+            if (!styled.inAnnex(p) && !inNoble) {
+                pins.add(new CityTerrain.Pin(p.minX(), p.minZ(), p.minX() + p.w() - 1, p.minZ() + p.d() - 1, false));
+            }
+        }
+        if (!styled.styledWalls()) {
+            for (CityLayout.WallSegment seg : CityLayout.wallSegments(site.cells())) {
+                int[] a = CityLayout.wallBlock(seg, 0, 0);
+                int[] b = CityLayout.wallBlock(seg, seg.length() - 1, CityLayout.WALL_WIDTH - 1);
+                pins.add(new CityTerrain.Pin(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1]), false));
+            }
+        }
+        return pins;
+    }
+
+    /** City block (bx, bz), out to the roads about it. */
+    private static CityTerrain.Pin blockPin(int bx, int bz) {
+        return new CityTerrain.Pin(CityLayout.blockStart(bx), CityLayout.blockStart(bz), CityLayout.roadStart(bx + 1) - 1, CityLayout.roadStart(bz + 1) - 1, false);
+    }
+
+    /** The ground's level at world (x, z): its tile's. */
+    private int y(int x, int z) {
+        return plan.level(x - site.originX(), z - site.originZ());
+    }
+
+    /**
+     * A road over world [x0, x1] × [z0, z1], each column at the level of the tile its centre line crosses there, so it
+     * only steps along its length: the centre line at city-local {@code across}, or the road's own middle if MIN_VALUE.
+     */
+    private void roadPiece(int x0, int z0, int x1, int z1, boolean paved, int across) {
+        boolean alongX = x1 - x0 >= z1 - z0;
+        int centre = across != Integer.MIN_VALUE ? across : alongX ? (z0 + z1) / 2 - site.originZ() : (x0 + x1) / 2 - site.originX();
+        int[] ys = new int[(x1 - x0 + 1) * (z1 - z0 + 1)];
+        int lo = Integer.MAX_VALUE;
+        int hi = Integer.MIN_VALUE;
+        for (int x = x0; x <= x1; x++) {
+            for (int z = z0; z <= z1; z++) {
+                int y = alongX ? plan.level(x - site.originX(), centre) : plan.level(centre, z - site.originZ());
+                ys[(x - x0) * (z1 - z0 + 1) + z - z0] = y;
+                lo = Math.min(lo, y);
+                hi = Math.max(hi, y);
+            }
+        }
+        pieces.addPiece(new CityRoadPiece(new BoundingBox(x0, lo, z0, x1, hi + 1, z1),
+                (paved ? net.minecraft.world.level.block.Blocks.COBBLESTONE : net.minecraft.world.level.block.Blocks.GRAVEL).defaultBlockState(),
+                paved ? net.minecraft.world.level.block.Blocks.COBBLESTONE_SLAB.defaultBlockState() : rafasconquest.content.ConquestContent.GRAVEL_SLAB.get().defaultBlockState(), ys));
+    }
+
+    /** The ground under a building's footprint, flat at {@code y}: laid before the building, which stands on it. */
+    private void foundation(BoundingBox footprint, int y) {
+        int[] ys = new int[footprint.getXSpan() * footprint.getZSpan()];
+        java.util.Arrays.fill(ys, y);
+        pieces.addPiece(new CityRoadPiece(new BoundingBox(footprint.minX(), y, footprint.minZ(), footprint.maxX(), y + 1, footprint.maxZ()),
+                variant.ground(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), ys));
     }
 
     static void build(Structure.GenerationContext ctx, CityLayout.Site site, CityVariant variant, int cellX, int cellZ, StructurePiecesBuilder pieces) {
@@ -203,8 +295,8 @@ public final class CityGridBuilder {
         int cellMinZ = oz + CityLayout.cellMin(cellZ);
         int cellMaxZ = oz + CityLayout.cellMax(cellZ);
 
-        // The ground first: everything else in the cell is built on the flattened plate.
-        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plate - SPAWN_PROTECTION_DEPTH, maxY, platform(ctx, site)));
+        // The ground first: everything else in the cell is built on the shaped tiles.
+        pieces.addPiece(new CityTerrainPiece(site, cellX, cellZ, variant, plan, plan.minLevel() - SPAWN_PROTECTION_DEPTH, maxY, platform(ctx, site)));
 
         // The styled walls and the noble district, laid out for the whole city.
         rafasconquest.style.CityPlan.Plan styled = rafasconquest.style.CityPlan.of(site); // by its founder, held or not
@@ -219,25 +311,27 @@ public final class CityGridBuilder {
             int x = ox + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.x0() && k < styled.x1();
             for (int[] run : merged(runs(cellMinZ - oz, cellMaxZ - oz, cut ? styled.areaMinZ() : 0, cut ? styled.areaMaxZ() : -1), k, true, claims)) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(x, plate, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, plate, oz + run[1]), false));
+                roadPiece(x, oz + run[0], x + CityLayout.ROAD_WIDTH - 1, oz + run[1], false, Integer.MIN_VALUE);
             }
         }
         for (int k : CityLayout.roadsInCell(site.cells(), cellZ)) {
             int z = oz + CityLayout.roadStart(k);
             boolean cut = noble && k > styled.z0() && k < styled.z1();
             for (int[] run : merged(runs(cellMinX - ox, cellMaxX - ox, cut ? styled.areaMinX() : 0, cut ? styled.areaMaxX() : -1), k, false, claims)) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + run[0], plate, z, ox + run[1], plate, z + CityLayout.ROAD_WIDTH - 1), false));
+                roadPiece(ox + run[0], z, ox + run[1], z + CityLayout.ROAD_WIDTH - 1, false, Integer.MIN_VALUE);
             }
         }
         // The gate avenues' extra width, on the side toward the origin.
         int gate = site.blocksPerSide() / 2;
         int extra = CityLayout.AVENUE_EXTRA;
         int g = CityLayout.roadStart(gate);
+        // At the avenue's own level, so it never steps across its width.
+        int avenue = g + CityLayout.ROAD_WIDTH / 2;
         if (CityLayout.roadsInCell(site.cells(), cellX).contains(gate)) {
-            road(g - extra, cellMinZ - oz, g - 1, cellMaxZ - oz, styled);
+            road(g - extra, cellMinZ - oz, g - 1, cellMaxZ - oz, styled, avenue);
         }
         if (CityLayout.roadsInCell(site.cells(), cellZ).contains(gate)) {
-            road(cellMinX - ox, g - extra, cellMaxX - ox, g - 1, styled);
+            road(cellMinX - ox, g - extra, cellMaxX - ox, g - 1, styled, avenue);
         }
         // The ring road just inside the wall, on the edge cells.
         int far = site.size() - 1;
@@ -250,16 +344,16 @@ public final class CityGridBuilder {
         int z1 = Math.min(cellMaxZ - oz, in1);
         int last = site.cells() - 1;
         if (cellZ == 0) {
-            road(x0, in0, x1, in0 + ring - 1, styled);
+            road(x0, in0, x1, in0 + ring - 1, styled, Integer.MIN_VALUE);
         }
         if (cellZ == last) {
-            road(x0, in1 - ring + 1, x1, in1, styled);
+            road(x0, in1 - ring + 1, x1, in1, styled, Integer.MIN_VALUE);
         }
         if (cellX == 0) {
-            road(in0, z0, in0 + ring - 1, z1, styled);
+            road(in0, z0, in0 + ring - 1, z1, styled, Integer.MIN_VALUE);
         }
         if (cellX == last) {
-            road(in1 - ring + 1, z0, in1, z1, styled);
+            road(in1 - ring + 1, z0, in1, z1, styled, Integer.MIN_VALUE);
         }
 
         for (int bx : CityLayout.blocksInCell(cellX)) {
@@ -285,10 +379,11 @@ public final class CityGridBuilder {
                                     && !styled.has(rafasconquest.style.CityPlan.Kind.BARRACKS)) { // a Barracks too big for the plot has its own ground
                                 // The small Barracks: from the style folders where its slot has a file, else the mod's own.
                                 String barracks = rafasconquest.style.CityStyles.barracks(site);
+                                int ground = y(blockX, blockZ); // the Barracks' block is pinned flat
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = barracks == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(barracks,
-                                        blockX + CityLayout.PLOT_SIZE / 2, plate, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
+                                        blockX + CityLayout.PLOT_SIZE / 2, ground, blockZ + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
                                 if (styledPiece.isEmpty()) {
-                                    pieces.addPiece(new BarracksPiece(Barracks.of(site), plate));
+                                    pieces.addPiece(new BarracksPiece(Barracks.of(site), ground));
                                 }
                                 styledPiece.forEach(pieces::addPiece);
                                 continue; // the barracks has this plot
@@ -297,10 +392,11 @@ public final class CityGridBuilder {
                                 int[] church = Barracks.of(site).church();
                                 // The Palace: from the style folders where its slot has a file, else the gold church.
                                 String palace = rafasconquest.style.CityStyles.palace(site);
+                                int ground = y(blockX, blockZ);
                                 java.util.List<rafasconquest.style.StylePiece> styledPiece = palace == null ? java.util.List.of() : rafasconquest.style.StylePiece.of(palace,
-                                        church[0] + CityLayout.PLOT_SIZE / 2, plate, church[1] + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
+                                        church[0] + CityLayout.PLOT_SIZE / 2, ground, church[1] + CityLayout.PLOT_SIZE / 2, rafasconquest.style.CityStyles.TURNS_TO_WEST);
                                 if (styledPiece.isEmpty()) {
-                                    pieces.addPiece(new GoldChurchPiece(church[0], church[1], plate));
+                                    pieces.addPiece(new GoldChurchPiece(church[0], church[1], ground));
                                 }
                                 styledPiece.forEach(pieces::addPiece);
                                 continue; // and the gold church, the one beside it
@@ -335,7 +431,7 @@ public final class CityGridBuilder {
             int rz0 = Math.max(r[1], cellMinZ - oz);
             int rz1 = Math.min(r[3], cellMaxZ - oz);
             if (rx0 <= rx1 && rz0 <= rz1) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + rx0, plate, oz + rz0, ox + rx1, plate, oz + rz1), true));
+                roadPiece(ox + rx0, oz + rz0, ox + rx1, oz + rz1, true, Integer.MIN_VALUE);
             }
         }
         // The styled pieces this cell builds: the noble district's, the church's and the walls.
@@ -344,7 +440,8 @@ public final class CityGridBuilder {
                 townCenter(FOUNTAIN, ox + p.centreX(), oz + p.centreZ()); // shortcut: the plains fountain always; later from the data packs
                 continue;
             }
-            rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), plate, oz + p.minZ(), p.turns()).forEach(pieces::addPiece);
+            // Its ground is pinned flat (the noble district's is one level), so its middle's tile stands for it all.
+            rafasconquest.style.StylePiece.at(p.file(), ox + p.minX(), y(ox + p.centreX(), oz + p.centreZ()), oz + p.minZ(), p.turns()).forEach(pieces::addPiece);
         }
 
         // Walls last, so they stand on top of the edge road (the mod's own, where the style has no walls of its own).
@@ -356,7 +453,7 @@ public final class CityGridBuilder {
     }
 
     /** A road over city-local [x0, x1] × [z0, z1], less any part inside the noble district. */
-    private void road(int x0, int z0, int x1, int z1, rafasconquest.style.CityPlan.Plan styled) {
+    private void road(int x0, int z0, int x1, int z1, rafasconquest.style.CityPlan.Plan styled, int across) {
         boolean alongX = x1 - x0 >= z1 - z0;
         boolean crosses = styled.noble() && (alongX
                 ? z1 >= styled.areaMinZ() && z0 <= styled.areaMaxZ()
@@ -367,9 +464,11 @@ public final class CityGridBuilder {
                 crosses ? (alongX ? styled.areaMaxX() : styled.areaMaxZ()) : -1)) {
             int ox = site.originX();
             int oz = site.originZ();
-            pieces.addPiece(alongX
-                    ? new CityRoadPiece(new BoundingBox(ox + run[0], plate, oz + z0, ox + run[1], plate, oz + z1), false)
-                    : new CityRoadPiece(new BoundingBox(ox + x0, plate, oz + run[0], ox + x1, plate, oz + run[1]), false));
+            if (alongX) {
+                roadPiece(ox + run[0], oz + z0, ox + run[1], oz + z1, false, across);
+            } else {
+                roadPiece(ox + x0, oz + run[0], ox + x1, oz + run[1], false, across);
+            }
         }
     }
 
@@ -462,8 +561,9 @@ public final class CityGridBuilder {
             Rotation rotation = Rotation.values()[seg.quarterTurns()];
             int x = site.originX() + seg.originX();
             int z = site.originZ() + seg.originZ();
-            // Rigid on the plate: its bottom layer replaces the plate's surface, like a street.
-            BlockPos laidOut = new BlockPos(x, plate, z);
+            // Rigid on its pinned ground: its bottom layer replaces the surface, like a street.
+            int[] middle = CityLayout.wallBlock(seg, seg.length() / 2, CityLayout.WALL_WIDTH / 2);
+            BlockPos laidOut = new BlockPos(x, plan.level(middle[0], middle[1]), z);
             BlockPos pos = laidOut;
             if (previous != null && previous.segment.side() == seg.side() && previous.segment.index() == seg.index() - 1) {
                 BlockPos joined = joinWall(previous, element, rotation);
@@ -471,7 +571,7 @@ public final class CityGridBuilder {
                     RafasConquest.LOGGER.warn("City wall segment {} {} does not line up with its jigsaw (layout {}, jigsaw {})",
                             seg.side(), seg.index(), laidOut, joined);
                 } else {
-                    pos = joined;
+                    pos = joined.atY(laidOut.getY()); // each segment on its own ground: it may stand a step off the last
                 }
             }
             pieces.addPiece(new PoolElementStructurePiece(templates, element, pos, element.getGroundLevelDelta(), rotation,
@@ -535,8 +635,14 @@ public final class CityGridBuilder {
             free = rafasconquest.style.BlockPacker.cut(free, new rafasconquest.style.BlockPacker.Rect(c.minX() - sx[0], c.minZ() - sz[0], c.w(), c.d()));
         }
         for (rafasconquest.style.BlockPacker.Placed p : rafasconquest.style.BlockPacker.pack(free, w, d, houses.sizes(), packing, houseShares(bx, bz))) {
-            rafasconquest.style.StylePiece.at(houses.files().get(p.building()), site.originX() + sx[0] + p.x(), plate, site.originZ() + sz[0] + p.z(), p.turns())
-                    .forEach(pieces::addPiece);
+            rafasconquest.style.BlockPacker.Size size = houses.sizes().get(p.building());
+            int fw = p.turns() % 2 == 0 ? size.x() : size.z();
+            int fd = p.turns() % 2 == 0 ? size.z() : size.x();
+            int x = site.originX() + sx[0] + p.x();
+            int z = site.originZ() + sz[0] + p.z();
+            int ground = y(x + fw / 2, z + fd / 2);
+            foundation(new BoundingBox(x, ground, z, x + fw - 1, ground, z + fd - 1), ground);
+            rafasconquest.style.StylePiece.at(houses.files().get(p.building()), x, ground, z, p.turns()).forEach(pieces::addPiece);
         }
     }
 
@@ -591,6 +697,8 @@ public final class CityGridBuilder {
         if (pool.isEmpty()) {
             return;
         }
+        // The house stands at the road's level just outside its door, its footprint levelled to it.
+        int ground = y(ex + toRoad.getStepX(), ez + toRoad.getStepZ());
         int attempts = 0;
         // Shuffled templates repeat each element by its weight; try each distinct element once.
         java.util.Set<StructurePoolElement> tried = new java.util.HashSet<>();
@@ -608,10 +716,11 @@ public final class CityGridBuilder {
                 }
                 // Like vanilla attaching a rigid house to a terrain-following street: the entrance jigsaw sits on the
                 // first free block above the ground, not in it. One lower sinks the house and its villagers.
-                int entranceY = plate + 1;
+                int entranceY = ground + 1;
                 BlockPos pos = new BlockPos(ex - entrance.pos().getX(), entranceY - entrance.pos().getY(), ez - entrance.pos().getZ());
                 BoundingBox box = element.getBoundingBox(templates, pos, rotation);
                 if (box.minX() >= plot.minX() && box.maxX() <= plot.maxX() && box.minZ() >= plot.minZ() && box.maxZ() <= plot.maxZ()) {
+                    foundation(box, ground);
                     place(element, pos, rotation, box, 0);
                     return;
                 }
@@ -653,7 +762,7 @@ public final class CityGridBuilder {
     private void townCenter(StructurePoolElement element, int cx, int cz) {
         Rotation rotation = Rotation.getRandom(random);
         BoundingBox at = element.getBoundingBox(templates, new BlockPos(cx, 0, cz), rotation);
-        BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), plate - at.minY(), cz + (cz - at.getCenter().getZ()));
+        BlockPos pos = new BlockPos(cx + (cx - at.getCenter().getX()), y(cx, cz) - at.minY(), cz + (cz - at.getCenter().getZ()));
         place(element, pos, rotation, element.getBoundingBox(templates, pos, rotation), 0);
     }
 
@@ -695,7 +804,7 @@ public final class CityGridBuilder {
                         break;
                     }
                 }
-                BlockPos pos = new BlockPos(x - (at.minX() + at.maxX()) / 2, plate + 1 - baseY, z - (at.minZ() + at.maxZ()) / 2);
+                BlockPos pos = new BlockPos(x - (at.minX() + at.maxX()) / 2, y(x, z) + 1 - baseY, z - (at.minZ() + at.maxZ()) / 2);
                 BoundingBox box = element.getBoundingBox(templates, pos, rotation);
                 boolean inside = box.minX() >= block.minX() && box.maxX() <= block.maxX() && box.minZ() >= block.minZ() && box.maxZ() <= block.maxZ();
                 if (inside && occupied.stream().noneMatch(box::intersects)) {

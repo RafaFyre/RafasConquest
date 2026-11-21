@@ -233,7 +233,7 @@ public final class RoadNetwork {
                     return new int[]{ground, Math.max(water, ground)};
                 }
                 default -> {
-                    return new int[]{plan.plateY() + 1, plan.plateY() + 1};
+                    return new int[]{col.low() + 1, col.low() + 1}; // its tile's level
                 }
             }
         }

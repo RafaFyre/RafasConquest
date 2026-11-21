@@ -8,8 +8,11 @@ import java.util.List;
  * How a city reshapes the land, decided from the original terrain alone so every cell of a city agrees.
  * <p>
  * The <b>box</b> is the city square plus the wall, which stands {@link CityLayout#WALL_OUTSET} blocks out past it, plus
- * {@link #BOX_MARGIN} blocks past the wall. Inside it, the ground becomes a flat
- * <b>plate</b> at the median height of the box: everything above is cleared, everything below is filled.
+ * {@link #BOX_MARGIN} blocks past the wall. Inside it, the ground follows the land in
+ * {@link #TILE}-block <b>tiles</b>, each one level, neighbouring tiles at most 1 block apart (a 4-block rise is spread
+ * over 4 tiles); {@link Pin pinned} areas (the town centre, walls, big buildings) are flat. Everything above is cleared,
+ * everything below is filled. The <b>plate</b> is the box's median height: the level the harbour and the path out to an
+ * outside noble district keep.
  * <p>
  * Around the box, out to {@link #SLOPE_REACH} blocks:
  * <ul>
@@ -44,6 +47,10 @@ public final class CityTerrain {
     public static final int EDGE_SEGMENT = 32;
     public static final int SEGMENTS_PER_SIDE = (BOX_MAX - BOX_MIN + EDGE_SEGMENT) / EDGE_SEGMENT;
     static final int MEDIAN_STEP = 24;
+    /** Side of a height tile: neighbouring tiles' ground is at most 1 block apart. */
+    public static final int TILE = 8;
+    /** The ground is read once every this many tiles each way: the field smooths between readings anyway. */
+    static final int SAMPLE_TILES = 2;
     static final int RAY_STEP = 4;
     /** How far past the reach to look for land the carve has to meet. */
     static final int BEYOND_REACH = 12;
@@ -79,7 +86,12 @@ public final class CityTerrain {
      * for a city's), and {@code run} how many blocks out the easing goes for each block up: 2 for a city; negative,
      * blocks up for each one out: -3 for an outside noble district's platform ({@link NobleAnnex}), a cliff face.
      */
-    public record Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset, int size, int run) {
+    public record Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset, int size, int run, int[] levels) {
+        /** A plan with no tile field: the plate everywhere. */
+        public Plan(int plateY, Edge[][] edges, int[][] carveTo, int cells, int outset, int size, int run) {
+            this(plateY, edges, carveTo, cells, outset, size, run, null);
+        }
+
         /** A 3 × 3 city's plan. */
         public Plan(int plateY, Edge[][] edges, int[][] carveTo) {
             this(plateY, edges, carveTo, CityLayout.CELLS_PER_SIDE);
@@ -115,6 +127,32 @@ public final class CityTerrain {
             return run < 0 ? -run * d : (d + run - 1) / run;
         }
 
+        /** The first tile's index along each axis (tiles start at local multiples of {@link #TILE}). */
+        int tile0() {
+            return Math.floorDiv(boxMin(), TILE);
+        }
+
+        /** Tiles along each side of the box. */
+        public int tiles() {
+            return Math.floorDiv(boxMax(), TILE) - tile0() + 1;
+        }
+
+        /** The ground's level at local (x, z): its tile's, held onto the box; the plate where there is no field. */
+        public int level(int lx, int lz) {
+            if (levels == null) {
+                return plateY;
+            }
+            int n = tiles();
+            int i = Math.max(0, Math.min(n - 1, Math.floorDiv(lx, TILE) - tile0()));
+            int j = Math.max(0, Math.min(n - 1, Math.floorDiv(lz, TILE) - tile0()));
+            return levels[j * n + i];
+        }
+
+        /** The lowest ground in the box. */
+        public int minLevel() {
+            return levels == null ? plateY : Arrays.stream(levels).min().orElse(plateY);
+        }
+
         /** Whether local (x, z) lies in the box. */
         public boolean inBox(int x, int z) {
             return x >= boxMin() && x <= boxMax() && z >= boxMin() && z <= boxMax();
@@ -128,12 +166,12 @@ public final class CityTerrain {
         @Override
         public boolean equals(Object o) {
             return o instanceof Plan p && p.plateY == plateY && p.cells == cells && p.outset == outset && p.size == size && p.run == run
-                    && Arrays.deepEquals(p.edges, edges) && Arrays.deepEquals(p.carveTo, carveTo);
+                    && Arrays.deepEquals(p.edges, edges) && Arrays.deepEquals(p.carveTo, carveTo) && Arrays.equals(p.levels, levels);
         }
 
         @Override
         public int hashCode() {
-            return 31 * (31 * (31 * (31 * (31 * plateY + cells) + outset) + size * 7 + run) + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo);
+            return 31 * (31 * (31 * (31 * (31 * plateY + cells) + outset) + size * 7 + run) + Arrays.deepHashCode(edges)) + Arrays.deepHashCode(carveTo) + 7 * Arrays.hashCode(levels);
         }
     }
 
@@ -163,7 +201,7 @@ public final class CityTerrain {
     }
 
     public enum Kind {
-        /** Inside the box: flatten to the plate. */
+        /** Inside the box: flatten to its tile's level ({@code low}). */
         PLATE,
         /** Outside the box: carve down to {@code high} if higher; fill up to {@code low} if lower and {@code fill}. */
         SLOPE,
@@ -195,6 +233,18 @@ public final class CityTerrain {
 
     /** The same; a {@code port}'s plate is always at sea level, flush with the water, and the land is shaped to meet it. */
     public static Plan plan(CityLayout.Site site, Heights heights, int seaLevel, int outset, boolean port) {
+        return plan(site, heights, seaLevel, outset, port, List.of());
+    }
+
+    /**
+     * A city-local rectangle [minX, maxX] × [minZ, maxZ] whose tiles all stand at one level: the plate if
+     * {@code atPlate}, else the field's mean under it; either way held within reach of the pins laid before it.
+     */
+    public record Pin(int minX, int minZ, int maxX, int maxZ, boolean atPlate) {
+    }
+
+    /** The same, with {@code pins} laid in order over the tile field. */
+    public static Plan plan(CityLayout.Site site, Heights heights, int seaLevel, int outset, boolean port, List<Pin> pins) {
         int cells = site.cells();
         Plan box = new Plan(0, null, null, cells, outset); // only its box and reach are read
         int boxMin = box.boxMin();
@@ -207,7 +257,123 @@ public final class CityTerrain {
         }
         samples.sort(Integer::compare);
         int plate = port ? seaLevel - 1 : Math.max(seaLevel - 1, samples.get(samples.size() / 2));
-        return edges(site.originX(), site.originZ(), heights, new Plan(plate, null, null, cells, outset));
+        int[] levels = levels(site.originX(), site.originZ(), heights, seaLevel - 1, plate, box, pins);
+        return edges(site.originX(), site.originZ(), heights, new Plan(plate, null, null, cells, outset, box.size(), box.run(), levels));
+    }
+
+    /**
+     * The tile field: the land under each tile (read every {@link #SAMPLE_TILES} tiles, never below {@code floor}),
+     * brought to the nearest field whose neighbouring tiles (diagonals too) differ by at most 1, as the middle of the
+     * lowest such field above the land and the highest below it; then the pins, each flat, the rest kept within 1 a
+     * tile of them.
+     */
+    static int[] levels(int originX, int originZ, Heights heights, int floor, int plate, Plan box, List<Pin> pins) {
+        int n = box.tiles();
+        int t0 = box.tile0();
+        int[] read = new int[n * n];
+        for (int j = 0; j < n; j += SAMPLE_TILES) {
+            for (int i = 0; i < n; i += SAMPLE_TILES) {
+                int lx = Math.max(box.boxMin(), Math.min(box.boxMax(), (t0 + i) * TILE + TILE / 2));
+                int lz = Math.max(box.boxMin(), Math.min(box.boxMax(), (t0 + j) * TILE + TILE / 2));
+                read[j * n + i] = Math.max(floor, heights.at(originX + lx, originZ + lz));
+            }
+        }
+        int[] above = new int[n * n];
+        int[] below = new int[n * n];
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                above[j * n + i] = read[(j - j % SAMPLE_TILES) * n + i - i % SAMPLE_TILES];
+                below[j * n + i] = -above[j * n + i];
+            }
+        }
+        lowestAbove(above, n);
+        lowestAbove(below, n); // negated: the highest field below the land
+        int[] mid = new int[n * n];
+        for (int k = 0; k < mid.length; k++) {
+            mid[k] = Math.floorDiv(above[k] - below[k], 2);
+        }
+        // The pins in tiles, {a0, b0, a1, b1, level}, each held within reach of those laid before it.
+        List<int[]> laid = new ArrayList<>();
+        for (Pin p : pins) {
+            if (p.maxX() < box.boxMin() || p.maxZ() < box.boxMin() || p.minX() > box.boxMax() || p.minZ() > box.boxMax()) {
+                continue; // wholly outside the box
+            }
+            int a0 = Math.floorDiv(Math.max(p.minX(), box.boxMin()), TILE) - t0;
+            int b0 = Math.floorDiv(Math.max(p.minZ(), box.boxMin()), TILE) - t0;
+            int a1 = Math.floorDiv(Math.min(p.maxX(), box.boxMax()), TILE) - t0;
+            int b1 = Math.floorDiv(Math.min(p.maxZ(), box.boxMax()), TILE) - t0;
+            long sum = 0;
+            for (int j = b0; j <= b1; j++) {
+                for (int i = a0; i <= a1; i++) {
+                    sum += mid[j * n + i];
+                }
+            }
+            int v = p.atPlate() ? plate : (int) Math.round((double) sum / ((a1 - a0 + 1) * (b1 - b0 + 1)));
+            laid.add(new int[]{a0, b0, a1, b1, within(laid, a0, b0, a1, b1, v)});
+        }
+        int[] levels = new int[n * n];
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                levels[j * n + i] = within(laid, i, j, i, j, mid[j * n + i]);
+            }
+        }
+        return levels;
+    }
+
+    /** {@code v} for tiles [a0, a1] × [b0, b1], held within 1 a tile of each pin laid: their level ± their distance. */
+    private static int within(List<int[]> laid, int a0, int b0, int a1, int b1, int v) {
+        int lo = Integer.MIN_VALUE;
+        int hi = Integer.MAX_VALUE;
+        for (int[] q : laid) {
+            int d = Math.max(Math.max(0, Math.max(q[0] - a1, a0 - q[2])), Math.max(0, Math.max(q[1] - b1, b0 - q[3])));
+            lo = Math.max(lo, q[4] - d);
+            hi = Math.min(hi, q[4] + d);
+        }
+        // shortcut: pins too close for their levels (a huge one between two far apart) meet halfway; none do in a city.
+        return lo <= hi ? Math.max(lo, Math.min(hi, v)) : Math.floorDiv(lo + hi, 2);
+    }
+
+    /**
+     * Turns {@code a} (n × n) into the lowest field at or above it whose neighbours, diagonals too, differ by at most 1:
+     * each tile the least of every tile's value plus its distance in tiles. Two sweeps, as a chessboard distance map.
+     */
+    static void lowestAbove(int[] a, int n) {
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                int v = a[j * n + i];
+                if (i > 0) {
+                    v = Math.min(v, a[j * n + i - 1] + 1);
+                }
+                if (j > 0) {
+                    v = Math.min(v, a[(j - 1) * n + i] + 1);
+                    if (i > 0) {
+                        v = Math.min(v, a[(j - 1) * n + i - 1] + 1);
+                    }
+                    if (i < n - 1) {
+                        v = Math.min(v, a[(j - 1) * n + i + 1] + 1);
+                    }
+                }
+                a[j * n + i] = v;
+            }
+        }
+        for (int j = n - 1; j >= 0; j--) {
+            for (int i = n - 1; i >= 0; i--) {
+                int v = a[j * n + i];
+                if (i < n - 1) {
+                    v = Math.min(v, a[j * n + i + 1] + 1);
+                }
+                if (j < n - 1) {
+                    v = Math.min(v, a[(j + 1) * n + i] + 1);
+                    if (i < n - 1) {
+                        v = Math.min(v, a[(j + 1) * n + i + 1] + 1);
+                    }
+                    if (i > 0) {
+                        v = Math.min(v, a[(j + 1) * n + i - 1] + 1);
+                    }
+                }
+                a[j * n + i] = v;
+            }
+        }
     }
 
     /**
@@ -227,11 +393,13 @@ public final class CityTerrain {
         for (Side side : Side.values()) {
             for (int seg = 0; seg < segments; seg++) {
                 int along = center(seg, box.boxMin(), box.boxMax());
-                edges[side.ordinal()][seg] = classify(originX, originZ, heights, box.plateY(), side, along, box);
-                carveTo[side.ordinal()][seg] = carveTarget(originX, originZ, heights, box.plateY(), side, along, box);
+                int[] foot = outward(side, along, 0, box.boxMin(), box.boxMax());
+                int base = box.level(foot[0], foot[1]); // the slope starts from the box's ground at this stretch
+                edges[side.ordinal()][seg] = classify(originX, originZ, heights, base, side, along, box);
+                carveTo[side.ordinal()][seg] = carveTarget(originX, originZ, heights, base, side, along, box);
             }
         }
-        return new Plan(box.plateY(), edges, carveTo, box.cells(), box.outset(), box.size(), box.run());
+        return new Plan(box.plateY(), edges, carveTo, box.cells(), box.outset(), box.size(), box.run(), box.levels());
     }
 
     private static int next(int l, int boxMax) {
@@ -346,7 +514,8 @@ public final class CityTerrain {
         int boxMax = plan.boxMax();
         int dx = lx < boxMin ? boxMin - lx : lx > boxMax ? lx - boxMax : 0;
         int dz = lz < boxMin ? boxMin - lz : lz > boxMax ? lz - boxMax : 0;
-        int plate = plan.plateY();
+        // The slope starts from the box's ground nearest the column.
+        int plate = plan.level(Math.max(boxMin, Math.min(boxMax, lx)), Math.max(boxMin, Math.min(boxMax, lz)));
         if (dx == 0 && dz == 0) {
             return new Column(Kind.PLATE, plate, plate, false);
         }

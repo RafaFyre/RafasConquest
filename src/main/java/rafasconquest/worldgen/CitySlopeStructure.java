@@ -86,7 +86,7 @@ public class CitySlopeStructure extends Structure {
         }
         for (int[] r : styled.roads()) {
             if (styled.inAnnex(r) && t.holds((r[0] + r[2]) / 2, (r[1] + r[3]) / 2)) {
-                pieces.addPiece(new CityRoadPiece(new BoundingBox(ox + r[0], top, oz + r[1], ox + r[2], top, oz + r[3]), true));
+                pieces.addPiece(CityRoadPiece.flat(new BoundingBox(ox + r[0], top, oz + r[1], ox + r[2], top, oz + r[3]), true));
             }
         }
         List<int[]> path = styled.path();
