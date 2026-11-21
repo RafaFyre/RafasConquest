@@ -176,10 +176,11 @@ public record CityPlates(int ax, int az, int boxSize, int plateY, int[] walled, 
 
     /**
      * Why a road may not be laid beside {@code roads}, or null if it may: it must start on the city's flat ground
-     * outside its walls or on another road, and cross no walls, harbour, outside noble district or district.
+     * outside its walls or on another road, and cross no walls, harbour, outside noble district, district or special
+     * building ({@code specials}: footprints {minX, minZ, maxX, maxZ}).
      */
     @Nullable
-    public String roadProblem(int[] r, List<int[]> roads, Set<Long> districts) {
+    public String roadProblem(int[] r, List<int[]> roads, Set<Long> districts, List<int[]> specials) {
         double len = length(r);
         if (len < ROAD_MIN) {
             return "Too short";
@@ -197,8 +198,74 @@ public record CityPlates(int ax, int az, int boxSize, int plateY, int[] walled, 
             if (districts.contains(at(c[0], c[1])) && !onRoad(c[0], c[1], roads)) {
                 return "A road may not cross a district";
             }
+            if (inAny(specials, c[0], c[1])) {
+                return "A road may not cross a building";
+            }
         }
         return null;
+    }
+
+    private static boolean inAny(List<int[]> boxes, int x, int z) {
+        for (int[] b : boxes) {
+            if (in(b, x, z)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Why a special building may not stand on footprint {@code b} ({minX, minZ, maxX, maxZ}), or null if it may: all of
+     * it on flat ground (the city's margin or flat plates) clear of walls, harbour, outside noble district, districts,
+     * roads and other buildings, and touching the city, a road, a district or another building.
+     */
+    @Nullable
+    public String specialProblem(int[] b, Set<Long> flat, Set<Long> districts, List<int[]> roads, List<int[]> specials) {
+        boolean touches = false;
+        for (int x = b[0] - 1; x <= b[2] + 1; x++) {
+            for (int z = b[1] - 1; z <= b[3] + 1; z++) {
+                if (in(b, x, z)) {
+                    if (in(walled, x, z) || in(harbour, x, z) || in(annex, x, z)) {
+                        return "It may not stand within the walls, on the harbour or the noble district";
+                    }
+                    if (!inBoxArea(x, z) && !flat.contains(at(x, z))) {
+                        return "It needs flat ground";
+                    }
+                    if (districts.contains(at(x, z))) {
+                        return "It may not stand on a district";
+                    }
+                    if (onRoad(x, z, roads)) {
+                        return "It may not stand on a road";
+                    }
+                    if (inAny(specials, x, z)) {
+                        return "It overlaps another building";
+                    }
+                } else if (!touches) {
+                    touches = inBoxArea(x, z) || onRoad(x, z, roads) || districts.contains(at(x, z)) || inAny(specials, x, z);
+                }
+            }
+        }
+        return touches ? null : "It must touch the city, a road, a district or another building";
+    }
+
+    /** The plates any of {@code boxes} ({minX, minZ, maxX, maxZ}) stands on part of. */
+    public Set<Long> platesUnder(List<int[]> boxes) {
+        Set<Long> plates = new HashSet<>();
+        for (int[] b : boxes) {
+            for (int i = Math.floorDiv(b[0] - ax, PLATE); i <= Math.floorDiv(b[2] - ax, PLATE); i++) {
+                for (int j = Math.floorDiv(b[1] - az, PLATE); j <= Math.floorDiv(b[3] - az, PLATE); j++) {
+                    plates.add(key(i, j));
+                }
+            }
+        }
+        return plates;
+    }
+
+    /** A footprint {minX, minZ, maxX, maxZ} of a building {@code sx} by {@code sz}, turned {@code turns} quarter turns, centred on (x, z). */
+    public static int[] footprint(int x, int z, int sx, int sz, int turns) {
+        int w = turns % 2 == 0 ? sx : sz;
+        int d = turns % 2 == 0 ? sz : sx;
+        return new int[]{x - w / 2, z - d / 2, x - w / 2 + w - 1, z - d / 2 + d - 1};
     }
 
     /** A road climbs in tiles this long along it, at most a block from one tile to the next. */

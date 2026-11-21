@@ -44,12 +44,12 @@ class CityPlatesTest {
     @Test
     void roadsStartAtTheCityEdgeOrARoadAndAvoidWallsAndDistricts() {
         int[] west = {10, 50, -60, 50}; // from the margin west of the walls, outward
-        assertEquals(null, plates.roadProblem(west, List.of(), Set.of()));
-        assertEquals("A road must start on the city's edge or on another road", plates.roadProblem(new int[]{-100, 0, -150, 0}, List.of(), Set.of()));
-        assertEquals(null, plates.roadProblem(new int[]{-50, 51, -50, 0}, List.of(west), Set.of())); // branches off it
-        assertEquals("A road may not cross the walls, the harbour or the noble district", plates.roadProblem(new int[]{10, 50, 50, 50}, List.of(), Set.of()));
-        assertEquals("A road may not cross a district", plates.roadProblem(west, List.of(), Set.of(CityPlates.key(-2, 1))));
-        assertEquals("Too short", plates.roadProblem(new int[]{10, 50, 12, 50}, List.of(), Set.of()));
+        assertEquals(null, plates.roadProblem(west, List.of(), Set.of(), List.of()));
+        assertEquals("A road must start on the city's edge or on another road", plates.roadProblem(new int[]{-100, 0, -150, 0}, List.of(), Set.of(), List.of()));
+        assertEquals(null, plates.roadProblem(new int[]{-50, 51, -50, 0}, List.of(west), Set.of(), List.of())); // branches off it
+        assertEquals("A road may not cross the walls, the harbour or the noble district", plates.roadProblem(new int[]{10, 50, 50, 50}, List.of(), Set.of(), List.of()));
+        assertEquals("A road may not cross a district", plates.roadProblem(west, List.of(), Set.of(CityPlates.key(-2, 1)), List.of()));
+        assertEquals("Too short", plates.roadProblem(new int[]{10, 50, 12, 50}, List.of(), Set.of(), List.of()));
         assertEquals(true, plates.roadPlates(List.of(west)).contains(CityPlates.key(-2, 1)));
         assertEquals(5, CityPlates.columns(new int[]{0, 0, 0, 10}).stream().filter(c -> c[1] == 5).count()); // 5 wide
     }
@@ -70,6 +70,21 @@ class CityPlatesTest {
         assertEquals(List.of(66, 0), java.util.Arrays.stream(CityPlates.surface(steps, 21)).boxed().toList()); // last tile: flat
         int[] down = {70, 69};
         assertEquals(List.of(70, 1), java.util.Arrays.stream(CityPlates.surface(down, 6)).boxed().toList()); // slab down, on 69
+    }
+
+    @Test
+    void specialBuildingsStandOnFlatGroundTouchingTheCity() {
+        Set<Long> flat = Set.of(CityPlates.key(-1, 1)); // x -32..-1, z 32..63
+        assertEquals(null, plates.specialProblem(new int[]{2, 2, 10, 10}, flat, Set.of(), List.of(), List.of())); // the margin
+        assertEquals("It may not stand within the walls, on the harbour or the noble district",
+                plates.specialProblem(new int[]{25, 25, 35, 35}, flat, Set.of(), List.of(), List.of()));
+        assertEquals(null, plates.specialProblem(new int[]{-10, 40, -1, 50}, flat, Set.of(), List.of(), List.of())); // beside the box
+        assertEquals("It must touch the city, a road, a district or another building",
+                plates.specialProblem(new int[]{-20, 40, -10, 50}, flat, Set.of(), List.of(), List.of()));
+        assertEquals(null, plates.specialProblem(new int[]{-20, 40, -10, 50}, flat, Set.of(), List.of(), List.of(new int[]{-9, 40, -1, 45})));
+        assertEquals("It needs flat ground", plates.specialProblem(new int[]{-10, 40, -1, 50}, Set.of(), Set.of(), List.of(), List.of()));
+        assertEquals("It overlaps another building", plates.specialProblem(new int[]{2, 2, 10, 10}, flat, Set.of(), List.of(), List.of(new int[]{8, 8, 12, 12})));
+        assertEquals(List.of(-5, -2, 4, 1), java.util.Arrays.stream(CityPlates.footprint(0, 0, 4, 10, 1)).boxed().toList()); // turned: 10 by 4
     }
 
     @Test

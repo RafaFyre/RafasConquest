@@ -84,6 +84,7 @@ final class CityHud {
     private Runnable flatten;
     private Runnable districts;
     private Runnable roads;
+    private Runnable specials;
     private Runnable map;
     private Runnable court;
     private Runnable ideas;
@@ -118,7 +119,7 @@ final class CityHud {
 
     /** The whole HUD on a window-sized image; returns its hover spots in reference units. */
     static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts, Runnable roads,
-                           Runnable map, Runnable court, Runnable ideas, IntConsumer faction) {
+                            Runnable specials, Runnable map, Runnable court, Runnable ideas, IntConsumer faction) {
         float s = img.getWidth() / REF_W;
         Graphics2D g = smooth(img, s);
         CityHud hud = new CityHud(g, img.getHeight() / s);
@@ -127,6 +128,7 @@ final class CityHud {
         hud.flatten = flatten;
         hud.districts = districts;
         hud.roads = roads;
+        hud.specials = specials;
         hud.map = map;
         hud.court = court;
         hud.ideas = ideas;
@@ -472,7 +474,7 @@ final class CityHud {
                 + CityStock.DISTRICT_GOLD + " gold and " + CityStock.DISTRICT_RAW + " raw materials each", districts);
         medallion(215, b(1090), "pick", "Flatten ground", "Level 32-block plates round the city before building districts on them: "
                 + CityStock.FLATTEN_GOLD + " gold and " + CityStock.FLATTEN_WORKERS + " workers a plate", flatten);
-        medallion(283, b(1090), "hub", "Hubs and buildings", "Hubs serve the districts beside them; buildings fill a district's slots");
+        medallion(283, b(1090), "hub", "Special buildings", "Put down a monument of the city's style on flat ground touching the city, a road, a district or another building; free for now", specials);
         ringButton(383, b(1080), 31, "spiral", "Court", "The city's factions bring their requests; your word is final", court);
         ringButton(1617, b(1080), 31, "tree", "Idea Tree (R)", "The ages and what each one brings", ideas);
     }

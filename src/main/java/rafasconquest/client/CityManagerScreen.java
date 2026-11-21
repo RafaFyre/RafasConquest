@@ -72,6 +72,17 @@ public class CityManagerScreen extends Screen {
     private static final int FLATTEN = 1;
     private static final int DISTRICT = 2;
     private static final int ROAD = 3;
+    private static final int SPECIAL = 4;
+    /** The special building being put down (index into the state's files), how it is turned, those placed but not confirmed. */
+    private int special;
+    private int turns;
+    private final List<ConquestNetwork.SpecialOrder> orders = new ArrayList<>();
+    @Nullable
+    private int[] spot;
+    @Nullable
+    private Button pick;
+    @Nullable
+    private Button turn;
     /** Roads drawn and not yet confirmed, and the one being dragged out ({x1, z1, x2, z2}), or null. */
     private final List<int[]> drafts = new ArrayList<>();
     @Nullable
@@ -136,7 +147,82 @@ public class CityManagerScreen extends Screen {
                 showButtons();
             }).bounds(10 + i * 76, height - 104, 72, 20).build()));
         }
+        pick = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            special++;
+            showButtons();
+        }).bounds(10, height - 104, 200, 20).build());
+        turn = addRenderableWidget(Button.builder(Component.literal("Turn (R)"), b -> turns++).bounds(215, height - 104, 80, 20).build());
         showButtons();
+    }
+
+    /** The special buildings this city's style offers (style files). */
+    private List<String> specialFiles() {
+        return mine() ? state.specialFiles() : List.of();
+    }
+
+    /** A style file's name to show: its file name without the folders or ".nbt". */
+    private static String shown(String file) {
+        String name = file.substring(file.lastIndexOf('/') + 1);
+        return name.endsWith(".nbt") ? name.substring(0, name.length() - 4) : name;
+    }
+
+    /** An order's footprint {minX, minZ, maxX, maxZ}, or null if its file is no longer offered. */
+    @Nullable
+    private int[] footprint(ConquestNetwork.SpecialOrder o) {
+        int i = state.specialFiles().indexOf(o.file());
+        if (i < 0) {
+            return null;
+        }
+        int[] size = state.specialSizes().get(i);
+        return CityPlates.footprint(o.x(), o.z(), size[0], size[1], o.turns());
+    }
+
+    /** Why a special building may not stand on {@code box} beside those placed and {@code before}, or null. */
+    @Nullable
+    private String specialProblem(int[] box, List<int[]> before) {
+        List<int[]> specials = new ArrayList<>(state.specials());
+        specials.addAll(before);
+        return state.plates().specialProblem(box, new HashSet<>(state.flat()), state.districts().keySet(), state.roads(), specials);
+    }
+
+    /** The special buildings placed so far that may stand, each beside those before it; up to the first that may not. */
+    private List<ConquestNetwork.SpecialOrder> ordersAccepted() {
+        List<int[]> boxes = new ArrayList<>();
+        List<ConquestNetwork.SpecialOrder> ok = new ArrayList<>();
+        for (ConquestNetwork.SpecialOrder o : orders) {
+            int[] box = footprint(o);
+            if (box == null || specialProblem(box, boxes) != null) {
+                break;
+            }
+            boxes.add(box);
+            ok.add(o);
+        }
+        return ok;
+    }
+
+    /** The building under the mouse, as it would be placed: an order, or null if there is none or no ground. */
+    @Nullable
+    private ConquestNetwork.SpecialOrder hoverOrder() {
+        List<String> files = specialFiles();
+        if (spot == null || files.isEmpty()) {
+            return null;
+        }
+        return new ConquestNetwork.SpecialOrder(files.get(Math.floorMod(special, files.size())), spot[0], spot[1], Math.floorMod(turns, 4));
+    }
+
+    /** Why the building under the mouse may not stand there, or null (also null with no ground under the mouse). */
+    @Nullable
+    private String hoverProblem() {
+        ConquestNetwork.SpecialOrder o = hoverOrder();
+        int[] box = o == null ? null : footprint(o);
+        return box == null ? null : specialProblem(box, ordersAccepted().stream().map(this::footprint).toList());
+    }
+
+    /** Plates no district may go on: those with a district or under a special building. */
+    private Set<Long> taken() {
+        Set<Long> t = new HashSet<>(state.districts().keySet());
+        t.addAll(state.plates().platesUnder(state.specials()));
+        return t;
     }
 
     private boolean mine() {
@@ -162,6 +248,7 @@ public class CityManagerScreen extends Screen {
         selection.clear();
         drafts.clear();
         drag = null;
+        orders.clear();
         showButtons();
     }
 
@@ -170,7 +257,7 @@ public class CityManagerScreen extends Screen {
         List<int[]> roads = new ArrayList<>(state.roads());
         List<int[]> ok = new ArrayList<>();
         for (int[] r : drafts) {
-            if (state.plates().roadProblem(r, roads, state.districts().keySet()) != null) {
+            if (state.plates().roadProblem(r, roads, state.districts().keySet(), state.specials()) != null) {
                 break;
             }
             roads.add(r);
@@ -184,7 +271,7 @@ public class CityManagerScreen extends Screen {
     private String dragProblem() {
         List<int[]> roads = new ArrayList<>(state.roads());
         roads.addAll(roadsAccepted());
-        return state.plates().roadProblem(drag, roads, state.districts().keySet());
+        return state.plates().roadProblem(drag, roads, state.districts().keySet(), state.specials());
     }
 
     private void showButtons() {
@@ -195,6 +282,11 @@ public class CityManagerScreen extends Screen {
         for (int i = 0; i < kinds.size(); i++) {
             kinds.get(i).visible = mode == DISTRICT;
             kinds.get(i).active = i != kind; // the kind being placed shows pressed
+        }
+        List<String> files = specialFiles();
+        pick.visible = turn.visible = mode == SPECIAL && !files.isEmpty();
+        if (!files.isEmpty()) {
+            pick.setMessage(Component.literal(shown(files.get(Math.floorMod(special, files.size()))) + "  (click: next)"));
         }
     }
 
@@ -207,14 +299,14 @@ public class CityManagerScreen extends Screen {
 
     /** The selected plates that may be flattened, or built on in district mode. */
     private List<Long> accepted() {
-        return mode == DISTRICT ? state.plates().acceptDistricts(selection, new HashSet<>(state.flat()), state.districts().keySet(),
+        return mode == DISTRICT ? state.plates().acceptDistricts(selection, new HashSet<>(state.flat()), taken(),
                 state.plates().roadPlates(state.roads())) : state.plates().accept(selection, reach());
     }
 
     /** Whether one more plate, beside those already accepted, may be picked. */
     private boolean allowed(long k, List<Long> ok) {
         if (mode == DISTRICT) {
-            Set<Long> districts = new HashSet<>(state.districts().keySet());
+            Set<Long> districts = taken();
             districts.addAll(ok);
             return !state.plates().acceptDistricts(List.of(k), new HashSet<>(state.flat()), districts, state.plates().roadPlates(state.roads())).isEmpty();
         }
@@ -224,6 +316,14 @@ public class CityManagerScreen extends Screen {
     }
 
     private void confirm() {
+        if (mode == SPECIAL) {
+            List<ConquestNetwork.SpecialOrder> ok = ordersAccepted();
+            if (!ok.isEmpty()) {
+                ConquestNetwork.citySpecial(city.province(), ok);
+            }
+            orders.clear();
+            return;
+        }
         if (mode == ROAD) {
             List<int[]> roads = roadsAccepted();
             if (!roads.isEmpty()) {
@@ -307,6 +407,23 @@ public class CityManagerScreen extends Screen {
         for (int[] r : state.roads()) {
             road(pose, c, p, r, 0x70FFFFFF);
         }
+        for (int[] b : state.specials()) {
+            box(pose, c, p.plateY(), b, 0x30B080E0, 0xC0B080E0);
+        }
+        if (s.mode == SPECIAL) {
+            List<ConquestNetwork.SpecialOrder> good = s.ordersAccepted();
+            for (ConquestNetwork.SpecialOrder o : s.orders) {
+                int[] b = s.footprint(o);
+                if (b != null) {
+                    box(pose, c, p.plateY(), b, good.contains(o) ? 0x40E0B040 : 0x40D8402C, good.contains(o) ? 0xFFE0B040 : 0xFFD8402C);
+                }
+            }
+            ConquestNetwork.SpecialOrder o = s.hoverOrder();
+            int[] b = o == null ? null : s.footprint(o);
+            if (b != null) {
+                box(pose, c, p.plateY(), b, 0, s.hoverProblem() == null ? 0xFFFFFFFF : 0xFFD8402C);
+            }
+        }
         if (s.mode == ROAD) {
             List<int[]> good = s.roadsAccepted();
             for (int[] r : s.drafts) {
@@ -341,13 +458,20 @@ public class CityManagerScreen extends Screen {
 
     /** One plate at the height it is levelled to: a fill (none if 0) and its outline. */
     private static void plate(PoseStack pose, Vec3 cam, CityPlates p, long k, int fill, int line) {
-        double x0 = p.minX(CityPlates.i(k));
-        double z0 = p.minZ(CityPlates.j(k));
-        double x1 = x0 + CityPlates.PLATE;
-        double z1 = z0 + CityPlates.PLATE;
-        double y = p.plateY() + 1;
+        int x0 = p.minX(CityPlates.i(k));
+        int z0 = p.minZ(CityPlates.j(k));
+        box(pose, cam, p.plateY(), new int[]{x0, z0, x0 + CityPlates.PLATE - 1, z0 + CityPlates.PLATE - 1}, fill, line);
+    }
+
+    /** A block box {minX, minZ, maxX, maxZ} on ground at {@code plateY}: a fill (none if 0) and its outline. */
+    private static void box(PoseStack pose, Vec3 cam, int plateY, int[] b, int fill, int line) {
+        double x0 = b[0];
+        double z0 = b[1];
+        double x1 = b[2] + 1;
+        double z1 = b[3] + 1;
+        double y = plateY + 1;
         if (fill != 0) {
-            BattleSpotRing.strip(pose, cam, new Vec3(x0, y, z0 + CityPlates.PLATE / 2.0), new Vec3(x1, y, z0 + CityPlates.PLATE / 2.0), CityPlates.PLATE / 2F, fill);
+            BattleSpotRing.strip(pose, cam, new Vec3(x0, y, (z0 + z1) / 2), new Vec3(x1, y, (z0 + z1) / 2), (float) (z1 - z0) / 2, fill);
         }
         float half = 0.6F;
         BattleSpotRing.strip(pose, cam, new Vec3(x0 - half, y, z0), new Vec3(x1 + half, y, z0), half, line);
@@ -429,11 +553,18 @@ public class CityManagerScreen extends Screen {
         g.pose().popPose();
         drawCouncil(g, h);
         if (mode != NONE && mine() && confirm != null) {
-            hover = mode == ROAD ? null : plateAt(mouseX, mouseY);
-            int n = mode == ROAD ? roadsAccepted().size() : accepted().size();
+            hover = mode == ROAD || mode == SPECIAL ? null : plateAt(mouseX, mouseY);
+            Vec3 at = mode == SPECIAL ? ground(mouseX, mouseY) : null;
+            spot = at == null ? null : new int[]{Mth.floor(at.x), Mth.floor(at.z)};
+            int n = mode == SPECIAL ? ordersAccepted().size() : mode == ROAD ? roadsAccepted().size() : accepted().size();
             String d = CityStock.District.values()[kind].label;
-            String problem = mode == ROAD && drag != null ? dragProblem() : null;
-            String line = mode == ROAD
+            String problem = mode == ROAD && drag != null ? dragProblem() : mode == SPECIAL ? hoverProblem() : null;
+            String line = mode == SPECIAL
+                    ? specialFiles().isEmpty() ? "No special buildings in this city's style yet: add .nbt files to its " + CityStock.SPECIALS + " folder"
+                    : problem != null ? problem
+                    : n > 0 ? "Put down " + n + " building" + (n == 1 ? "" : "s") + " (free for now)"
+                    : "Click to put it down: R turns it, right-drag turns the view"
+                    : mode == ROAD
                     ? drag != null ? problem != null ? problem : Math.round(CityPlates.length(drag)) + " blocks"
                     : n == 0 ? "Drag a main road out from the city's edge or another road: right-drag to turn"
                     : "Lay " + n + " main road" + (n == 1 ? "" : "s") + " (free for now)"
@@ -450,6 +581,8 @@ public class CityManagerScreen extends Screen {
             for (Button b : kinds) {
                 b.render(g, mouseX, mouseY, partialTick);
             }
+            pick.render(g, mouseX, mouseY, partialTick);
+            turn.render(g, mouseX, mouseY, partialTick);
         }
 
         double rx = mouseX * guiScale() / s();
@@ -475,7 +608,7 @@ public class CityManagerScreen extends Screen {
         hudKey = key;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT), () -> toggle(ROAD),
-                this::back, () -> over(new CityCourtScreen(this, title.getString(), city.province(), -1)), () -> over(new TechTreeScreen(this)),
+                () -> toggle(SPECIAL), this::back, () -> over(new CityCourtScreen(this, title.getString(), city.province(), -1)), () -> over(new TechTreeScreen(this)),
                 f -> over(new CityCourtScreen(this, title.getString(), city.province(), f)));
         minecraft.getTextureManager().register(HUD, upload(img));
     }
@@ -545,6 +678,13 @@ public class CityManagerScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
+        if (mode == SPECIAL && button == 0) {
+            ConquestNetwork.SpecialOrder o = hoverOrder();
+            if (o != null) {
+                orders.add(o);
+            }
+            return true;
+        }
         if (mode == ROAD && button == 0) {
             Vec3 at = mine() ? ground(mouseX, mouseY) : null;
             if (at != null) {
@@ -571,6 +711,9 @@ public class CityManagerScreen extends Screen {
                 drag[2] = Mth.floor(at.x);
                 drag[3] = Mth.floor(at.z);
             }
+            return true;
+        }
+        if (mode == SPECIAL && button == 0) {
             return true;
         }
         if (mode != NONE && button == 0) {
@@ -631,7 +774,11 @@ public class CityManagerScreen extends Screen {
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
         if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_R) {
-            over(new TechTreeScreen(this));
+            if (mode == SPECIAL) {
+                turns++; // putting down a special building: R turns it
+            } else {
+                over(new TechTreeScreen(this));
+            }
             return true;
         }
         return super.keyPressed(key, scan, mods);

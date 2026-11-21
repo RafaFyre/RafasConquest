@@ -450,6 +450,24 @@ public final class ConquestNetwork {
                     }
                 })
                 .add();
+        CHANNEL.messageBuilder(CitySpecial.class, 56, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((m, b) -> {
+                    b.writeVarInt(m.province());
+                    b.writeCollection(m.orders(), (buf, o) -> {
+                        buf.writeUtf(o.file());
+                        buf.writeInt(o.x());
+                        buf.writeInt(o.z());
+                        buf.writeByte(o.turns());
+                    });
+                })
+                .decoder(b -> new CitySpecial(b.readVarInt(), b.readList(buf -> new SpecialOrder(buf.readUtf(), buf.readInt(), buf.readInt(), buf.readByte()))))
+                .consumerMainThread((m, context) -> {
+                    ServerPlayer player = SimpleChannel.sender(context);
+                    if (player != null && m.orders().size() <= 16) {
+                        rafasconquest.peerage.CityStock.placeSpecials(player, m.province(), m.orders());
+                    }
+                })
+                .add();
         CHANNEL.messageBuilder(CityRoads.class, 55, NetworkDirection.PLAY_TO_SERVER)
                 .encoder((m, b) -> {
                     b.writeVarInt(m.province());
@@ -471,7 +489,8 @@ public final class ConquestNetwork {
      * {@link rafasconquest.peerage.CityStock.District} ordinal).
      */
     public record CityState(int province, int[] res, int busy, rafasconquest.core.CityPlates plates, List<Long> flat, List<Long> pending,
-                            Map<Long, Integer> districts, List<int[]> roads) {
+                            Map<Long, Integer> districts, List<int[]> roads,
+                            List<String> specialFiles, List<int[]> specialSizes, List<int[]> specials) {
         void write(FriendlyByteBuf b) {
             b.writeVarInt(province);
             b.writeVarIntArray(res);
@@ -487,6 +506,9 @@ public final class ConquestNetwork {
             b.writeCollection(pending, FriendlyByteBuf::writeLong);
             b.writeMap(districts, FriendlyByteBuf::writeLong, FriendlyByteBuf::writeVarInt);
             b.writeCollection(roads, FriendlyByteBuf::writeVarIntArray);
+            b.writeCollection(specialFiles, FriendlyByteBuf::writeUtf);
+            b.writeCollection(specialSizes, FriendlyByteBuf::writeVarIntArray);
+            b.writeCollection(specials, FriendlyByteBuf::writeVarIntArray);
         }
 
         static CityState read(FriendlyByteBuf b) {
@@ -503,8 +525,21 @@ public final class ConquestNetwork {
             }
             return new CityState(province, res, busy, new rafasconquest.core.CityPlates(ax, az, size, plateY, boxes[0], boxes[1], boxes[2]),
                     b.readList(FriendlyByteBuf::readLong), b.readList(FriendlyByteBuf::readLong), b.readMap(FriendlyByteBuf::readLong, FriendlyByteBuf::readVarInt),
+                    b.readList(FriendlyByteBuf::readVarIntArray), b.readList(FriendlyByteBuf::readUtf), b.readList(FriendlyByteBuf::readVarIntArray),
                     b.readList(FriendlyByteBuf::readVarIntArray));
         }
+    }
+
+    /** A special building wanted: its style file, centred on (x, z), turned {@code turns} quarter turns. */
+    public record SpecialOrder(String file, int x, int z, int turns) {
+    }
+
+    /** Client → server: put down these special buildings round the city seating {@code province}. */
+    public record CitySpecial(int province, List<SpecialOrder> orders) {
+    }
+
+    public static void citySpecial(int province, List<SpecialOrder> orders) {
+        CHANNEL.sendToServer(new CitySpecial(province, orders));
     }
 
     /** Client → server: lay these main roads ({x1, z1, x2, z2}) round the city seating {@code province}. */

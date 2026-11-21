@@ -19,6 +19,7 @@ import rafasconquest.core.CityPlates;
 import rafasconquest.core.CityTerrain;
 import rafasconquest.core.SeatCities;
 import rafasconquest.data.SaveGuard;
+import rafasconquest.style.CityStyles;
 import rafasconquest.map.BaseMap;
 import rafasconquest.net.ConquestNetwork;
 import rafasconquest.worldgen.CityGridBuilder;
@@ -88,6 +89,12 @@ public final class CityStock extends SavedData {
         final Map<Long, Integer> districts = new java.util.LinkedHashMap<>();
         /** Main roads, {x1, z1, x2, z2} ({@link CityPlates}). */
         final List<int[]> roads = new ArrayList<>();
+        /** Special buildings put down: their files, footprints {minX, minZ, maxX, maxZ} and quarter turns. */
+        final List<Special> specials = new ArrayList<>();
+
+        List<int[]> boxes() {
+            return specials.stream().map(Special::box).toList();
+        }
         /** Columns of the first pending plate already levelled; not saved, so a restart levels it again from the start. */
         int column;
 
@@ -176,7 +183,9 @@ public final class CityStock extends SavedData {
         Stock s = data.stock(province);
         ServerLevel level = player.server.overworld();
         CityPlates p = plates(level, c);
-        List<Long> ok = p.acceptDistricts(wanted, s.flat, s.districts.keySet(), p.roadPlates(s.roads));
+        Set<Long> taken = new java.util.HashSet<>(s.districts.keySet());
+        taken.addAll(p.platesUnder(s.boxes())); // no district over a special building
+        List<Long> ok = p.acceptDistricts(wanted, s.flat, taken, p.roadPlates(s.roads));
         int n = ok.size();
         if (n == 0) {
             player.sendSystemMessage(Component.literal("A district needs flat ground touching the city, another district or a main road."));
@@ -217,13 +226,59 @@ public final class CityStock extends SavedData {
         int x0 = p.minX(CityPlates.i(plate));
         int z0 = p.minZ(CityPlates.j(plate));
         for (rafasconquest.style.BlockPacker.Placed b : rafasconquest.style.BlockPacker.pack(free(x0, z0, roads), CityPlates.PLATE, CityPlates.PLATE, sizes, random)) {
-            for (rafasconquest.style.StylePiece piece : rafasconquest.style.StylePiece.at(buildings.get(b.building()).file(), x0 + b.x(), p.plateY(), z0 + b.z(), b.turns())) {
-                net.minecraft.world.level.levelgen.structure.BoundingBox box = piece.getBoundingBox();
-                piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.getRandom(), box,
-                        new ChunkPos(box.minX() >> 4, box.minZ() >> 4), box.getCenter());
-            }
+            put(level, buildings.get(b.building()).file(), x0 + b.x(), p.plateY(), z0 + b.z(), b.turns());
         }
         return true;
+    }
+
+    /** Builds a style file in the live world, its footprint's corner at (minX, minZ), its floor at y. */
+    private static void put(ServerLevel level, String file, int minX, int y, int minZ, int turns) {
+        for (rafasconquest.style.StylePiece piece : rafasconquest.style.StylePiece.at(file, minX, y, minZ, turns)) {
+            net.minecraft.world.level.levelgen.structure.BoundingBox box = piece.getBoundingBox();
+            piece.postProcess(level, level.structureManager(), level.getChunkSource().getGenerator(), level.getRandom(), box,
+                    new ChunkPos(box.minX() >> 4, box.minZ() >> 4), box.getCenter());
+        }
+    }
+
+    /** Where a city's special buildings come from: its style's monuments (else the default style's). */
+    public static final String SPECIALS = "city/buildings/landmarks/style/monuments";
+
+    /** A special building put down: its file, footprint {minX, minZ, maxX, maxZ} and quarter turns. */
+    record Special(String file, int[] box, int turns) {
+    }
+
+    private static List<CityStyles.Building> specialKinds(CityLayout.Site site) {
+        return CityStyles.buildings(site, SPECIALS);
+    }
+
+    /**
+     * A player puts down special buildings round the city seating {@code province}, each centred on its spot and
+     * checked beside those before it. Free for now.
+     */
+    public static void placeSpecials(ServerPlayer player, int province, List<ConquestNetwork.SpecialOrder> wanted) {
+        SeatCities.City c = city(province);
+        if (c == null || Peerage.get(player.server).of(player.getUUID()).hold != province) {
+            return;
+        }
+        CityStock data = get(player.server);
+        Stock s = data.stock(province);
+        ServerLevel level = player.server.overworld();
+        CityPlates p = plates(level, c);
+        List<CityStyles.Building> kinds = specialKinds(site(c));
+        for (ConquestNetwork.SpecialOrder o : wanted) {
+            CityStyles.Building b = kinds.stream().filter(k -> k.file().equals(o.file())).findFirst().orElse(null);
+            int turns = Math.floorMod(o.turns(), 4);
+            int[] box = b == null ? null : CityPlates.footprint(o.x(), o.z(), b.x(), b.z(), turns);
+            String problem = box == null ? "That building is not in this city's style" : p.specialProblem(box, s.flat, s.districts.keySet(), s.roads, s.boxes());
+            if (problem != null) {
+                player.sendSystemMessage(Component.literal(problem + "."));
+                break;
+            }
+            s.specials.add(new Special(b.file(), box, turns));
+            put(level, b.file(), box[0], p.plateY(), box[1], turns);
+            data.setDirty();
+        }
+        send(player, province);
     }
 
     /** A plate's room for buildings: whole, less the 4-block squares a road runs through (and a gap round them). */
@@ -253,7 +308,7 @@ public final class CityStock extends SavedData {
         ServerLevel level = player.server.overworld();
         CityPlates p = plates(level, c);
         for (int[] r : wanted) {
-            String problem = r.length != 4 ? "Not a road" : p.roadProblem(r, s.roads, s.districts.keySet());
+            String problem = r.length != 4 ? "Not a road" : p.roadProblem(r, s.roads, s.districts.keySet(), s.boxes());
             if (problem != null) {
                 player.sendSystemMessage(Component.literal(problem + "."));
                 break;
@@ -372,7 +427,9 @@ public final class CityStock extends SavedData {
         CityStock data = get(player.server);
         Stock s = data.stock(province);
         ConquestNetwork.cityState(player, new ConquestNetwork.CityState(province, s.res.clone(), s.busyWorkers(),
-                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending), new HashMap<>(s.districts), new ArrayList<>(s.roads)));
+                plates(player.server.overworld(), c), new ArrayList<>(s.flat), new ArrayList<>(s.pending), new HashMap<>(s.districts), new ArrayList<>(s.roads),
+                specialKinds(site(c)).stream().map(CityStyles.Building::file).toList(),
+                specialKinds(site(c)).stream().map(b -> new int[]{b.x(), b.z()}).toList(), new ArrayList<>(s.boxes())));
     }
 
     @Override
@@ -386,6 +443,15 @@ public final class CityStock extends SavedData {
             one.put("districts", new LongArrayTag(new ArrayList<>(s.districts.keySet())));
             one.putIntArray("districtKinds", s.districts.values().stream().mapToInt(Integer::intValue).toArray());
             one.putIntArray("roads", s.roads.stream().flatMapToInt(java.util.Arrays::stream).toArray());
+            net.minecraft.nbt.ListTag specials = new net.minecraft.nbt.ListTag();
+            for (Special sp : s.specials) {
+                CompoundTag t = new CompoundTag();
+                t.putString("file", sp.file());
+                t.putIntArray("box", sp.box());
+                t.putInt("turns", sp.turns());
+                specials.add(t);
+            }
+            one.put("specials", specials);
             all.put(Integer.toString(province), one);
         });
         tag.put("cities", all);
@@ -414,6 +480,13 @@ public final class CityStock extends SavedData {
             int[] roads = one.getIntArray("roads");
             for (int i = 0; i + 3 < roads.length; i += 4) {
                 s.roads.add(java.util.Arrays.copyOfRange(roads, i, i + 4));
+            }
+            for (net.minecraft.nbt.Tag t : one.getList("specials", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+                CompoundTag sp = (CompoundTag) t;
+                int[] box = sp.getIntArray("box");
+                if (box.length == 4) {
+                    s.specials.add(new Special(sp.getString("file"), box, sp.getInt("turns")));
+                }
             }
             data.cities.put(Integer.parseInt(key), s);
         }
