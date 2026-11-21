@@ -77,6 +77,9 @@ public final class ClientScreens {
 
     /** The server called the player out of the city manager (a battle muster). */
     public static void closeCityManager() {
+        if (CityManagerScreen.behind != null) {
+            Minecraft.getInstance().setScreen(CityManagerScreen.behind); // back under the court or idea tree first, so closing it puts the camera back
+        }
         if (Minecraft.getInstance().screen instanceof CityManagerScreen) {
             Minecraft.getInstance().setScreen(null);
         }

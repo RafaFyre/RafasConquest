@@ -96,6 +96,7 @@ public class CityManagerScreen extends Screen {
 
     @Override
     protected void init() {
+        behind = null;
         if (camera == null && minecraft != null) {
             ConquestNetwork.cityView(city.province());
             hidGui = minecraft.options.hideGui;
@@ -105,8 +106,8 @@ public class CityManagerScreen extends Screen {
         }
         addButtons();
         if (council.isEmpty() && minecraft != null && minecraft.level != null) {
-            // Five unlike figures: their own skins, and coats and hoods dyed apart, as Frostpunk 2's are.
-            int[][] looks = {{6, 4, 0x5A4A3A}, {1, 0, 0x3A4048}, {11, 3, 0x7A1E18}, {16, 1, 0x2C3A30}, {3, 2, 0x6A5A40}};
+            // One figure per faction (peasantry, merchant guilds, great houses): their own skins, coats and hoods dyed apart.
+            int[][] looks = {{6, 4, 0x5A4A3A}, {1, 0, 0x3A4048}, {11, 3, 0x7A1E18}};
             for (int[] look : looks) {
                 AbstractRecruitEntity e = ModEntityTypes.RECRUIT.get().create(minecraft.level);
                 if (e != null) {
@@ -473,7 +474,9 @@ public class CityManagerScreen extends Screen {
         }
         hudKey = key;
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT), () -> toggle(ROAD));
+        spots = CityHud.paint(img, title.getString(), date(), day, this::back, mine() ? state.res() : null, mine() ? state.busy() : 0, () -> toggle(FLATTEN), () -> toggle(DISTRICT), () -> toggle(ROAD),
+                this::back, () -> over(new CityCourtScreen(this, title.getString(), city.province(), -1)), () -> over(new TechTreeScreen(this)),
+                f -> over(new CityCourtScreen(this, title.getString(), city.province(), f)));
         minecraft.getTextureManager().register(HUD, upload(img));
     }
 
@@ -615,8 +618,30 @@ public class CityManagerScreen extends Screen {
         }
     }
 
+    /** The city manager under a screen opened over it (the court, the idea tree), which goes back to it; else null. */
+    @Nullable
+    static CityManagerScreen behind;
+
+    /** Opens a screen over this one, keeping the city view (camera, chunks, HUD) for when it comes back. */
+    private void over(Screen screen) {
+        behind = this;
+        minecraft.setScreen(screen);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scan, int mods) {
+        if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_R) {
+            over(new TechTreeScreen(this));
+            return true;
+        }
+        return super.keyPressed(key, scan, mods);
+    }
+
     @Override
     public void removed() {
+        if (behind == this) {
+            return; // a screen over this one; this comes back
+        }
         if (!left) {
             left = true;
             ConquestNetwork.cityView(ConquestNetwork.CITY_LEAVE);

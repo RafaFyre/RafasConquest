@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.IntConsumer;
 
 /**
  * Paints the city manager's HUD as Frostpunk 2's, with Java2D, at the window's own pixels: smooth shapes, a thin condensed
@@ -44,11 +45,13 @@ final class CityHud {
     static final String SAMPLE = "Sample figure: not built yet";
     static final int MUTED_RGB = 0x9AA4AC;
 
-    /** The council: each faction's x on the rail, its name, its fervour (0 to 3) and how it feels about the player. */
-    static final float[] FACTION_X = {540, 720, 865, 1150, 1340};
-    static final String[] FACTIONS = {"The Labourers", "The Stalwarts", "The Faithkeepers", "The Evolvers", "The Merchants"};
-    static final int[] FERVOUR = {0, 0, 3, 2, 0};
-    static final String[] RELATION = {"Content", "Tolerant", "Unhappy", "Tolerant", "Loyal"};
+    /** The city's factions at court: each one's x on the rail, its name, what it is, its fervour (0 to 3) and how it feels about the holder. */
+    static final float[] FACTION_X = {560, 800, 1250};
+    static final String[] FACTIONS = {"The Peasantry", "The Merchant Guilds", "The Great Houses"};
+    static final String[] ABOUT = {"The common folk of the city: labourers, craftsmen, the poor",
+            "The guilds of traders and makers who run the city's markets", "The families of standing in the city, old blood and new money"};
+    static final int[] FERVOUR = {0, 1, 0};
+    static final String[] RELATION = {"Content", "Restless", "Loyal"};
     static final float RAIL = 1058;
 
 
@@ -81,6 +84,10 @@ final class CityHud {
     private Runnable flatten;
     private Runnable districts;
     private Runnable roads;
+    private Runnable map;
+    private Runnable court;
+    private Runnable ideas;
+    private IntConsumer faction;
 
     private CityHud(Graphics2D g, float refH) {
         this.g = g;
@@ -110,7 +117,8 @@ final class CityHud {
     }
 
     /** The whole HUD on a window-sized image; returns its hover spots in reference units. */
-    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts, Runnable roads) {
+    static List<Spot> paint(BufferedImage img, String name, String date, long day, Runnable back, @Nullable int[] res, int busy, Runnable flatten, Runnable districts, Runnable roads,
+                           Runnable map, Runnable court, Runnable ideas, IntConsumer faction) {
         float s = img.getWidth() / REF_W;
         Graphics2D g = smooth(img, s);
         CityHud hud = new CityHud(g, img.getHeight() / s);
@@ -119,6 +127,10 @@ final class CityHud {
         hud.flatten = flatten;
         hud.districts = districts;
         hud.roads = roads;
+        hud.map = map;
+        hud.court = court;
+        hud.ideas = ideas;
+        hud.faction = faction;
         hud.draw(name, date, day, back);
         g.dispose();
         return hud.spots;
@@ -285,7 +297,7 @@ final class CityHud {
             spots.add(new Spot(1718, y - 12, 24, 24, List.of(Component.literal(i == 0 ? "Warning: cold" : "Warning: food"),
                     mutedLine(i == 0 ? "Some housing is colder than Liveable" : "Food output is below demand"), mutedLine("Not built yet")), null));
         }
-        ringButton(1948, 140, 40, "mountain", "Frostland", "The map outside the city: expeditions, outposts, colonies, trails");
+        ringButton(1948, 140, 40, "mountain", "World map", "The grand strategy map", map);
     }
 
     // --- The goals, left ---
@@ -352,6 +364,7 @@ final class CityHud {
         // Fervour: three diamonds over the faction's head, red as it rises.
         for (int i = 0; i < FACTION_X.length; i++) {
             float cx = FACTION_X[i];
+            int f = i;
             if (FERVOUR[i] > 0) {
                 for (int d = 0; d < 3; d++) {
                     float dx = cx - 32 + d * 32;
@@ -365,9 +378,9 @@ final class CityHud {
                 }
             }
             spots.add(new Spot(cx - 40, b(985), 80, 120, List.of(Component.literal(FACTIONS[i]),
-                    mutedLine("Relations: " + RELATION[i]),
-                    mutedLine("Fervour: " + FERVOUR[i] + " of 3 diamonds; radicals protest, then riot"),
-                    mutedLine("Click in Frostpunk 2: gift or collect heatstamps, promise, calm, council seats, special"), mutedLine(SAMPLE)), null));
+                    mutedLine(ABOUT[i]), mutedLine("Relations: " + RELATION[i]),
+                    mutedLine("Fervour: " + FERVOUR[i] + " of 3 diamonds; radicals protest, then riot"), mutedLine(SAMPLE),
+                    Component.literal("Click: their faction at court").withColor(0xE0B040)), () -> faction.accept(f)));
         }
 
         // Tension: a glass sphere in a silver ring, filling with black from the bottom.
@@ -460,8 +473,8 @@ final class CityHud {
         medallion(215, b(1090), "pick", "Flatten ground", "Level 32-block plates round the city before building districts on them: "
                 + CityStock.FLATTEN_GOLD + " gold and " + CityStock.FLATTEN_WORKERS + " workers a plate", flatten);
         medallion(283, b(1090), "hub", "Hubs and buildings", "Hubs serve the districts beside them; buildings fill a district's slots");
-        ringButton(383, b(1080), 31, "spiral", "Council and laws", "Propose laws and see how each faction will vote");
-        ringButton(1617, b(1080), 31, "tree", "Idea Tree (R)", "Research: Survival, Economy and Society; each faction backs its own solution");
+        ringButton(383, b(1080), 31, "spiral", "Court", "The city's factions bring their requests; your word is final", court);
+        ringButton(1617, b(1080), 31, "tree", "Idea Tree (R)", "The ages and what each one brings", ideas);
     }
 
     private String amount(Resource r) {
@@ -490,7 +503,7 @@ final class CityHud {
                 click == null ? mutedLine("Not built yet") : Component.literal("Click: start or stop").withColor(0xE0B040)), click));
     }
 
-    private void ringButton(float x, float y, float r, String glyph, String name, String detail) {
+    private void ringButton(float x, float y, float r, String glyph, String name, String detail, Runnable click) {
         g.setColor(new Color(16, 20, 24, 190));
         g.fill(circle(x, y, r));
         g.setStroke(new BasicStroke(2));
@@ -500,7 +513,7 @@ final class CityHud {
         g.setColor(LINE);
         g.draw(circle(x, y, r - 6));
         icon(glyph, x, y, r * 1.0F, Color.WHITE);
-        spots.add(new Spot(x - r, y - r, 2 * r, 2 * r, List.of(Component.literal(name), mutedLine(detail), mutedLine("Not built yet")), null));
+        spots.add(new Spot(x - r, y - r, 2 * r, 2 * r, List.of(Component.literal(name), mutedLine(detail), Component.literal("Click: open").withColor(0xE0B040)), click));
     }
 
     private void smallCircle(float x, float y, String glyph, String name, String detail, boolean dark) {
