@@ -23,7 +23,7 @@ public final class SableLink {
      */
     public record Helm(int id, int side, double x, double z, double toX, double toZ, double faceX, double faceZ, double speed,
                        rafasconquest.core.SeaLanes.Size hull, java.util.Set<Integer> lashed, java.util.Set<Integer> hooked,
-                       int sail, int stripe, java.util.UUID nation) {
+                       int sail, int stripe, java.util.UUID nation, double wind) {
     }
 
     /**

@@ -49,6 +49,9 @@ public final class FieldBattle {
     private final Random random;
     private final FieldRules.Rates rates;
     private int seconds;
+    /** The wind's way at the start (toward, as an angle) and which way it turns, +1 or -1 ({@link Wind}). */
+    private final double windStart;
+    private final int windTurn;
     /** When a soldier last fell (0 before anyone has). */
     private int lastFall;
     private boolean finalMelee;
@@ -1319,6 +1322,9 @@ public final class FieldBattle {
         secondBlocks = secondMix == null ? secondBlocks : java.util.Arrays.stream(secondMix).sum();
         this.rates = rates;
         this.random = new Random(seed);
+        Random weather = new Random(seed ^ 0x57494E44L); // its own draws, so the wind leaves the battle's others as they were
+        windStart = weather.nextDouble() * 2 * Math.PI;
+        windTurn = weather.nextBoolean() ? 1 : -1;
         Point[] fronts = BattlePlan.fronts(centre, axisX, axisZ);
         // Over UNIT_TACTICS_OVER soldiers the generals move their armies unit by unit (platoons); below it, block by block.
         byUnits = (firstBlocks + secondBlocks) * BattlePlan.SOLDIERS_PER_FORMATION > FieldRules.UNIT_TACTICS_OVER;
@@ -1638,6 +1644,16 @@ public final class FieldBattle {
 
     public FieldArmy army(int side) {
         return armies[side];
+    }
+
+    /** The way the wind blows now (toward), as an angle ({@link Wind}). */
+    public double wind() {
+        return Wind.at(windStart, windTurn, seconds);
+    }
+
+    /** +1 if the wind turns clockwise as seen from above (north -z, east +x), -1 anticlockwise. */
+    public int windTurn() {
+        return -windTurn; // atan2(x, z) grows from +z toward +x: anticlockwise from above
     }
 
     public int seconds() {
@@ -3851,7 +3867,7 @@ public final class FieldBattle {
      * own side lying across its way ({@link Ramming#detour}), and where coming round would strike any of {@code ships}
      * (but those it is grappled to, hooking or going for) it backs astern instead, to where it has room to turn.
      */
-    static void sail(FieldBlock b, Point target, List<FieldBlock> ships) {
+    static void sail(FieldBlock b, Point target, List<FieldBlock> ships, double wind) {
         if (!b.lashed.isEmpty()) {
             return; // grappled (a rammer the second it strikes too): it holds fast while its soldiers board
         }
@@ -3883,6 +3899,12 @@ public final class FieldBattle {
             wantX = -wantX; // its stern toward it
             wantZ = -wantZ;
         }
+        boolean sails = b.hull.propulsion == rafasconquest.core.SeaLanes.Propulsion.SAIL;
+        if (sails && !there && !astern) { // shortcut: a sailship still backs astern as a galley does; stop that in the sail AI stage
+            double[] can = Wind.steer(wantX, wantZ, b.facingX, b.facingZ, wind);
+            wantX = can[0];
+            wantZ = can[1];
+        }
         double off = Math.atan2(b.facingX * wantZ - b.facingZ * wantX, b.facingX * wantX + b.facingZ * wantZ);
         if (Ramming.turnFouls(me, off, others)) {
             double back = shipSpeed(b) / 2; // no room to come round: astern, straight, until there is
@@ -3894,6 +3916,9 @@ public final class FieldBattle {
             // Along its heading halfway through the turn: an arc.
             double[] mid = turned(b.facingX, b.facingZ, turn / 2);
             double pace = Math.min(astern ? shipSpeed(b) / 2 : shipSpeed(b), d) * Math.max(MIN_WAY, Math.cos(off));
+            if (sails) {
+                pace *= Wind.pace(mid[0], mid[1], wind);
+            }
             b.pos = b.pos.plus(mid[0] * pace * (astern ? -1 : 1), mid[1] * pace * (astern ? -1 : 1));
         }
         double[] heading = turned(b.facingX, b.facingZ, turn);
@@ -3955,7 +3980,7 @@ public final class FieldBattle {
                         }
                     }
                 }
-                sail(block, target, afloat);
+                sail(block, target, afloat, wind());
                 continue;
             }
             double dx = target.x() - block.pos.x();

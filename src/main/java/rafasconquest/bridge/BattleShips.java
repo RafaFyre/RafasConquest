@@ -381,8 +381,18 @@ final class BattleShips {
             wantX += away.x; // going ahead, it turns away from those of its own side it would foul
             wantZ += away.z;
         }
+        boolean sails = h.hull().propulsion == SeaLanes.Propulsion.SAIL;
+        if (sails && !there && !astern) { // no closer to the wind than close-hauled, as FieldBattle.sail
+            double length = Math.max(1e-9, Math.hypot(wantX, wantZ));
+            double[] can = rafasconquest.battle.Wind.steer(wantX / length, wantZ / length, me.dirX(), me.dirZ(), h.wind());
+            wantX = can[0];
+            wantZ = can[1];
+        }
         double off = wrap(Math.atan2(wantX, wantZ) - heading);
         double pace = there ? 0 : Math.min(astern ? h.speed() / 2 : h.speed(), d * PULL) * Math.max(FieldBattle.MIN_WAY, Math.cos(off));
+        if (sails && pace > 0) {
+            pace *= rafasconquest.battle.Wind.pace(me.dirX(), me.dirZ(), h.wind());
+        }
         pace = astern ? -pace : pace;
         if (Ramming.turnFouls(me, off, others)) {
             pace = -h.speed() / 2; // no room to come round: astern, straight, until there is

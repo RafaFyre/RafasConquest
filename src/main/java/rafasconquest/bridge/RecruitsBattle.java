@@ -2436,7 +2436,7 @@ public final class RecruitsBattle {
                 double faceZ = real ? block.settleZ() : block.facingZ();
                 afloat.add(new Afloat(new SableLink.Helm(block.shipId(), side, at.x(), at.z(), to.x(), to.z(), faceX, faceZ,
                         real ? FieldBattle.shipSpeed(block) : 2 * FieldBattle.shipSpeed(block), block.hull(), lashed, hooked, flag.base(),
-                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(), sides[side].faction.id()), near - keep, boarded));
+                        flag.layers().isEmpty() ? flag.base() : flag.layers().get(0).color(), sides[side].faction.id(), field.wind()), near - keep, boarded));
             }
         }
         // Sable floats every real ship block by block (about 0.8 ms a tick each): only the nearest few are real, the rest
@@ -5156,6 +5156,11 @@ public final class RecruitsBattle {
                 field.seconds(), sides[0].faction.name(), field.army(0).alive(), field.army(0).reliefs(), sides[1].faction.name(),
                 field.army(1).alive(), field.army(1).reliefs(), liveSoldiers, live.size(), frontRows, window.describe(),
                 perTick(ownNanos), perTick(fieldNanos), perTick(switchNanos), perTick(snapshotNanos)));
+        if (field.type() == BattleType.OCEAN || field.type() == BattleType.AMPHIBIOUS) {
+            // shortcut: told in the report only; give it a compass on the battle HUD if players need it at a glance.
+            broadcast("[battle wind] from the " + rafasconquest.battle.Wind.from(field.wind()) + ", turning "
+                    + (field.windTurn() > 0 ? "clockwise" : "anticlockwise"));
+        }
         String sable = SablePhysics.report(level, window.count);
         if (!sable.isEmpty()) {
             broadcast("[battle sable] " + sable);

@@ -1009,7 +1009,7 @@ class FieldBattleTest {
         FieldBlock g = new FieldBlock(1, 0, Arm.GUNSHIP, 20, FieldRules.SOLDIER_HEALTH, BattlePlan.LEADER_INDEX, false,
                 new Point(100, 0), 0, 1, Duty.FRONT);
         g.pos = new Point(100, 0);
-        g.hull = rafasconquest.core.SeaLanes.Size.GUNSHIP;
+        g.hull = rafasconquest.core.SeaLanes.Size.XXLARGE; // rowed, so the wind doesn't bend its circle (WindTest has that)
         g.ship = FieldBlock.ShipKind.GUNSHIP;
         g.gunSide = 1;
         Point mark = new Point(0, 0);
@@ -1024,7 +1024,7 @@ class FieldBattleTest {
             g.settleZ = -g.gunSide * ux;
             Point to = FieldBattle.circling(mark, -ux, -uz, g.settleX, g.settleZ, keep);
             assertTrue(g.pos.distanceTo(to) > FieldBattle.AT_PLACE, "it got there and stopped");
-            FieldBattle.sail(g, to, List.of(g));
+            FieldBattle.sail(g, to, List.of(g), 0);
             double now = Math.atan2(g.pos.z(), g.pos.x());
             swept += Math.atan2(Math.sin(now - last), Math.cos(now - last));
             last = now;
@@ -1250,7 +1250,7 @@ class FieldBattleTest {
             Point before = ship.pos();
             double hx = ship.facingX();
             double hz = ship.facingZ();
-            FieldBattle.sail(ship, target, List.of());
+            FieldBattle.sail(ship, target, List.of(), 0);
             double dx = ship.pos().x() - before.x();
             double dz = ship.pos().z() - before.z();
             double moved = Math.hypot(dx, dz);
@@ -1289,7 +1289,7 @@ class FieldBattleTest {
         Point target = new Point(-10, 0); // close astern
         for (int s = 0; s < 30 && ship.pos().distanceTo(target) > FieldBattle.AT_PLACE; s++) {
             Point before = ship.pos();
-            FieldBattle.sail(ship, target, List.of());
+            FieldBattle.sail(ship, target, List.of(), 0);
             assertTrue(ship.pos().distanceTo(before) <= FieldBattle.shipSpeed(ship) / 2 + 1e-9, "astern faster than half speed");
             assertTrue(ship.pos().x() < before.x() + 1e-9, "didn't back toward it");
             assertEquals(1, ship.facingX(), 1e-9, "turned round instead of backing");
